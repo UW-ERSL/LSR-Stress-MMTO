@@ -8,7 +8,7 @@ from sklearn.decomposition import PCA
 import matplotlib.cm as cm
 import os
 import sys
-
+import warnings
 
 class MaterialEncoder:
     def __init__(self, vae_params):
@@ -37,7 +37,10 @@ class MaterialEncoder:
         self.vaeNet = VariationalAutoencoder(self.vaeSettings)
 
     def preprocessData(self):
-        df = pd.read_excel(self.excel_file, header=None)
+        with warnings.catch_warnings():
+            # the databases carry Excel data validation, which openpyxl drops
+            warnings.filterwarnings("ignore", message="Data Validation extension")
+            df = pd.read_excel(self.excel_file, header=None)
         attribute_names = df.iloc[0, 1:].tolist()
         units = df.iloc[1, 1:].tolist()
         material_names = df.iloc[2:, 0].tolist()

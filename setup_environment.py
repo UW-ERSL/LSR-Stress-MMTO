@@ -174,7 +174,10 @@ def main():
     step(1, "conda environment", "1 to 3 min")
     if env_exists(conda):
         print(f"      {ENV} exists, skipping")
-    elif run([conda, "create", "-y", "-n", ENV, f"python={PYTHON}"]) != 0:
+    # Python from conda-forge rather than Anaconda's default channel, which
+    # refuses to install anything until its terms of service are accepted
+    elif run([conda, "create", "-y", "-n", ENV, "--override-channels",
+              "-c", "conda-forge", f"python={PYTHON}"]) != 0:
         fail(f"could not create {ENV}")
 
     # ------------------------------------------------------------------ 2

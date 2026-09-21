@@ -2,31 +2,79 @@
 
 Stress-based multi-material topology optimization in a learned latent space.
 
+Install below, then open `Tutorial.ipynb` to reproduce the paper's examples.
+
 ## Installation
 
-1. **Download the code.** On this page, click the green **Code** button, then **Download ZIP**, and unzip it anywhere.
+First, download the code: on this page, click the green **Code** button, then **Download ZIP**, and unzip it anywhere.
 
-2. **Install Miniconda.** Download the Windows installer from [anaconda.com/download](https://www.anaconda.com/download/success), run it, and accept the defaults.
+If you already have conda, skip step 1. To set everything up yourself instead, see [Setting up by hand](#setting-up-by-hand) further down.
 
-3. **Open the Anaconda Prompt.** Start menu, type `Anaconda Prompt`, open it.
+1. **Install Miniconda.** Download the Windows installer from [anaconda.com/download](https://www.anaconda.com/download/success), run it, and accept the defaults.
 
-4. **Run the setup.** Type `python` and a space in the Anaconda Prompt, drag `setup_environment.py` into the window, and press Enter. It takes 10 to 30 minutes and ends with `Done.`
+2. **Open the Anaconda Prompt.** Start menu, type `Anaconda Prompt`, open it.
 
-5. **Open the tutorial.** Open `Tutorial.ipynb` in your code editor and select the kernel **Python (lsr-stress-mmto)**.
+3. **Run the setup.** In the Anaconda Prompt, type `python` and a space, **without pressing Enter**, then drag `setup_environment.py` into the window, and only then press Enter. It takes roughly 10 minutes and ends with `Done.`
 
-To use your browser instead of an editor, paste each line into the Anaconda Prompt, pressing Enter after each, then open `Tutorial.ipynb` from the panel on the left:
+   This also downloads [PyTO](https://github.com/UW-ERSL/PyTO), the single-material topology optimization code this builds on (finite element analysis, filters, MMA), into a folder next to this one, unless it is already there.
+
+4. **Open the tutorial.** Open `Tutorial.ipynb` in your code editor and select the kernel **Python (lsr-stress-mmto)**.
+
+To use your browser instead of an editor, run these in the Anaconda Prompt, one at a time:
 
 ```
 conda activate lsr-stress-mmto
-pip install jupyterlab
-jupyter lab
 ```
+
+```
+pip install jupyterlab
+```
+
+Then type `jupyter lab` and a space, **without pressing Enter**, drag `Tutorial.ipynb` into the window, and press Enter.
 
 ## Running the paper's examples
 
-**Start with `Tutorial.ipynb`.** It reproduces each of the four examples in the paper and, in doing so, walks through the whole workflow: the material database, choosing the latent dimension, the design problem, the trained VAE, the optimization, and the resulting design.
+`Tutorial.ipynb` reproduces each of the four examples in the paper and, in doing so, walks through the whole workflow: the material database, choosing the latent dimension, the design problem, the trained VAE, the optimization, and the resulting design.
 
-Pick an example in the first cell and run the notebook top to bottom. A run takes 15 to 65 minutes depending on the example.
+## Setting up by hand
+
+In an Anaconda Prompt, from inside this folder, run these one at a time.
+
+**Create the environment:**
+
+```
+conda create -n lsr-stress-mmto -c conda-forge --override-channels python=3.11
+```
+
+**Activate it:**
+
+```
+conda activate lsr-stress-mmto
+```
+
+**Install the packages:**
+
+```
+pip install -r requirements.txt
+```
+
+**Register it as a notebook kernel:**
+
+```
+python -m ipykernel install --user --name lsr-stress-mmto --display-name "Python (lsr-stress-mmto)"
+```
+
+**Fetch PyTO next to this folder**, at the commit the paper used:
+
+```
+git clone https://github.com/UW-ERSL/PyTO.git ../PyTO
+```
+
+```
+git -C ../PyTO checkout b109a169
+```
+
+To use a PyTO you already have instead, it must sit next to this folder and be named `PyTO`. If yours has another name, run `mklink /J PyTO <its name>` in the folder that holds both.
 
 ## Files
 
@@ -48,7 +96,7 @@ Pick an example in the first cell and run the notebook top to bottom. A run take
 | `networks.py` | the VAE network |
 | `materialColors.py` | the colour each material is drawn in |
 | `mmto_common.py` | the parameter container shared by the examples |
-| `PyTOImports.py` | imports the finite element library and the optimizer |
+| `PyTOImports.py` | imports PyTO: finite element analysis, filters and the MMA optimizer |
 
 ### `1-PureStructural/`
 

@@ -69,7 +69,6 @@ class Z0InitMethod(Enum):
     HEAVIEST = "heaviest"
     ORIGIN = "origin"
     UNIFORM = "uniform"
-    MATERIAL = "material"
 class BetaScheduleScheme(Enum):
     PAPER = "paper"
     PAPER_BM1 = "paper_bm1"
@@ -714,10 +713,6 @@ def run_topopt(
             z0[i * num_elems : (i + 1) * num_elems] = np.random.uniform(
                 -0.5, 0.5, size=num_elems
             )
-    elif z0_init_method == Z0InitMethod.MATERIAL:
-        zSel = matEncoder.getRealPoints()[Z0_MATERIAL_INDEX]   # module-level knob, mirrors _BEAM_PARETO_* pattern
-        for i in range(latentDim):
-            z0[i * num_elems : (i + 1) * num_elems] = zSel[i]
     else:
         raise ValueError(f"Unknown z0_init_method: {z0_init_method}")
 
