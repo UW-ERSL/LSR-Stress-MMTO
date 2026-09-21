@@ -1,0 +1,45 @@
+# Python 3.11
+#
+#     python -m pip install -r requirements.txt
+#
+# A superset: this covers both this repository and the solver library it builds
+# on, so one install is enough.
+#
+# The pins are inherited from the solver library and should not be loosened.
+# pyvista in particular is held below 0.46; later releases change plotting
+# behaviour it relies on.
+
+# --- solver stack ---
+numpy<2.3                  # numba supports NumPy 2.2 at most
+scipy
+matplotlib
+scikit-learn
+pandas
+torch
+numba
+pyamg
+pypardiso                  # direct linear solver
+mmapy                      # MMA optimizer
+absl-py
+
+# --- geometry and meshing ---
+numpy-stl
+tetgen
+trimesh
+pymeshfix
+manifold3d
+
+# --- rendering ---
+pyvista<0.46
+vtk
+pyvistaqt
+PyQt5
+
+# --- this repository ---
+openpyxl                   # the .xlsx engine pandas uses for the databases
+ipython                    # image display in the notebooks
+ipykernel                  # registers the environment as a Jupyter kernel
+
+# --- optional ---
+# cupy-cuda11x             # GPU acceleration; needs CUDA 11 and an NVIDIA card.
+#                          # Everything runs on CPU without it.

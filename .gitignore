@@ -1,0 +1,35 @@
+# the author's paper workspace: archived records, the figures notebook and the
+# code that reproduces the paper's figures from them
+paper/
+
+# outputs, regenerated on demand
+results/
+runs/
+figs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# notebooks
+.ipynb_checkpoints/
+
+# temporary file written and removed by setup_environment.py
+_verify_environment.py
+
+# raw run pickles
+*.pkl
+
+# CAD source files; the models ship as STL
+*.SLDPRT
+*.sldprt
+
+# editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
