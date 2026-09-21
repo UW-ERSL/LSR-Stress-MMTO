@@ -6,7 +6,8 @@ Builds everything needed to run this repository, in one command:
     python setup_environment.py
 
 1. creates a conda environment, lsr-stress-mmto, with Python 3.11
-2. fetches the solver library beside this repository, at a fixed commit,
+2. fetches PyTO, the single-material topology optimization code this builds
+   on, beside this repository, at a fixed commit,
    with git if it is installed and as a download otherwise
 3. installs requirements.txt into that environment
 4. registers the environment as a Jupyter kernel
@@ -118,6 +119,35 @@ def report_existing_solver():
     else:
         print(f"      already present at {head[:8]}, leaving it as is")
         print(f"      note: results were produced at {SOLVER_COMMIT[:8]}")
+    if shutil.which("git") and os.path.isdir(os.path.join(SOLVER_PATH, ".git")):
+        dirty = subprocess.run(
+            ["git", "-C", SOLVER_PATH, "status", "--porcelain", "--untracked-files=no"],
+            capture_output=True, text=True).stdout.strip()
+        if dirty:
+            print("      note: it has uncommitted changes, which will be used as they are")
+
+
+def pyto_like_siblings():
+    """Folders beside this repository that hold PyTO under another name.
+
+    A folder counts if it contains src/topopt_common.py. A link to PyTO and PyTO
+    itself are the same folder, so a link does not count.
+    """
+    try:
+        names = sorted(os.listdir(PARENT))
+    except OSError:
+        return []
+    ours = os.path.realpath(SOLVER_PATH) if os.path.exists(SOLVER_PATH) else None
+    found = []
+    for name in names:
+        path = os.path.join(PARENT, name)
+        if name == SOLVER_DIR or os.path.realpath(path) == os.path.realpath(HERE):
+            continue
+        if not os.path.isfile(os.path.join(path, "src", "topopt_common.py")):
+            continue
+        if ours is None or os.path.realpath(path) != ours:
+            found.append(name)
+    return found
 
 
 def download_solver():
@@ -160,7 +190,7 @@ def download_solver():
 
 def main():
     print(f"repository : {HERE}", flush=True)
-    print(f"solver     : {SOLVER_PATH}", flush=True)
+    print(f"PyTO       : {SOLVER_PATH}", flush=True)
     print(f"environment: {ENV}", flush=True)
     print("\nFive steps. Step 3 downloads a few GB and is the slow one.", flush=True)
 
@@ -181,9 +211,18 @@ def main():
         fail(f"could not create {ENV}")
 
     # ------------------------------------------------------------------ 2
-    step(2, "solver library", "under a minute")
+    step(2, "PyTO, the topology optimization code", "under a minute")
+    others = pyto_like_siblings()
     if os.path.isdir(os.path.join(SOLVER_PATH, "src")):
         report_existing_solver()
+        for name in others:
+            print(f"      note: {name} also looks like PyTO; this repository uses "
+                  f"{SOLVER_DIR}", flush=True)
+    elif others:
+        fail(f"found {others[0]} beside this repository, but it must be called "
+             f"{SOLVER_DIR}.\nRename it, or keep the name and link it, in {PARENT}:\n"
+             f"    mklink /J {SOLVER_DIR} {others[0]}\n"
+             f"then run this again. Nothing was downloaded.")
     elif shutil.which("git"):
         if run(["git", "clone", SOLVER_URL, SOLVER_PATH]) != 0:
             fail(f"could not clone {SOLVER_URL}")
@@ -195,13 +234,14 @@ def main():
         download_solver()
 
     # ------------------------------------------------------------------ 3
-    step(3, "dependencies", "10 to 30 min; pip shows progress below")
+    step(3, "dependencies", "roughly 10 min; pip shows progress below")
     py = env_python(conda)
     print(f"      using {py}", flush=True)
     req = os.path.join(HERE, "requirements.txt")
-    if in_env(py, "-m", "pip", "install", "--upgrade", "pip") != 0:
+    if in_env(py, "-m", "pip", "install", "--no-warn-script-location", "--upgrade", "pip") != 0:
         fail("could not upgrade pip inside the environment")
-    if in_env(py, "-m", "pip", "install", "--progress-bar", "on", "-r", req) != 0:
+    if in_env(py, "-m", "pip", "install", "--no-warn-script-location",
+              "--progress-bar", "on", "-r", req) != 0:
         fail("dependency install failed; the lines above say which package")
 
     # ------------------------------------------------------------------ 4
@@ -257,7 +297,7 @@ check("repository found", lambda: root or (_ for _ in ()).throw(RuntimeError("no
 
 for m in ("records", "render", "figures", "tables", "display"):
     check(f"utils.{m} imports", lambda m=m: importlib.import_module(f"utils.{m}"))
-check("solver library imports", lambda: importlib.import_module("ExamplesPureStructural"))
+check("PyTO and the examples import", lambda: importlib.import_module("ExamplesPureStructural"))
 check("optimizer driver imports", lambda: importlib.import_module("MainPureStructural"))
 
 def lbracket_mesh():
