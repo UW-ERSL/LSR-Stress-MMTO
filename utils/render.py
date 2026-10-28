@@ -41,6 +41,15 @@ def _import_examples():
     return MMTOExamplesPureStructural, getMMTOProblemPureStructural
 
 
+def _custom_problem(run: Run):
+    """The CustomProblem of a run made from a .pyto project file, else None."""
+    spec = ((run.config or {}).get("arguments_resolved") or {}).get("to_problem")
+    if not isinstance(spec, dict) or "pyto" not in spec:
+        return None
+    from ExamplesPureStructural import CustomProblem  # type: ignore
+    return CustomProblem(**spec)
+
+
 def mesh_for(run: Run):
     """The voxel mesh this run used, rebuilt and cached.
 
@@ -54,7 +63,7 @@ def mesh_for(run: Run):
 
     if key not in _MESH_CACHE:
         try:
-            ex = Examples[run.example]
+            ex = _custom_problem(run) or Examples[run.example]
         except KeyError as e:
             raise RenderError(
                 f"{run.descriptor}: example {run.example!r} is not in "

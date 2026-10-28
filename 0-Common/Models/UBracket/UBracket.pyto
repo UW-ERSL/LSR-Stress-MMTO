@@ -1,0 +1,198 @@
+{
+  "version": "2025.01",
+  "stl_file_path": "UBracket.STL",
+  "settings": {
+    "unit_system": "MKS",
+    "temperature_unit": "Kelvin",
+    "angle_unit": "Degree"
+  },
+  "analysis_settings": {
+    "n_elements": 10000,
+    "solver_type": "PARDISO"
+  },
+  "material_data": {
+    "name": "Placeholder",
+    "properties": {
+      "Young's Modulus": 1.0,
+      "Poisson's Ratio": 0.3,
+      "Yield Strength": 1.0,
+      "Density": 1.0,
+      "Thermal Conductivity": 1.0,
+      "Thermal Expansion": 0.0,
+      "Specific Heat Capacity": 1.0,
+      "Price": 1.0
+    }
+  },
+  "structuralBC": {
+    "fixed_faces_indices": [],
+    "load_faces_indices": [],
+    "load_forces": [],
+    "point_supports": [
+      {
+        "type": "Fixed XYZ",
+        "points": [],
+        "regions": [
+          {
+            "normals": [
+              [
+                -1,
+                0,
+                0
+              ],
+              [
+                1,
+                0,
+                0
+              ],
+              [
+                0,
+                -1,
+                0
+              ],
+              [
+                0,
+                1,
+                0
+              ],
+              [
+                0,
+                0,
+                -1
+              ],
+              [
+                0,
+                0,
+                1
+              ]
+            ],
+            "origins": [
+              [
+                -0.002475,
+                0,
+                0
+              ],
+              [
+                0.002475,
+                0,
+                0
+              ],
+              [
+                0,
+                -0.05,
+                0
+              ],
+              [
+                0,
+                1.05,
+                0
+              ],
+              [
+                0,
+                0,
+                -0.05
+              ],
+              [
+                0,
+                0,
+                0.06
+              ]
+            ]
+          }
+        ]
+      }
+    ],
+    "point_loads": [
+      {
+        "points": [],
+        "regions": [
+          {
+            "normals": [
+              [
+                -1,
+                0,
+                0
+              ],
+              [
+                1,
+                0,
+                0
+              ],
+              [
+                0,
+                -1,
+                0
+              ],
+              [
+                0,
+                1,
+                0
+              ],
+              [
+                0,
+                0,
+                -1
+              ],
+              [
+                0,
+                0,
+                1
+              ]
+            ],
+            "origins": [
+              [
+                0.997525,
+                0,
+                0
+              ],
+              [
+                1.002475,
+                0,
+                0
+              ],
+              [
+                0,
+                0.928218,
+                0
+              ],
+              [
+                0,
+                1.05,
+                0
+              ],
+              [
+                0,
+                0,
+                -0.05
+              ],
+              [
+                0,
+                0,
+                0.06
+              ]
+            ]
+          }
+        ],
+        "force": [
+          -1.0,
+          0.0,
+          0.0
+        ]
+      }
+    ],
+    "constraint_counts": {
+      "fixed_triangles": 0,
+      "loaded_triangles": 0
+    }
+  },
+  "thermalBC": {
+    "fixed_temps": [],
+    "heat_sources": [],
+    "total_heat_sources": [],
+    "thermal_counts": {
+      "fixed_temps": 0,
+      "heat_sources": 0,
+      "total_heat_sources": 0,
+      "convection": 0
+    }
+  }
+}

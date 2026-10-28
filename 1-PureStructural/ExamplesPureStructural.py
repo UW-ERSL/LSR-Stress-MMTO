@@ -12,6 +12,7 @@ from PyTOImports import  TO_QOI, find_elements_with_fixedDOF # type: ignore
 from mmto_common import MMTOParams # type: ignore
 from dataclasses import dataclass, field
 from PyTOImports import topopt_material_model  # to override the shared p-norm exponent per problem
+from pyto_project import problem_from_pyto  # type: ignore
 @dataclass(slots=True) # avoid accidental modification
 class VAEParams: #default VAE parameters
     klFactor: float = 5e-6
@@ -41,6 +42,45 @@ _UBRACKET_DOMAIN_AREA   = 0.875   # unit square (1.0) minus slot (0.25*0.5 = 0.1
 _UBRACKET_THICKNESS     = 0.01    # z-extent baked into UBracket.STL (single nz=1 layer)
 _UBRACKET_MASS_FRACTION = 0.40    # cap = 40% of an A-filled (rho=1.0) domain; raise/lower to bind
 _UBRACKET_MASS_CAP      = _UBRACKET_MASS_FRACTION * _UBRACKET_DOMAIN_AREA * _UBRACKET_THICKNESS  # rho_A=1.0
+
+# --- Your own problem, made in the PyTO-AD GUI and saved as a .pyto project file. ---
+# The VAE settings of each database, as in the examples above, so the network shipped
+# with the database can be loaded.
+_DATABASE_VAE = {
+    "BM1_3Mats_2Attr":                dict(latentDim=2, learningRate=5e-4, vae_hiddenDim=50,
+                                           maxAttributeErrorPercent=0.1, klFactor=1e-4, numEpochs=30000),
+    "6Materials_AF_3Attr":            dict(latentDim=2, learningRate=1e-4, vae_hiddenDim=50,
+                                           maxAttributeErrorPercent=0.1, klFactor=1e-4, numEpochs=100000),
+    "Beam_8Mats_3Attr_v4_spectrum2D": dict(latentDim=2, learningRate=5e-4, vae_hiddenDim=50,
+                                           maxAttributeErrorPercent=0.1, klFactor=1e-4, numEpochs=100000),
+    "CustomAlloys20_3D":              dict(latentDim=3, learningRate=5e-4, vae_hiddenDim=50,
+                                           maxAttributeErrorPercent=0.1, klFactor=1e-4, numEpochs=100000),
+}
+
+@dataclass
+class CustomProblem:
+    """A problem from a .pyto project file (geometry, supports, loads) and a material database.
+
+    objective:   "VON_MISES" (p-norm of the von Mises stress) or "FAILURE_FACTOR"
+                 (p-norm of von Mises stress / yield strength)
+    constraints: ("VOLUME_FRACTION", upper bound)
+                 ("VOLUME_FRACTION", upper bound, material index)
+                 ("MASS", upper bound), mass = sum of density * x * element volume
+    single_layer: one element through the thickness, for a flat part
+    """
+    pyto: str
+    database: str
+    objective: str = "FAILURE_FACTOR"
+    constraints: list = field(default_factory=lambda: [("VOLUME_FRACTION", 0.4)])
+    n_dof: int = 30000
+    single_layer: bool = False
+    relative_filter_radius: float = 2.5
+    pnorm_exponent: float = 10.0
+    keep_fixed_elems: bool = False
+
+    @property
+    def name(self):
+        return os.path.splitext(os.path.basename(self.pyto))[0]
 
 
 def getMMTOProblemPureStructural(to_problem: MMTOExamplesPureStructural,nDOFDesired = None, **kwargs):
@@ -151,10 +191,40 @@ def getMMTOProblemPureStructural(to_problem: MMTOExamplesPureStructural,nDOFDesi
         vae_params.maxAttributeErrorPercent = 0.1
         vae_params.klFactor = 1e-4
         vae_params.numEpochs = 100000
+    elif isinstance(to_problem, CustomProblem):
+        structural_problem = to_problem
+        if to_problem.database not in _DATABASE_VAE:
+            raise ValueError(f"Unknown database {to_problem.database!r}; choose from {', '.join(_DATABASE_VAE)}")
+        to_params.Comment = f"{to_problem.name}, from {to_problem.pyto}, {to_problem.database}"
+        to_params.ExtrudeZ = to_problem.single_layer
+        to_params.KeepFixedElems = to_problem.keep_fixed_elems
+        to_params.RelativeFilterRadius = to_problem.relative_filter_radius
+        to_params.nDOFDesired = to_problem.n_dof if nDOFDesired is None else nDOFDesired
+        topopt_material_model._PNORM_EXPONENT = to_problem.pnorm_exponent
+        to_params.MaterialsExcelFile = f'./1-PureStructural/MaterialDataPureStructural/{to_problem.database}.xlsx'
+        objectives = {"VON_MISES": (TO_QOI.PNORM_STRESS, None),
+                      "FAILURE_FACTOR": (TO_QOI.PNORM_STRESS, "FAILURE_FACTOR")}
+        if to_problem.objective not in objectives:
+            raise ValueError(f"Unknown objective {to_problem.objective!r}; choose from {', '.join(objectives)}")
+        to_params.Objective = objectives[to_problem.objective]
+        to_params.Constraints = []
+        for c in to_problem.constraints:
+            if c[0] == "VOLUME_FRACTION" and len(c) == 3:
+                to_params.Constraints.append((TO_QOI.VOLUME_FRACTION, {"material_id": int(c[2]), "tau": 0.5}, c[1]))
+            elif c[0] in ("VOLUME_FRACTION", "MASS") and len(c) == 2:
+                to_params.Constraints.append((TO_QOI[c[0]], None, c[1]))
+            else:
+                raise ValueError(f"Unknown constraint {c!r}")
+        for k, v in _DATABASE_VAE[to_problem.database].items():
+            setattr(vae_params, k, v)
     else:
         raise ValueError(f"Unknown problem: {to_problem}")
-    
-    mesh, mat_prop, bc, elem_body_force = getStructuralFEAProblem(structural_problem, nDOFDesired = to_params.nDOFDesired, **kwargs)
+
+    if isinstance(structural_problem, CustomProblem):
+        mesh, mat_prop, bc, elem_body_force = problem_from_pyto(structural_problem.pyto, nDOFDesired=to_params.nDOFDesired,
+                                                                single_layer=structural_problem.single_layer)
+    else:
+        mesh, mat_prop, bc, elem_body_force = getStructuralFEAProblem(structural_problem, nDOFDesired = to_params.nDOFDesired, **kwargs)
 
 
     # Add  elements to keep
