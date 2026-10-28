@@ -65,7 +65,7 @@ class MaterialEncoder:
                 dataScaleMax[i] = norm_col.max()
                 normalizedData[:, i] = (norm_col - dataScaleMin[i]) / (dataScaleMax[i] - dataScaleMin[i] + 1e-12)
 
-        scaledMaterialData = torch.tensor(normalizedData).float()
+        scaledMaterialData = torch.tensor(normalizedData, dtype=torch.get_default_dtype())
 
         materialAttributes = {}
         for i, name in enumerate(attribute_names):
@@ -258,7 +258,7 @@ class MaterialEncoder:
 
     def getMaterialPropertiesAtLatentPoints(self, zPts, compute_gradients=False):
         if compute_gradients:
-            zPts_tensor = torch.tensor(zPts, dtype=torch.float32) \
+            zPts_tensor = torch.tensor(zPts, dtype=torch.get_default_dtype()) \
                         if not isinstance(zPts, torch.Tensor) \
                         else zPts.clone().detach()
 

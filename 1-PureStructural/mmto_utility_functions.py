@@ -236,7 +236,7 @@ def compute_mass_from_x_and_z(
 
     zPts = torch.tensor(
         np.asarray(z_flat, dtype=float).reshape(latentDim, -1).T,
-        dtype=torch.float32,
+        dtype=torch.get_default_dtype(),   # the decoder's dtype (float64 under PyTO-AD)
     )
 
     with torch.no_grad():
@@ -267,7 +267,7 @@ def eval_stress_compliance_metrics(
     x_vec = np.asarray(x_vec, dtype=float).flatten()
     z_vec = np.asarray(z_vec, dtype=float).flatten()
 
-    zPts = torch.tensor(np.asarray(z_vec, dtype=float).reshape(latentDim, -1).T).float()
+    zPts = torch.tensor(np.asarray(z_vec, dtype=float).reshape(latentDim, -1).T, dtype=torch.get_default_dtype())
 
     with torch.no_grad():
         decoded = matEncoder.vaeNet.decoder(zPts)
@@ -284,7 +284,7 @@ def eval_stress_compliance_metrics(
     fe_solver_structural.set_material(fe_solver_structural.mat_prop)
 
     sol_local = fe_solver_structural.solve(x_vec, MaterialModel.SIMP)
-    fe_solver_structural.mesh.setPseudoDensity(x_vec)
+    fe_solver_structural.mesh.setPseudoDensity(torch.as_tensor(x_vec))   # PyTO-AD's mesh takes torch
     fe_solver_structural.postprocess()
 
     vm = np.asarray(fe_solver_structural.vonMisesStress, dtype=float)
@@ -638,7 +638,7 @@ def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
         design_domain_volume=design_domain_volume,
     )
 
-    zOptimalPts = torch.tensor(zOptimal, dtype=torch.float32)
+    zOptimalPts = torch.tensor(zOptimal, dtype=torch.get_default_dtype())
     if snap_to_real_material:
         zSnappedPts = torch.tensor(matEncoder.getClosestRealMaterialZValues(zOptimalPts))
         zOptimalPts = zSnappedPts

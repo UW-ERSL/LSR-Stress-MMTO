@@ -174,7 +174,7 @@ def _material_summary(mat_encoder, z_real_points, material_colors):
         pass
     try:
         import torch
-        zr = torch.as_tensor(np.asarray(z_real_points), dtype=torch.float32)
+        zr = torch.as_tensor(np.asarray(z_real_points), dtype=torch.get_default_dtype())
         props = mat_encoder.getMaterialProperties(mat_encoder.vaeNet.decoder(zr))
         out["real_material_properties"] = {
             k: np.asarray(v.detach().cpu()).astype(float).ravel().tolist()

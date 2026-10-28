@@ -1,12 +1,14 @@
-# LSR-Stress-MMTO
+# LSR-Stress-MMTO (autodiff branch)
 
 Stress-based multi-material topology optimization in a learned latent space.
+
+**This is the `autodiff` branch.** The gradients of the objective and constraints come from automatic differentiation (PyTorch autograd) through [PyTO-AD](https://github.com/UW-ERSL/PyTO-AD), instead of the hand-derived sensitivities on `main`. The `main` branch is the code the paper used; see [Differences from main](#differences-from-main).
 
 Install below, then open `Tutorial.ipynb` to reproduce the paper's examples.
 
 ## Installation
 
-First, download the code: on this page, click the green **Code** button, then **Download ZIP**, and unzip it anywhere.
+First, download the code: on this page, switch the branch menu (top left, it says `main`) to **autodiff**, then click the green **Code** button, then **Download ZIP**, and unzip it anywhere. With git instead: `git clone -b autodiff https://github.com/UW-ERSL/LSR-Stress-MMTO.git`.
 
 If you already have conda, skip step 1. To set everything up yourself instead, see [Setting up by hand](#setting-up-by-hand) further down.
 
@@ -16,14 +18,14 @@ If you already have conda, skip step 1. To set everything up yourself instead, s
 
 3. **Run the setup.** In the Anaconda Prompt, type `python` and a space, **without pressing Enter**, then drag `setup_environment.py` into the window, and only then press Enter. It takes roughly 10 minutes and ends with `Done.`
 
-   This also downloads [PyTO](https://github.com/UW-ERSL/PyTO), the single-material topology optimization code this builds on (finite element analysis, filters, MMA), into a folder next to this one, unless it is already there.
+   This also downloads [PyTO-AD](https://github.com/UW-ERSL/PyTO-AD), the differentiable topology optimization code this branch builds on (finite element analysis, filters, MMA, automatic differentiation), into a folder next to this one, unless it is already there. It creates its own environment, `lsr-stress-mmto-ad`, so it never touches the one `main` uses.
 
-4. **Open the tutorial.** Open `Tutorial.ipynb` in your code editor and select the kernel **Python (lsr-stress-mmto)**.
+4. **Open the tutorial.** Open `Tutorial.ipynb` in your code editor and select the kernel **Python (lsr-stress-mmto-ad)**.
 
 To use your browser instead of an editor, run these in the Anaconda Prompt, one at a time:
 
 ```
-conda activate lsr-stress-mmto
+conda activate lsr-stress-mmto-ad
 ```
 
 ```
@@ -43,13 +45,13 @@ In an Anaconda Prompt, from inside this folder, run these one at a time.
 **Create the environment:**
 
 ```
-conda create -n lsr-stress-mmto -c conda-forge --override-channels python=3.11
+conda create -n lsr-stress-mmto-ad -c conda-forge --override-channels python=3.11
 ```
 
 **Activate it:**
 
 ```
-conda activate lsr-stress-mmto
+conda activate lsr-stress-mmto-ad
 ```
 
 **Install the packages:**
@@ -61,20 +63,30 @@ pip install -r requirements.txt
 **Register it as a notebook kernel:**
 
 ```
-python -m ipykernel install --user --name lsr-stress-mmto --display-name "Python (lsr-stress-mmto)"
+python -m ipykernel install --user --name lsr-stress-mmto-ad --display-name "Python (lsr-stress-mmto-ad)"
 ```
 
-**Fetch PyTO next to this folder**, at the commit the paper used:
+**Fetch PyTO-AD next to this folder**, at the commit this branch was tested with:
 
 ```
-git clone https://github.com/UW-ERSL/PyTO.git ../PyTO
+git clone https://github.com/UW-ERSL/PyTO-AD.git ../PyTO-AD
 ```
 
 ```
-git -C ../PyTO checkout b109a169
+git -C ../PyTO-AD checkout 19c53506
 ```
 
-To use a PyTO you already have instead, it must sit next to this folder and be named `PyTO`. If yours has another name, run `mklink /J PyTO <its name>` in the folder that holds both.
+To use a PyTO-AD you already have instead, it must sit next to this folder and be named `PyTO-AD`. If yours has another name, run `mklink /J PyTO-AD <its name>` in the folder that holds both.
+
+## Differences from main
+
+| | `main` | `autodiff` |
+|---|---|---|
+| Solver library | PyTO | PyTO-AD only (PyTO is not used) |
+| Gradients | hand-derived adjoints, `SensitivitiesPureStructural.py` | autograd through the forward pass, `AutodiffPureStructural.py` |
+| Environment | `lsr-stress-mmto` | `lsr-stress-mmto-ad` |
+
+Everything else (examples, material databases, VAEs, optimizer settings, schedules) is the same, so a run on either branch can be compared one to one.
 
 ## Files
 
@@ -96,7 +108,7 @@ To use a PyTO you already have instead, it must sit next to this folder and be n
 | `networks.py` | the VAE network |
 | `materialColors.py` | the colour each material is drawn in |
 | `mmto_common.py` | the parameter container shared by the examples |
-| `PyTOImports.py` | imports PyTO: finite element analysis, filters and the MMA optimizer |
+| `PyTOImports.py` | imports PyTO-AD: finite element analysis, filters and the MMA optimizer |
 
 ### `1-PureStructural/`
 
@@ -105,7 +117,7 @@ To use a PyTO you already have instead, it must sit next to this folder and be n
 | `MaterialDataPureStructural/` | material databases (`.xlsx`) and trained VAEs (`.nt`) |
 | `ExamplesPureStructural.py` | the four examples: objective, constraints, settings |
 | `MainPureStructural.py` | the optimization driver |
-| `SensitivitiesPureStructural.py` | gradients of the objective and constraints |
+| `AutodiffPureStructural.py` | the objective and constraints as differentiable functions; autograd gives their gradients |
 | `mmto_utility_functions.py` | filters, stress and mass diagnostics, run bookkeeping |
 | `run_io.py` | saves a finished run to disk |
 

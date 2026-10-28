@@ -7,9 +7,10 @@ PIPELINE:
       x_filt -> x_phys = Heaviside(x_filt) optional projection (density only)
       z  -> decode (VAE) -> E, Y, mass_density  per-element material properties
     FEA solve(x_phys) -> von Mises stress (relaxed) -> objective/constraints
-    SensitivitiesPureStructural computes obj/cons + gradients
+    all of the above is one torch tree (AutodiffPureStructural.MMTOModelAD);
+    gradients by autograd, through PyTO-AD's solve
     optional penalties (latent z-smoothing, distance-to-real-material) added here
-    chain rule back through Heaviside + density filter -> gradient w.r.t. x
+    gradient carried back through Heaviside + density filter by autograd -> w.r.t. x
     MMA takes one step.
 
 Latents z are raw MMA variables (no forward filter); their *gradients* are
@@ -50,10 +51,7 @@ from ExamplesPureStructural import (
     material_colors,
 )
 from materialEncoder import MaterialEncoder 
-from SensitivitiesPureStructural import (
-    compute_mmto_objective_and_gradient,
-    compute_mmto_constraint_and_gradient,
-)
+import AutodiffPureStructural as AD
 from mmto_utility_functions import (
     create_density_and_material_filters,
     compute_domain_volume,
@@ -200,7 +198,7 @@ def run_topopt(
     if material_filter_radius is not None:
         to_params.MaterialFilterRadius = material_filter_radius
     if pnorm_exponent is not None:
-        import topopt_material_model  # type: ignore
+        from PyTOImports import topopt_material_model  # type: ignore
         topopt_material_model._PNORM_EXPONENT = float(pnorm_exponent)
     print(f"[SWEEP] nDOFDesired={to_params.nDOFDesired}  "
           f"RelativeFilterRadius={to_params.RelativeFilterRadius}  "
@@ -250,10 +248,10 @@ def run_topopt(
     # --- Solver selection: direct (PARDISO) for small problems; iterative
     #     (DPCG + deflation) beyond the DOF cutoff. Mirrors topopt_mma.py so the
     #     MMTO driver uses the same tested iterative path as single-material.
-    #     The stress adjoint in SensitivitiesPureStructural reuses fe_solver.solver
+    #     The adjoint solve in PyTO-AD's differentiable solve reuses fe_solver.solver
     #     and fe_solver.dsolver, so it follows this choice automatically.
     try:
-        from topopt_common import DIRECT_SOLVER_DOF_CUTOFF
+        from PyTOImports import DIRECT_SOLVER_DOF_CUTOFF
     except Exception:
         DIRECT_SOLVER_DOF_CUTOFF = 120000  # dof limit for direct solver; above -> DPCG
 
@@ -266,7 +264,7 @@ def run_topopt(
         dsolver.create_deflation_matrix(mesh_structural)
     print("Solver:", solver.name)
 
-    fe_solver_structural = hex_structural_fea.HexStructuralFEA(
+    fe_solver_structural = AD.MultiMaterialHexFEA(
         mesh=mesh_structural,
         mat_prop=mat_prop_struct,
         bc=bc_struct,
@@ -274,17 +272,6 @@ def run_topopt(
         dsolver=dsolver,
         rtol=1e-8,
         elem_body_force=elem_body_force,
-    )
-
-    nu_template = (
-        float(constant_poissons_ratio)
-        if use_constant_poissons_ratio
-        else float(mat_prop_struct.poissons_ratio)
-    )
-    KETemplate = hex_element_stiffness.hex8_stiffness_matrix_structural(
-        mat_prop_struct.youngs_modulus,
-        nu_template,
-        mesh_structural.elem_size,
     )
 
     num_dof = fe_solver_structural.bc.num_dofs
@@ -299,6 +286,10 @@ def run_topopt(
     print("Creating filter...")
     H_density, Hs_density, H_material, Hs_material = create_density_and_material_filters(
         fe_solver_structural, to_params, createFilters
+    )
+    ad_model = AD.MMTOModelAD(
+        fe_solver_structural, matEncoder, H_density, Hs_density, H_material, Hs_material,
+        zRealPoints_np, to_params, use_constant_poissons_ratio, constant_poissons_ratio, elem_volume,
     )
 
 
@@ -345,71 +336,6 @@ def run_topopt(
         dxphys_dxfilt = (beta * (1.0 - np.tanh(beta * (x_filt - eta)) ** 2)) / denom
         return x, dxphys_dxfilt
 
-    def _distance_to_real_material_penalty(
-        density_for_penalty: np.ndarray,
-        z_elemmajor: np.ndarray,
-        gamma_val: float,
-        eps: float = 1e-12,
-    ):
-        """Distance-to-nearest-real-material penalty and gradients.
-
-        P = gamma_val * sum_e dens_e * dist(z_e, nearest real material) / nActive.
-        Pulls each element latent toward the closest real-material latent point.
-        Returns (penalty_value, dP/d(density), dP/d(z))  [z grad shape (N, latentDim)].
-        """
-        dens = np.asarray(density_for_penalty, dtype=float).reshape(-1)
-        z = np.asarray(z_elemmajor, dtype=float)
-        N = dens.size
-
-        diff = z[:, None, :] - zRealPoints_np[None, :, :]
-        dist2 = np.einsum("nml,nml->nm", diff, diff)
-        dist = np.sqrt(np.maximum(dist2, eps))
-        k_star = np.argmin(dist, axis=1)
-        dmin = dist[np.arange(N), k_star]
-        nActive = int(np.sum(dens > 0.1))
-        nActive = max(nActive, 1)
-
-        penalty_value = float(gamma_val * np.sum(dens * dmin) / nActive)
-
-        dpen_d_dens = (gamma_val / nActive) * dmin
-
-        z_k = zRealPoints_np[k_star, :]
-        dpen_d_z = (gamma_val / nActive) * (
-            dens[:, None] * (z - z_k) / np.maximum(dmin[:, None], eps)
-        )
-
-        return penalty_value, dpen_d_dens, dpen_d_z
-
-    def _z_smoothing_penalty_and_grads(
-        density_for_penalty: np.ndarray,
-        z_elemmajor: np.ndarray,
-        smooth_weight: float,
-    ):
-        """Density-weighted latent smoothing penalty
-        Pz = w * sum_ell sum_e x_e * ( z - filtered(z) )^2.
-
-        filtered = (H_material @ z)/Hs_material. Each element term is multiplied
-        by its density so void regions are not smoothed.
-        Returns (Pz, dPz/d(density), dPz/d(z)).
-        """
-        dens = np.asarray(density_for_penalty, dtype=float).reshape(-1)
-        z = np.asarray(z_elemmajor, dtype=float)
-
-        zbar = np.column_stack([(H_material @ z[:, ell]) / Hs_material for ell in range(latentDim)])
-        r = z - zbar
-
-        Pz = float(smooth_weight * np.sum(dens[:, None] * (r ** 2)))
-        dP_dx = smooth_weight * np.sum(r ** 2, axis=1)
-
-        dP_dz = np.zeros_like(z)
-        for ell in range(latentDim):
-            wr = dens * r[:, ell]
-            dP_dz[:, ell] = 2.0 * smooth_weight * (
-                wr - (H_material.T @ (wr / Hs_material))
-            )
-
-        return Pz, dP_dx, dP_dz
-
     def _smooth_latent_gradient_inplace(vec: np.ndarray):
         """Sensitivity-filter (in place) each latent block of an objective gradient.
 
@@ -439,12 +365,12 @@ def run_topopt(
 
         Steps:
           1. split zeta into density x and latents z
-          2. density filter x -> x_filt, Heaviside x_filt -> x_phys (+ dx_phys/dx_filt)
-          3. decode z -> E, nu, material props; assign per-element materials
-          4. FEA solve(x_phys); record stress-violation diagnostics into history
-          5. base obj/grad and cons/grad from SensitivitiesPureStructural
-          6. normalize obj by obj0; add optional z-smoothing and distance penalties
-          7. chain rule: latent-block sens filter, then Heaviside + density filter
+          2. density filter x -> x_filt, Heaviside x_filt -> x_phys (numpy, for logging)
+          3. AD model: decode z -> material properties and solve, in one torch tree
+          4. postprocess the solve; record stress-violation diagnostics into history
+          5. obj/cons values from the AD model; their gradients w.r.t. (x_phys, z) by autograd
+          6. normalize obj by obj0; add optional z-smoothing and distance penalties (autograd)
+          7. latent-block sens filter, then Heaviside + density filter (autograd)
           8. log, update beta continuation / SIMP continuation
         """
         nonlocal mmaIterations, obj0, Sd0, gamma, beta_proj, use_z_smoothing, use_penalization, _dyn_ramp_started
@@ -476,72 +402,24 @@ def run_topopt(
         x_filt = (H_density @ x) / Hs_density if APPLY_DENSITY_FILTER else x.copy()
 
         if use_heaviside_projection:
-            x_phys, dxphys_dxfilt = heaviside_projection(x_filt, beta_proj, eta_proj)
+            x_phys, _ = heaviside_projection(x_filt, beta_proj, eta_proj)
         else:
             x_phys = x_filt
-            dxphys_dxfilt = np.ones_like(x_filt)
 
-        # ===================== DECODE MATERIALS =======================
-        zTorch = torch.tensor(z, dtype=torch.float32)   # torch twin of z, for the decoder
+        # ============ DECODE + MAIN FEA: one torch tree (AD model) ============
+        # zeta -> x_phys, decoded properties -> PyTO-AD solve -> stress -> J, constraints
+        to_params.current_major_iter = int(mmaIterations)
+        J_t, cons_t = ad_model.evaluate(zeta, beta_proj, eta_proj,
+                                        use_heaviside=use_heaviside_projection,
+                                        apply_density_filter=APPLY_DENSITY_FILTER)
 
-        with torch.no_grad():
-            decoded = matEncoder.vaeNet.decoder(zTorch)
-            material_properties = matEncoder.getMaterialProperties(decoded)
-            Youngs_Modulus = material_properties["Youngs_Modulus"].detach().cpu().numpy()
-
+        # the decoded properties for logging and diagnostics: the same numbers, detached
+        material_properties = {k: v.detach() for k, v in ad_model.props.items()}
+        zTorch = ad_model.z.detach()
         log_design_state(history, mmaIterations, x_phys, z, material_properties,
                          zTorch, matEncoder, num_elems, beta_proj, eta_proj, verbose=verbose)
-        nu_key = None
-        for k in (
-            "Poissons_Ratio",
-            "Poisson_Ratio",
-            "poissons_ratio",
-            "poisson_ratio",
-            "nu",
-            "Nu",
-        ):
-            if k in material_properties:
-                nu_key = k
-                break
 
-        if use_constant_poissons_ratio or (nu_key is None):
-            nu_vals = np.full_like(
-                Youngs_Modulus,
-                float(constant_poissons_ratio),
-                dtype=float,
-            )
-        else:
-            nu_vals = material_properties[nu_key].detach().cpu().numpy().astype(float)
-
-        if use_z_smoothing:
-            # RAW penalty (weight = 1); weighting + normalization applied later
-            Pz_raw, dPz_dx, dPz_dz = _z_smoothing_penalty_and_grads(
-                density_for_penalty=x_phys,
-                z_elemmajor=z,
-                smooth_weight=1.0,
-            )
-        else:
-            Pz_raw = 0.0
-            dPz_dx = np.zeros(num_elems, dtype=float)
-            dPz_dz = np.zeros((num_elems, latentDim), dtype=float)
-
-        # ========================= MAIN FEA ===========================
-        fe_solver_structural.mat_prop = []
-        for i in range(len(Youngs_Modulus)):
-            mp = mat_lib.create_material_with_defaults(
-                name=f"Material_{i+1}",
-                youngs_modulus=float(Youngs_Modulus[i]),
-            )
-            if hasattr(mp, "poissons_ratio"):
-                mp.poissons_ratio = float(nu_vals[i])
-            elif hasattr(mp, "nu"):
-                mp.nu = float(nu_vals[i])
-            fe_solver_structural.mat_prop.append(mp)
-
-        fe_solver_structural.set_material(fe_solver_structural.mat_prop)
-
-        sol = fe_solver_structural.solve(x_phys, MaterialModel.SIMP)
-        fe_solver_structural.mesh.setPseudoDensity(x_phys)
+        fe_solver_structural.mesh.setPseudoDensity(torch.as_tensor(x_phys))   # PyTO-AD's mesh takes torch
         fe_solver_structural.postprocess()
 
         record_fea_diagnostics(history, mmaIterations, x_phys, z, material_properties,
@@ -549,31 +427,11 @@ def run_topopt(
                                plot_progress=plot_progress, plotter=plotter, verbose=verbose)
 
         # ============ OBJECTIVE / CONSTRAINTS / SENSITIVITIES =========
-        zeta_phys = zeta.copy()
-        zeta_phys[0:num_elems] = x_phys
-        zeta_phys[num_elems:] = z.T.reshape(-1)
-        to_params.current_major_iter = int(mmaIterations)
-        obj, grad_obj = compute_mmto_objective_and_gradient(
-            to_params,
-            sol,
-            zeta_phys,
-            fe_solver_structural,
-            KETemplate,
-            matEncoder,
-            use_constant_poissons_ratio=use_constant_poissons_ratio,
-            constant_poissons_ratio=constant_poissons_ratio,
-        )
-
-        cons, grad_cons = compute_mmto_constraint_and_gradient(
-            to_params,
-            sol,
-            zeta_phys,
-            fe_solver_structural,
-            KETemplate,
-            matEncoder,
-            use_constant_poissons_ratio=use_constant_poissons_ratio,
-            constant_poissons_ratio=constant_poissons_ratio,
-        )
+        # gradients w.r.t. (x_phys, z), the layout the manual code returned
+        obj = float(J_t)
+        grad_obj = ad_model.grad_phys(J_t)
+        cons = np.array([[float(c)] for c in cons_t])
+        grad_cons = np.array([ad_model.grad_phys(c) for c in cons_t])
 
         # ================= PENALTIES + NORMALIZATION ==================
         J_phys = float(obj)
@@ -597,10 +455,10 @@ def run_topopt(
             # penalty is ZERO at a spatially-uniform start, so it has no valid
             # own-initial-value to normalize by (dividing by it would blow up).
             # z_smoothing_weight multiplies the raw roughness directly.
-            Pzn = float(z_smoothing_weight) * float(Pz_raw)
+            Pz_t = AD.latent_smoothing(ad_model.x_phys, ad_model.z, ad_model.Hm, ad_model.Hsm)
+            Pzn = float(z_smoothing_weight) * float(Pz_t)
             obj = obj + Pzn
-            grad_obj_phys[0:num_elems] += float(z_smoothing_weight) * dPz_dx
-            grad_obj_phys[num_elems:] += float(z_smoothing_weight) * dPz_dz.T.reshape(-1)
+            grad_obj_phys += float(z_smoothing_weight) * ad_model.grad_phys(Pz_t)
         else:
             Pzn = 0.0
 
@@ -609,11 +467,8 @@ def run_topopt(
 
         if use_penalization and (use_dynamic_gamma_scheduling or mmaIterations >= int(penalty_start_iter)):
             # RAW penalty (gamma = 1); weighting + normalization applied here
-            penalty_raw, dpen_d_x, dpen_d_z = _distance_to_real_material_penalty(
-                x_phys,
-                z,
-                1.0,
-            )
+            Dp_t = AD.distance_penalty(ad_model.x_phys, ad_model.z, ad_model.z_real)
+            penalty_raw = float(Dp_t)
 
             if Sd0 is None:
                 Sd0 = max(float(penalty_raw), 1e-12)   # freeze initial scale (once)
@@ -622,9 +477,9 @@ def run_topopt(
             P = float(penalty_raw)
             Pn = float(gamma) * (P / Sd0)
             obj = obj + Pn
-            # density gradient (dpen_d_x) intentionally NOT applied: x enters the
-            # realizability penalty as a frozen weight, so dP/dx = 0 by construction.
-            grad_obj_phys[num_elems:] += float(gamma) * dpen_d_z.T.reshape(-1) / Sd0
+            # x enters the realizability penalty as a frozen weight (detached in the AD
+            # model), so its x block is zero by construction, as before.
+            grad_obj_phys += float(gamma) * ad_model.grad_phys(Dp_t) / Sd0
 
             if use_dynamic_gamma_scheduling:
                 _J_hist.append(float(Jn))
@@ -649,15 +504,9 @@ def run_topopt(
         grad_obj = grad_obj_phys
 
         # ============== CHAIN RULE -> DESIGN VARIABLES ================
-        if APPLY_DENSITY_FILTER:
-            g_x = grad_obj[0:num_elems].copy()
-            g_xfilt = g_x * dxphys_dxfilt
-            grad_obj[0:num_elems] = H_density.T @ (g_xfilt / Hs_density)
-
-            for i in range(grad_cons.shape[0]):
-                g_xc = grad_cons[i, 0:num_elems].copy()
-                g_xfilt_c = g_xc * dxphys_dxfilt
-                grad_cons[i, 0:num_elems] = H_density.T @ (g_xfilt_c / Hs_density)
+        grad_obj = ad_model.chain_to_x(grad_obj)
+        for i in range(grad_cons.shape[0]):
+            grad_cons[i, :] = ad_model.chain_to_x(grad_cons[i, :])
 
         grad_obj = np.array([grad_obj]).reshape((num_design_var, 1))
         cons = np.array(cons).reshape((-1, 1))

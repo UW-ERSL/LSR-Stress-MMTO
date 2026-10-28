@@ -2,12 +2,11 @@
 #
 #     python -m pip install -r requirements.txt
 #
-# A superset: this covers both this repository and the solver library it builds
-# on, so one install is enough.
+# autodiff branch. A superset: this covers both this repository and PyTO-AD,
+# the solver library this branch builds on, so one install is enough.
 #
-# The pins are inherited from the solver library and should not be loosened.
-# pyvista in particular is held below 0.46; later releases change plotting
-# behaviour it relies on.
+# pyvista: PyTO-AD asks for >=0.45 and this repository's plotting for <0.46,
+# so it is held to the 0.45 series, which satisfies both.
 
 # --- solver stack ---
 numpy<2.3                  # numba supports NumPy 2.2 at most
@@ -15,7 +14,7 @@ scipy
 matplotlib
 scikit-learn
 pandas
-torch
+torch                      # automatic differentiation (the gradients on this branch)
 numba
 pyamg
 pypardiso                  # direct linear solver
@@ -30,7 +29,7 @@ pymeshfix
 manifold3d
 
 # --- rendering ---
-pyvista<0.46
+pyvista>=0.45,<0.46
 vtk
 pyvistaqt
 PyQt5

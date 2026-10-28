@@ -11,7 +11,7 @@ from StructuralFEAExamples import StructuralFEAExamples, getStructuralFEAProblem
 from PyTOImports import  TO_QOI, find_elements_with_fixedDOF # type: ignore
 from mmto_common import MMTOParams # type: ignore
 from dataclasses import dataclass, field
-import topopt_material_model  # to override the shared p-norm exponent per problem
+from PyTOImports import topopt_material_model  # to override the shared p-norm exponent per problem
 @dataclass(slots=True) # avoid accidental modification
 class VAEParams: #default VAE parameters
     klFactor: float = 5e-6

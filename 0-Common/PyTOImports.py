@@ -1,10 +1,19 @@
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../PyTO/src')))
-import stl_reader, hex_mesher,topopt_filters, bound_cond, mat_lib, hex_structural_fea, hex_element_stiffness, hex_thermal_fea, linear_solvers, deflation # type: ignore[reportMissingImports]
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../PyTO-AD/src')))
+import pyto.autodiff.material_model as topopt_material_model  # first: PyTO-AD sets torch's default dtype to float64
+from pyto.io import stl_reader
+from pyto.core import hex_mesher, mat_lib
+from pyto.core import bc as bound_cond
+from pyto.topopt import filters as topopt_filters
+from pyto.physics.structural import hex_structural_fea
+from pyto.physics import hex_element_stiffness
+from pyto.physics.thermal import hex_thermal_fea
+from pyto.solve import solvers as linear_solvers
+from pyto.solve import deflation
 
-from topopt_common import createFilters, TO_QOI, TOParams, find_elements_with_fixedDOF # type: ignore[reportMissingImports]
-from mmaWrapper import  runMMA # type: ignore[reportMissingImports]
-from topopt_material_model import MaterialModel, get_stress_relaxation_correction, get_stress_relaxation_factor_sensitivity, get_pNorm_exponent, get_structural_material_model_sensitivity, get_structural_material_model_scaling, get_thermal_material_model_sensitivity, get_thermal_material_model_scaling    # type: ignore[reportMissingImports]
-from topopt_material_model import initialize_SIMP_STRUCTURAL_PENALTY, initialize_SIMP_THERMAL_PENALTY # type: ignore[reportMissingImports]
-from topopt_material_model import   increment_SIMP_THERMAL_PENALTY, increment_SIMP_STRUCTURAL_PENALTY # type: ignore[reportMissingImports]
+from pyto.topopt.common import createFilters, TO_QOI, TOParams, find_elements_with_fixedDOF, DIRECT_SOLVER_DOF_CUTOFF
+from pyto.topopt.drivers.mmaWrapper import runMMA
+from pyto.autodiff.material_model import MaterialModel, get_pNorm_exponent
+from pyto.autodiff.material_model import initialize_SIMP_STRUCTURAL_PENALTY, initialize_SIMP_THERMAL_PENALTY
+from pyto.autodiff.material_model import increment_SIMP_THERMAL_PENALTY, increment_SIMP_STRUCTURAL_PENALTY

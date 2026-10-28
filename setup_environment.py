@@ -5,9 +5,11 @@ Builds everything needed to run this repository, in one command:
 
     python setup_environment.py
 
-1. creates a conda environment, lsr-stress-mmto, with Python 3.11
-2. fetches PyTO, the single-material topology optimization code this builds
-   on, beside this repository, at a fixed commit,
+autodiff branch: gradients come from automatic differentiation through PyTO-AD.
+
+1. creates a conda environment, lsr-stress-mmto-ad, with Python 3.11
+2. fetches PyTO-AD, the differentiable topology optimization code this branch
+   builds on, beside this repository, at a fixed commit,
    with git if it is installed and as a download otherwise
 3. installs requirements.txt into that environment
 4. registers the environment as a Jupyter kernel
@@ -16,7 +18,7 @@ Builds everything needed to run this repository, in one command:
 Safe to run again: each step is skipped if already done.
 
 Afterwards, open Tutorial.ipynb in a code editor and select the kernel
-"Python (lsr-stress-mmto)". The README covers running it in a browser instead.
+"Python (lsr-stress-mmto-ad)". The README covers running it in a browser instead.
 """
 import os
 import shutil
@@ -30,12 +32,12 @@ except Exception:
     pass
 os.environ["PYTHONUNBUFFERED"] = "1"
 
-ENV = "lsr-stress-mmto"
+ENV = "lsr-stress-mmto-ad"
 PYTHON = "3.11"
 
-SOLVER_URL = "https://github.com/UW-ERSL/PyTO.git"
-SOLVER_COMMIT = "b109a1691c5526001c766221d00e84e26470dfdb"
-SOLVER_DIR = "PyTO"
+SOLVER_URL = "https://github.com/UW-ERSL/PyTO-AD.git"
+SOLVER_COMMIT = "19c535068713c49f8eb1e30d9306f7501b22d754"
+SOLVER_DIR = "PyTO-AD"
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PARENT = os.path.dirname(HERE)
@@ -128,10 +130,10 @@ def report_existing_solver():
 
 
 def pyto_like_siblings():
-    """Folders beside this repository that hold PyTO under another name.
+    """Folders beside this repository that hold PyTO-AD under another name.
 
-    A folder counts if it contains src/topopt_common.py. A link to PyTO and PyTO
-    itself are the same folder, so a link does not count.
+    A folder counts if it contains src/pyto/topopt/common.py. A link to PyTO-AD
+    and PyTO-AD itself are the same folder, so a link does not count.
     """
     try:
         names = sorted(os.listdir(PARENT))
@@ -143,7 +145,7 @@ def pyto_like_siblings():
         path = os.path.join(PARENT, name)
         if name == SOLVER_DIR or os.path.realpath(path) == os.path.realpath(HERE):
             continue
-        if not os.path.isfile(os.path.join(path, "src", "topopt_common.py")):
+        if not os.path.isfile(os.path.join(path, "src", "pyto", "topopt", "common.py")):
             continue
         if ours is None or os.path.realpath(path) != ours:
             found.append(name)
@@ -156,7 +158,7 @@ def download_solver():
     import urllib.request
     import zipfile
 
-    url = f"https://github.com/UW-ERSL/PyTO/archive/{SOLVER_COMMIT}.zip"
+    url = f"https://github.com/UW-ERSL/PyTO-AD/archive/{SOLVER_COMMIT}.zip"
     tmp = tempfile.mkdtemp(prefix="solver_")
     zpath = os.path.join(tmp, "solver.zip")
     print(f"      $ download {url}", flush=True)
@@ -190,7 +192,7 @@ def download_solver():
 
 def main():
     print(f"repository : {HERE}", flush=True)
-    print(f"PyTO       : {SOLVER_PATH}", flush=True)
+    print(f"PyTO-AD    : {SOLVER_PATH}", flush=True)
     print(f"environment: {ENV}", flush=True)
     print("\nFive steps. Step 3 downloads a few GB and is the slow one.", flush=True)
 
@@ -211,12 +213,12 @@ def main():
         fail(f"could not create {ENV}")
 
     # ------------------------------------------------------------------ 2
-    step(2, "PyTO, the topology optimization code", "under a minute")
+    step(2, "PyTO-AD, the differentiable topology optimization code", "under a minute")
     others = pyto_like_siblings()
     if os.path.isdir(os.path.join(SOLVER_PATH, "src")):
         report_existing_solver()
         for name in others:
-            print(f"      note: {name} also looks like PyTO; this repository uses "
+            print(f"      note: {name} also looks like PyTO-AD; this branch uses "
                   f"{SOLVER_DIR}", flush=True)
     elif others:
         fail(f"found {others[0]} beside this repository, but it must be called "
@@ -297,8 +299,19 @@ check("repository found", lambda: root or (_ for _ in ()).throw(RuntimeError("no
 
 for m in ("records", "render", "figures", "tables", "display"):
     check(f"utils.{m} imports", lambda m=m: importlib.import_module(f"utils.{m}"))
-check("PyTO and the examples import", lambda: importlib.import_module("ExamplesPureStructural"))
+check("PyTO-AD and the examples import", lambda: importlib.import_module("ExamplesPureStructural"))
 check("optimizer driver imports", lambda: importlib.import_module("MainPureStructural"))
+
+def pyto_ad_only():
+    import pyto
+    where = os.path.realpath(os.path.dirname(pyto.__file__))
+    expected = os.path.realpath(os.path.join(os.path.dirname(here), "PyTO-AD", "src", "pyto"))
+    if where != expected:
+        raise RuntimeError(f"pyto imported from {where}, expected {expected}")
+    old = [m for m in ("topopt_common", "hex_structural_fea", "topopt_material_model") if m in sys.modules]
+    if old:
+        raise RuntimeError(f"PyTO (main) modules were imported: {old}")
+check("only PyTO-AD is used (no PyTO main modules loaded)", pyto_ad_only)
 
 def lbracket_mesh():
     from ExamplesPureStructural import (MMTOExamplesPureStructural,

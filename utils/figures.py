@@ -313,9 +313,7 @@ def boundary_conditions(example, out=None, *, size=(1400, 1050), zoom=0.82):
     """
     from ExamplesPureStructural import (                       # type: ignore
         MMTOExamplesPureStructural, getMMTOProblemPureStructural)
-    import hex_structural_fea                                  # type: ignore
-    import linear_solvers                                      # type: ignore
-    import deflation                                           # type: ignore
+    from PyTOImports import hex_structural_fea, linear_solvers, deflation  # type: ignore
     import pyvista as pv
 
     ex = (example if not isinstance(example, str)
