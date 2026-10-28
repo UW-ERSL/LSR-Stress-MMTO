@@ -1,0 +1,257 @@
+{
+ "run": {
+  "example": "UBracket_Stress_FF",
+  "comment": "U-bracket (unit square minus top slot), nz=1, 6-material A-F VAE, min p-norm FAILURE FACTOR s.t. mass cap (-x distributed load)",
+  "timestamp": "2026-10-28T02:19:23",
+  "runtime_seconds": 647.2315800189972,
+  "iterations": 351
+ },
+ "arguments_resolved": {
+  "to_problem": "UBracket_Stress_FF",
+  "n_dof_desired": null,
+  "relative_filter_radius": 3.5,
+  "material_filter_radius": 2.5,
+  "pnorm_exponent": 16.0,
+  "timeLimit": 36000,
+  "saveNet": "./1-PureStructural/MaterialDataPureStructural/6Materials_AF_3Attr.nt",
+  "plot_progress": false,
+  "verbose": true,
+  "save_dir": "D:\\LSR_STRESS_MMTO_MAIN\\comparison\\reference\\autodiff\\U-bracket",
+  "use_pretrained_vae": true,
+  "use_penalization": true,
+  "use_continuation": false,
+  "use_constant_poissons_ratio": false,
+  "constant_poissons_ratio": 0.3,
+  "snap_to_real_material": false,
+  "rel_conv_tol": 1e-07,
+  "maxIterations": 350,
+  "binarize_topology": true,
+  "z0_init_method": "ORIGIN",
+  "plot_bcs": false,
+  "gamma_init": 0.001,
+  "gamma_max": 10,
+  "gamma_factor": 1.1,
+  "penalty_start_iter": 0,
+  "distance_penalty_disable_after_iter": 250,
+  "use_dynamic_gamma_scheduling": true,
+  "plotter": null,
+  "use_heaviside_projection": true,
+  "eta_proj": 0.5,
+  "beta_schedule_scheme": "PAPER",
+  "use_z_smoothing": false,
+  "z_smoothing_weight": 0.0001,
+  "z_smoothing_disable_after_iter": 250
+ },
+ "penalization_distance": {
+  "use_penalization": true,
+  "gamma_init": 0.001,
+  "gamma_max": 10,
+  "gamma_factor": 1.1,
+  "penalty_start_iter": 0,
+  "distance_penalty_disable_after_iter": 250
+ },
+ "penalization_zsmoothing": {
+  "use_z_smoothing": false,
+  "z_smoothing_weight": 0.0001,
+  "z_smoothing_disable_after_iter": 250
+ },
+ "heaviside_beta": {
+  "use_heaviside_projection": true,
+  "eta_proj": 0.5,
+  "beta_schedule_scheme": "PAPER",
+  "beta_schedule_values": {
+   "beta_init": 1.0,
+   "beta_max": 32,
+   "beta_factor": 1.5,
+   "beta_update_every": 5,
+   "beta_start_iter": 50
+  }
+ },
+ "topopt_params": {
+  "Comment": "U-bracket (unit square minus top slot), nz=1, 6-material A-F VAE, min p-norm FAILURE FACTOR s.t. mass cap (-x distributed load)",
+  "Objective": [
+   "PNORM_STRESS",
+   "FAILURE_FACTOR"
+  ],
+  "Constraints": [
+   [
+    "MASS",
+    null,
+    0.0035000000000000005
+   ]
+  ],
+  "nDOFDesired": 30000,
+  "APPLY_FILTER_TO_DENSITY": true,
+  "HeavisideProjection": false,
+  "HeavisideBetaInterval": 50,
+  "HeavisideBetaMax": 32.0,
+  "RelativeFilterRadius": 3.5,
+  "XSymmetry": false,
+  "YSymmetry": false,
+  "ZSymmetry": false,
+  "XAxisAngularSymmetry": 0,
+  "YAxisAngularSymmetry": 0,
+  "ZAxisAngularSymmetry": 0,
+  "ExtrudeX": false,
+  "ExtrudeY": false,
+  "ExtrudeZ": true,
+  "KeepFixedElems": false,
+  "RemoveHangingElems": false,
+  "AMBuildDir": "",
+  "ElemsToKeep": null,
+  "MaxIterations": 150,
+  "Enforce_Constraints_MMA": false,
+  "Eliminate_Hanging_Elements": false,
+  "MaterialsExcelFile": "./1-PureStructural/MaterialDataPureStructural/6Materials_AF_3Attr.xlsx",
+  "materialModel": "SIMP",
+  "ObjectiveLabel": null,
+  "ConstraintLabels": null,
+  "Gradient": "AUTODIFF",
+  "ThermalReferenceTemperature": 23.0,
+  "ConductivityPenalty": null,
+  "ConductivityVoidRatio": null,
+  "stress_scaling": 1.0,
+  "MaterialFilterRadius": 2.5,
+  "current_major_iter": 350,
+  "AL_state": null,
+  "pnorm_exponent": 16.0
+ },
+ "vae_params": {
+  "klFactor": 0.0001,
+  "learningRate": 0.0001,
+  "numEpochs": 100000,
+  "vae_hiddenDim": 50,
+  "latentDim": 2,
+  "maxAttributeErrorPercent": 0.1
+ },
+ "materials": {
+  "material_names": [
+   "A",
+   "B",
+   "C",
+   "D",
+   "E",
+   "F"
+  ],
+  "material_count": 6,
+  "zRealPoints": [
+   [
+    1.747274511147964,
+    -1.7038478661926366
+   ],
+   [
+    -0.43245301725916396,
+    -0.986808210155835
+   ],
+   [
+    0.26461849494095613,
+    -0.2161391652449775
+   ],
+   [
+    -1.8557649703053318,
+    0.4394352550867623
+   ],
+   [
+    1.059655911352821,
+    1.3710718353521902
+   ],
+   [
+    -1.016514473970213,
+    2.0950629613761182
+   ]
+  ],
+  "material_colors": [
+   "#f58231",
+   "#49c878",
+   "#800000",
+   "#080878",
+   "#b8860b",
+   "#1b1b1b",
+   "#004d00",
+   "#28a3dc",
+   "#6a5acd",
+   "#a35f5f",
+   "#9932cc",
+   "#e6194b",
+   "#ffb6c1",
+   "#e76f5d",
+   "#ffe119",
+   "#008080",
+   "#228b22",
+   "#911eb4",
+   "#42d4f4",
+   "#505053"
+  ],
+  "real_material_properties": {
+   "Density": [
+    1.0049085991748667,
+    1.19994989148482,
+    1.3988317804535932,
+    1.6004428731640323,
+    1.7991663748793143,
+    1.9929988769796059
+   ],
+   "Youngs_Modulus": [
+    100.46874161928365,
+    159.73840760027474,
+    139.74128098744256,
+    199.18077666460678,
+    119.92138269086175,
+    179.92692562174892
+   ],
+   "Yield_Strength": [
+    100.98129104311218,
+    139.99256423361797,
+    179.76854485966686,
+    220.08536951664104,
+    259.83326449273295,
+    298.6116821042167
+   ]
+  }
+ },
+ "fea": {
+  "mesh": {
+   "num_elems": 9001,
+   "num_nodes": 18508,
+   "elem_size": [
+    0.009900990099009901,
+    0.009900990099009901,
+    0.009999999776482582
+   ],
+   "domain_min_xyz": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "domain_max_xyz": [
+    1.0,
+    1.0,
+    0.009999999776482582
+   ]
+  },
+  "loading_and_bc": {
+   "load_node_count": 16,
+   "net_force_xyz": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "total_force_magnitude": 1.0,
+   "load_centroid_xyz": [
+    1.0,
+    0.9653465346534653,
+    0.004999999888241291
+   ],
+   "fixed_dof_count": 612,
+   "fixed_node_count": 204
+  },
+  "use_constant_poissons_ratio": false,
+  "constant_poissons_ratio": 0.3
+ },
+ "optimizer_mma": {
+  "optimizer": "MMA (mmaWrapper)",
+  "kktTol": 1e-06,
+  "fTolerance": 1e-07,
+  "gTolerance": 1e-07
+ }
+}

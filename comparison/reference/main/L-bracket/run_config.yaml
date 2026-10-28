@@ -1,0 +1,241 @@
+# MMTO run configuration  (auto-generated; do not edit)
+
+# ================================================================
+# RUN
+# ================================================================
+run:
+  example: LBracketTopLoad_Stress_BM1
+  comment: 
+  timestamp: 2026-10-28T01:44:26
+  runtime_seconds: 976.4060447216034
+  iterations: 301
+
+# ================================================================
+# ARGUMENTS_RESOLVED
+# ================================================================
+arguments_resolved:
+  to_problem: LBracketTopLoad_Stress_BM1
+  n_dof_desired: None
+  relative_filter_radius: 3.5
+  material_filter_radius: 3.5
+  pnorm_exponent: None
+  timeLimit: 36000
+  saveNet: ./1-PureStructural/MaterialDataPureStructural/BM1_3Mats_2Attr.nt
+  plot_progress: False
+  verbose: True
+  save_dir: D:\LSR_STRESS_MMTO_MAIN\comparison\reference\main\L-bracket
+  use_pretrained_vae: True
+  use_penalization: True
+  use_continuation: False
+  use_constant_poissons_ratio: False
+  constant_poissons_ratio: 0.3
+  snap_to_real_material: False
+  rel_conv_tol: 1e-07
+  maxIterations: 300
+  binarize_topology: True
+  z0_init_method: ORIGIN
+  plot_bcs: False
+  gamma_init: 0.001
+  gamma_max: 10
+  gamma_factor: 1.1
+  penalty_start_iter: 0
+  distance_penalty_disable_after_iter: 250
+  use_dynamic_gamma_scheduling: True
+  plotter: None
+  use_heaviside_projection: True
+  eta_proj: 0.5
+  beta_schedule_scheme: PAPER_BM1
+  use_z_smoothing: False
+  z_smoothing_weight: 0.0001
+  z_smoothing_disable_after_iter: 250
+
+# ================================================================
+# PENALIZATION_DISTANCE
+# ================================================================
+penalization_distance:
+  use_penalization: True
+  gamma_init: 0.001
+  gamma_max: 10
+  gamma_factor: 1.1
+  penalty_start_iter: 0
+  distance_penalty_disable_after_iter: 250
+
+# ================================================================
+# PENALIZATION_ZSMOOTHING
+# ================================================================
+penalization_zsmoothing:
+  use_z_smoothing: False
+  z_smoothing_weight: 0.0001
+  z_smoothing_disable_after_iter: 250
+
+# ================================================================
+# HEAVISIDE_BETA
+# ================================================================
+heaviside_beta:
+  use_heaviside_projection: True
+  eta_proj: 0.5
+  beta_schedule_scheme: PAPER_BM1
+  beta_schedule_values:
+    beta_init: 1.0
+    beta_max: 16
+    beta_factor: 1.5
+    beta_update_every: 5
+    beta_start_iter: 50
+
+# ================================================================
+# TOPOPT_PARAMS
+# ================================================================
+topopt_params:
+  Comment: 
+  Objective:
+    - PNORM_STRESS
+    - None
+  Constraints:
+    -
+      - VOLUME_FRACTION
+      -
+        material_id: 0
+        tau: 0.5
+      - 0.15
+    -
+      - VOLUME_FRACTION
+      -
+        material_id: 1
+        tau: 0.5
+      - 0.15
+    -
+      - VOLUME_FRACTION
+      -
+        material_id: 2
+        tau: 0.5
+      - 0.1
+  nDOFDesired: 30000
+  APPLY_FILTER_TO_DENSITY: True
+  RelativeFilterRadius: 3.5
+  XSymmetry: False
+  YSymmetry: False
+  ZSymmetry: False
+  XAxisAngularSymmetry: 0
+  YAxisAngularSymmetry: 0
+  ZAxisAngularSymmetry: 0
+  ExtrudeX: False
+  ExtrudeY: False
+  ExtrudeZ: True
+  KeepFixedElems: False
+  RemoveHangingElems: False
+  AMBuildDir: 
+  ElemsToKeep: None
+  MaxIterations: 150
+  Enforce_Constraints_MMA: False
+  Eliminate_Hanging_Elements: False
+  MaterialsExcelFile: ./1-PureStructural/MaterialDataPureStructural/BM1_3Mats_2Attr.xlsx
+  materialModel: SIMP
+  MaterialFilterRadius: 3.5
+  current_major_iter: 300
+  AL_state: None
+  pnorm_exponent: 6.0
+
+# ================================================================
+# VAE_PARAMS
+# ================================================================
+vae_params:
+  klFactor: 0.0001
+  learningRate: 0.0005
+  numEpochs: 30000
+  vae_hiddenDim: 50
+  latentDim: 2
+  maxAttributeErrorPercent: 0.1
+
+# ================================================================
+# MATERIALS
+# ================================================================
+materials:
+  material_names:
+    - Mat1_Red
+    - Mat2_Blue
+    - Mate3_Green
+  material_count: 3
+  zRealPoints:
+    -
+      - 0.42587676644325256
+      - 1.4803550243377686
+    -
+      - -0.2765323519706726
+      - 0.09666434675455093
+    -
+      - -0.4819369614124298
+      - -1.9408565759658813
+  material_colors:
+    - #f58231
+    - #49c878
+    - #800000
+    - #080878
+    - #b8860b
+    - #1b1b1b
+    - #004d00
+    - #28a3dc
+    - #6a5acd
+    - #a35f5f
+    - #9932cc
+    - #e6194b
+    - #ffb6c1
+    - #e76f5d
+    - #ffe119
+    - #008080
+    - #228b22
+    - #911eb4
+    - #42d4f4
+    - #505053
+  real_material_properties:
+    Youngs_Modulus:
+      - 1009883.9375
+      - 1999965.25
+      - 2995593.0
+    Poissons_Ratio:
+      - 0.30000001192092896
+      - 0.30011388659477234
+      - 0.3499998450279236
+
+# ================================================================
+# FEA
+# ================================================================
+fea:
+  mesh:
+    num_elems: 12825
+    num_nodes: 26216
+    elem_size:
+      - 1.4184397163120568
+      - 1.4184397163120568
+      - 1.0
+    domain_min_xyz:
+      - 0.0
+      - 0.0
+      - 0.0
+    domain_max_xyz:
+      - 200.0
+      - 200.0
+      - 1.0
+  loading_and_bc:
+    load_node_count: 16
+    net_force_xyz:
+      - 0.0
+      - -4.0
+      - 0.0
+    total_force_magnitude: 4.0
+    load_centroid_xyz:
+      - 200.0
+      - 75.88652482269504
+      - 0.5
+    fixed_dof_count: 342
+    fixed_node_count: 114
+  use_constant_poissons_ratio: False
+  constant_poissons_ratio: 0.3
+
+# ================================================================
+# OPTIMIZER_MMA
+# ================================================================
+optimizer_mma:
+  optimizer: MMA (mmaWrapper)
+  kktTol: 1e-06
+  fTolerance: 1e-07
+  gTolerance: 1e-07

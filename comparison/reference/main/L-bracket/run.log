@@ -1,0 +1,3070 @@
+[LBracket_BM1] grid=[141, 141, 1]  total_elems=12825  in-plane=12825  nz=1  h=1.418 mm   (Banh target: 12800 in-plane, h=1.414 mm)
+[SWEEP] nDOFDesired=30000  RelativeFilterRadius=3.5  MaterialFilterRadius=3.5  P=(example default)
+Intrinsic dimension estimate (participation ratio): 1.140
+PCA explained variance ratio: [0.93448305 0.06551698]
+Loading pre-trained autoencoder from file: ./1-PureStructural/MaterialDataPureStructural/BM1_3Mats_2Attr.nt
+----------------------------------------
+Attribute                     Max % Error
+----------------------------------------
+Youngs_Modulus                   0.494198
+Poissons_Ratio                   0.227750
+----------------------------------------
+Solver: PARDISO
+Number of DOF: 78648
+Using latent dimension: 2
+Creating filter...
+-------------- Iteration 0 -----------------
+Percentage grey elements (x_phys): 100.00% | beta=1, eta=0.5
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=12.2 | Jn=1 | P=0.146 | Pn=0.001 | Pz_n=0 | f=1.001
+Constraint 1 (VOLUME_FRACTION): 0.0051 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.495 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.000197 <= 0.1?
+-------------- Iteration 1 -----------------
+Percentage grey elements (x_phys): 100.00% | beta=1, eta=0.5
+[MAT] counts=[0, 6, 0]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=14.83 | Jn=1.215 | P=0.202 | Pn=0.00138 | Pz_n=2.25e-05 | f=1.217
+Constraint 1 (VOLUME_FRACTION): 0.0183 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.428 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 3.78e-05 <= 0.1?
+-------------- Iteration 2 -----------------
+Percentage grey elements (x_phys): 100.00% | beta=1, eta=0.5
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=20.15 | Jn=1.651 | P=0.261 | Pn=0.00178 | Pz_n=5.49e-05 | f=1.653
+Constraint 1 (VOLUME_FRACTION): 0.0594 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.333 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 7.52e-06 <= 0.1?
+-------------- Iteration 3 -----------------
+Percentage grey elements (x_phys): 100.00% | beta=1, eta=0.5
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=28.59 | Jn=2.342 | P=0.303 | Pn=0.00207 | Pz_n=8.08e-05 | f=2.345
+Constraint 1 (VOLUME_FRACTION): 0.145 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.195 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 2.36e-06 <= 0.1?
+-------------- Iteration 4 -----------------
+Percentage grey elements (x_phys): 100.00% | beta=1, eta=0.5
+[MAT] counts=[1, 0, 0]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=29.81 | Jn=2.443 | P=0.274 | Pn=0.00187 | Pz_n=0.000158 | f=2.445
+Constraint 1 (VOLUME_FRACTION): 0.146 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 5.51e-06 <= 0.1?
+-------------- Iteration 5 -----------------
+Percentage grey elements (x_phys): 100.00% | beta=1, eta=0.5
+[MAT] counts=[7, 7, 0]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=24.98 | Jn=2.047 | P=0.264 | Pn=0.0018 | Pz_n=0.000349 | f=2.049
+Constraint 1 (VOLUME_FRACTION): 0.145 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 1.85e-05 <= 0.1?
+-------------- Iteration 6 -----------------
+Percentage grey elements (x_phys): 100.00% | beta=1, eta=0.5
+[MAT] counts=[32, 20, 1]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=20.69 | Jn=1.695 | P=0.263 | Pn=0.0018 | Pz_n=0.000514 | f=1.698
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 5.6e-05 <= 0.1?
+-------------- Iteration 7 -----------------
+Percentage grey elements (x_phys): 100.00% | beta=1, eta=0.5
+[MAT] counts=[396, 89, 3]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=19.5 | Jn=1.598 | P=0.261 | Pn=0.00178 | Pz_n=0.000632 | f=1.6
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.000111 <= 0.1?
+-------------- Iteration 8 -----------------
+Percentage grey elements (x_phys): 91.55% | beta=1, eta=0.5
+[MAT] counts=[809, 98, 3]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=16.98 | Jn=1.391 | P=0.283 | Pn=0.00193 | Pz_n=0.000891 | f=1.394
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.000156 <= 0.1?
+-------------- Iteration 9 -----------------
+Percentage grey elements (x_phys): 93.02% | beta=1, eta=0.5
+[MAT] counts=[799, 135, 4]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=15.83 | Jn=1.297 | P=0.277 | Pn=0.00189 | Pz_n=0.000907 | f=1.3
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.000207 <= 0.1?
+-------------- Iteration 10 -----------------
+Percentage grey elements (x_phys): 85.86% | beta=1, eta=0.5
+[MAT] counts=[1043, 204, 5]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=14 | Jn=1.147 | P=0.3 | Pn=0.00205 | Pz_n=0.00099 | f=1.15
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.000276 <= 0.1?
+-------------- Iteration 11 -----------------
+Percentage grey elements (x_phys): 83.70% | beta=1, eta=0.5
+[MAT] counts=[1017, 441, 6]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=13.19 | Jn=1.081 | P=0.306 | Pn=0.00209 | Pz_n=0.00121 | f=1.084
+Constraint 1 (VOLUME_FRACTION): 0.146 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.00037 <= 0.1?
+-------------- Iteration 12 -----------------
+Percentage grey elements (x_phys): 81.37% | beta=1, eta=0.5
+[MAT] counts=[1096, 520, 8]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=11.64 | Jn=0.9536 | P=0.314 | Pn=0.00215 | Pz_n=0.00132 | f=0.9571
+Constraint 1 (VOLUME_FRACTION): 0.146 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.000507 <= 0.1?
+-------------- Iteration 13 -----------------
+Percentage grey elements (x_phys): 79.51% | beta=1, eta=0.5
+[MAT] counts=[1089, 813, 12]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=10.62 | Jn=0.8705 | P=0.322 | Pn=0.0022 | Pz_n=0.00132 | f=0.874
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.00075 <= 0.1?
+-------------- Iteration 14 -----------------
+Percentage grey elements (x_phys): 77.21% | beta=1, eta=0.5
+[MAT] counts=[1171, 1103, 13]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=9.663 | Jn=0.7918 | P=0.334 | Pn=0.00228 | Pz_n=0.00149 | f=0.7955
+Constraint 1 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.00125 <= 0.1?
+-------------- Iteration 15 -----------------
+Percentage grey elements (x_phys): 75.06% | beta=1, eta=0.5
+[MAT] counts=[1216, 1414, 32]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=8.901 | Jn=0.7293 | P=0.346 | Pn=0.00236 | Pz_n=0.00168 | f=0.7334
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.00237 <= 0.1?
+-------------- Iteration 16 -----------------
+Percentage grey elements (x_phys): 72.20% | beta=1, eta=0.5
+[MAT] counts=[1279, 1593, 65]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=8.195 | Jn=0.6714 | P=0.359 | Pn=0.00245 | Pz_n=0.00185 | f=0.6757
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.00421 <= 0.1?
+-------------- Iteration 17 -----------------
+Percentage grey elements (x_phys): 70.00% | beta=1, eta=0.5
+[MAT] counts=[1306, 1761, 112]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=7.568 | Jn=0.6201 | P=0.371 | Pn=0.00254 | Pz_n=0.00206 | f=0.6247
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.00661 <= 0.1?
+-------------- Iteration 18 -----------------
+Percentage grey elements (x_phys): 67.82% | beta=1, eta=0.5
+[MAT] counts=[1317, 1882, 147]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=7.041 | Jn=0.5769 | P=0.383 | Pn=0.00261 | Pz_n=0.00234 | f=0.5819
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.00937 <= 0.1?
+-------------- Iteration 19 -----------------
+Percentage grey elements (x_phys): 65.08% | beta=1, eta=0.5
+[MAT] counts=[1333, 1959, 200]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=6.578 | Jn=0.539 | P=0.397 | Pn=0.00271 | Pz_n=0.00256 | f=0.5442
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0126 <= 0.1?
+-------------- Iteration 20 -----------------
+Percentage grey elements (x_phys): 62.39% | beta=1, eta=0.5
+[MAT] counts=[1332, 2024, 267]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=6.166 | Jn=0.5052 | P=0.409 | Pn=0.0028 | Pz_n=0.00288 | f=0.5109
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0163 <= 0.1?
+-------------- Iteration 21 -----------------
+Percentage grey elements (x_phys): 59.51% | beta=1, eta=0.5
+[MAT] counts=[1355, 2072, 321]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=5.797 | Jn=0.475 | P=0.425 | Pn=0.0029 | Pz_n=0.00308 | f=0.481
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0202 <= 0.1?
+-------------- Iteration 22 -----------------
+Percentage grey elements (x_phys): 57.45% | beta=1, eta=0.5
+[MAT] counts=[1355, 2104, 391]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=5.474 | Jn=0.4485 | P=0.436 | Pn=0.00298 | Pz_n=0.00332 | f=0.4548
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0243 <= 0.1?
+-------------- Iteration 23 -----------------
+Percentage grey elements (x_phys): 55.05% | beta=1, eta=0.5
+[MAT] counts=[1362, 2164, 428]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=5.203 | Jn=0.4263 | P=0.448 | Pn=0.00306 | Pz_n=0.00353 | f=0.4329
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0281 <= 0.1?
+-------------- Iteration 24 -----------------
+Percentage grey elements (x_phys): 52.35% | beta=1, eta=0.5
+[MAT] counts=[1371, 2187, 470]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=4.976 | Jn=0.4077 | P=0.458 | Pn=0.00313 | Pz_n=0.00371 | f=0.4145
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0315 <= 0.1?
+-------------- Iteration 25 -----------------
+Percentage grey elements (x_phys): 49.84% | beta=1, eta=0.5
+[MAT] counts=[1377, 2182, 508]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=4.785 | Jn=0.392 | P=0.467 | Pn=0.00319 | Pz_n=0.0038 | f=0.399
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0346 <= 0.1?
+-------------- Iteration 26 -----------------
+Percentage grey elements (x_phys): 47.58% | beta=1, eta=0.5
+[MAT] counts=[1404, 2187, 543]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=4.621 | Jn=0.3787 | P=0.476 | Pn=0.00325 | Pz_n=0.00373 | f=0.3856
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0373 <= 0.1?
+-------------- Iteration 27 -----------------
+Percentage grey elements (x_phys): 45.36% | beta=1, eta=0.5
+[MAT] counts=[1452, 2159, 573]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=4.476 | Jn=0.3667 | P=0.484 | Pn=0.0033 | Pz_n=0.00369 | f=0.3737
+Constraint 1 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0398 <= 0.1?
+-------------- Iteration 28 -----------------
+Percentage grey elements (x_phys): 43.41% | beta=1, eta=0.5
+[MAT] counts=[1502, 2151, 597]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=4.342 | Jn=0.3558 | P=0.492 | Pn=0.00336 | Pz_n=0.00345 | f=0.3626
+Constraint 1 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0421 <= 0.1?
+-------------- Iteration 29 -----------------
+Percentage grey elements (x_phys): 41.39% | beta=1, eta=0.5
+[MAT] counts=[1572, 2157, 626]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=4.224 | Jn=0.3461 | P=0.503 | Pn=0.00343 | Pz_n=0.00319 | f=0.3527
+Constraint 1 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0443 <= 0.1?
+-------------- Iteration 30 -----------------
+Percentage grey elements (x_phys): 39.33% | beta=1, eta=0.5
+[MAT] counts=[1682, 2126, 655]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=4.114 | Jn=0.3371 | P=0.516 | Pn=0.00352 | Pz_n=0.00296 | f=0.3436
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0466 <= 0.1?
+-------------- Iteration 31 -----------------
+Percentage grey elements (x_phys): 37.85% | beta=1, eta=0.5
+[MAT] counts=[1737, 2104, 685]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=4.013 | Jn=0.3288 | P=0.525 | Pn=0.00358 | Pz_n=0.00268 | f=0.3351
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0487 <= 0.1?
+-------------- Iteration 32 -----------------
+Percentage grey elements (x_phys): 36.42% | beta=1, eta=0.5
+[MAT] counts=[1769, 2103, 708]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.921 | Jn=0.3212 | P=0.531 | Pn=0.00363 | Pz_n=0.00244 | f=0.3273
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0506 <= 0.1?
+-------------- Iteration 33 -----------------
+Percentage grey elements (x_phys): 35.27% | beta=1, eta=0.5
+[MAT] counts=[1788, 2107, 726]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.839 | Jn=0.3145 | P=0.538 | Pn=0.00367 | Pz_n=0.00226 | f=0.3205
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0524 <= 0.1?
+-------------- Iteration 34 -----------------
+Percentage grey elements (x_phys): 33.94% | beta=1, eta=0.5
+[MAT] counts=[1822, 2104, 745]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.763 | Jn=0.3083 | P=0.546 | Pn=0.00373 | Pz_n=0.00207 | f=0.3141
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0541 <= 0.1?
+-------------- Iteration 35 -----------------
+Percentage grey elements (x_phys): 32.45% | beta=1, eta=0.5
+[MAT] counts=[1826, 2090, 769]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.689 | Jn=0.3023 | P=0.555 | Pn=0.00379 | Pz_n=0.00199 | f=0.3081
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0561 <= 0.1?
+-------------- Iteration 36 -----------------
+Percentage grey elements (x_phys): 31.41% | beta=1, eta=0.5
+[MAT] counts=[1829, 2085, 798]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.622 | Jn=0.2968 | P=0.561 | Pn=0.00383 | Pz_n=0.00189 | f=0.3025
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0578 <= 0.1?
+-------------- Iteration 37 -----------------
+Percentage grey elements (x_phys): 30.18% | beta=1, eta=0.5
+[MAT] counts=[1846, 2075, 815]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.559 | Jn=0.2916 | P=0.57 | Pn=0.00389 | Pz_n=0.00184 | f=0.2973
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0596 <= 0.1?
+-------------- Iteration 38 -----------------
+Percentage grey elements (x_phys): 29.40% | beta=1, eta=0.5
+[MAT] counts=[1871, 2061, 831]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.5 | Jn=0.2868 | P=0.572 | Pn=0.00391 | Pz_n=0.00174 | f=0.2924
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0612 <= 0.1?
+-------------- Iteration 39 -----------------
+Percentage grey elements (x_phys): 28.52% | beta=1, eta=0.5
+[MAT] counts=[1895, 2070, 851]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.445 | Jn=0.2823 | P=0.575 | Pn=0.00393 | Pz_n=0.00173 | f=0.2879
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0631 <= 0.1?
+-------------- Iteration 40 -----------------
+Percentage grey elements (x_phys): 28.15% | beta=1, eta=0.5
+[MAT] counts=[1923, 2053, 878]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.396 | Jn=0.2782 | P=0.573 | Pn=0.00391 | Pz_n=0.00174 | f=0.2839
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.065 <= 0.1?
+-------------- Iteration 41 -----------------
+Percentage grey elements (x_phys): 27.82% | beta=1, eta=0.5
+[MAT] counts=[1922, 2040, 901]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.35 | Jn=0.2745 | P=0.571 | Pn=0.0039 | Pz_n=0.0018 | f=0.2802
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0668 <= 0.1?
+-------------- Iteration 42 -----------------
+Percentage grey elements (x_phys): 27.56% | beta=1, eta=0.5
+[MAT] counts=[1913, 2024, 923]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.309 | Jn=0.2711 | P=0.569 | Pn=0.00389 | Pz_n=0.0018 | f=0.2768
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0686 <= 0.1?
+-------------- Iteration 43 -----------------
+Percentage grey elements (x_phys): 27.24% | beta=1, eta=0.5
+[MAT] counts=[1927, 2026, 941]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.27 | Jn=0.2679 | P=0.568 | Pn=0.00388 | Pz_n=0.00183 | f=0.2736
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0702 <= 0.1?
+-------------- Iteration 44 -----------------
+Percentage grey elements (x_phys): 26.92% | beta=1, eta=0.5
+[MAT] counts=[1925, 2037, 956]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.235 | Jn=0.265 | P=0.566 | Pn=0.00387 | Pz_n=0.00186 | f=0.2708
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0718 <= 0.1?
+-------------- Iteration 45 -----------------
+Percentage grey elements (x_phys): 26.34% | beta=1, eta=0.5
+[MAT] counts=[1942, 2018, 971]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.203 | Jn=0.2625 | P=0.565 | Pn=0.00386 | Pz_n=0.00188 | f=0.2682
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0734 <= 0.1?
+-------------- Iteration 46 -----------------
+Percentage grey elements (x_phys): 26.01% | beta=1, eta=0.5
+[MAT] counts=[1933, 2011, 993]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.173 | Jn=0.26 | P=0.563 | Pn=0.00384 | Pz_n=0.00191 | f=0.2658
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.075 <= 0.1?
+-------------- Iteration 47 -----------------
+Percentage grey elements (x_phys): 25.79% | beta=1, eta=0.5
+[MAT] counts=[1927, 1992, 1011]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.146 | Jn=0.2578 | P=0.561 | Pn=0.00383 | Pz_n=0.00193 | f=0.2635
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0766 <= 0.1?
+-------------- Iteration 48 -----------------
+Percentage grey elements (x_phys): 25.58% | beta=1, eta=0.5
+[MAT] counts=[1927, 1972, 1033]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.12 | Jn=0.2557 | P=0.559 | Pn=0.00381 | Pz_n=0.00197 | f=0.2614
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0782 <= 0.1?
+-------------- Iteration 49 -----------------
+Percentage grey elements (x_phys): 25.19% | beta=1, eta=0.5
+[MAT] counts=[1927, 1955, 1051]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.098 | Jn=0.2538 | P=0.557 | Pn=0.00381 | Pz_n=0.00195 | f=0.2596
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0797 <= 0.1?
+-------------- Iteration 50 -----------------
+Percentage grey elements (x_phys): 24.54% | beta=1, eta=0.5
+[MAT] counts=[1925, 1939, 1074]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.078 | Jn=0.2522 | P=0.556 | Pn=0.0038 | Pz_n=0.00197 | f=0.258
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0813 <= 0.1?
+-------------- Iteration 51 -----------------
+Percentage grey elements (x_phys): 23.99% | beta=1, eta=0.5
+[MAT] counts=[1920, 1947, 1096]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.061 | Jn=0.2508 | P=0.555 | Pn=0.00379 | Pz_n=0.00194 | f=0.2565
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0828 <= 0.1?
+-------------- Iteration 52 -----------------
+Percentage grey elements (x_phys): 23.85% | beta=1, eta=0.5
+[MAT] counts=[1924, 1965, 1117]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.044 | Jn=0.2494 | P=0.553 | Pn=0.00377 | Pz_n=0.00198 | f=0.2552
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0843 <= 0.1?
+-------------- Iteration 53 -----------------
+Percentage grey elements (x_phys): 23.70% | beta=1, eta=0.5
+[MAT] counts=[1930, 1965, 1137]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.03 | Jn=0.2483 | P=0.549 | Pn=0.00375 | Pz_n=0.00195 | f=0.2539
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0858 <= 0.1?
+-------------- Iteration 54 -----------------
+Percentage grey elements (x_phys): 23.72% | beta=1, eta=0.5
+[MAT] counts=[1963, 1956, 1156]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=3.016 | Jn=0.2471 | P=0.546 | Pn=0.00373 | Pz_n=0.00195 | f=0.2528
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0872 <= 0.1?
+[PROJ] Updated beta -> 1.5 (eta=0.5, scheme=paper_bm1)
+-------------- Iteration 55 -----------------
+Percentage grey elements (x_phys): 22.21% | beta=1.5, eta=0.5
+[MAT] counts=[1956, 1956, 1177]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.973 | Jn=0.2436 | P=0.551 | Pn=0.00376 | Pz_n=0.00193 | f=0.2493
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.089 <= 0.1?
+-------------- Iteration 56 -----------------
+Percentage grey elements (x_phys): 22.77% | beta=1.5, eta=0.5
+[MAT] counts=[1965, 1940, 1195]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.964 | Jn=0.2429 | P=0.544 | Pn=0.00371 | Pz_n=0.00198 | f=0.2486
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0906 <= 0.1?
+-------------- Iteration 57 -----------------
+Percentage grey elements (x_phys): 22.81% | beta=1.5, eta=0.5
+[MAT] counts=[1959, 1945, 1214]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.951 | Jn=0.2418 | P=0.539 | Pn=0.00368 | Pz_n=0.002 | f=0.2475
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0921 <= 0.1?
+-------------- Iteration 58 -----------------
+Percentage grey elements (x_phys): 22.91% | beta=1.5, eta=0.5
+[MAT] counts=[1965, 1939, 1235]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.938 | Jn=0.2407 | P=0.534 | Pn=0.00365 | Pz_n=0.00199 | f=0.2464
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0936 <= 0.1?
+-------------- Iteration 59 -----------------
+Percentage grey elements (x_phys): 23.03% | beta=1.5, eta=0.5
+[MAT] counts=[1951, 1950, 1246]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.926 | Jn=0.2397 | P=0.529 | Pn=0.00361 | Pz_n=0.00199 | f=0.2453
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.095 <= 0.1?
+[PROJ] Updated beta -> 2.25 (eta=0.5, scheme=paper_bm1)
+-------------- Iteration 60 -----------------
+Percentage grey elements (x_phys): 19.53% | beta=2.25, eta=0.5
+[MAT] counts=[1945, 1947, 1262]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.865 | Jn=0.2347 | P=0.545 | Pn=0.00372 | Pz_n=0.00193 | f=0.2404
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.151 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0968 <= 0.1?
+-------------- Iteration 61 -----------------
+Percentage grey elements (x_phys): 19.69% | beta=2.25, eta=0.5
+[MAT] counts=[1942, 1937, 1281]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.86 | Jn=0.2343 | P=0.538 | Pn=0.00367 | Pz_n=0.00199 | f=0.24
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0984 <= 0.1?
+-------------- Iteration 62 -----------------
+Percentage grey elements (x_phys): 19.67% | beta=2.25, eta=0.5
+[MAT] counts=[1936, 1936, 1303]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.848 | Jn=0.2334 | P=0.533 | Pn=0.00364 | Pz_n=0.00205 | f=0.2391
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0997 <= 0.1?
+-------------- Iteration 63 -----------------
+Percentage grey elements (x_phys): 19.53% | beta=2.25, eta=0.5
+[MAT] counts=[1924, 1936, 1313]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.841 | Jn=0.2327 | P=0.531 | Pn=0.00362 | Pz_n=0.00203 | f=0.2384
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0997 <= 0.1?
+-------------- Iteration 64 -----------------
+Percentage grey elements (x_phys): 19.57% | beta=2.25, eta=0.5
+[MAT] counts=[1919, 1940, 1311]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.833 | Jn=0.2321 | P=0.527 | Pn=0.0036 | Pz_n=0.00199 | f=0.2377
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0997 <= 0.1?
+[PROJ] Updated beta -> 3.375 (eta=0.5, scheme=paper_bm1)
+-------------- Iteration 65 -----------------
+Percentage grey elements (x_phys): 15.52% | beta=3.38, eta=0.5
+[MAT] counts=[1924, 1924, 1315]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.756 | Jn=0.2258 | P=0.544 | Pn=0.00371 | Pz_n=0.00189 | f=0.2314
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.151 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 66 -----------------
+Percentage grey elements (x_phys): 15.95% | beta=3.38, eta=0.5
+[MAT] counts=[1920, 1912, 1315]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.76 | Jn=0.2262 | P=0.539 | Pn=0.00368 | Pz_n=0.00179 | f=0.2316
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0996 <= 0.1?
+-------------- Iteration 67 -----------------
+Percentage grey elements (x_phys): 16.27% | beta=3.38, eta=0.5
+[MAT] counts=[1915, 1924, 1318]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.754 | Jn=0.2257 | P=0.534 | Pn=0.00365 | Pz_n=0.00176 | f=0.2311
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0997 <= 0.1?
+-------------- Iteration 68 -----------------
+Percentage grey elements (x_phys): 16.58% | beta=3.38, eta=0.5
+[MAT] counts=[1924, 1924, 1324]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.749 | Jn=0.2252 | P=0.532 | Pn=0.00363 | Pz_n=0.00169 | f=0.2305
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0997 <= 0.1?
+-------------- Iteration 69 -----------------
+Percentage grey elements (x_phys): 16.87% | beta=3.38, eta=0.5
+[MAT] counts=[1927, 1931, 1324]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.743 | Jn=0.2248 | P=0.529 | Pn=0.00361 | Pz_n=0.00162 | f=0.23
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0997 <= 0.1?
+[PROJ] Updated beta -> 5.062 (eta=0.5, scheme=paper_bm1)
+-------------- Iteration 70 -----------------
+Percentage grey elements (x_phys): 11.33% | beta=5.06, eta=0.5
+[MAT] counts=[1934, 1941, 1324]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.66 | Jn=0.218 | P=0.551 | Pn=0.00376 | Pz_n=0.00151 | f=0.2233
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.151 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.101 <= 0.1?
+-------------- Iteration 71 -----------------
+Percentage grey elements (x_phys): 11.97% | beta=5.06, eta=0.5
+[MAT] counts=[1940, 1935, 1315]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.664 | Jn=0.2183 | P=0.546 | Pn=0.00373 | Pz_n=0.0014 | f=0.2234
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0998 <= 0.1?
+-------------- Iteration 72 -----------------
+Percentage grey elements (x_phys): 12.19% | beta=5.06, eta=0.5
+[MAT] counts=[1941, 1929, 1316]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.658 | Jn=0.2177 | P=0.542 | Pn=0.0037 | Pz_n=0.00142 | f=0.2229
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0998 <= 0.1?
+-------------- Iteration 73 -----------------
+Percentage grey elements (x_phys): 12.28% | beta=5.06, eta=0.5
+[MAT] counts=[1929, 1931, 1319]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.652 | Jn=0.2173 | P=0.539 | Pn=0.00368 | Pz_n=0.00137 | f=0.2224
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 74 -----------------
+Percentage grey elements (x_phys): 12.19% | beta=5.06, eta=0.5
+[MAT] counts=[1930, 1919, 1319]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.647 | Jn=0.2169 | P=0.536 | Pn=0.00366 | Pz_n=0.00134 | f=0.2219
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+[PROJ] Updated beta -> 7.594 (eta=0.5, scheme=paper_bm1)
+-------------- Iteration 75 -----------------
+Percentage grey elements (x_phys): 8.23% | beta=7.59, eta=0.5
+[MAT] counts=[1920, 1923, 1320]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.577 | Jn=0.2111 | P=0.551 | Pn=0.00376 | Pz_n=0.00127 | f=0.2162
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.101 <= 0.1?
+-------------- Iteration 76 -----------------
+Percentage grey elements (x_phys): 8.39% | beta=7.59, eta=0.5
+[MAT] counts=[1928, 1907, 1315]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.577 | Jn=0.2112 | P=0.546 | Pn=0.00373 | Pz_n=0.00121 | f=0.2161
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0997 <= 0.1?
+-------------- Iteration 77 -----------------
+Percentage grey elements (x_phys): 8.30% | beta=7.59, eta=0.5
+[MAT] counts=[1926, 1909, 1309]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.574 | Jn=0.2109 | P=0.542 | Pn=0.0037 | Pz_n=0.00118 | f=0.2157
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0998 <= 0.1?
+-------------- Iteration 78 -----------------
+Percentage grey elements (x_phys): 8.41% | beta=7.59, eta=0.5
+[MAT] counts=[1933, 1899, 1311]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.57 | Jn=0.2106 | P=0.536 | Pn=0.00366 | Pz_n=0.00122 | f=0.2155
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0998 <= 0.1?
+-------------- Iteration 79 -----------------
+Percentage grey elements (x_phys): 8.44% | beta=7.59, eta=0.5
+[MAT] counts=[1927, 1900, 1302]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.568 | Jn=0.2104 | P=0.531 | Pn=0.00363 | Pz_n=0.00122 | f=0.2153
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0998 <= 0.1?
+[PROJ] Updated beta -> 11.39 (eta=0.5, scheme=paper_bm1)
+-------------- Iteration 80 -----------------
+Percentage grey elements (x_phys): 5.54% | beta=11.4, eta=0.5
+[MAT] counts=[1939, 1909, 1306]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.526 | Jn=0.207 | P=0.543 | Pn=0.0037 | Pz_n=0.00121 | f=0.2119
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 81 -----------------
+Percentage grey elements (x_phys): 5.40% | beta=11.4, eta=0.5
+[MAT] counts=[1930, 1916, 1307]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.525 | Jn=0.2069 | P=0.541 | Pn=0.00369 | Pz_n=0.00119 | f=0.2117
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 82 -----------------
+Percentage grey elements (x_phys): 5.47% | beta=11.4, eta=0.5
+[MAT] counts=[1925, 1920, 1302]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.521 | Jn=0.2066 | P=0.536 | Pn=0.00366 | Pz_n=0.00113 | f=0.2114
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0998 <= 0.1?
+-------------- Iteration 83 -----------------
+Percentage grey elements (x_phys): 5.31% | beta=11.4, eta=0.5
+[MAT] counts=[1922, 1918, 1309]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.518 | Jn=0.2063 | P=0.533 | Pn=0.00364 | Pz_n=0.0011 | f=0.211
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0998 <= 0.1?
+-------------- Iteration 84 -----------------
+Percentage grey elements (x_phys): 5.15% | beta=11.4, eta=0.5
+[MAT] counts=[1923, 1919, 1304]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.516 | Jn=0.2061 | P=0.53 | Pn=0.00362 | Pz_n=0.00106 | f=0.2108
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0998 <= 0.1?
+[PROJ] Updated beta -> 16 (eta=0.5, scheme=paper_bm1)
+-------------- Iteration 85 -----------------
+Percentage grey elements (x_phys): 2.97% | beta=16, eta=0.5
+[MAT] counts=[1923, 1919, 1309]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.493 | Jn=0.2043 | P=0.54 | Pn=0.00369 | Pz_n=0.00103 | f=0.209
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 86 -----------------
+Percentage grey elements (x_phys): 2.78% | beta=16, eta=0.5
+[MAT] counts=[1922, 1924, 1304]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.493 | Jn=0.2043 | P=0.537 | Pn=0.00366 | Pz_n=0.000991 | f=0.2089
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 87 -----------------
+Percentage grey elements (x_phys): 2.88% | beta=16, eta=0.5
+[MAT] counts=[1917, 1927, 1301]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.492 | Jn=0.2042 | P=0.531 | Pn=0.00362 | Pz_n=0.000989 | f=0.2088
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0998 <= 0.1?
+-------------- Iteration 88 -----------------
+Percentage grey elements (x_phys): 2.69% | beta=16, eta=0.5
+[MAT] counts=[1917, 1932, 1300]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.492 | Jn=0.2042 | P=0.527 | Pn=0.0036 | Pz_n=0.000912 | f=0.2087
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0996 <= 0.1?
+-------------- Iteration 89 -----------------
+Percentage grey elements (x_phys): 2.80% | beta=16, eta=0.5
+[MAT] counts=[1924, 1918, 1300]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.49 | Jn=0.204 | P=0.522 | Pn=0.00356 | Pz_n=0.000923 | f=0.2085
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0997 <= 0.1?
+-------------- Iteration 90 -----------------
+Percentage grey elements (x_phys): 2.66% | beta=16, eta=0.5
+[MAT] counts=[1922, 1927, 1301]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.488 | Jn=0.2039 | P=0.517 | Pn=0.00353 | Pz_n=0.000887 | f=0.2083
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 91 -----------------
+Percentage grey elements (x_phys): 2.74% | beta=16, eta=0.5
+[MAT] counts=[1924, 1924, 1304]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.487 | Jn=0.2038 | P=0.511 | Pn=0.00349 | Pz_n=0.00087 | f=0.2081
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 92 -----------------
+Percentage grey elements (x_phys): 2.64% | beta=16, eta=0.5
+[MAT] counts=[1923, 1924, 1303]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.486 | Jn=0.2037 | P=0.506 | Pn=0.00346 | Pz_n=0.000862 | f=0.208
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 93 -----------------
+Percentage grey elements (x_phys): 2.64% | beta=16, eta=0.5
+[MAT] counts=[1921, 1925, 1306]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.486 | Jn=0.2037 | P=0.5 | Pn=0.00341 | Pz_n=0.000867 | f=0.2079
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 94 -----------------
+Percentage grey elements (x_phys): 2.63% | beta=16, eta=0.5
+[MAT] counts=[1919, 1928, 1305]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.485 | Jn=0.2036 | P=0.495 | Pn=0.00338 | Pz_n=0.000874 | f=0.2079
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 95 -----------------
+Percentage grey elements (x_phys): 2.62% | beta=16, eta=0.5
+[MAT] counts=[1922, 1925, 1301]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.484 | Jn=0.2036 | P=0.489 | Pn=0.00334 | Pz_n=0.000884 | f=0.2078
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 96 -----------------
+Percentage grey elements (x_phys): 2.60% | beta=16, eta=0.5
+[MAT] counts=[1924, 1924, 1299]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.484 | Jn=0.2035 | P=0.484 | Pn=0.0033 | Pz_n=0.000891 | f=0.2077
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 97 -----------------
+Percentage grey elements (x_phys): 2.57% | beta=16, eta=0.5
+[MAT] counts=[1924, 1925, 1298]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.483 | Jn=0.2035 | P=0.479 | Pn=0.00327 | Pz_n=0.000887 | f=0.2076
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 98 -----------------
+Percentage grey elements (x_phys): 2.60% | beta=16, eta=0.5
+[MAT] counts=[1922, 1927, 1297]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.483 | Jn=0.2034 | P=0.474 | Pn=0.00323 | Pz_n=0.00087 | f=0.2076
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 99 -----------------
+Percentage grey elements (x_phys): 2.61% | beta=16, eta=0.5
+[MAT] counts=[1920, 1929, 1298]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.483 | Jn=0.2034 | P=0.469 | Pn=0.0032 | Pz_n=0.000861 | f=0.2075
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 100 -----------------
+Percentage grey elements (x_phys): 2.57% | beta=16, eta=0.5
+[MAT] counts=[1916, 1933, 1295]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.482 | Jn=0.2034 | P=0.465 | Pn=0.00318 | Pz_n=0.000846 | f=0.2074
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 101 -----------------
+Percentage grey elements (x_phys): 2.57% | beta=16, eta=0.5
+[MAT] counts=[1918, 1928, 1296]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.482 | Jn=0.2033 | P=0.46 | Pn=0.00314 | Pz_n=0.000832 | f=0.2073
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 102 -----------------
+Percentage grey elements (x_phys): 2.55% | beta=16, eta=0.5
+[MAT] counts=[1913, 1932, 1297]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.481 | Jn=0.2033 | P=0.456 | Pn=0.00311 | Pz_n=0.000809 | f=0.2072
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 103 -----------------
+Percentage grey elements (x_phys): 2.53% | beta=16, eta=0.5
+[MAT] counts=[1912, 1933, 1297]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.481 | Jn=0.2032 | P=0.451 | Pn=0.00308 | Pz_n=0.000799 | f=0.2071
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 104 -----------------
+Percentage grey elements (x_phys): 2.46% | beta=16, eta=0.5
+[MAT] counts=[1914, 1934, 1294]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.48 | Jn=0.2032 | P=0.447 | Pn=0.00305 | Pz_n=0.000791 | f=0.2071
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 105 -----------------
+Percentage grey elements (x_phys): 2.44% | beta=16, eta=0.5
+[MAT] counts=[1920, 1926, 1294]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.48 | Jn=0.2032 | P=0.442 | Pn=0.00302 | Pz_n=0.000815 | f=0.207
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 106 -----------------
+Percentage grey elements (x_phys): 2.46% | beta=16, eta=0.5
+[MAT] counts=[1922, 1922, 1294]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.48 | Jn=0.2032 | P=0.437 | Pn=0.00298 | Pz_n=0.000817 | f=0.207
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 107 -----------------
+Percentage grey elements (x_phys): 2.46% | beta=16, eta=0.5
+[MAT] counts=[1917, 1926, 1297]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.479 | Jn=0.2031 | P=0.432 | Pn=0.00295 | Pz_n=0.000812 | f=0.2069
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 108 -----------------
+Percentage grey elements (x_phys): 2.43% | beta=16, eta=0.5
+[MAT] counts=[1929, 1915, 1297]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.479 | Jn=0.2031 | P=0.427 | Pn=0.00292 | Pz_n=0.000778 | f=0.2068
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 109 -----------------
+Percentage grey elements (x_phys): 2.44% | beta=16, eta=0.5
+[MAT] counts=[1921, 1923, 1298]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.478 | Jn=0.203 | P=0.422 | Pn=0.00288 | Pz_n=0.000767 | f=0.2067
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 110 -----------------
+Percentage grey elements (x_phys): 2.42% | beta=16, eta=0.5
+[MAT] counts=[1931, 1914, 1299]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.478 | Jn=0.203 | P=0.416 | Pn=0.00284 | Pz_n=0.00076 | f=0.2066
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 111 -----------------
+Percentage grey elements (x_phys): 2.42% | beta=16, eta=0.5
+[MAT] counts=[1923, 1922, 1298]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.477 | Jn=0.203 | P=0.411 | Pn=0.00281 | Pz_n=0.000774 | f=0.2066
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 112 -----------------
+Percentage grey elements (x_phys): 2.44% | beta=16, eta=0.5
+[MAT] counts=[1925, 1924, 1297]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.477 | Jn=0.203 | P=0.406 | Pn=0.00277 | Pz_n=0.000809 | f=0.2065
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 113 -----------------
+Percentage grey elements (x_phys): 2.42% | beta=16, eta=0.5
+[MAT] counts=[1926, 1923, 1296]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.477 | Jn=0.2029 | P=0.402 | Pn=0.00274 | Pz_n=0.000816 | f=0.2065
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 114 -----------------
+Percentage grey elements (x_phys): 2.41% | beta=16, eta=0.5
+[MAT] counts=[1926, 1922, 1298]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.477 | Jn=0.2029 | P=0.397 | Pn=0.00271 | Pz_n=0.000809 | f=0.2064
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 115 -----------------
+Percentage grey elements (x_phys): 2.40% | beta=16, eta=0.5
+[MAT] counts=[1928, 1916, 1299]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.476 | Jn=0.2029 | P=0.393 | Pn=0.00268 | Pz_n=0.00079 | f=0.2064
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 116 -----------------
+Percentage grey elements (x_phys): 2.41% | beta=16, eta=0.5
+[MAT] counts=[1931, 1916, 1298]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.476 | Jn=0.2029 | P=0.389 | Pn=0.00266 | Pz_n=0.000785 | f=0.2063
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 117 -----------------
+Percentage grey elements (x_phys): 2.37% | beta=16, eta=0.5
+[MAT] counts=[1933, 1913, 1297]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.476 | Jn=0.2028 | P=0.386 | Pn=0.00263 | Pz_n=0.000769 | f=0.2062
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 118 -----------------
+Percentage grey elements (x_phys): 2.39% | beta=16, eta=0.5
+[MAT] counts=[1932, 1915, 1296]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.475 | Jn=0.2028 | P=0.382 | Pn=0.00261 | Pz_n=0.000748 | f=0.2061
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 119 -----------------
+Percentage grey elements (x_phys): 2.38% | beta=16, eta=0.5
+[MAT] counts=[1929, 1917, 1298]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.475 | Jn=0.2028 | P=0.378 | Pn=0.00258 | Pz_n=0.000723 | f=0.2061
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 120 -----------------
+Percentage grey elements (x_phys): 2.38% | beta=16, eta=0.5
+[MAT] counts=[1927, 1920, 1297]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.474 | Jn=0.2027 | P=0.374 | Pn=0.00255 | Pz_n=0.000712 | f=0.206
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 121 -----------------
+Percentage grey elements (x_phys): 2.38% | beta=16, eta=0.5
+[MAT] counts=[1927, 1918, 1300]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.474 | Jn=0.2027 | P=0.37 | Pn=0.00252 | Pz_n=0.000714 | f=0.2059
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 122 -----------------
+Percentage grey elements (x_phys): 2.35% | beta=16, eta=0.5
+[MAT] counts=[1925, 1919, 1300]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.474 | Jn=0.2027 | P=0.366 | Pn=0.0025 | Pz_n=0.000723 | f=0.2059
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 123 -----------------
+Percentage grey elements (x_phys): 2.38% | beta=16, eta=0.5
+[MAT] counts=[1930, 1918, 1299]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.474 | Jn=0.2027 | P=0.362 | Pn=0.00247 | Pz_n=0.000744 | f=0.2059
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 124 -----------------
+Percentage grey elements (x_phys): 2.36% | beta=16, eta=0.5
+[MAT] counts=[1927, 1917, 1301]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.474 | Jn=0.2027 | P=0.357 | Pn=0.00244 | Pz_n=0.000737 | f=0.2058
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 125 -----------------
+Percentage grey elements (x_phys): 2.36% | beta=16, eta=0.5
+[MAT] counts=[1927, 1922, 1297]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.473 | Jn=0.2026 | P=0.353 | Pn=0.00241 | Pz_n=0.00072 | f=0.2058
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 126 -----------------
+Percentage grey elements (x_phys): 2.37% | beta=16, eta=0.5
+[MAT] counts=[1926, 1923, 1298]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.473 | Jn=0.2026 | P=0.349 | Pn=0.00238 | Pz_n=0.000704 | f=0.2057
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 127 -----------------
+Percentage grey elements (x_phys): 2.38% | beta=16, eta=0.5
+[MAT] counts=[1923, 1925, 1300]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.473 | Jn=0.2026 | P=0.344 | Pn=0.00235 | Pz_n=0.000696 | f=0.2056
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 128 -----------------
+Percentage grey elements (x_phys): 2.36% | beta=16, eta=0.5
+[MAT] counts=[1927, 1923, 1299]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.472 | Jn=0.2026 | P=0.34 | Pn=0.00232 | Pz_n=0.000708 | f=0.2056
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 129 -----------------
+Percentage grey elements (x_phys): 2.39% | beta=16, eta=0.5
+[MAT] counts=[1926, 1924, 1299]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.472 | Jn=0.2026 | P=0.336 | Pn=0.00229 | Pz_n=0.000744 | f=0.2056
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 130 -----------------
+Percentage grey elements (x_phys): 2.36% | beta=16, eta=0.5
+[MAT] counts=[1925, 1925, 1298]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+[DYN-GAMMA] ramp started at iter 130 (plateau)
+Obj: J=2.472 | Jn=0.2026 | P=0.332 | Pn=0.00227 | Pz_n=0.000757 | f=0.2056
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 131 -----------------
+Percentage grey elements (x_phys): 2.37% | beta=16, eta=0.5
+[MAT] counts=[1927, 1921, 1300]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.472 | Jn=0.2025 | P=0.329 | Pn=0.00247 | Pz_n=0.00076 | f=0.2058
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 132 -----------------
+Percentage grey elements (x_phys): 2.35% | beta=16, eta=0.5
+[MAT] counts=[1927, 1923, 1298]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.472 | Jn=0.2025 | P=0.325 | Pn=0.00268 | Pz_n=0.000741 | f=0.2059
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 133 -----------------
+Percentage grey elements (x_phys): 2.35% | beta=16, eta=0.5
+[MAT] counts=[1928, 1923, 1298]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.471 | Jn=0.2025 | P=0.32 | Pn=0.00291 | Pz_n=0.00072 | f=0.2061
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 134 -----------------
+Percentage grey elements (x_phys): 2.36% | beta=16, eta=0.5
+[MAT] counts=[1928, 1925, 1298]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.471 | Jn=0.2024 | P=0.315 | Pn=0.00315 | Pz_n=0.000706 | f=0.2063
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 135 -----------------
+Percentage grey elements (x_phys): 2.38% | beta=16, eta=0.5
+[MAT] counts=[1927, 1925, 1299]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.47 | Jn=0.2024 | P=0.31 | Pn=0.00341 | Pz_n=0.000703 | f=0.2065
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 136 -----------------
+Percentage grey elements (x_phys): 2.35% | beta=16, eta=0.5
+[MAT] counts=[1931, 1923, 1298]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.47 | Jn=0.2024 | P=0.303 | Pn=0.00367 | Pz_n=0.000705 | f=0.2068
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 137 -----------------
+Percentage grey elements (x_phys): 2.37% | beta=16, eta=0.5
+[MAT] counts=[1927, 1927, 1297]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.47 | Jn=0.2024 | P=0.296 | Pn=0.00393 | Pz_n=0.000724 | f=0.207
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 138 -----------------
+Percentage grey elements (x_phys): 2.34% | beta=16, eta=0.5
+[MAT] counts=[1927, 1925, 1300]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.47 | Jn=0.2024 | P=0.287 | Pn=0.00421 | Pz_n=0.000748 | f=0.2073
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 139 -----------------
+Percentage grey elements (x_phys): 2.35% | beta=16, eta=0.5
+[MAT] counts=[1925, 1927, 1298]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.47 | Jn=0.2024 | P=0.278 | Pn=0.00448 | Pz_n=0.000799 | f=0.2077
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 140 -----------------
+Percentage grey elements (x_phys): 2.32% | beta=16, eta=0.5
+[MAT] counts=[1922, 1929, 1298]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.47 | Jn=0.2024 | P=0.269 | Pn=0.00476 | Pz_n=0.000852 | f=0.208
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 141 -----------------
+Percentage grey elements (x_phys): 2.32% | beta=16, eta=0.5
+[MAT] counts=[1923, 1931, 1294]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.47 | Jn=0.2024 | P=0.258 | Pn=0.00503 | Pz_n=0.000919 | f=0.2084
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 142 -----------------
+Percentage grey elements (x_phys): 2.31% | beta=16, eta=0.5
+[MAT] counts=[1921, 1931, 1296]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.471 | Jn=0.2024 | P=0.247 | Pn=0.0053 | Pz_n=0.000964 | f=0.2087
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 143 -----------------
+Percentage grey elements (x_phys): 2.32% | beta=16, eta=0.5
+[MAT] counts=[1915, 1936, 1297]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.471 | Jn=0.2025 | P=0.236 | Pn=0.00557 | Pz_n=0.000996 | f=0.209
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 144 -----------------
+Percentage grey elements (x_phys): 2.33% | beta=16, eta=0.5
+[MAT] counts=[1918, 1936, 1295]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.471 | Jn=0.2025 | P=0.225 | Pn=0.00583 | Pz_n=0.00103 | f=0.2093
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 145 -----------------
+Percentage grey elements (x_phys): 2.32% | beta=16, eta=0.5
+[MAT] counts=[1920, 1933, 1294]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.471 | Jn=0.2025 | P=0.214 | Pn=0.00609 | Pz_n=0.00109 | f=0.2096
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 146 -----------------
+Percentage grey elements (x_phys): 2.31% | beta=16, eta=0.5
+[MAT] counts=[1919, 1934, 1294]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.471 | Jn=0.2025 | P=0.202 | Pn=0.00634 | Pz_n=0.00114 | f=0.21
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 147 -----------------
+Percentage grey elements (x_phys): 2.32% | beta=16, eta=0.5
+[MAT] counts=[1921, 1933, 1294]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.471 | Jn=0.2025 | P=0.19 | Pn=0.00656 | Pz_n=0.00119 | f=0.2102
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 148 -----------------
+Percentage grey elements (x_phys): 2.30% | beta=16, eta=0.5
+[MAT] counts=[1917, 1937, 1295]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.471 | Jn=0.2025 | P=0.178 | Pn=0.00677 | Pz_n=0.00126 | f=0.2105
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 149 -----------------
+Percentage grey elements (x_phys): 2.31% | beta=16, eta=0.5
+[MAT] counts=[1916, 1938, 1294]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.471 | Jn=0.2025 | P=0.166 | Pn=0.00695 | Pz_n=0.00131 | f=0.2108
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 150 -----------------
+Percentage grey elements (x_phys): 2.32% | beta=16, eta=0.5
+[MAT] counts=[1917, 1939, 1294]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.472 | Jn=0.2025 | P=0.155 | Pn=0.00711 | Pz_n=0.00137 | f=0.211
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 151 -----------------
+Percentage grey elements (x_phys): 2.34% | beta=16, eta=0.5
+[MAT] counts=[1917, 1939, 1291]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.472 | Jn=0.2025 | P=0.144 | Pn=0.00725 | Pz_n=0.00147 | f=0.2113
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 152 -----------------
+Percentage grey elements (x_phys): 2.35% | beta=16, eta=0.5
+[MAT] counts=[1916, 1943, 1288]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.472 | Jn=0.2025 | P=0.133 | Pn=0.00742 | Pz_n=0.00157 | f=0.2115
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 153 -----------------
+Percentage grey elements (x_phys): 2.35% | beta=16, eta=0.5
+[MAT] counts=[1917, 1940, 1291]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.472 | Jn=0.2026 | P=0.124 | Pn=0.00756 | Pz_n=0.00172 | f=0.2118
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 154 -----------------
+Percentage grey elements (x_phys): 2.35% | beta=16, eta=0.5
+[MAT] counts=[1917, 1941, 1291]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.473 | Jn=0.2026 | P=0.116 | Pn=0.00778 | Pz_n=0.00187 | f=0.2123
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 155 -----------------
+Percentage grey elements (x_phys): 2.34% | beta=16, eta=0.5
+[MAT] counts=[1916, 1941, 1291]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.473 | Jn=0.2026 | P=0.109 | Pn=0.00808 | Pz_n=0.00201 | f=0.2127
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 156 -----------------
+Percentage grey elements (x_phys): 2.34% | beta=16, eta=0.5
+[MAT] counts=[1915, 1942, 1289]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.474 | Jn=0.2027 | P=0.103 | Pn=0.00839 | Pz_n=0.00216 | f=0.2132
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 157 -----------------
+Percentage grey elements (x_phys): 2.33% | beta=16, eta=0.5
+[MAT] counts=[1915, 1942, 1288]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.474 | Jn=0.2027 | P=0.098 | Pn=0.00877 | Pz_n=0.00231 | f=0.2138
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 158 -----------------
+Percentage grey elements (x_phys): 2.32% | beta=16, eta=0.5
+[MAT] counts=[1914, 1945, 1289]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.474 | Jn=0.2027 | P=0.0932 | Pn=0.00917 | Pz_n=0.00249 | f=0.2144
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 159 -----------------
+Percentage grey elements (x_phys): 2.35% | beta=16, eta=0.5
+[MAT] counts=[1915, 1944, 1289]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.474 | Jn=0.2027 | P=0.0889 | Pn=0.00962 | Pz_n=0.00266 | f=0.215
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 160 -----------------
+Percentage grey elements (x_phys): 2.36% | beta=16, eta=0.5
+[MAT] counts=[1914, 1946, 1290]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.475 | Jn=0.2028 | P=0.0841 | Pn=0.01 | Pz_n=0.00289 | f=0.2157
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 161 -----------------
+Percentage grey elements (x_phys): 2.39% | beta=16, eta=0.5
+[MAT] counts=[1914, 1946, 1290]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.475 | Jn=0.2028 | P=0.0801 | Pn=0.0105 | Pz_n=0.00316 | f=0.2164
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 162 -----------------
+Percentage grey elements (x_phys): 2.39% | beta=16, eta=0.5
+[MAT] counts=[1914, 1946, 1290]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.476 | Jn=0.2028 | P=0.0762 | Pn=0.011 | Pz_n=0.00347 | f=0.2173
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 163 -----------------
+Percentage grey elements (x_phys): 2.39% | beta=16, eta=0.5
+[MAT] counts=[1914, 1947, 1290]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.476 | Jn=0.2029 | P=0.0724 | Pn=0.0115 | Pz_n=0.00387 | f=0.2182
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 164 -----------------
+Percentage grey elements (x_phys): 2.36% | beta=16, eta=0.5
+[MAT] counts=[1914, 1947, 1290]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.477 | Jn=0.2029 | P=0.0691 | Pn=0.0121 | Pz_n=0.00425 | f=0.2192
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.1 <= 0.1?
+-------------- Iteration 165 -----------------
+Percentage grey elements (x_phys): 2.37% | beta=16, eta=0.5
+[MAT] counts=[1914, 1946, 1290]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.478 | Jn=0.203 | P=0.0658 | Pn=0.0126 | Pz_n=0.0047 | f=0.2203
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 166 -----------------
+Percentage grey elements (x_phys): 2.37% | beta=16, eta=0.5
+[MAT] counts=[1913, 1946, 1290]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.478 | Jn=0.203 | P=0.0628 | Pn=0.0133 | Pz_n=0.00519 | f=0.2215
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 167 -----------------
+Percentage grey elements (x_phys): 2.39% | beta=16, eta=0.5
+[MAT] counts=[1913, 1946, 1291]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.479 | Jn=0.2031 | P=0.0597 | Pn=0.0139 | Pz_n=0.0057 | f=0.2227
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 168 -----------------
+Percentage grey elements (x_phys): 2.39% | beta=16, eta=0.5
+[MAT] counts=[1913, 1945, 1290]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.48 | Jn=0.2032 | P=0.0566 | Pn=0.0145 | Pz_n=0.00628 | f=0.2239
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 169 -----------------
+Percentage grey elements (x_phys): 2.38% | beta=16, eta=0.5
+[MAT] counts=[1913, 1944, 1289]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.481 | Jn=0.2033 | P=0.0535 | Pn=0.015 | Pz_n=0.00696 | f=0.2253
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 170 -----------------
+Percentage grey elements (x_phys): 2.40% | beta=16, eta=0.5
+[MAT] counts=[1914, 1944, 1289]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.482 | Jn=0.2033 | P=0.0503 | Pn=0.0155 | Pz_n=0.00774 | f=0.2266
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 171 -----------------
+Percentage grey elements (x_phys): 2.36% | beta=16, eta=0.5
+[MAT] counts=[1914, 1943, 1290]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.483 | Jn=0.2034 | P=0.0471 | Pn=0.016 | Pz_n=0.00854 | f=0.228
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 172 -----------------
+Percentage grey elements (x_phys): 2.37% | beta=16, eta=0.5
+[MAT] counts=[1914, 1941, 1291]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.484 | Jn=0.2035 | P=0.0438 | Pn=0.0164 | Pz_n=0.00951 | f=0.2294
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 173 -----------------
+Percentage grey elements (x_phys): 2.35% | beta=16, eta=0.5
+[MAT] counts=[1914, 1939, 1291]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.485 | Jn=0.2036 | P=0.0409 | Pn=0.0168 | Pz_n=0.0105 | f=0.2309
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 174 -----------------
+Percentage grey elements (x_phys): 2.30% | beta=16, eta=0.5
+[MAT] counts=[1915, 1936, 1291]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.486 | Jn=0.2037 | P=0.0376 | Pn=0.017 | Pz_n=0.0117 | f=0.2324
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 175 -----------------
+Percentage grey elements (x_phys): 2.30% | beta=16, eta=0.5
+[MAT] counts=[1915, 1935, 1291]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.488 | Jn=0.2038 | P=0.0352 | Pn=0.0175 | Pz_n=0.0127 | f=0.234
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 176 -----------------
+Percentage grey elements (x_phys): 2.35% | beta=16, eta=0.5
+[MAT] counts=[1915, 1934, 1291]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.49 | Jn=0.204 | P=0.0319 | Pn=0.0174 | Pz_n=0.0141 | f=0.2355
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 177 -----------------
+Percentage grey elements (x_phys): 2.34% | beta=16, eta=0.5
+[MAT] counts=[1916, 1933, 1291]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.492 | Jn=0.2041 | P=0.0297 | Pn=0.0179 | Pz_n=0.0151 | f=0.2371
+Constraint 1 (VOLUME_FRACTION): 0.15 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 178 -----------------
+Percentage grey elements (x_phys): 2.35% | beta=16, eta=0.5
+[MAT] counts=[1916, 1933, 1291]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.495 | Jn=0.2044 | P=0.0264 | Pn=0.0175 | Pz_n=0.0168 | f=0.2387
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 179 -----------------
+Percentage grey elements (x_phys): 2.35% | beta=16, eta=0.5
+[MAT] counts=[1917, 1933, 1290]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.497 | Jn=0.2046 | P=0.0248 | Pn=0.0181 | Pz_n=0.0177 | f=0.2404
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 180 -----------------
+Percentage grey elements (x_phys): 2.37% | beta=16, eta=0.5
+[MAT] counts=[1916, 1932, 1290]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.499 | Jn=0.2048 | P=0.0224 | Pn=0.018 | Pz_n=0.0191 | f=0.2418
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 181 -----------------
+Percentage grey elements (x_phys): 2.42% | beta=16, eta=0.5
+[MAT] counts=[1917, 1932, 1290]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.502 | Jn=0.205 | P=0.0214 | Pn=0.0189 | Pz_n=0.0198 | f=0.2437
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 182 -----------------
+Percentage grey elements (x_phys): 2.39% | beta=16, eta=0.5
+[MAT] counts=[1916, 1930, 1290]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.505 | Jn=0.2053 | P=0.0196 | Pn=0.019 | Pz_n=0.0208 | f=0.2451
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0999 <= 0.1?
+-------------- Iteration 183 -----------------
+Percentage grey elements (x_phys): 2.44% | beta=16, eta=0.5
+[MAT] counts=[1917, 1930, 1290]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.507 | Jn=0.2054 | P=0.0188 | Pn=0.0201 | Pz_n=0.0214 | f=0.2469
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0998 <= 0.1?
+-------------- Iteration 184 -----------------
+Percentage grey elements (x_phys): 2.40% | beta=16, eta=0.5
+[MAT] counts=[1918, 1930, 1290]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.511 | Jn=0.2057 | P=0.0183 | Pn=0.0214 | Pz_n=0.0219 | f=0.2491
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0998 <= 0.1?
+-------------- Iteration 185 -----------------
+Percentage grey elements (x_phys): 2.40% | beta=16, eta=0.5
+[MAT] counts=[1918, 1929, 1289]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.513 | Jn=0.2059 | P=0.0177 | Pn=0.0228 | Pz_n=0.0221 | f=0.2508
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0998 <= 0.1?
+-------------- Iteration 186 -----------------
+Percentage grey elements (x_phys): 2.40% | beta=16, eta=0.5
+[MAT] counts=[1918, 1928, 1288]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.515 | Jn=0.2061 | P=0.0171 | Pn=0.0243 | Pz_n=0.0226 | f=0.253
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0998 <= 0.1?
+-------------- Iteration 187 -----------------
+Percentage grey elements (x_phys): 2.42% | beta=16, eta=0.5
+[MAT] counts=[1918, 1929, 1290]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.518 | Jn=0.2063 | P=0.0167 | Pn=0.0261 | Pz_n=0.0228 | f=0.2552
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0998 <= 0.1?
+-------------- Iteration 188 -----------------
+Percentage grey elements (x_phys): 2.42% | beta=16, eta=0.5
+[MAT] counts=[1917, 1928, 1288]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.518 | Jn=0.2064 | P=0.0166 | Pn=0.0285 | Pz_n=0.023 | f=0.2579
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0998 <= 0.1?
+-------------- Iteration 189 -----------------
+Percentage grey elements (x_phys): 2.44% | beta=16, eta=0.5
+[MAT] counts=[1917, 1929, 1289]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.521 | Jn=0.2066 | P=0.0163 | Pn=0.0309 | Pz_n=0.0231 | f=0.2606
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0998 <= 0.1?
+-------------- Iteration 190 -----------------
+Percentage grey elements (x_phys): 2.42% | beta=16, eta=0.5
+[MAT] counts=[1917, 1929, 1290]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.524 | Jn=0.2068 | P=0.016 | Pn=0.0333 | Pz_n=0.0235 | f=0.2636
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0998 <= 0.1?
+-------------- Iteration 191 -----------------
+Percentage grey elements (x_phys): 2.42% | beta=16, eta=0.5
+[MAT] counts=[1916, 1930, 1288]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.524 | Jn=0.2068 | P=0.0162 | Pn=0.0369 | Pz_n=0.0234 | f=0.2672
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0998 <= 0.1?
+-------------- Iteration 192 -----------------
+Percentage grey elements (x_phys): 2.42% | beta=16, eta=0.5
+[MAT] counts=[1917, 1929, 1288]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.525 | Jn=0.2069 | P=0.0161 | Pn=0.0405 | Pz_n=0.0235 | f=0.2709
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0998 <= 0.1?
+-------------- Iteration 193 -----------------
+Percentage grey elements (x_phys): 2.42% | beta=16, eta=0.5
+[MAT] counts=[1916, 1929, 1289]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.528 | Jn=0.2072 | P=0.0159 | Pn=0.0441 | Pz_n=0.0237 | f=0.275
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0997 <= 0.1?
+-------------- Iteration 194 -----------------
+Percentage grey elements (x_phys): 2.42% | beta=16, eta=0.5
+[MAT] counts=[1915, 1925, 1289]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.528 | Jn=0.2071 | P=0.0163 | Pn=0.0495 | Pz_n=0.0235 | f=0.2801
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0997 <= 0.1?
+-------------- Iteration 195 -----------------
+Percentage grey elements (x_phys): 2.44% | beta=16, eta=0.5
+[MAT] counts=[1914, 1924, 1289]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.528 | Jn=0.2072 | P=0.0161 | Pn=0.0539 | Pz_n=0.0237 | f=0.2847
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0997 <= 0.1?
+-------------- Iteration 196 -----------------
+Percentage grey elements (x_phys): 2.45% | beta=16, eta=0.5
+[MAT] counts=[1913, 1923, 1288]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.53 | Jn=0.2073 | P=0.0163 | Pn=0.0601 | Pz_n=0.0237 | f=0.2911
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0997 <= 0.1?
+-------------- Iteration 197 -----------------
+Percentage grey elements (x_phys): 2.45% | beta=16, eta=0.5
+[MAT] counts=[1912, 1922, 1287]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.531 | Jn=0.2074 | P=0.0162 | Pn=0.0658 | Pz_n=0.0237 | f=0.2968
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0997 <= 0.1?
+-------------- Iteration 198 -----------------
+Percentage grey elements (x_phys): 2.45% | beta=16, eta=0.5
+[MAT] counts=[1911, 1922, 1286]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.532 | Jn=0.2075 | P=0.0165 | Pn=0.0735 | Pz_n=0.0236 | f=0.3046
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0997 <= 0.1?
+-------------- Iteration 199 -----------------
+Percentage grey elements (x_phys): 2.41% | beta=16, eta=0.5
+[MAT] counts=[1911, 1921, 1285]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.534 | Jn=0.2076 | P=0.0164 | Pn=0.0802 | Pz_n=0.0237 | f=0.3115
+Constraint 1 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.149 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0997 <= 0.1?
+-------------- Iteration 200 -----------------
+Percentage grey elements (x_phys): 2.45% | beta=16, eta=0.5
+[MAT] counts=[1911, 1920, 1285]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.534 | Jn=0.2076 | P=0.0166 | Pn=0.0898 | Pz_n=0.0237 | f=0.321
+Constraint 1 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0996 <= 0.1?
+-------------- Iteration 201 -----------------
+Percentage grey elements (x_phys): 2.44% | beta=16, eta=0.5
+[MAT] counts=[1910, 1920, 1285]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.534 | Jn=0.2076 | P=0.0165 | Pn=0.0981 | Pz_n=0.0237 | f=0.3295
+Constraint 1 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0996 <= 0.1?
+-------------- Iteration 202 -----------------
+Percentage grey elements (x_phys): 2.52% | beta=16, eta=0.5
+[MAT] counts=[1908, 1918, 1285]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.536 | Jn=0.2078 | P=0.0168 | Pn=0.11 | Pz_n=0.0237 | f=0.341
+Constraint 1 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0996 <= 0.1?
+-------------- Iteration 203 -----------------
+Percentage grey elements (x_phys): 2.48% | beta=16, eta=0.5
+[MAT] counts=[1907, 1916, 1285]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.538 | Jn=0.2079 | P=0.0167 | Pn=0.12 | Pz_n=0.0237 | f=0.3512
+Constraint 1 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0996 <= 0.1?
+-------------- Iteration 204 -----------------
+Percentage grey elements (x_phys): 2.50% | beta=16, eta=0.5
+[MAT] counts=[1906, 1913, 1284]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.536 | Jn=0.2078 | P=0.017 | Pn=0.134 | Pz_n=0.0237 | f=0.3654
+Constraint 1 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0996 <= 0.1?
+-------------- Iteration 205 -----------------
+Percentage grey elements (x_phys): 2.50% | beta=16, eta=0.5
+[MAT] counts=[1906, 1913, 1284]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.538 | Jn=0.208 | P=0.0168 | Pn=0.146 | Pz_n=0.0237 | f=0.3776
+Constraint 1 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0996 <= 0.1?
+-------------- Iteration 206 -----------------
+Percentage grey elements (x_phys): 2.51% | beta=16, eta=0.5
+[MAT] counts=[1906, 1910, 1284]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.539 | Jn=0.2081 | P=0.0171 | Pn=0.163 | Pz_n=0.0237 | f=0.3949
+Constraint 1 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0995 <= 0.1?
+-------------- Iteration 207 -----------------
+Percentage grey elements (x_phys): 2.52% | beta=16, eta=0.5
+[MAT] counts=[1905, 1910, 1284]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.539 | Jn=0.208 | P=0.0169 | Pn=0.178 | Pz_n=0.0237 | f=0.4097
+Constraint 1 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0995 <= 0.1?
+-------------- Iteration 208 -----------------
+Percentage grey elements (x_phys): 2.53% | beta=16, eta=0.5
+[MAT] counts=[1904, 1910, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.54 | Jn=0.2081 | P=0.0172 | Pn=0.199 | Pz_n=0.0237 | f=0.4305
+Constraint 1 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0995 <= 0.1?
+-------------- Iteration 209 -----------------
+Percentage grey elements (x_phys): 2.51% | beta=16, eta=0.5
+[MAT] counts=[1903, 1909, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.541 | Jn=0.2082 | P=0.017 | Pn=0.216 | Pz_n=0.0237 | f=0.4484
+Constraint 1 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0995 <= 0.1?
+-------------- Iteration 210 -----------------
+Percentage grey elements (x_phys): 2.54% | beta=16, eta=0.5
+[MAT] counts=[1903, 1908, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.541 | Jn=0.2082 | P=0.0173 | Pn=0.242 | Pz_n=0.0237 | f=0.4737
+Constraint 1 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0995 <= 0.1?
+-------------- Iteration 211 -----------------
+Percentage grey elements (x_phys): 2.53% | beta=16, eta=0.5
+[MAT] counts=[1903, 1908, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.542 | Jn=0.2083 | P=0.0171 | Pn=0.263 | Pz_n=0.0237 | f=0.4953
+Constraint 1 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0995 <= 0.1?
+-------------- Iteration 212 -----------------
+Percentage grey elements (x_phys): 2.58% | beta=16, eta=0.5
+[MAT] counts=[1902, 1908, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.542 | Jn=0.2083 | P=0.0174 | Pn=0.294 | Pz_n=0.0237 | f=0.5257
+Constraint 1 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0994 <= 0.1?
+-------------- Iteration 213 -----------------
+Percentage grey elements (x_phys): 2.59% | beta=16, eta=0.5
+[MAT] counts=[1902, 1907, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2084 | P=0.0172 | Pn=0.32 | Pz_n=0.0237 | f=0.5516
+Constraint 1 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0994 <= 0.1?
+-------------- Iteration 214 -----------------
+Percentage grey elements (x_phys): 2.58% | beta=16, eta=0.5
+[MAT] counts=[1902, 1906, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2084 | P=0.0174 | Pn=0.357 | Pz_n=0.0237 | f=0.5887
+Constraint 1 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0994 <= 0.1?
+-------------- Iteration 215 -----------------
+Percentage grey elements (x_phys): 2.58% | beta=16, eta=0.5
+[MAT] counts=[1901, 1905, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.544 | Jn=0.2084 | P=0.0172 | Pn=0.388 | Pz_n=0.0237 | f=0.62
+Constraint 1 (VOLUME_FRACTION): 0.148 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0994 <= 0.1?
+-------------- Iteration 216 -----------------
+Percentage grey elements (x_phys): 2.57% | beta=16, eta=0.5
+[MAT] counts=[1900, 1905, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.544 | Jn=0.2084 | P=0.0175 | Pn=0.433 | Pz_n=0.0237 | f=0.665
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0994 <= 0.1?
+-------------- Iteration 217 -----------------
+Percentage grey elements (x_phys): 2.57% | beta=16, eta=0.5
+[MAT] counts=[1900, 1905, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.545 | Jn=0.2085 | P=0.0173 | Pn=0.47 | Pz_n=0.0237 | f=0.7026
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0994 <= 0.1?
+-------------- Iteration 218 -----------------
+Percentage grey elements (x_phys): 2.57% | beta=16, eta=0.5
+[MAT] counts=[1899, 1905, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.544 | Jn=0.2085 | P=0.0175 | Pn=0.525 | Pz_n=0.0237 | f=0.7568
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0994 <= 0.1?
+-------------- Iteration 219 -----------------
+Percentage grey elements (x_phys): 2.56% | beta=16, eta=0.5
+[MAT] counts=[1899, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.545 | Jn=0.2085 | P=0.0173 | Pn=0.57 | Pz_n=0.0237 | f=0.8024
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0994 <= 0.1?
+-------------- Iteration 220 -----------------
+Percentage grey elements (x_phys): 2.57% | beta=16, eta=0.5
+[MAT] counts=[1899, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.545 | Jn=0.2085 | P=0.0175 | Pn=0.636 | Pz_n=0.0237 | f=0.8679
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0994 <= 0.1?
+-------------- Iteration 221 -----------------
+Percentage grey elements (x_phys): 2.55% | beta=16, eta=0.5
+[MAT] counts=[1899, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.546 | Jn=0.2086 | P=0.0173 | Pn=0.691 | Pz_n=0.0237 | f=0.9234
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0994 <= 0.1?
+-------------- Iteration 222 -----------------
+Percentage grey elements (x_phys): 2.58% | beta=16, eta=0.5
+[MAT] counts=[1899, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.545 | Jn=0.2085 | P=0.0176 | Pn=0.77 | Pz_n=0.0237 | f=1.003
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0994 <= 0.1?
+-------------- Iteration 223 -----------------
+Percentage grey elements (x_phys): 2.55% | beta=16, eta=0.5
+[MAT] counts=[1898, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.546 | Jn=0.2086 | P=0.0173 | Pn=0.837 | Pz_n=0.0237 | f=1.069
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0994 <= 0.1?
+-------------- Iteration 224 -----------------
+Percentage grey elements (x_phys): 2.58% | beta=16, eta=0.5
+[MAT] counts=[1897, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.546 | Jn=0.2086 | P=0.0176 | Pn=0.933 | Pz_n=0.0237 | f=1.165
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0994 <= 0.1?
+-------------- Iteration 225 -----------------
+Percentage grey elements (x_phys): 2.55% | beta=16, eta=0.5
+[MAT] counts=[1898, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.546 | Jn=0.2086 | P=0.0174 | Pn=1.01 | Pz_n=0.0237 | f=1.246
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0994 <= 0.1?
+-------------- Iteration 226 -----------------
+Percentage grey elements (x_phys): 2.57% | beta=16, eta=0.5
+[MAT] counts=[1897, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.546 | Jn=0.2086 | P=0.0176 | Pn=1.13 | Pz_n=0.0236 | f=1.363
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 227 -----------------
+Percentage grey elements (x_phys): 2.57% | beta=16, eta=0.5
+[MAT] counts=[1898, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.546 | Jn=0.2086 | P=0.0174 | Pn=1.19 | Pz_n=0.0237 | f=1.418
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 228 -----------------
+Percentage grey elements (x_phys): 2.55% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.546 | Jn=0.2086 | P=0.0176 | Pn=1.2 | Pz_n=0.0236 | f=1.435
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 229 -----------------
+Percentage grey elements (x_phys): 2.54% | beta=16, eta=0.5
+[MAT] counts=[1897, 1904, 1282]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.547 | Jn=0.2087 | P=0.0174 | Pn=1.19 | Pz_n=0.0237 | f=1.419
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 230 -----------------
+Percentage grey elements (x_phys): 2.54% | beta=16, eta=0.5
+[MAT] counts=[1897, 1904, 1282]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.546 | Jn=0.2086 | P=0.0176 | Pn=1.2 | Pz_n=0.0236 | f=1.435
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 231 -----------------
+Percentage grey elements (x_phys): 2.54% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1282]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.547 | Jn=0.2087 | P=0.0174 | Pn=1.19 | Pz_n=0.0236 | f=1.419
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 232 -----------------
+Percentage grey elements (x_phys): 2.54% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1282]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.546 | Jn=0.2086 | P=0.0176 | Pn=1.2 | Pz_n=0.0236 | f=1.436
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 233 -----------------
+Percentage grey elements (x_phys): 2.54% | beta=16, eta=0.5
+[MAT] counts=[1895, 1904, 1282]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.547 | Jn=0.2087 | P=0.0174 | Pn=1.19 | Pz_n=0.0236 | f=1.42
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 234 -----------------
+Percentage grey elements (x_phys): 2.55% | beta=16, eta=0.5
+[MAT] counts=[1895, 1904, 1282]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.546 | Jn=0.2086 | P=0.0176 | Pn=1.2 | Pz_n=0.0236 | f=1.436
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 235 -----------------
+Percentage grey elements (x_phys): 2.56% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.547 | Jn=0.2087 | P=0.0174 | Pn=1.19 | Pz_n=0.0236 | f=1.42
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 236 -----------------
+Percentage grey elements (x_phys): 2.55% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.546 | Jn=0.2086 | P=0.0176 | Pn=1.2 | Pz_n=0.0236 | f=1.436
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 237 -----------------
+Percentage grey elements (x_phys): 2.54% | beta=16, eta=0.5
+[MAT] counts=[1896, 1903, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.547 | Jn=0.2087 | P=0.0174 | Pn=1.19 | Pz_n=0.0236 | f=1.42
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 238 -----------------
+Percentage grey elements (x_phys): 2.54% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.546 | Jn=0.2086 | P=0.0176 | Pn=1.2 | Pz_n=0.0236 | f=1.436
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 239 -----------------
+Percentage grey elements (x_phys): 2.53% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.547 | Jn=0.2087 | P=0.0174 | Pn=1.19 | Pz_n=0.0236 | f=1.42
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 240 -----------------
+Percentage grey elements (x_phys): 2.53% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.546 | Jn=0.2086 | P=0.0176 | Pn=1.2 | Pz_n=0.0236 | f=1.437
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 241 -----------------
+Percentage grey elements (x_phys): 2.53% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.547 | Jn=0.2087 | P=0.0174 | Pn=1.19 | Pz_n=0.0236 | f=1.42
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 242 -----------------
+Percentage grey elements (x_phys): 2.57% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.546 | Jn=0.2086 | P=0.0176 | Pn=1.2 | Pz_n=0.0236 | f=1.436
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 243 -----------------
+Percentage grey elements (x_phys): 2.51% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.547 | Jn=0.2087 | P=0.0174 | Pn=1.19 | Pz_n=0.0236 | f=1.42
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 244 -----------------
+Percentage grey elements (x_phys): 2.57% | beta=16, eta=0.5
+[MAT] counts=[1896, 1905, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.546 | Jn=0.2086 | P=0.0176 | Pn=1.2 | Pz_n=0.0236 | f=1.436
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 245 -----------------
+Percentage grey elements (x_phys): 2.51% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.547 | Jn=0.2087 | P=0.0174 | Pn=1.19 | Pz_n=0.0236 | f=1.42
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 246 -----------------
+Percentage grey elements (x_phys): 2.56% | beta=16, eta=0.5
+[MAT] counts=[1896, 1905, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.546 | Jn=0.2086 | P=0.0176 | Pn=1.2 | Pz_n=0.0236 | f=1.436
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 247 -----------------
+Percentage grey elements (x_phys): 2.53% | beta=16, eta=0.5
+[MAT] counts=[1896, 1903, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.547 | Jn=0.2087 | P=0.0174 | Pn=1.19 | Pz_n=0.0236 | f=1.419
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 248 -----------------
+Percentage grey elements (x_phys): 2.57% | beta=16, eta=0.5
+[MAT] counts=[1896, 1905, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.546 | Jn=0.2086 | P=0.0176 | Pn=1.2 | Pz_n=0.0236 | f=1.437
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 249 -----------------
+Percentage grey elements (x_phys): 2.53% | beta=16, eta=0.5
+[MAT] counts=[1896, 1903, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.547 | Jn=0.2087 | P=0.0174 | Pn=1.19 | Pz_n=0.0236 | f=1.419
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+[INFO] z-smoothing penalty disabled at iteration 250
+-------------- Iteration 250 -----------------
+Percentage grey elements (x_phys): 2.57% | beta=16, eta=0.5
+[MAT] counts=[1896, 1905, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.546 | Jn=0.2086 | P=0.0176 | Pn=1.2 | Pz_n=0 | f=1.413
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 251 -----------------
+Percentage grey elements (x_phys): 2.53% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.546 | Jn=0.2086 | P=0.0171 | Pn=1.17 | Pz_n=0 | f=1.379
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 252 -----------------
+Percentage grey elements (x_phys): 2.56% | beta=16, eta=0.5
+[MAT] counts=[1895, 1905, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.545 | Jn=0.2086 | P=0.0174 | Pn=1.19 | Pz_n=0 | f=1.398
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 253 -----------------
+Percentage grey elements (x_phys): 2.50% | beta=16, eta=0.5
+[MAT] counts=[1896, 1903, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.546 | Jn=0.2086 | P=0.0171 | Pn=1.17 | Pz_n=0 | f=1.379
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 254 -----------------
+Percentage grey elements (x_phys): 2.52% | beta=16, eta=0.5
+[MAT] counts=[1895, 1905, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.545 | Jn=0.2085 | P=0.0174 | Pn=1.19 | Pz_n=0 | f=1.398
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 255 -----------------
+Percentage grey elements (x_phys): 2.50% | beta=16, eta=0.5
+[MAT] counts=[1895, 1903, 1282]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.546 | Jn=0.2086 | P=0.0171 | Pn=1.17 | Pz_n=0 | f=1.379
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 256 -----------------
+Percentage grey elements (x_phys): 2.48% | beta=16, eta=0.5
+[MAT] counts=[1895, 1904, 1282]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.545 | Jn=0.2085 | P=0.0174 | Pn=1.19 | Pz_n=0 | f=1.399
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 257 -----------------
+Percentage grey elements (x_phys): 2.49% | beta=16, eta=0.5
+[MAT] counts=[1895, 1903, 1281]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.545 | Jn=0.2086 | P=0.0171 | Pn=1.17 | Pz_n=0 | f=1.379
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 258 -----------------
+Percentage grey elements (x_phys): 2.46% | beta=16, eta=0.5
+[MAT] counts=[1895, 1904, 1281]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.545 | Jn=0.2085 | P=0.0174 | Pn=1.19 | Pz_n=0 | f=1.399
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 259 -----------------
+Percentage grey elements (x_phys): 2.47% | beta=16, eta=0.5
+[MAT] counts=[1895, 1903, 1282]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.545 | Jn=0.2085 | P=0.0171 | Pn=1.17 | Pz_n=0 | f=1.379
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 260 -----------------
+Percentage grey elements (x_phys): 2.46% | beta=16, eta=0.5
+[MAT] counts=[1895, 1904, 1282]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.544 | Jn=0.2085 | P=0.0175 | Pn=1.19 | Pz_n=0 | f=1.4
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 261 -----------------
+Percentage grey elements (x_phys): 2.46% | beta=16, eta=0.5
+[MAT] counts=[1895, 1903, 1282]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.545 | Jn=0.2085 | P=0.0172 | Pn=1.17 | Pz_n=0 | f=1.38
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 262 -----------------
+Percentage grey elements (x_phys): 2.46% | beta=16, eta=0.5
+[MAT] counts=[1895, 1904, 1282]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.544 | Jn=0.2085 | P=0.0175 | Pn=1.19 | Pz_n=0 | f=1.401
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 263 -----------------
+Percentage grey elements (x_phys): 2.49% | beta=16, eta=0.5
+[MAT] counts=[1895, 1903, 1282]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.545 | Jn=0.2085 | P=0.0172 | Pn=1.17 | Pz_n=0 | f=1.379
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 264 -----------------
+Percentage grey elements (x_phys): 2.49% | beta=16, eta=0.5
+[MAT] counts=[1895, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.544 | Jn=0.2084 | P=0.0175 | Pn=1.19 | Pz_n=0 | f=1.401
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 265 -----------------
+Percentage grey elements (x_phys): 2.46% | beta=16, eta=0.5
+[MAT] counts=[1895, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.544 | Jn=0.2085 | P=0.0172 | Pn=1.17 | Pz_n=0 | f=1.38
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 266 -----------------
+Percentage grey elements (x_phys): 2.48% | beta=16, eta=0.5
+[MAT] counts=[1895, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.544 | Jn=0.2084 | P=0.0175 | Pn=1.19 | Pz_n=0 | f=1.402
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 267 -----------------
+Percentage grey elements (x_phys): 2.48% | beta=16, eta=0.5
+[MAT] counts=[1895, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.544 | Jn=0.2085 | P=0.0172 | Pn=1.17 | Pz_n=0 | f=1.38
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 268 -----------------
+Percentage grey elements (x_phys): 2.49% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.544 | Jn=0.2084 | P=0.0175 | Pn=1.19 | Pz_n=0 | f=1.401
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 269 -----------------
+Percentage grey elements (x_phys): 2.49% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.544 | Jn=0.2085 | P=0.0171 | Pn=1.17 | Pz_n=0 | f=1.379
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 270 -----------------
+Percentage grey elements (x_phys): 2.50% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1284]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.544 | Jn=0.2084 | P=0.0175 | Pn=1.19 | Pz_n=0 | f=1.402
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 271 -----------------
+Percentage grey elements (x_phys): 2.47% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.544 | Jn=0.2084 | P=0.0171 | Pn=1.17 | Pz_n=0 | f=1.379
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 272 -----------------
+Percentage grey elements (x_phys): 2.51% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2084 | P=0.0175 | Pn=1.19 | Pz_n=0 | f=1.402
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 273 -----------------
+Percentage grey elements (x_phys): 2.49% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1283]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.544 | Jn=0.2084 | P=0.0172 | Pn=1.17 | Pz_n=0 | f=1.379
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 274 -----------------
+Percentage grey elements (x_phys): 2.52% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1285]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2084 | P=0.0175 | Pn=1.19 | Pz_n=0 | f=1.402
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 275 -----------------
+Percentage grey elements (x_phys): 2.52% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1285]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.544 | Jn=0.2084 | P=0.0171 | Pn=1.17 | Pz_n=0 | f=1.379
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 276 -----------------
+Percentage grey elements (x_phys): 2.51% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1285]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2084 | P=0.0175 | Pn=1.19 | Pz_n=0 | f=1.402
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 277 -----------------
+Percentage grey elements (x_phys): 2.51% | beta=16, eta=0.5
+[MAT] counts=[1896, 1903, 1286]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.544 | Jn=0.2084 | P=0.0172 | Pn=1.17 | Pz_n=0 | f=1.38
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 278 -----------------
+Percentage grey elements (x_phys): 2.51% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1286]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2084 | P=0.0175 | Pn=1.19 | Pz_n=0 | f=1.402
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 279 -----------------
+Percentage grey elements (x_phys): 2.50% | beta=16, eta=0.5
+[MAT] counts=[1896, 1903, 1288]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2084 | P=0.0172 | Pn=1.17 | Pz_n=0 | f=1.379
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 280 -----------------
+Percentage grey elements (x_phys): 2.50% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1287]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2084 | P=0.0175 | Pn=1.19 | Pz_n=0 | f=1.402
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 281 -----------------
+Percentage grey elements (x_phys): 2.49% | beta=16, eta=0.5
+[MAT] counts=[1896, 1903, 1288]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2084 | P=0.0172 | Pn=1.17 | Pz_n=0 | f=1.379
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 282 -----------------
+Percentage grey elements (x_phys): 2.50% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1289]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2084 | P=0.0175 | Pn=1.19 | Pz_n=0 | f=1.402
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 283 -----------------
+Percentage grey elements (x_phys): 2.49% | beta=16, eta=0.5
+[MAT] counts=[1896, 1902, 1289]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2084 | P=0.0171 | Pn=1.17 | Pz_n=0 | f=1.379
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 284 -----------------
+Percentage grey elements (x_phys): 2.50% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1288]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2084 | P=0.0175 | Pn=1.19 | Pz_n=0 | f=1.402
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 285 -----------------
+Percentage grey elements (x_phys): 2.49% | beta=16, eta=0.5
+[MAT] counts=[1896, 1902, 1289]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2084 | P=0.0171 | Pn=1.17 | Pz_n=0 | f=1.379
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 286 -----------------
+Percentage grey elements (x_phys): 2.50% | beta=16, eta=0.5
+[MAT] counts=[1896, 1904, 1287]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2084 | P=0.0175 | Pn=1.19 | Pz_n=0 | f=1.402
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 287 -----------------
+Percentage grey elements (x_phys): 2.49% | beta=16, eta=0.5
+[MAT] counts=[1896, 1902, 1288]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2084 | P=0.0171 | Pn=1.17 | Pz_n=0 | f=1.379
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 288 -----------------
+Percentage grey elements (x_phys): 2.50% | beta=16, eta=0.5
+[MAT] counts=[1896, 1903, 1287]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2083 | P=0.0175 | Pn=1.19 | Pz_n=0 | f=1.403
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 289 -----------------
+Percentage grey elements (x_phys): 2.48% | beta=16, eta=0.5
+[MAT] counts=[1896, 1902, 1288]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2084 | P=0.0171 | Pn=1.17 | Pz_n=0 | f=1.379
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 290 -----------------
+Percentage grey elements (x_phys): 2.50% | beta=16, eta=0.5
+[MAT] counts=[1896, 1903, 1287]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2083 | P=0.0175 | Pn=1.19 | Pz_n=0 | f=1.403
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 291 -----------------
+Percentage grey elements (x_phys): 2.48% | beta=16, eta=0.5
+[MAT] counts=[1896, 1902, 1288]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2084 | P=0.0171 | Pn=1.17 | Pz_n=0 | f=1.379
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 292 -----------------
+Percentage grey elements (x_phys): 2.50% | beta=16, eta=0.5
+[MAT] counts=[1896, 1903, 1288]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2083 | P=0.0175 | Pn=1.19 | Pz_n=0 | f=1.403
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 293 -----------------
+Percentage grey elements (x_phys): 2.49% | beta=16, eta=0.5
+[MAT] counts=[1896, 1902, 1288]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2084 | P=0.0171 | Pn=1.17 | Pz_n=0 | f=1.378
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 294 -----------------
+Percentage grey elements (x_phys): 2.50% | beta=16, eta=0.5
+[MAT] counts=[1896, 1903, 1288]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2083 | P=0.0175 | Pn=1.19 | Pz_n=0 | f=1.403
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 295 -----------------
+Percentage grey elements (x_phys): 2.50% | beta=16, eta=0.5
+[MAT] counts=[1896, 1902, 1288]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2084 | P=0.0171 | Pn=1.17 | Pz_n=0 | f=1.378
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 296 -----------------
+Percentage grey elements (x_phys): 2.49% | beta=16, eta=0.5
+[MAT] counts=[1896, 1903, 1288]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2083 | P=0.0175 | Pn=1.2 | Pz_n=0 | f=1.403
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 297 -----------------
+Percentage grey elements (x_phys): 2.49% | beta=16, eta=0.5
+[MAT] counts=[1896, 1902, 1288]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2084 | P=0.0171 | Pn=1.17 | Pz_n=0 | f=1.378
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 298 -----------------
+Percentage grey elements (x_phys): 2.49% | beta=16, eta=0.5
+[MAT] counts=[1896, 1903, 1288]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2083 | P=0.0175 | Pn=1.2 | Pz_n=0 | f=1.404
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 299 -----------------
+Percentage grey elements (x_phys): 2.50% | beta=16, eta=0.5
+[MAT] counts=[1896, 1902, 1288]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2084 | P=0.0171 | Pn=1.17 | Pz_n=0 | f=1.378
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+-------------- Iteration 300 -----------------
+Percentage grey elements (x_phys): 2.50% | beta=16, eta=0.5
+[MAT] counts=[1896, 1903, 1288]
+[STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SENS nu mode] use_constant=False, const_nu=0.3
+[SENS nu mode] use_constant=False, const_nu=0.3
+Obj: J=2.543 | Jn=0.2083 | P=0.0175 | Pn=1.2 | Pz_n=0 | f=1.403
+Constraint 1 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 2 (VOLUME_FRACTION): 0.147 <= 0.15?
+Constraint 3 (VOLUME_FRACTION): 0.0993 <= 0.1?
+Total optimization time: 976.41 seconds
+
+======================================================================
+[FINAL METRICS] Continuous (x_phys projected, raw z)
+ Final mass       : N/A (Density not present in material database)
+ Mass ratio       : N/A (Density not present in material database)
+ Max failure factor : N/A (Yield_Strength not present in material database)
+ Compliance       : 0.00229235
+ p-norm(vonMises) : 2.54352
+ max(vonMises)    : 1.27698 (x > 0.5)
+ min(vonMises)    : 0.0600903 (x > 0.5)
+======================================================================
+
+
+======================================================================
+[FINAL METRICS] Binarized topology (x projected -> binarized, raw z)
+ Final mass       : N/A (Density not present in material database)
+ Mass ratio       : N/A (Density not present in material database)
+ Max failure factor : N/A (Yield_Strength not present in material database)
+ Compliance       : 0.00226364
+ p-norm(vonMises) : 2.526
+ max(vonMises)    : 1.28505 (x > 0.5)
+ min(vonMises)    : 0.0538419 (x > 0.5)
+======================================================================
+
+
+======================================================================
+[FINAL METRICS] Binarized + snapped materials (x binarized, snapped z)
+ Final mass       : N/A (Density not present in material database)
+ Mass ratio       : N/A (Density not present in material database)
+ Max failure factor : N/A (Yield_Strength not present in material database)
+ Compliance       : 0.00226364
+ p-norm(vonMises) : 2.526
+ max(vonMises)    : 1.28505 (x > 0.5)
+ min(vonMises)    : 0.0538419 (x > 0.5)
+======================================================================
+
+[FINAL STRESS DIAG] Yield_Strength not present; stress violation count unavailable.
+[SAVE] run_data.pkl + run_config.yaml -> D:\LSR_STRESS_MMTO_MAIN\comparison\reference\main\L-bracket
