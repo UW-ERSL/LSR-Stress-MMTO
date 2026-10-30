@@ -73,8 +73,8 @@ def run(cmd, **kw):
 def conda_exe():
     exe = os.environ.get("CONDA_EXE") or shutil.which("conda")
     if not exe:
-        fail("conda was not found. Install Anaconda or Miniconda, then run this "
-             "from an Anaconda Prompt, or a terminal where `conda` works.")
+        fail("conda was not found. Install Miniforge (or Miniconda or Anaconda), then run this "
+             "from a Miniforge Prompt, or a terminal where `conda` works.")
     return exe
 
 

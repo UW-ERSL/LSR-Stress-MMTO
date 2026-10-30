@@ -169,7 +169,9 @@ def print_stress_violation_diagnostics(diag, iteration=None, prefix="[STRESS DIA
     Print compact stress violation diagnostics.
     """
     if diag is None:
-        print(f"{prefix} Yield_Strength not present; stress violation count unavailable.")
+        if iteration is None or int(iteration) <= 1:   # once per run, not every iteration
+            print(f"{prefix} No Yield_Strength in the material database, so stress violations "
+                  "are not counted. This is expected for such databases.")
         return
 
     iter_txt = "" if iteration is None else f" Iter {int(iteration):4d} |"

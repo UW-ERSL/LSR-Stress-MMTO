@@ -10,19 +10,19 @@ Install below, then open `Tutorial.ipynb` to reproduce the paper's examples.
 
 First, download the code: on this page, switch the branch menu (top left, it says `main`) to **autodiff**, then click the green **Code** button, then **Download ZIP**, and unzip it anywhere. With git instead: `git clone -b autodiff https://github.com/UW-ERSL/LSR-Stress-MMTO.git`.
 
-If you already have conda, skip step 1. To set everything up yourself instead, see [Setting up by hand](#setting-up-by-hand) further down.
+If you already have conda (Miniforge, Miniconda or Anaconda), skip step 1. If you already have an environment that runs this code, you can keep using it; `requirements.txt` lists what it needs. To set everything up yourself instead, see [Setting up by hand](#setting-up-by-hand) further down.
 
-1. **Install Miniconda.** Download the Windows installer from [anaconda.com/download](https://www.anaconda.com/download/success), run it, and accept the defaults.
+1. **Install Miniforge.** Download the Windows installer, `Miniforge3-Windows-x86_64.exe`, from [github.com/conda-forge/miniforge](https://github.com/conda-forge/miniforge/releases/latest), run it, and accept the defaults.
 
-2. **Open the Anaconda Prompt.** Start menu, type `Anaconda Prompt`, open it.
+2. **Open the Miniforge Prompt.** Start menu, type `Miniforge Prompt`, open it. With Miniconda or Anaconda it is the `Anaconda Prompt`.
 
-3. **Run the setup.** In the Anaconda Prompt, type `python` and a space, **without pressing Enter**, then drag `setup_environment.py` into the window, and only then press Enter. It takes roughly 10 minutes and ends with `Done.`
+3. **Run the setup.** In that prompt, type `python` and a space, **without pressing Enter**, then drag `setup_environment.py` into the window, and only then press Enter. It takes roughly 10 minutes and ends with `Done.`
 
    This also downloads [PyTO-AD](https://github.com/UW-ERSL/PyTO-AD), the differentiable topology optimization code this branch builds on (finite element analysis, filters, MMA, automatic differentiation), into a folder next to this one, unless it is already there. It creates its own environment, `lsr-stress-mmto-ad`, so it never touches the one `main` uses.
 
 4. **Open the tutorial.** Open `Tutorial.ipynb` in your code editor and select the kernel **Python (lsr-stress-mmto-ad)**.
 
-To use your browser instead of an editor, run these in the Anaconda Prompt, one at a time:
+To use your browser instead of an editor, run these in the same prompt, one at a time:
 
 ```
 conda activate lsr-stress-mmto-ad
@@ -40,7 +40,7 @@ Then type `jupyter lab` and a space, **without pressing Enter**, drag `Tutorial.
 
 ## Setting up by hand
 
-In an Anaconda Prompt, from inside this folder, run these one at a time.
+In a Miniforge Prompt (or Anaconda Prompt), from inside this folder, run these one at a time.
 
 **Create the environment:**
 
