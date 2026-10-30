@@ -9,10 +9,15 @@ TREE (arrow = "depends on")
     J      -> svm -> s -> x_phys, E, nu, u   objective (to_params.Objective):
                                                PNORM_STRESS                 p-norm of relaxed von Mises
                                                PNORM_STRESS, FAILURE_FACTOR mean p-norm of svm / Y, Y -> z
+                                               COMPLIANCE                   F . u
+                                               MASS                         sum rho x_phys V, rho -> z
     g_k    -> x_phys, z                      constraints (to_params.Constraints), each g_k <= 0:
                                                VOLUME_FRACTION              global, mean(x_phys)
                                                VOLUME_FRACTION, material_id per material, softmax weights
                                                MASS                         sum rho x_phys V, rho -> z
+                                               COST                         sum rho c x_phys V, rho, c -> z
+                                               COMPLIANCE                   F . u
+                                               STRESS_FAILURE_FACTOR        mean p-norm of svm / Y
     Pz     -> x_phys, z                      latent smoothing penalty
     Dp     -> x_phys (frozen), z             distance to the nearest real material
     E, nu, Y, rho -> z                       VAE decoder (whichever attributes the database has)
@@ -287,22 +292,43 @@ class MMTOModelAD:
 
         E, nu, self.props = decode(self.enc, self.z, self.use_constant_nu, self.nu_const)
         self.fe.set_material_fields(E, nu)
-        u = self.fe.solve(self.x_phys, ad_mm.MaterialModel.SIMP)
+        self.u = u = self.fe.solve(self.x_phys, ad_mm.MaterialModel.SIMP)
         self.svm = von_mises(self.fe.element_stress(u, self.x_phys))
 
         self.J = self._objective()
         self.cons = [self._constraint(qoi, opt, limit) for qoi, opt, limit in self.to_params.Constraints]
         return self.J, self.cons
 
+    def _prop(self, name, qoi):
+        """A decoded material property, or a clear error if the database has no such column."""
+        if name not in self.props:
+            raise KeyError(f"{qoi.name} needs a {name} column in the material database; "
+                           f"this one has {', '.join(sorted(self.props))}")
+        return self.props[name]
+
+    def _compliance(self):
+        """F . u, with F the total force PyTO-AD assembled, as main's total_force . sol."""
+        return torch.dot(self.fe.total_force, self.u)
+
+    def _mass(self, qoi):
+        return torch.sum(self._prop("Density", qoi) * self.x_phys) * self.elem_volume
+
+    def _ff_pnorm(self, qoi):
+        """p-norm of sigma_vm,e / Y_e, mean form (1/N), as the manual code on main."""
+        p = ad_mm.get_pNorm_exponent()
+        Y = torch.clamp(self._prop("Yield_Strength", qoi), min=1e-12)
+        return (torch.sum((self.svm / Y) ** p) / self.N) ** (1.0 / p)
+
     def _objective(self):
         qoi, opt = self.to_params.Objective[0], self.to_params.Objective[1]
-        p = ad_mm.get_pNorm_exponent()
         if qoi.name == "PNORM_STRESS" and opt == "FAILURE_FACTOR":
-            # p-norm of sigma_vm,e / Y_e, mean form (1/N), as the manual code on main
-            Y = torch.clamp(self.props["Yield_Strength"], min=1e-12)
-            return (torch.sum((self.svm / Y) ** p) / self.N) ** (1.0 / p)
+            return self._ff_pnorm(qoi)
         if qoi.name == "PNORM_STRESS":
-            return pnorm(self.svm, p)                     # no 1/N, as PyTO's pNormStress
+            return pnorm(self.svm, ad_mm.get_pNorm_exponent())   # no 1/N, as PyTO's pNormStress
+        if qoi.name == "COMPLIANCE":
+            return self._compliance()
+        if qoi.name == "MASS":
+            return self._mass(qoi)
         raise NotImplementedError(f"objective {qoi.name} {opt} not in the AD path yet")
 
     def _constraint(self, qoi, opt, limit):
@@ -313,11 +339,14 @@ class MMTOModelAD:
         if qoi.name == "VOLUME_FRACTION":
             return torch.mean(self.x_phys) / limit - 1.0
         if qoi.name == "MASS":
-            mass = torch.sum(self.props["Density"] * self.x_phys) * self.elem_volume
-            return mass / limit - 1.0
+            return self._mass(qoi) / limit - 1.0
         if qoi.name == "COST":
-            cost = torch.sum(self.props["Density"] * self.props["Cost"] * self.x_phys) * self.elem_volume
+            cost = torch.sum(self._prop("Density", qoi) * self._prop("Cost", qoi) * self.x_phys) * self.elem_volume
             return cost / limit - 1.0
+        if qoi.name == "COMPLIANCE":
+            return self._compliance() / limit - 1.0
+        if qoi.name == "STRESS_FAILURE_FACTOR":
+            return self._ff_pnorm(qoi) / limit - 1.0
         raise NotImplementedError(f"constraint {qoi.name} {opt} not in the AD path yet")
 
     def grad_phys(self, q):
