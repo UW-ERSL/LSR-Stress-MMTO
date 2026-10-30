@@ -23,6 +23,7 @@ TREE (arrow = "depends on")
     E, nu, Y, rho -> z                       VAE decoder (whichever attributes the database has)
     u      -> K -> x_phys, E, nu             K_e = SIMP(x_phys) * (lam_e K_lam + mu_e K_mu)
     x_phys -> x_filt -> x                    Heaviside(density filter(x))
+Each objective and constraint is one entry of QUANTITIES (section "quantities" below).
 Any other objective or constraint raises NotImplementedError rather than run something different.
 The driver (MainPureStructural.py) combines them: OBJ = J/J0 + w*Pz + gamma*Dp/Sd0.
 
@@ -251,6 +252,96 @@ def material_volume_fraction(xb, z, z_real, material_id, tau):
     return torch.sum(xb * p[:, material_id]) / xb.shape[0]
 
 
+# ----------------------------------------------------------------------------- quantities
+# Every objective and constraint is one entry here. To add one: write its function of the
+# model's current state (m.x_phys, m.z, m.u, m.svm, m.props, ...) in torch, add an entry, and
+# add it to tests/test_ad_quantities.py. Nothing else changes: the gradient comes from autograd.
+#
+#   name         the name a project file uses (P1); PyTO-AD's name where the meaning is the same
+#   objective    the to_params.Objective form it answers to, or None if it is not an objective
+#   constraint   the to_params.Constraints form (qoi name, option kind), or None
+#   physics      the physics it applies to
+#   needs        material database columns it reads (checked, with a clear error)
+#   fn(m, opt)   the value, a torch scalar; a constraint is fn / limit - 1 <= 0
+STRUCTURAL = "structural"
+
+
+class Quantity:
+    __slots__ = ("name", "objective", "constraint", "physics", "needs", "fn", "doc")
+
+    def __init__(self, name, objective, constraint, physics, needs, fn, doc):
+        self.name, self.objective, self.constraint = name, objective, constraint
+        self.physics, self.needs, self.fn, self.doc = frozenset(physics), tuple(needs), fn, doc
+
+
+def _option_kind(opt):
+    """None, "FAILURE_FACTOR", or "material" (a dict with material_id), as the forms are keyed."""
+    if isinstance(opt, dict) and "material_id" in opt:
+        return "material"
+    return opt
+
+
+def _compliance(m, opt):
+    return torch.dot(m.fe.total_force, m.u)               # F . u, as main's total_force . sol
+
+
+def _mass(m, opt):
+    return torch.sum(m.props["Density"] * m.x_phys) * m.elem_volume
+
+
+def _cost(m, opt):
+    return torch.sum(m.props["Density"] * m.props["Cost"] * m.x_phys) * m.elem_volume
+
+
+def _stress_pnorm(m, opt):
+    return pnorm(m.svm, ad_mm.get_pNorm_exponent())     # no 1/N, as PyTO's pNormStress
+
+
+def _failure_factor_pnorm(m, opt):
+    p = ad_mm.get_pNorm_exponent()                      # mean form (1/N), as the manual code on main
+    Y = torch.clamp(m.props["Yield_Strength"], min=1e-12)
+    return (torch.sum((m.svm / Y) ** p) / m.N) ** (1.0 / p)
+
+
+def _volume_fraction(m, opt):
+    return torch.mean(m.x_phys)
+
+
+def _material_volume_fraction(m, opt):
+    return material_volume_fraction(m.x_phys, m.z, m.z_real,
+                                    int(opt["material_id"]), float(opt.get("tau", 1.0)))
+
+
+QUANTITIES = [
+    Quantity("Compliance", ("COMPLIANCE", None), ("COMPLIANCE", None), [STRUCTURAL], [],
+             _compliance, "F . u"),
+    Quantity("Mass", ("MASS", None), ("MASS", None), [STRUCTURAL], ["Density"],
+             _mass, "sum of density * x_phys * element volume"),
+    Quantity("Cost", None, ("COST", None), [STRUCTURAL], ["Density", "Cost"],
+             _cost, "sum of density * cost * x_phys * element volume"),
+    Quantity("StressPNorm", ("PNORM_STRESS", None), None, [STRUCTURAL], [],
+             _stress_pnorm, "p-norm of the relaxed von Mises stress, no 1/N"),
+    Quantity("FailureFactorPNorm", ("PNORM_STRESS", "FAILURE_FACTOR"), ("STRESS_FAILURE_FACTOR", None),
+             [STRUCTURAL], ["Yield_Strength"],
+             _failure_factor_pnorm, "mean p-norm of von Mises / yield strength, per element"),
+    Quantity("VolumeFraction", None, ("VOLUME_FRACTION", None), [STRUCTURAL], [],
+             _volume_fraction, "mean of x_phys"),
+    Quantity("MaterialVolumeFraction", None, ("VOLUME_FRACTION", "material"), [STRUCTURAL], [],
+             _material_volume_fraction, "volume fraction of one database material, softmax weights"),
+]
+_AS_OBJECTIVE = {q.objective: q for q in QUANTITIES if q.objective}
+_AS_CONSTRAINT = {q.constraint: q for q in QUANTITIES if q.constraint}
+
+
+def find_quantity(qoi, opt, role):
+    """The registry entry for a to_params form; role is "objective" or "constraint"."""
+    table = _AS_OBJECTIVE if role == "objective" else _AS_CONSTRAINT
+    q = table.get((qoi.name, _option_kind(opt)))
+    if q is None:
+        raise NotImplementedError(f"{role} {qoi.name} {opt} not in the AD path yet")
+    return q
+
+
 # ----------------------------------------------------------------------------- the forward pass
 class MMTOModelAD:
     """The optimization callback's differentiable model, one torch tree per MMA iteration.
@@ -299,55 +390,20 @@ class MMTOModelAD:
         self.cons = [self._constraint(qoi, opt, limit) for qoi, opt, limit in self.to_params.Constraints]
         return self.J, self.cons
 
-    def _prop(self, name, qoi):
-        """A decoded material property, or a clear error if the database has no such column."""
-        if name not in self.props:
-            raise KeyError(f"{qoi.name} needs a {name} column in the material database; "
+    def _value(self, q, opt):
+        """q.fn at the current state, after checking the database has the columns it reads."""
+        missing = [c for c in q.needs if c not in self.props]
+        if missing:
+            raise KeyError(f"{q.name} needs a {missing[0]} column in the material database; "
                            f"this one has {', '.join(sorted(self.props))}")
-        return self.props[name]
-
-    def _compliance(self):
-        """F . u, with F the total force PyTO-AD assembled, as main's total_force . sol."""
-        return torch.dot(self.fe.total_force, self.u)
-
-    def _mass(self, qoi):
-        return torch.sum(self._prop("Density", qoi) * self.x_phys) * self.elem_volume
-
-    def _ff_pnorm(self, qoi):
-        """p-norm of sigma_vm,e / Y_e, mean form (1/N), as the manual code on main."""
-        p = ad_mm.get_pNorm_exponent()
-        Y = torch.clamp(self._prop("Yield_Strength", qoi), min=1e-12)
-        return (torch.sum((self.svm / Y) ** p) / self.N) ** (1.0 / p)
+        return q.fn(self, opt)
 
     def _objective(self):
         qoi, opt = self.to_params.Objective[0], self.to_params.Objective[1]
-        if qoi.name == "PNORM_STRESS" and opt == "FAILURE_FACTOR":
-            return self._ff_pnorm(qoi)
-        if qoi.name == "PNORM_STRESS":
-            return pnorm(self.svm, ad_mm.get_pNorm_exponent())   # no 1/N, as PyTO's pNormStress
-        if qoi.name == "COMPLIANCE":
-            return self._compliance()
-        if qoi.name == "MASS":
-            return self._mass(qoi)
-        raise NotImplementedError(f"objective {qoi.name} {opt} not in the AD path yet")
+        return self._value(find_quantity(qoi, opt, "objective"), opt)
 
     def _constraint(self, qoi, opt, limit):
-        if qoi.name == "VOLUME_FRACTION" and isinstance(opt, dict) and "material_id" in opt:
-            V = material_volume_fraction(self.x_phys, self.z, self.z_real,
-                                         int(opt["material_id"]), float(opt.get("tau", 1.0)))
-            return V / limit - 1.0
-        if qoi.name == "VOLUME_FRACTION":
-            return torch.mean(self.x_phys) / limit - 1.0
-        if qoi.name == "MASS":
-            return self._mass(qoi) / limit - 1.0
-        if qoi.name == "COST":
-            cost = torch.sum(self._prop("Density", qoi) * self._prop("Cost", qoi) * self.x_phys) * self.elem_volume
-            return cost / limit - 1.0
-        if qoi.name == "COMPLIANCE":
-            return self._compliance() / limit - 1.0
-        if qoi.name == "STRESS_FAILURE_FACTOR":
-            return self._ff_pnorm(qoi) / limit - 1.0
-        raise NotImplementedError(f"constraint {qoi.name} {opt} not in the AD path yet")
+        return self._value(find_quantity(qoi, opt, "constraint"), opt) / limit - 1.0
 
     def grad_phys(self, q):
         """dq/d(x_phys, z) as one numpy vector [x (N) ; z latent-major (N*latentDim)]."""

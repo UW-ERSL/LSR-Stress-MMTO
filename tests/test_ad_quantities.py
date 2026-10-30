@@ -38,7 +38,12 @@ QUANTITIES = [
     ("constraint COMPLIANCE", None, (TO_QOI.COMPLIANCE, None, 1.0)),
     ("constraint MASS", None, (TO_QOI.MASS, None, 1.0)),
     ("constraint STRESS_FAILURE_FACTOR", None, (TO_QOI.STRESS_FAILURE_FACTOR, None, 1.0)),
+    ("objective PNORM_STRESS", (TO_QOI.PNORM_STRESS, None), None),
+    ("constraint VOLUME_FRACTION", None, (TO_QOI.VOLUME_FRACTION, None, 0.4)),
+    ("constraint VOLUME_FRACTION, material 2", None,
+     (TO_QOI.VOLUME_FRACTION, {"material_id": 2, "tau": 0.5}, 0.15)),
 ]
+# COST is the one entry not checked here: no database with a Cost column is small enough.
 
 _SETUP = {}
 
@@ -120,28 +125,17 @@ def _assert_ok(name, objective, constraint):
     return errors
 
 
-def test_objective_compliance():
-    _assert_ok(*QUANTITIES[0])
+def _make_test(name, objective, constraint):
+    def test():
+        _assert_ok(name, objective, constraint)
+    test.__name__ = "test_" + "_".join(name.lower().replace(",", "").split())
+    return test
 
 
-def test_objective_mass():
-    _assert_ok(*QUANTITIES[1])
-
-
-def test_objective_failure_factor():
-    _assert_ok(*QUANTITIES[2])
-
-
-def test_constraint_compliance():
-    _assert_ok(*QUANTITIES[3])
-
-
-def test_constraint_mass():
-    _assert_ok(*QUANTITIES[4])
-
-
-def test_constraint_stress_failure_factor():
-    _assert_ok(*QUANTITIES[5])
+for _q in QUANTITIES:                     # one test per quantity, so pytest reports each
+    _t = _make_test(*_q)
+    globals()[_t.__name__] = _t
+del _q, _t
 
 
 def test_missing_column_is_named():
@@ -161,6 +155,19 @@ def test_missing_column_is_named():
         model.to_params.Objective, model.to_params.Constraints = saved
 
 
+def test_registry():
+    """Names are unique and every to_params form of an entry finds that entry."""
+    from AutodiffPureStructural import QUANTITIES as REGISTRY, find_quantity  # type: ignore
+    names = [q.name for q in REGISTRY]
+    assert len(names) == len(set(names)), names
+    material = {"material_id": 0, "tau": 0.5}
+    for q in REGISTRY:
+        for role, form in (("objective", q.objective), ("constraint", q.constraint)):
+            if form:
+                opt = material if form[1] == "material" else form[1]
+                assert find_quantity(TO_QOI[form[0]], opt, role) is q, (q.name, role)
+
+
 if __name__ == "__main__":
     failed = 0
     for name, objective, constraint in QUANTITIES:
@@ -169,6 +176,8 @@ if __name__ == "__main__":
         status = "ok  " if worst < TOL else "FAIL"
         failed += worst >= TOL
         print(f"{status} {name:42s} worst relative difference {worst:.1e}")
+    test_registry()
+    print("ok   registry")
     try:
         test_missing_column_is_named()
         print("ok   missing database column is named")
