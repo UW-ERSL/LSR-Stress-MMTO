@@ -176,13 +176,35 @@ def pnorm(v, p):
 
 
 # ----------------------------------------------------------------------------- design maps
-def to_torch_sparse(H):
-    H = H.tocoo()
-    return torch.sparse_coo_tensor(np.vstack([H.row, H.col]), H.data, H.shape, dtype=_DTYPE).coalesce()
+class SparseOperator:
+    """A constant sparse matrix (a filter) as scipy CSR, with its transpose, both built once."""
+
+    def __init__(self, H):
+        self.H = H.tocsr()
+        self.Ht = self.H.T.tocsr()
+
+
+class _SparseMatmul(torch.autograd.Function):
+    """H @ x inside the tree: forward H @ x, backward H^T @ g, both scipy CSR products. Same result as
+    torch.sparse.mm on a COO tensor, which is about 20 times slower for a large 3D filter."""
+
+    @staticmethod
+    def forward(ctx, x, op):
+        ctx.op = op
+        return torch.from_numpy(np.asarray(op.H @ x.detach().numpy()))
+
+    @staticmethod
+    def backward(ctx, g):
+        return torch.from_numpy(np.asarray(ctx.op.Ht @ g.detach().numpy())), None
+
+
+def sparse_matmul(op, x):
+    """op.H @ x for x of shape (N,) or (N, k), differentiable w.r.t. x."""
+    return _SparseMatmul.apply(x, op)
 
 
 def density_filter(x, H, Hs):
-    return torch.sparse.mm(H, x[:, None])[:, 0] / Hs
+    return sparse_matmul(H, x) / Hs
 
 
 def heaviside(x_filt, beta, eta):
@@ -213,7 +235,7 @@ def distance_penalty(xb, z, z_real, eps=1e-12):
 
 def latent_smoothing(xb, z, Hm, Hsm):
     """Pz = sum_e xb_e * || z_e - (Hm z)_e / Hsm_e ||^2  (latent smoothing, weight 1)."""
-    zbar = torch.sparse.mm(Hm, z) / Hsm[:, None]
+    zbar = sparse_matmul(Hm, z) / Hsm[:, None]
     return torch.sum(xb[:, None] * (z - zbar) ** 2)
 
 
@@ -245,9 +267,9 @@ class MMTOModelAD:
         self.fe, self.enc, self.to_params = fe, enc, to_params
         self.N = fe.mesh.num_elems
         self.latentDim = enc.vae_params.latentDim
-        self.H = to_torch_sparse(H_density)
+        self.H = SparseOperator(H_density)
         self.Hs = torch.as_tensor(np.asarray(Hs_density, dtype=float).ravel(), dtype=_DTYPE)
-        self.Hm = to_torch_sparse(H_material)
+        self.Hm = SparseOperator(H_material)
         self.Hsm = torch.as_tensor(np.asarray(Hs_material, dtype=float).ravel(), dtype=_DTYPE)
         self.z_real = torch.as_tensor(np.asarray(z_real, dtype=float), dtype=_DTYPE)
         self.use_constant_nu, self.nu_const = bool(use_constant_nu), float(nu_const)
@@ -293,6 +315,9 @@ class MMTOModelAD:
         if qoi.name == "MASS":
             mass = torch.sum(self.props["Density"] * self.x_phys) * self.elem_volume
             return mass / limit - 1.0
+        if qoi.name == "COST":
+            cost = torch.sum(self.props["Density"] * self.props["Cost"] * self.x_phys) * self.elem_volume
+            return cost / limit - 1.0
         raise NotImplementedError(f"constraint {qoi.name} {opt} not in the AD path yet")
 
     def grad_phys(self, q):
