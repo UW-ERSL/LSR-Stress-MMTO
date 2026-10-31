@@ -18,8 +18,14 @@ whatever the PyTO-AD GUI saved in the same file is kept as it is.
     p.save("bracket.pyto")
     q = Project.load("bracket.pyto")
     mesh, mat_prop, bc, body_force, to_params, vae_params = q.build()
+    run(q)                                  # optimizes; results and a copy of q in results/bracket
 
 build() returns what getMMTOProblemPureStructural returns for a benchmark.
+
+Settings: every setting of run_topopt is stored, under run_topopt's own name, in
+settings.common, settings.advanced and settings.vae (DEFAULT_SETTINGS below). A new
+project starts from the settings of the paper's examples; a file missing some is
+completed from the same defaults, and the run says which.
 
 Boundary conditions (each acts on a named selection, evaluated on the mesh nodes):
     fixed          dofs "x", "y", "z" or any combination, value 0
@@ -53,10 +59,28 @@ BC_KINDS = ("fixed", "displacement", "force", "traction")
 _AXES = {"x": 0, "y": 1, "z": 2}
 _MARK_FIXED, _MARK_LOAD, _MARK_ROLLER = 1, 2, 3
 
-# settings.vae key -> VAEParams attribute
-_VAE_KEYS = {"latent_dim": "latentDim", "learning_rate": "learningRate", "hidden_dim": "vae_hiddenDim",
-             "max_attribute_error_percent": "maxAttributeErrorPercent", "kl_factor": "klFactor",
-             "num_epochs": "numEpochs"}
+# Every setting of run_topopt a project stores, under run_topopt's own names, with the value
+# a new project starts from: the settings of the paper's examples (comparison/run_both.py).
+# A setting missing from a file is filled from here and reported; a setting not listed here
+# is an error. material_filter_radius None means "the same as relative_filter_radius";
+# saveNet None means the .nt file next to the database's .xlsx.
+DEFAULT_SETTINGS = {
+    "common": {"maxIterations": 300, "relative_filter_radius": 2.5, "material_filter_radius": None,
+               "pnorm_exponent": 6.0, "beta_schedule_scheme": "PAPER"},
+    "advanced": {"timeLimit": 36000, "rel_conv_tol": 1e-7,
+                 "use_penalization": True, "gamma_init": 1e-3, "gamma_max": 10.0, "gamma_factor": 1.1,
+                 "penalty_start_iter": 0, "distance_penalty_disable_after_iter": 250,
+                 "use_dynamic_gamma_scheduling": True,
+                 "use_z_smoothing": True, "z_smoothing_weight": 1e-4, "z_smoothing_disable_after_iter": 250,
+                 "use_heaviside_projection": True, "eta_proj": 0.5, "use_continuation": False,
+                 "use_constant_poissons_ratio": False, "constant_poissons_ratio": 0.3,
+                 "snap_to_real_material": False, "z0_init_method": "ORIGIN", "binarize_topology": True},
+    "vae": {"use_pretrained_vae": True, "saveNet": None},
+}
+# the VAE's own settings, also in settings.vae; they start from the database's known values
+VAE_PARAMS = ("latentDim", "learningRate", "vae_hiddenDim", "maxAttributeErrorPercent", "klFactor", "numEpochs")
+# run_topopt arguments about one run's output, not the problem; n_dof_desired is mesh.n_dof
+NOT_STORED = ("to_problem", "save_dir", "plot_progress", "plot_bcs", "verbose", "plotter")
 
 
 def _dofs(dofs):
@@ -125,7 +149,7 @@ class Project:
         self.keep_support_elements = False
         self.database = None
         self.formulation = {"objective": None, "constraints": []}
-        self.settings = {"common": {}, "advanced": {}, "vae": {}}
+        self.settings = {k: dict(v) for k, v in DEFAULT_SETTINGS.items()}
         self._gui = {}                          # everything else in the .pyto, kept for the GUI
 
     # ------------------------------------------------------------------ building it up
@@ -224,6 +248,20 @@ class Project:
             xlsx, _ = self.database_paths()
             if not os.path.isfile(xlsx):
                 errors.append(f"material database {xlsx} does not exist")
+        for section, values in self.settings.items():
+            known = set(DEFAULT_SETTINGS.get(section, {})) | (set(VAE_PARAMS) if section == "vae" else set())
+            if section not in DEFAULT_SETTINGS:
+                errors.append(f"settings: unknown section {section!r}")
+                continue
+            for k in values:
+                if k not in known:
+                    errors.append(f"settings.{section}: unknown setting {k!r}")
+        from MainPureStructural import BetaScheduleScheme, Z0InitMethod                # type: ignore
+        for section, key, enum in (("common", "beta_schedule_scheme", BetaScheduleScheme),
+                                   ("advanced", "z0_init_method", Z0InitMethod)):
+            v = self.settings.get(section, {}).get(key)
+            if v is not None and v not in enum.__members__:
+                errors.append(f"settings.{section}.{key}: {v!r} is not one of {', '.join(enum.__members__)}")
         obj = self.formulation.get("objective")
         if not obj:
             errors.append("no objective")
@@ -245,9 +283,31 @@ class Project:
                 errors.append(f"constraint {i}: {e}")
         return errors
 
+    def complete_settings(self):
+        """Fill every missing setting from the defaults; returns what was filled."""
+        from ExamplesPureStructural import VAEParams                                  # type: ignore
+        filled = []
+        for section, defaults in DEFAULT_SETTINGS.items():
+            values = self.settings.setdefault(section, {})
+            for k, v in defaults.items():
+                if k not in values:
+                    values[k] = v
+                    filled.append(f"{section}.{k}")
+        vae_defaults = {k: getattr(VAEParams(), k) for k in VAE_PARAMS}
+        if self.database is not None:
+            vae_defaults.update(self.database_paths()[1] or {})
+        for k in VAE_PARAMS:
+            if k not in self.settings["vae"]:
+                self.settings["vae"][k] = vae_defaults[k]
+                filled.append(f"vae.{k}")
+        return filled
+
     # ------------------------------------------------------------------ the problem
     def build(self, verbose=True):
         """mesh, mat_prop, bc, elem_body_force, to_params, vae_params, as for a benchmark."""
+        filled = self.complete_settings()
+        if filled and verbose:
+            print(f"[{self.name}] settings not in the project, taken from the defaults: {', '.join(filled)}")
         errors = self.validate()
         if errors:
             raise ValueError(f"project {self.name!r}:\n  " + "\n  ".join(errors))
@@ -329,12 +389,11 @@ class Project:
         to_params.ExtrudeZ = self.single_layer
         to_params.KeepFixedElems = self.keep_support_elements
         to_params.nDOFDesired = self.n_dof
-        if common.get("filter_radius") is not None:
-            to_params.RelativeFilterRadius = float(common["filter_radius"])
-        if common.get("material_filter_radius") is not None:
+        to_params.RelativeFilterRadius = float(common["relative_filter_radius"])
+        if common["material_filter_radius"] is not None:
             to_params.MaterialFilterRadius = float(common["material_filter_radius"])
-        topopt_material_model._PNORM_EXPONENT = float(common.get("pnorm_exponent", 6))
-        xlsx, vae_defaults = self.database_paths()
+        topopt_material_model._PNORM_EXPONENT = float(common["pnorm_exponent"])
+        xlsx, _ = self.database_paths()
         to_params.MaterialsExcelFile = xlsx
         obj = self.formulation["objective"]
         to_params.Objective = to_params_form(obj["expression"], "objective")
@@ -342,11 +401,8 @@ class Project:
                                  for c in self.formulation.get("constraints", [])]
 
         vae_params = VAEParams()
-        for k, v in (vae_defaults or {}).items():
-            setattr(vae_params, k, v)
-        for k, v in self.settings.get("vae", {}).items():
-            if k in _VAE_KEYS:
-                setattr(vae_params, _VAE_KEYS[k], v)
+        for k in VAE_PARAMS:
+            setattr(vae_params, k, self.settings["vae"][k])
 
         # ---- keep-solid elements
         to_params.ElemsToKeep = None
@@ -378,11 +434,10 @@ class Project:
                 "database": self.database,
                 "formulation": {"objective": self.formulation.get("objective"),
                                 "constraints": [dict(c) for c in self.formulation.get("constraints", [])]},
-                "settings": {k: dict(self.settings.get(k, {})) for k in ("common", "advanced", "vae")}}
+                "settings": {k: dict(v) for k, v in self.settings.items()}}
 
-    def save(self, path):
-        """Write the project; other sections of an existing .pyto are kept."""
-        path = os.path.abspath(path)
+    def _file_data(self, path):
+        """The JSON a project file at path holds, with the STL path relative to it."""
         data = dict(self._gui)
         if os.path.isfile(path):
             with open(path) as fh:
@@ -394,22 +449,50 @@ class Project:
             pass
         data["stl_file_path"] = stl.replace("\\", "/")
         data["mmto"] = self.to_dict()
+        return data
+
+    def save(self, path):
+        """Write the project, every setting included; other sections of an existing .pyto are kept."""
+        path = os.path.abspath(path)
+        self.complete_settings()
+        data = self._file_data(path)
         with open(path, "w") as fh:
             json.dump(data, fh, indent=2)
         self.base_dir, self.stl = os.path.dirname(path), data["stl_file_path"]
+
+    def copy(self, **changes):
+        import copy
+        p = copy.deepcopy(self)
+        for k, v in changes.items():
+            setattr(p, k, v)
+        return p
+
+    def to_record(self):
+        """The project as a run record stores it."""
+        return {"project": self.to_dict(), "stl_file_path": self.stl_path(), "base_dir": self.base_dir,
+                "gui": self._gui}
+
+    @classmethod
+    def from_record(cls, record):
+        data = dict(record.get("gui") or {}, mmto=record["project"], stl_file_path=record["stl_file_path"])
+        return cls._from_data(data, record["base_dir"], record["project"].get("name", "project"))
 
     @classmethod
     def load(cls, path):
         path = os.path.abspath(path)
         with open(path) as fh:
             data = json.load(fh)
+        return cls._from_data(data, os.path.dirname(path), os.path.splitext(os.path.basename(path))[0])
+
+    @classmethod
+    def _from_data(cls, data, base_dir, default_name):
         m = data.get("mmto") or {}
         if m.get("schema_version", SCHEMA_VERSION) > SCHEMA_VERSION:
-            raise ValueError(f"{path}: written by a newer version (schema {m['schema_version']})")
+            raise ValueError(f"{default_name}: written by a newer version (schema {m['schema_version']})")
         mesh = m.get("mesh", {})
-        p = cls(m.get("name") or os.path.splitext(os.path.basename(path))[0], data.get("stl_file_path", ""),
+        p = cls(m.get("name") or default_name, data.get("stl_file_path", ""),
                 n_dof=mesh.get("n_dof", 30000), single_layer=mesh.get("single_layer", False),
-                base_dir=os.path.dirname(path))
+                base_dir=base_dir)
         p.comment, p.physics = m.get("comment", ""), m.get("physics", "structural")
         p.selections = {k: S.from_dict(v) for k, v in m.get("selections", {}).items()}
         p.bcs = [dict(bc) for bc in m.get("bcs", [])]
@@ -418,7 +501,44 @@ class Project:
         p.database = m.get("database")
         f = m.get("formulation") or {}
         p.formulation = {"objective": f.get("objective"), "constraints": list(f.get("constraints", []))}
-        s = m.get("settings") or {}
-        p.settings = {k: dict(s.get(k, {})) for k in ("common", "advanced", "vae")}
+        stored = m.get("settings") or {}
+        p.settings = {k: dict(stored.get(k, {})) for k in DEFAULT_SETTINGS}    # missing ones: filled at build
+        p.settings.update({k: dict(v) for k, v in stored.items() if k not in DEFAULT_SETTINGS})
         p._gui = {k: v for k, v in data.items() if k not in ("mmto", "stl_file_path")}
         return p
+
+
+# ---------------------------------------------------------------------- running
+def run_arguments(project, save_dir=None, verbose=True, plot_progress=False, plot_bcs=False, plotter=None):
+    """The keyword arguments run_topopt gets for this project."""
+    from MainPureStructural import BetaScheduleScheme, Z0InitMethod                    # type: ignore
+    project.complete_settings()
+    args = dict(project.settings["common"], **project.settings["advanced"],
+                use_pretrained_vae=project.settings["vae"]["use_pretrained_vae"],
+                saveNet=project.settings["vae"]["saveNet"])
+    args["beta_schedule_scheme"] = BetaScheduleScheme[args["beta_schedule_scheme"]]
+    args["z0_init_method"] = Z0InitMethod[args["z0_init_method"]]
+    args.update(to_problem=project, n_dof_desired=project.n_dof,
+                save_dir=save_dir if save_dir is not None else os.path.join("results", project.name),
+                verbose=verbose, plot_progress=plot_progress, plot_bcs=plot_bcs, plotter=plotter)
+    return args
+
+
+def run(project, save_dir=None, **run_options):
+    """Optimize the project with run_topopt; a copy of the project goes into save_dir with the results."""
+    import run_io                                                                      # type: ignore
+    from MainPureStructural import run_topopt                                          # type: ignore
+    filled = project.complete_settings()
+    if filled:
+        print(f"[{project.name}] settings not in the project, taken from the defaults: {', '.join(filled)}")
+    errors = project.validate()
+    if errors:
+        raise ValueError(f"project {project.name!r}:\n  " + "\n  ".join(errors))
+    snapshot = project.copy()                    # the run gets, and records, the project as it is now
+    args = run_arguments(snapshot, save_dir, **run_options)
+    if run_io.WRITE_FILES:
+        os.makedirs(args["save_dir"], exist_ok=True)
+        path = os.path.abspath(os.path.join(args["save_dir"], f"{project.name}.pyto"))
+        with open(path, "w") as fh:
+            json.dump(snapshot._file_data(path), fh, indent=2)
+    return run_topopt(**args)

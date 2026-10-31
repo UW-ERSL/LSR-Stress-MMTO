@@ -56,6 +56,8 @@ def _to_plain(obj, _depth=0):
             return _to_plain(obj.detach().cpu().numpy(), _depth + 1)
     except Exception:
         pass
+    if hasattr(obj, "to_record"):                     # a Project: stored whole, as saved
+        return _to_plain(obj.to_record(), _depth + 1)
     try:
         import dataclasses
         if dataclasses.is_dataclass(obj) and not isinstance(obj, type):

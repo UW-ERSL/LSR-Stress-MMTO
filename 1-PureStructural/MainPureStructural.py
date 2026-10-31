@@ -183,6 +183,7 @@ def run_topopt(
     Optional latent smoothing penalty (density-weighted):
       Pz = lambda * sum_ell sum_e x_e * ( z_e^(ell) - ((H z^(ell))/Hs)_e )^2
     """
+    _args_at_start = dict(locals())   # the arguments as given; the run switches some off later
 
     history = init_run_history()
     mesh_structural, mat_prop_struct, bc_struct, elem_body_force, to_params, vae_params = (
@@ -307,12 +308,17 @@ def run_topopt(
     APPLY_DENSITY_FILTER = True
     APPLY_LATENT_SENS_FILTER = False  # (H_material@g)/Hs smoothing of latent
                                       # gradient blocks; set False.
+    MMA_MOVE_LIMIT, MMA_KKT_TOL = 0.05, 1e-6
+    # dynamic gamma: the ramp starts once J changed by less than rel_tol over the last
+    # window iterations (not before min_iter), or end_margin iterations before it must
+    DYN_GAMMA = {"window": 10, "rel_tol": 1e-3, "min_iter": 20, "end_margin": 30}
 
     mmaIterations = 0
     obj0 = None
     Sd0 = None    # frozen reference scale for distance penalty (own initial value)
     _J_hist = []               # objective history for dynamic-gamma plateau trigger
     _dyn_ramp_started = False   # latches True once the dynamic ramp begins
+    _during_run = {}            # iteration at which a setting changed during the run
     gamma = float(gamma_init)
     beta_schedule = get_beta_schedule(beta_schedule_scheme)
     beta_proj = float(beta_schedule["beta_init"])
@@ -380,6 +386,7 @@ def run_topopt(
             and mmaIterations >= z_smoothing_disable_after_iter
         ):
             use_z_smoothing = False
+            _during_run["z_smoothing_off_at_iter"] = int(mmaIterations)
             if verbose:
                 print(f"[INFO] z-smoothing penalty disabled at iteration {mmaIterations}")
         # Disable distance-based penalty after specified iteration
@@ -390,6 +397,7 @@ def run_topopt(
             and mmaIterations >= distance_penalty_disable_after_iter
         ):
             use_penalization = False
+            _during_run["distance_penalty_off_at_iter"] = int(mmaIterations)
             if verbose:
                 print(f"[INFO] Distance-based penalty disabled at iteration {mmaIterations}")
         zeta = np.asarray(zeta).flatten()
@@ -428,9 +436,9 @@ def run_topopt(
 
         # ============ OBJECTIVE / CONSTRAINTS / SENSITIVITIES =========
         # gradients w.r.t. (x_phys, z), the layout the manual code returned
-        obj = float(J_t)
+        obj = float(J_t.detach())
         grad_obj = ad_model.grad_phys(J_t)
-        cons = np.array([[float(c)] for c in cons_t])
+        cons = np.array([[float(c.detach())] for c in cons_t])
         grad_cons = np.array([ad_model.grad_phys(c) for c in cons_t])
 
         # ================= PENALTIES + NORMALIZATION ==================
@@ -456,7 +464,7 @@ def run_topopt(
             # own-initial-value to normalize by (dividing by it would blow up).
             # z_smoothing_weight multiplies the raw roughness directly.
             Pz_t = AD.latent_smoothing(ad_model.x_phys, ad_model.z, ad_model.Hm, ad_model.Hsm)
-            Pzn = float(z_smoothing_weight) * float(Pz_t)
+            Pzn = float(z_smoothing_weight) * float(Pz_t.detach())
             obj = obj + Pzn
             grad_obj_phys += float(z_smoothing_weight) * ad_model.grad_phys(Pz_t)
         else:
@@ -468,7 +476,7 @@ def run_topopt(
         if use_penalization and (use_dynamic_gamma_scheduling or mmaIterations >= int(penalty_start_iter)):
             # RAW penalty (gamma = 1); weighting + normalization applied here
             Dp_t = AD.distance_penalty(ad_model.x_phys, ad_model.z, ad_model.z_real)
-            penalty_raw = float(Dp_t)
+            penalty_raw = float(Dp_t.detach())
 
             if Sd0 is None:
                 Sd0 = max(float(penalty_raw), 1e-12)   # freeze initial scale (once)
@@ -484,15 +492,16 @@ def run_topopt(
             if use_dynamic_gamma_scheduling:
                 _J_hist.append(float(Jn))
                 if not _dyn_ramp_started:
-                    _K, _rel_tol, _min_iter = 10, 1e-3, 20
+                    _K, _rel_tol, _min_iter = DYN_GAMMA["window"], DYN_GAMMA["rel_tol"], DYN_GAMMA["min_iter"]
                     _n_ramp = int(np.ceil(np.log(max(gamma_max / gamma_init, 1 + 1e-9))
                                           / np.log(max(gamma_factor, 1 + 1e-9))))
-                    _deadline = int(maxIterations) - _n_ramp - 30
+                    _deadline = int(maxIterations) - _n_ramp - DYN_GAMMA["end_margin"]
                     _settled = (mmaIterations >= _min_iter and len(_J_hist) > _K and
                                 abs(_J_hist[-1] - _J_hist[-1 - _K])
                                 <= _rel_tol * max(abs(_J_hist[-1 - _K]), 1e-12))
                     if _settled or mmaIterations >= _deadline:
                         _dyn_ramp_started = True
+                        _during_run["gamma_ramp_started_at_iter"] = int(mmaIterations)
                         if verbose:
                             print(f"[DYN-GAMMA] ramp started at iter {mmaIterations} "
                                   f"({'plateau' if _settled else 'deadline'})")
@@ -587,8 +596,8 @@ def run_topopt(
         upperBound,
         maxIterations=maxIterations,
         timeLimitSecs=timeLimit,
-        move_limit=0.05,
-        kktTol=1e-6,
+        move_limit=MMA_MOVE_LIMIT,
+        kktTol=MMA_KKT_TOL,
         fTolerance=rel_conv_tol,
         gTolerance=rel_conv_tol,
         verbose=False,
@@ -597,11 +606,8 @@ def run_topopt(
     tEnd = time.time()
     print(f"Total optimization time: {tEnd - tStart:.2f} seconds")
     # ---- assemble the full parameter manifest (no plotting; saved as YAML+pkl) ----
-    import inspect as _inspect
     import run_io as _run_io
-    _argnames = list(_inspect.signature(run_topopt).parameters.keys())
-    _frame = _inspect.currentframe()
-    _run_args = {k: _frame.f_locals.get(k) for k in _argnames}
+    _run_args = dict(_args_at_start, saveNet=saveNet)   # as given, with the VAE file resolved
     _iters = None
     try:
         _iters = max((len(v) for v in history.values() if hasattr(v, "__len__")),
@@ -614,10 +620,23 @@ def run_topopt(
         beta_schedule=beta_schedule, mesh=mesh_structural, bc=bc_struct,
         mat_encoder=matEncoder, z_real_points=zRealPoints,
         material_colors=material_colors,
-        mma_settings={"optimizer": "MMA (mmaWrapper)", "kktTol": 1e-6,
+        mma_settings={"optimizer": "MMA (mmaWrapper)", "kktTol": MMA_KKT_TOL,
+                      "move_limit": MMA_MOVE_LIMIT,
                       "fTolerance": rel_conv_tol, "gTolerance": rel_conv_tol},
         runtime_sec=(tEnd - tStart), iterations=_iters,
         comment=getattr(to_params, "Comment", ""))
+    run_config["during_run"] = dict(_during_run)
+    from PyTOImports import topopt_material_model  # type: ignore
+    run_config["fixed_in_code"] = {
+        "mma_move_limit": MMA_MOVE_LIMIT, "mma_kkt_tol": MMA_KKT_TOL,
+        "dynamic_gamma": dict(DYN_GAMMA),
+        "apply_density_filter": APPLY_DENSITY_FILTER,
+        "apply_latent_sensitivity_filter": APPLY_LATENT_SENS_FILTER,
+        "initial_density": float(initialDensity),
+        "simp_structural_penalty_at_end": float(topopt_material_model._SIMP_STRUCTURAL_PENALTY),
+        "stress_relaxation_exponent": float(topopt_material_model._SIMP_STRESS_RELAXATION),
+        "void_stiffness_relative": float(topopt_material_model._EVOID_RELATIVE),
+    }
 
     run_postprocessing(
         history=history,

@@ -93,7 +93,11 @@ def getMMTOProblemPureStructural(to_problem: MMTOExamplesPureStructural,nDOFDesi
     Returns:
         StructuralTOProblem: The structural topology optimization problem.
     """
-    
+    if hasattr(to_problem, "build"):                  # a Project (0-Common/project.py)
+        if nDOFDesired is not None and int(nDOFDesired) != to_problem.n_dof:
+            to_problem = to_problem.copy(n_dof=int(nDOFDesired))
+        return to_problem.build()
+
     to_params = MMTOParams()
     topopt_material_model._PNORM_EXPONENT = 6   # default; Xie branches override to 10
     vae_params = VAEParams()

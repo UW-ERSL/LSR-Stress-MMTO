@@ -42,8 +42,11 @@ def _import_examples():
 
 
 def _custom_problem(run: Run):
-    """The CustomProblem of a run made from a .pyto project file, else None."""
+    """The Project or CustomProblem a run was made from, else None."""
     spec = ((run.config or {}).get("arguments_resolved") or {}).get("to_problem")
+    if isinstance(spec, dict) and "project" in spec:
+        from project import Project  # type: ignore
+        return Project.from_record(spec)
     if not isinstance(spec, dict) or "pyto" not in spec:
         return None
     from ExamplesPureStructural import CustomProblem  # type: ignore

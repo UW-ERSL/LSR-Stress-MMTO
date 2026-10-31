@@ -41,8 +41,8 @@ def coded_ubracket(base_dir=UBRACKET):
     p.database = "6Materials_AF_3Attr"
     p.objective("FailureFactorPNorm()")
     p.constraint("Mass()", "<=", 0.0035)
-    p.settings["common"].update(filter_radius=3.5, pnorm_exponent=16)
-    p.settings["vae"]["latent_dim"] = 2
+    p.settings["common"].update(relative_filter_radius=3.5, pnorm_exponent=16)
+    p.settings["vae"]["latentDim"] = 2
     return p
 
 
