@@ -30,6 +30,9 @@ Types (to_dict / from_dict give the JSON form a project file stores):
     face(side)                                   the plane at the mesh's extreme, side "xmin" ... "zmax"
     near_face(side, distance)                    within distance of that extreme (strictly)
     nearest(point)                               the single closest node or element
+    stl_faces(triangles)                         nodes on these triangles of the STL (nodes only)
+    rows(face, axis, n, end="max")               the n outermost node rows of a face along an
+                                                 axis, e.g. rows("xmax", "y", 8) (nodes only)
     ids(indices)                                 explicit indices; tied to one mesh
     inside_stl(path)                             inside a closed STL surface
     function("file.py:name")                     name(mesh, on) returns the indices
@@ -37,6 +40,9 @@ Types (to_dict / from_dict give the JSON form a project file stores):
 
 A function selection runs the Python file it names when it is evaluated: open project
 files with function selections only from people you trust.
+
+Lengths (radius, inner_radius, along, distance, pad) are numbers in model units, or
+"<k>h" for k times the largest element size, e.g. near_face("zmin", "1.5h").
 
 To add a type: subclass Selection, give it a TYPE and a fields tuple, write _mask or
 evaluate, and add it to tests/test_selections.py. from_dict finds it by TYPE.
@@ -58,12 +64,31 @@ def _points(mesh, on):
     raise ValueError(f"on must be 'nodes' or 'elements', not {on!r}")
 
 
+def _length(mesh, v):
+    """A length: a number in model units, or "<k>h" for k times the largest element size."""
+    if isinstance(v, str):
+        if not v.endswith("h"):
+            raise ValueError(f"length {v!r}: write a number, or e.g. '1.5h' for 1.5 element sizes")
+        return float(v[:-1] or 1.0) * float(np.max(mesh.elem_size))
+    return float(v)
+
+
+def _keep(v):
+    """A length as given: a number, or an "<k>h" string kept as text until there is a mesh."""
+    if isinstance(v, str):
+        if not v.endswith("h"):
+            raise ValueError(f"length {v!r}: write a number, or e.g. '1.5h' for 1.5 element sizes")
+        float(v[:-1] or 1.0)
+        return v
+    return float(v)
+
+
 def _pad(mesh, pad, on):
     if pad == "auto":
         pad = "half" if on == "nodes" else 0.0
     if pad == "half":
         return 0.5 * float(np.min(mesh.elem_size))
-    return float(pad)
+    return _length(mesh, pad)
 
 
 def _axis_vector(axis):
@@ -134,8 +159,8 @@ class cylinder(Selection):
     def __init__(self, center, axis, radius, inner_radius=0.0, along=None, pad="auto"):
         self.center = list(map(float, center))
         self.axis = axis if isinstance(axis, str) else list(map(float, axis))
-        self.radius, self.inner_radius = float(radius), float(inner_radius)
-        self.along = None if along is None else [float(along[0]), float(along[1])]
+        self.radius, self.inner_radius = _keep(radius), _keep(inner_radius)
+        self.along = None if along is None else [_keep(along[0]), _keep(along[1])]
         self.pad = pad
 
     def _mask(self, p, mesh, on):
@@ -150,11 +175,13 @@ class cylinder(Selection):
             a = _axis_vector(self.axis)
             along = d @ a
             r = np.linalg.norm(d - np.outer(along, a), axis=1)
-        m = r <= self.radius + t
-        if self.inner_radius > 0:
-            m &= r >= self.inner_radius - t
+        radius, inner = _length(mesh, self.radius), _length(mesh, self.inner_radius)
+        m = r <= radius + t
+        if inner > 0:
+            m &= r >= inner - t
         if self.along is not None:
-            m &= (along >= self.along[0] - t) & (along <= self.along[1] + t)
+            a0, a1 = _length(mesh, self.along[0]), _length(mesh, self.along[1])
+            m &= (along >= a0 - t) & (along <= a1 + t)
         return m
 
 
@@ -162,11 +189,11 @@ class sphere(Selection):
     TYPE, fields = "sphere", ("center", "radius", "pad")
 
     def __init__(self, center, radius, pad="auto"):
-        self.center, self.radius, self.pad = list(map(float, center)), float(radius), pad
+        self.center, self.radius, self.pad = list(map(float, center)), _keep(radius), pad
 
     def _mask(self, p, mesh, on):
         r = np.sqrt(np.sum((p - np.array(self.center)) ** 2, axis=1))
-        return r <= self.radius + _pad(mesh, self.pad, on)
+        return r <= _length(mesh, self.radius) + _pad(mesh, self.pad, on)
 
 
 class plane(Selection):
@@ -203,13 +230,14 @@ class near_face(Selection):
 
     def __init__(self, side, distance):
         _side(side)
-        self.side, self.distance = side, float(distance)
+        self.side, self.distance = side, _keep(distance)
 
     def _mask(self, p, mesh, on):
         k, end = _side(self.side)
+        d = _length(mesh, self.distance)
         if end == "min":
-            return p[:, k] < p[:, k].min() + self.distance
-        return p[:, k] > p[:, k].max() - self.distance
+            return p[:, k] < p[:, k].min() + d
+        return p[:, k] > p[:, k].max() - d
 
 
 class nearest(Selection):
@@ -235,6 +263,45 @@ class ids(Selection):
         if bad:
             raise IndexError(f"ids selection has indices outside this mesh's {n} {on}: {bad[:5]}")
         return np.array(self.indices, dtype=int)
+
+
+class stl_faces(Selection):
+    """Mesh nodes on triangles of the STL the mesh was made from (PyTO-AD's own lookup)."""
+    TYPE, fields = "stl_faces", ("triangles",)
+
+    def __init__(self, triangles):
+        self.triangles = [int(t) for t in triangles]
+
+    def evaluate(self, mesh, on="nodes", base_dir=None):
+        if on != "nodes":
+            raise ValueError("stl_faces selects nodes only")
+        return np.unique(np.asarray(mesh.get_nodes_on_triangles(self.triangles), dtype=int))
+
+
+class rows(Selection):
+    """The n outermost node rows of a face, counted along an axis: e.g. the 8 highest rows
+    of the right face. Rows are node layers, so their height is n element sizes."""
+    TYPE, fields = "rows", ("face", "axis", "n", "end")
+
+    def __init__(self, face, axis, n, end="max"):
+        _side(face)
+        if axis not in _AXES or end not in ("min", "max"):
+            raise ValueError(f"rows: axis must be x, y or z and end 'min' or 'max'")
+        self.face, self.axis, self.n, self.end = face, axis, int(n), end
+
+    def evaluate(self, mesh, on="nodes", base_dir=None):
+        if on != "nodes":
+            raise ValueError("rows selects nodes only")
+        p = _points(mesh, "nodes")
+        k, side_end = _side(self.face)
+        a = _AXES[self.axis]
+        h = np.asarray(mesh.elem_size, dtype=float)
+        extreme = p[:, k].min() if side_end == "min" else p[:, k].max()
+        on_face = np.abs(p[:, k] - extreme) < 0.25 * h[k]
+        row = np.round(p[:, a] / h[a]).astype(int)
+        chosen = np.unique(row[on_face])
+        chosen = chosen[-self.n:] if self.end == "max" else chosen[:self.n]
+        return np.flatnonzero(on_face & np.isin(row, chosen)).astype(int)
 
 
 def _resolve(path, base_dir):

@@ -1,0 +1,164 @@
+{
+  "stl_file_path": "../0-Common/Models/AirplaneBracket/AirplaneBracket.stl",
+  "mmto": {
+    "schema_version": 1,
+    "name": "Airplane bracket",
+    "physics": "structural",
+    "comment": "Airplane bracket (Liao 2024 geometry), z-half, 20 materials, min p-norm failure factor s.t. mass and cost",
+    "mesh": {
+      "n_dof": 150000,
+      "single_layer": false
+    },
+    "selections": {
+      "bores": {
+        "type": "union",
+        "of": [
+          {
+            "type": "cylinder",
+            "center": [
+              0.1,
+              0.0,
+              9.5
+            ],
+            "axis": "y",
+            "radius": 6.0,
+            "inner_radius": 0.0,
+            "along": [
+              -3.5,
+              3.0
+            ],
+            "pad": 0
+          },
+          {
+            "type": "cylinder",
+            "center": [
+              36.8,
+              0.0,
+              8.2
+            ],
+            "axis": "y",
+            "radius": 6.0,
+            "inner_radius": 0.0,
+            "along": [
+              -3.5,
+              3.0
+            ],
+            "pad": 0
+          }
+        ]
+      },
+      "symmetry": {
+        "type": "plane",
+        "axis": "z",
+        "value": 0.0,
+        "pad": "auto"
+      },
+      "bearing": {
+        "type": "box",
+        "lo": [
+          94.5,
+          -9.2,
+          0.0
+        ],
+        "hi": [
+          108.7,
+          -2.2,
+          3.6
+        ],
+        "pad": "half"
+      },
+      "collar": {
+        "type": "inside_stl",
+        "path": "../0-Common/Models/AirplaneBracket/AirplaneBracket_NonDesign.stl"
+      }
+    },
+    "bcs": [
+      {
+        "kind": "fixed",
+        "on": "bores",
+        "dofs": "xyz"
+      },
+      {
+        "kind": "fixed",
+        "on": "symmetry",
+        "dofs": "z"
+      },
+      {
+        "kind": "traction",
+        "on": "bearing",
+        "pressure": 75.0,
+        "direction": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "area": "bbox"
+      }
+    ],
+    "keep_solid": [
+      "collar",
+      "bores"
+    ],
+    "keep_support_elements": false,
+    "database": "CustomAlloys20_3D",
+    "formulation": {
+      "objective": {
+        "expression": "FailureFactorPNorm()",
+        "sense": "minimize"
+      },
+      "constraints": [
+        {
+          "expression": "Mass()",
+          "op": "<=",
+          "bound": 40000000.0
+        },
+        {
+          "expression": "Cost()",
+          "op": "<=",
+          "bound": 750000000.0
+        }
+      ]
+    },
+    "settings": {
+      "common": {
+        "maxIterations": 300,
+        "relative_filter_radius": 7.3,
+        "material_filter_radius": null,
+        "pnorm_exponent": 10.0,
+        "beta_schedule_scheme": "PAPER"
+      },
+      "advanced": {
+        "timeLimit": 36000,
+        "rel_conv_tol": 1e-07,
+        "use_penalization": true,
+        "gamma_init": 0.001,
+        "gamma_max": 10.0,
+        "gamma_factor": 1.1,
+        "penalty_start_iter": 0,
+        "distance_penalty_disable_after_iter": 250,
+        "use_dynamic_gamma_scheduling": true,
+        "use_z_smoothing": true,
+        "z_smoothing_weight": 0.0001,
+        "z_smoothing_disable_after_iter": 250,
+        "use_heaviside_projection": true,
+        "eta_proj": 0.5,
+        "use_continuation": false,
+        "use_constant_poissons_ratio": false,
+        "constant_poissons_ratio": 0.3,
+        "snap_to_real_material": false,
+        "z0_init_method": "ORIGIN",
+        "binarize_topology": true
+      },
+      "vae": {
+        "use_pretrained_vae": true,
+        "saveNet": null,
+        "latentDim": 3,
+        "learningRate": 0.0005,
+        "vae_hiddenDim": 50,
+        "maxAttributeErrorPercent": 0.1,
+        "klFactor": 0.0001,
+        "numEpochs": 100000
+      }
+    }
+  }
+}

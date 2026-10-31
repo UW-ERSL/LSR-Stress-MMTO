@@ -1,0 +1,154 @@
+{
+  "stl_file_path": "../0-Common/Models/Beam_Liao/Ex1_Beam_design.stl",
+  "mmto": {
+    "schema_version": 1,
+    "name": "beam",
+    "physics": "structural",
+    "comment": "Liao supported beam (quarter), 8 materials, min p-norm failure factor s.t. mass",
+    "mesh": {
+      "n_dof": 80000,
+      "single_layer": false
+    },
+    "selections": {
+      "mid_span": {
+        "type": "face",
+        "side": "xmin",
+        "pad": "auto"
+      },
+      "mid_width": {
+        "type": "face",
+        "side": "ymin",
+        "pad": "auto"
+      },
+      "support": {
+        "type": "intersect",
+        "of": [
+          {
+            "type": "near_face",
+            "side": "zmin",
+            "distance": "1.5h"
+          },
+          {
+            "type": "near_face",
+            "side": "xmax",
+            "distance": 10.0
+          },
+          {
+            "type": "near_face",
+            "side": "ymax",
+            "distance": 10.0
+          }
+        ]
+      },
+      "load_patch": {
+        "type": "intersect",
+        "of": [
+          {
+            "type": "box",
+            "lo": [
+              -1000000000.0,
+              -1000000000.0,
+              -1000000000.0
+            ],
+            "hi": [
+              11.0,
+              9.5,
+              1000000000.0
+            ],
+            "pad": 0
+          },
+          {
+            "type": "near_face",
+            "side": "zmax",
+            "distance": "1.5h"
+          }
+        ]
+      }
+    },
+    "bcs": [
+      {
+        "kind": "fixed",
+        "on": "mid_span",
+        "dofs": "x"
+      },
+      {
+        "kind": "fixed",
+        "on": "mid_width",
+        "dofs": "y"
+      },
+      {
+        "kind": "fixed",
+        "on": "support",
+        "dofs": "z"
+      },
+      {
+        "kind": "traction",
+        "on": "load_patch",
+        "pressure": 150.0,
+        "direction": [
+          0.0,
+          0.0,
+          -1.0
+        ],
+        "area": 88.515
+      }
+    ],
+    "keep_solid": [],
+    "keep_support_elements": false,
+    "database": "Beam_8Mats_3Attr_v4_spectrum2D",
+    "formulation": {
+      "objective": {
+        "expression": "FailureFactorPNorm()",
+        "sense": "minimize"
+      },
+      "constraints": [
+        {
+          "expression": "Mass()",
+          "op": "<=",
+          "bound": 490000000.0
+        }
+      ]
+    },
+    "settings": {
+      "common": {
+        "maxIterations": 350,
+        "relative_filter_radius": 7.0,
+        "material_filter_radius": null,
+        "pnorm_exponent": 10.0,
+        "beta_schedule_scheme": "PAPER"
+      },
+      "advanced": {
+        "timeLimit": 36000,
+        "rel_conv_tol": 1e-07,
+        "use_penalization": true,
+        "gamma_init": 0.001,
+        "gamma_max": 10.0,
+        "gamma_factor": 1.1,
+        "penalty_start_iter": 0,
+        "distance_penalty_disable_after_iter": 250,
+        "use_dynamic_gamma_scheduling": true,
+        "use_z_smoothing": true,
+        "z_smoothing_weight": 0.0001,
+        "z_smoothing_disable_after_iter": 250,
+        "use_heaviside_projection": true,
+        "eta_proj": 0.5,
+        "use_continuation": false,
+        "use_constant_poissons_ratio": true,
+        "constant_poissons_ratio": 0.37,
+        "snap_to_real_material": false,
+        "z0_init_method": "ORIGIN",
+        "binarize_topology": true
+      },
+      "vae": {
+        "use_pretrained_vae": true,
+        "saveNet": null,
+        "latentDim": 2,
+        "learningRate": 0.0005,
+        "vae_hiddenDim": 50,
+        "maxAttributeErrorPercent": 0.1,
+        "klFactor": 0.0001,
+        "numEpochs": 100000
+      }
+    }
+  }
+}

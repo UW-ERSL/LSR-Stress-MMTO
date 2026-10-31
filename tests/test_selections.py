@@ -75,6 +75,33 @@ def test_sphere_nearest_ids():
         raise AssertionError("ids outside the mesh did not raise")
 
 
+def test_element_size_lengths_and_rows():
+    """'2h' is two element sizes; rows() takes the outermost node rows of a face."""
+    assert count(S.near_face("xmin", "2h"), "elements") == 200
+    assert count(S.sphere([5, 5, 5], "1h", pad=0)) == 7
+    assert count(S.cylinder([5, 5, 0], "z", "1h", along=(0, "2h"), pad=0)) == 5 * 3
+    assert count(S.rows("xmax", "y", 3)) == 3 * 11                # y = 8, 9, 10 on x = 10
+    assert count(S.rows("xmax", "y", 3, end="min")) == 3 * 11
+    top = S.rows("ymax", "x", 2).evaluate(MESH)
+    assert set(MESH.node_xyz[top, 0]) == {9.0, 10.0} and set(MESH.node_xyz[top, 1]) == {10.0}
+    for bad in (lambda: S.near_face("xmin", "2mm"), lambda: S.rows("xmax", "w", 2)):
+        try:
+            bad()
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("a bad length or axis was accepted")
+
+
+def test_stl_faces():
+    """stl_faces asks the mesh for the nodes on those triangles (PyTO-AD's own lookup)."""
+    class FakeMesh(GridMesh):
+        def get_nodes_on_triangles(self, tris):
+            return [5, 3, 3] if list(tris) == [12, 13] else []
+    assert list(S.stl_faces([12, 13]).evaluate(FakeMesh())) == [3, 5]
+    assert S.from_dict(S.stl_faces([12, 13]).to_dict()).triangles == [12, 13]
+
+
 def test_combinations():
     a, b = S.face("xmin"), S.face("ymin")
     assert count(S.union(a, b)) == 121 + 121 - 11
@@ -88,13 +115,14 @@ def test_combinations():
 def test_json_round_trip():
     sels = [S.box([0, 0, 0], [2, 2, 2]), S.cylinder([5, 5, 0], "z", 1.5, 1.0, (0, 2), pad=0),
             S.cylinder([5, 5, 0], [0, 0, 1], 1.0), S.sphere([5, 5, 5], 1.0), S.plane("y", 3.0),
-            S.face("xmax"), S.near_face("zmin", 2.0), S.nearest([1, 2, 3]), S.ids([1, 2]),
+            S.face("xmax"), S.near_face("zmin", 2.0), S.near_face("zmax", "1.5h"), S.nearest([1, 2, 3]),
+            S.ids([1, 2]), S.rows("xmax", "y", 3),
             S.union(S.face("xmin"), S.intersect(S.face("ymin"), S.difference(S.face("zmin"), S.ids([0]))))]
     for s in sels:
         d = json.loads(json.dumps(s.to_dict()))
         t = S.from_dict(d)
         assert t.to_dict() == s.to_dict(), (s, t)
-        for on in ("nodes", "elements"):
+        for on in ("nodes", "elements") if s.TYPE != "rows" else ("nodes",):
             assert np.array_equal(t.evaluate(MESH, on), s.evaluate(MESH, on)), (s, on)
     try:
         S.from_dict({"type": "cone"})

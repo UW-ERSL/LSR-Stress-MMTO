@@ -1,0 +1,144 @@
+{
+  "stl_file_path": "../0-Common/Models/RectangularBeam/RectangularBeam.STL",
+  "mmto": {
+    "schema_version": 1,
+    "name": "rectangular beam",
+    "physics": "structural",
+    "comment": "Rectangular beam, from Akshat Agha's ProblemConfig.py: ends clamped, 1000 N down on the middle of the top",
+    "mesh": {
+      "n_dof": 12000,
+      "single_layer": false
+    },
+    "selections": {
+      "ends": {
+        "type": "union",
+        "of": [
+          {
+            "type": "face",
+            "side": "xmin",
+            "pad": "auto"
+          },
+          {
+            "type": "face",
+            "side": "xmax",
+            "pad": "auto"
+          }
+        ]
+      },
+      "attachments": {
+        "type": "union",
+        "of": [
+          {
+            "type": "near_face",
+            "side": "xmin",
+            "distance": 100.0
+          },
+          {
+            "type": "near_face",
+            "side": "xmax",
+            "distance": 100.0
+          }
+        ]
+      },
+      "top_middle": {
+        "type": "intersect",
+        "of": [
+          {
+            "type": "face",
+            "side": "ymax",
+            "pad": "auto"
+          },
+          {
+            "type": "box",
+            "lo": [
+              250.0,
+              -1000000000.0,
+              -1000000000.0
+            ],
+            "hi": [
+              750.0,
+              1000000000.0,
+              1000000000.0
+            ],
+            "pad": 0
+          }
+        ]
+      }
+    },
+    "bcs": [
+      {
+        "kind": "fixed",
+        "on": "ends",
+        "dofs": "xyz"
+      },
+      {
+        "kind": "force",
+        "on": "top_middle",
+        "total": [
+          0.0,
+          -1000.0,
+          0.0
+        ]
+      }
+    ],
+    "keep_solid": [
+      "attachments"
+    ],
+    "keep_support_elements": false,
+    "database": "6Materials_AF_3Attr",
+    "formulation": {
+      "objective": {
+        "expression": "Compliance()",
+        "sense": "minimize"
+      },
+      "constraints": [
+        {
+          "expression": "Mass()",
+          "op": "<=",
+          "bound": 1750000.0
+        }
+      ]
+    },
+    "settings": {
+      "common": {
+        "maxIterations": 300,
+        "relative_filter_radius": 5.0,
+        "material_filter_radius": 5.0,
+        "pnorm_exponent": 6.0,
+        "beta_schedule_scheme": "PAPER"
+      },
+      "advanced": {
+        "timeLimit": 36000,
+        "rel_conv_tol": 1e-07,
+        "use_penalization": true,
+        "gamma_init": 0.001,
+        "gamma_max": 10.0,
+        "gamma_factor": 1.1,
+        "penalty_start_iter": 0,
+        "distance_penalty_disable_after_iter": 250,
+        "use_dynamic_gamma_scheduling": true,
+        "use_z_smoothing": true,
+        "z_smoothing_weight": 0.0001,
+        "z_smoothing_disable_after_iter": 250,
+        "use_heaviside_projection": true,
+        "eta_proj": 0.5,
+        "use_continuation": false,
+        "use_constant_poissons_ratio": false,
+        "constant_poissons_ratio": 0.3,
+        "snap_to_real_material": false,
+        "z0_init_method": "ORIGIN",
+        "binarize_topology": true
+      },
+      "vae": {
+        "use_pretrained_vae": true,
+        "saveNet": null,
+        "latentDim": 2,
+        "learningRate": 0.0001,
+        "vae_hiddenDim": 50,
+        "maxAttributeErrorPercent": 0.1,
+        "klFactor": 0.0001,
+        "numEpochs": 100000
+      }
+    }
+  }
+}

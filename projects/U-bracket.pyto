@@ -1,0 +1,100 @@
+{
+  "stl_file_path": "../0-Common/Models/UBracket/UBracket.STL",
+  "mmto": {
+    "schema_version": 1,
+    "name": "U-bracket",
+    "physics": "structural",
+    "comment": "U-bracket (unit square minus top slot), 6 materials A-F, min p-norm failure factor s.t. mass",
+    "mesh": {
+      "n_dof": 30000,
+      "single_layer": true
+    },
+    "selections": {
+      "left": {
+        "type": "face",
+        "side": "xmin",
+        "pad": "auto"
+      },
+      "corner": {
+        "type": "rows",
+        "face": "xmax",
+        "axis": "y",
+        "n": 8,
+        "end": "max"
+      }
+    },
+    "bcs": [
+      {
+        "kind": "fixed",
+        "on": "left",
+        "dofs": "xyz"
+      },
+      {
+        "kind": "force",
+        "on": "corner",
+        "total": [
+          -1.0,
+          0.0,
+          0.0
+        ]
+      }
+    ],
+    "keep_solid": [],
+    "keep_support_elements": false,
+    "database": "6Materials_AF_3Attr",
+    "formulation": {
+      "objective": {
+        "expression": "FailureFactorPNorm()",
+        "sense": "minimize"
+      },
+      "constraints": [
+        {
+          "expression": "Mass()",
+          "op": "<=",
+          "bound": 0.0035000000000000005
+        }
+      ]
+    },
+    "settings": {
+      "common": {
+        "maxIterations": 350,
+        "relative_filter_radius": 3.5,
+        "material_filter_radius": 2.5,
+        "pnorm_exponent": 16.0,
+        "beta_schedule_scheme": "PAPER"
+      },
+      "advanced": {
+        "timeLimit": 36000,
+        "rel_conv_tol": 1e-07,
+        "use_penalization": true,
+        "gamma_init": 0.001,
+        "gamma_max": 10.0,
+        "gamma_factor": 1.1,
+        "penalty_start_iter": 0,
+        "distance_penalty_disable_after_iter": 250,
+        "use_dynamic_gamma_scheduling": true,
+        "use_z_smoothing": true,
+        "z_smoothing_weight": 0.0001,
+        "z_smoothing_disable_after_iter": 250,
+        "use_heaviside_projection": true,
+        "eta_proj": 0.5,
+        "use_continuation": false,
+        "use_constant_poissons_ratio": false,
+        "constant_poissons_ratio": 0.3,
+        "snap_to_real_material": false,
+        "z0_init_method": "ORIGIN",
+        "binarize_topology": true
+      },
+      "vae": {
+        "use_pretrained_vae": true,
+        "saveNet": null,
+        "latentDim": 2,
+        "learningRate": 0.0001,
+        "vae_hiddenDim": 50,
+        "maxAttributeErrorPercent": 0.1,
+        "klFactor": 0.0001,
+        "numEpochs": 100000
+      }
+    }
+  }
+}

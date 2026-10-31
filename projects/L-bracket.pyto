@@ -1,0 +1,112 @@
+{
+  "stl_file_path": "../0-Common/Models/LBracket_BM1/LBracket_BM1.STL",
+  "mmto": {
+    "schema_version": 1,
+    "name": "L-bracket",
+    "physics": "structural",
+    "comment": "L-bracket benchmark (Banh et al.), 3 materials, min p-norm von Mises s.t. volume fraction per material",
+    "mesh": {
+      "n_dof": 30000,
+      "single_layer": true
+    },
+    "selections": {
+      "clamp": {
+        "type": "stl_faces",
+        "triangles": [
+          12,
+          13
+        ]
+      },
+      "corner": {
+        "type": "rows",
+        "face": "xmax",
+        "axis": "y",
+        "n": 8,
+        "end": "max"
+      }
+    },
+    "bcs": [
+      {
+        "kind": "fixed",
+        "on": "clamp",
+        "dofs": "xyz"
+      },
+      {
+        "kind": "force",
+        "on": "corner",
+        "total": [
+          0.0,
+          -4.0,
+          0.0
+        ]
+      }
+    ],
+    "keep_solid": [],
+    "keep_support_elements": false,
+    "database": "BM1_3Mats_2Attr",
+    "formulation": {
+      "objective": {
+        "expression": "StressPNorm()",
+        "sense": "minimize"
+      },
+      "constraints": [
+        {
+          "expression": "MaterialVolumeFraction(0, tau=0.5)",
+          "op": "<=",
+          "bound": 0.15
+        },
+        {
+          "expression": "MaterialVolumeFraction(1, tau=0.5)",
+          "op": "<=",
+          "bound": 0.15
+        },
+        {
+          "expression": "MaterialVolumeFraction(2, tau=0.5)",
+          "op": "<=",
+          "bound": 0.1
+        }
+      ]
+    },
+    "settings": {
+      "common": {
+        "maxIterations": 300,
+        "relative_filter_radius": 3.5,
+        "material_filter_radius": 3.5,
+        "pnorm_exponent": 6.0,
+        "beta_schedule_scheme": "PAPER_BM1"
+      },
+      "advanced": {
+        "timeLimit": 36000,
+        "rel_conv_tol": 1e-07,
+        "use_penalization": true,
+        "gamma_init": 0.001,
+        "gamma_max": 10.0,
+        "gamma_factor": 1.1,
+        "penalty_start_iter": 0,
+        "distance_penalty_disable_after_iter": 250,
+        "use_dynamic_gamma_scheduling": true,
+        "use_z_smoothing": true,
+        "z_smoothing_weight": 0.0001,
+        "z_smoothing_disable_after_iter": 250,
+        "use_heaviside_projection": true,
+        "eta_proj": 0.5,
+        "use_continuation": false,
+        "use_constant_poissons_ratio": false,
+        "constant_poissons_ratio": 0.3,
+        "snap_to_real_material": false,
+        "z0_init_method": "ORIGIN",
+        "binarize_topology": true
+      },
+      "vae": {
+        "use_pretrained_vae": true,
+        "saveNet": null,
+        "latentDim": 2,
+        "learningRate": 0.0005,
+        "vae_hiddenDim": 50,
+        "maxAttributeErrorPercent": 0.1,
+        "klFactor": 0.0001,
+        "numEpochs": 30000
+      }
+    }
+  }
+}
