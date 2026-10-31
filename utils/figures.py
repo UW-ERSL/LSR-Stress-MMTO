@@ -17,7 +17,7 @@ import os
 import numpy as np
 
 from .records import Run
-from .render import (MIRROR_AXES, RenderError, draw_panel,
+from .render import (MIRROR_AXES, RenderError, draw_panel, project_name,
                      material_colours, material_labels, mesh_for, screenshot,
                      voxel_surface)
 
@@ -264,7 +264,7 @@ def latent_scatter(run: Run, out=None, *, max_points=20000, labels="letters"):
 
 def is_3d(run: Run) -> bool:
     """True for the examples rendered as voxels rather than 2D panels."""
-    return run.example in MIRROR_AXES
+    return project_name(run.example) in MIRROR_AXES
 
 
 def design(run: Run, out=None, *, field="material", size=(1200, 950),
@@ -303,22 +303,18 @@ def design(run: Run, out=None, *, field="material", size=(1200, 950),
     return _save(fig, out)
 
 
-def boundary_conditions(example, out=None, *, size=(1400, 1050), zoom=0.82):
-    """Loads and supports on the meshed design domain, drawn by PyTO.
+def boundary_conditions(problem, out=None, *, size=(1400, 1050), zoom=0.82):
+    """Loads and supports of a Project on its meshed design domain, drawn by PyTO.
 
     A plotter is supplied so the render is full size rather than PyTO's default
     400x300, and so the camera can be widened afterwards: its "iso" branch fits
     the view and then applies zoom(1.25), which crops the load arrow and the
     clamped face. zoom < 1 here undoes that.
     """
-    from ExamplesPureStructural import (                       # type: ignore
-        MMTOExamplesPureStructural, getMMTOProblemPureStructural)
     from PyTOImports import hex_structural_fea, linear_solvers, deflation  # type: ignore
     import pyvista as pv
 
-    ex = (example if not isinstance(example, str)
-          else MMTOExamplesPureStructural[example])
-    mesh, mat_prop, bc, body_force, to_params, _ = getMMTOProblemPureStructural(ex)
+    mesh, mat_prop, bc, body_force, to_params, _ = problem.build()
 
     # plot_mesh never solves, so the solver choice does not matter here
     fe = hex_structural_fea.HexStructuralFEA(

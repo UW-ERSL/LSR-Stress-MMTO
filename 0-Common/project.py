@@ -22,7 +22,8 @@ and loads, which become part of the mmto section (see below).
     run(q)                                  # optimizes; results and a copy of q in results/bracket
     q.to_script("bracket_setup.py")         # the same project as Python calls, to read or edit
 
-build() returns what getMMTOProblemPureStructural returns for a benchmark.
+build() returns the mesh, the material, the boundary conditions, the body force and the
+optimization and VAE parameters that run_topopt starts from.
 
 Settings: every setting of run_topopt is stored, under run_topopt's own name, in
 settings.common, settings.advanced and settings.vae (DEFAULT_SETTINGS below). A new
@@ -57,9 +58,9 @@ import re
 import numpy as np
 
 import selections as S
+from databases import DATABASE_DIR, DATABASE_VAE, VAEParams
 
 SCHEMA_VERSION = 1
-DATABASE_DIR = os.path.join("1-PureStructural", "MaterialDataPureStructural")
 BC_KINDS = {
     "fixed": "the given dofs (x, y, z) held at 0",
     "displacement": "the given dofs held at a nonzero value",
@@ -300,9 +301,8 @@ class Project:
 
     def database_paths(self):
         """(xlsx, VAE defaults or None) for the database name or path."""
-        from ExamplesPureStructural import _DATABASE_VAE   # type: ignore
-        if self.database in _DATABASE_VAE:
-            return os.path.join(DATABASE_DIR, f"{self.database}.xlsx"), _DATABASE_VAE[self.database]
+        if self.database in DATABASE_VAE:
+            return os.path.join(DATABASE_DIR, f"{self.database}.xlsx"), DATABASE_VAE[self.database]
         path = self.database if os.path.isabs(self.database) else os.path.join(self.base_dir, self.database)
         return path, None
 
@@ -381,7 +381,6 @@ class Project:
 
     def complete_settings(self):
         """Fill every missing setting from the defaults; returns what was filled."""
-        from ExamplesPureStructural import VAEParams                                  # type: ignore
         filled = []
         for section, defaults in DEFAULT_SETTINGS.items():
             values = self.settings.setdefault(section, {})
@@ -400,7 +399,7 @@ class Project:
 
     # ------------------------------------------------------------------ the problem
     def build(self, verbose=True):
-        """mesh, mat_prop, bc, elem_body_force, to_params, vae_params, as for a benchmark."""
+        """mesh, mat_prop, bc, elem_body_force, to_params, vae_params."""
         filled = self.complete_settings()
         if filled and verbose:
             print(f"[{self.name}] settings not in the project, taken from the defaults: {', '.join(filled)}")
@@ -410,7 +409,6 @@ class Project:
         from PyTOImports import (bound_cond, mat_lib, topopt_material_model,          # type: ignore
                                  find_elements_with_fixedDOF)
         from mmto_common import MMTOParams                                            # type: ignore
-        from ExamplesPureStructural import VAEParams                                  # type: ignore
         from pyto_project import make_mesh                                            # type: ignore
 
         mesh = make_mesh(self.stl_path(), self.n_dof, self.single_layer)

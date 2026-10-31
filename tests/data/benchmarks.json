@@ -1,0 +1,246 @@
+{
+ "L-bracket": {
+  "num_elems": 12825,
+  "num_nodes": 26216,
+  "n_force": 78648,
+  "objective": [
+   "PNORM_STRESS",
+   null
+  ],
+  "constraints": [
+   [
+    "VOLUME_FRACTION",
+    {
+     "material_id": 0,
+     "tau": 0.5
+    },
+    0.15
+   ],
+   [
+    "VOLUME_FRACTION",
+    {
+     "material_id": 1,
+     "tau": 0.5
+    },
+    0.15
+   ],
+   [
+    "VOLUME_FRACTION",
+    {
+     "material_id": 2,
+     "tau": 0.5
+    },
+    0.1
+   ]
+  ],
+  "ExtrudeZ": true,
+  "KeepFixedElems": false,
+  "nDOFDesired": 30000,
+  "RelativeFilterRadius": 3.5,
+  "MaterialFilterRadius": 3.5,
+  "database": "BM1_3Mats_2Attr.xlsx",
+  "pnorm_exponent": 6.0,
+  "vae": {
+   "latentDim": 2,
+   "learningRate": 0.0005,
+   "vae_hiddenDim": 50,
+   "maxAttributeErrorPercent": 0.1,
+   "klFactor": 0.0001,
+   "numEpochs": 30000
+  },
+  "run_settings": {
+   "use_pretrained_vae": true,
+   "maxIterations": 300,
+   "rel_conv_tol": 1e-07,
+   "use_penalization": true,
+   "gamma_init": 0.001,
+   "gamma_factor": 1.1,
+   "gamma_max": 10,
+   "penalty_start_iter": 0,
+   "distance_penalty_disable_after_iter": 250,
+   "use_dynamic_gamma_scheduling": true,
+   "use_z_smoothing": true,
+   "z_smoothing_weight": 0.0001,
+   "z_smoothing_disable_after_iter": 250,
+   "use_heaviside_projection": true,
+   "beta_schedule_scheme": "PAPER_BM1",
+   "eta_proj": 0.5,
+   "z0_init_method": "ORIGIN",
+   "snap_to_real_material": false,
+   "use_constant_poissons_ratio": false,
+   "constant_poissons_ratio": 0.3,
+   "use_continuation": false,
+   "binarize_topology": true
+  }
+ },
+ "U-bracket": {
+  "num_elems": 9001,
+  "num_nodes": 18508,
+  "n_force": 55524,
+  "objective": [
+   "PNORM_STRESS",
+   "FAILURE_FACTOR"
+  ],
+  "constraints": [
+   [
+    "MASS",
+    null,
+    0.0035000000000000005
+   ]
+  ],
+  "ExtrudeZ": true,
+  "KeepFixedElems": false,
+  "nDOFDesired": 30000,
+  "RelativeFilterRadius": 3.5,
+  "MaterialFilterRadius": 2.5,
+  "database": "6Materials_AF_3Attr.xlsx",
+  "pnorm_exponent": 16.0,
+  "vae": {
+   "latentDim": 2,
+   "learningRate": 0.0001,
+   "vae_hiddenDim": 50,
+   "maxAttributeErrorPercent": 0.1,
+   "klFactor": 0.0001,
+   "numEpochs": 100000
+  },
+  "run_settings": {
+   "use_pretrained_vae": true,
+   "maxIterations": 350,
+   "rel_conv_tol": 1e-07,
+   "use_penalization": true,
+   "gamma_init": 0.001,
+   "gamma_factor": 1.1,
+   "gamma_max": 10,
+   "penalty_start_iter": 0,
+   "distance_penalty_disable_after_iter": 250,
+   "use_dynamic_gamma_scheduling": true,
+   "use_z_smoothing": true,
+   "z_smoothing_weight": 0.0001,
+   "z_smoothing_disable_after_iter": 250,
+   "use_heaviside_projection": true,
+   "beta_schedule_scheme": "PAPER",
+   "eta_proj": 0.5,
+   "z0_init_method": "ORIGIN",
+   "snap_to_real_material": false,
+   "use_constant_poissons_ratio": false,
+   "constant_poissons_ratio": 0.3,
+   "use_continuation": false,
+   "binarize_topology": true
+  }
+ },
+ "beam": {
+  "num_elems": 25748,
+  "num_nodes": 29548,
+  "n_force": 88644,
+  "objective": [
+   "PNORM_STRESS",
+   "FAILURE_FACTOR"
+  ],
+  "constraints": [
+   [
+    "MASS",
+    null,
+    490000000.0
+   ]
+  ],
+  "ExtrudeZ": false,
+  "KeepFixedElems": false,
+  "nDOFDesired": 80000,
+  "RelativeFilterRadius": 7,
+  "MaterialFilterRadius": null,
+  "database": "Beam_8Mats_3Attr_v4_spectrum2D.xlsx",
+  "pnorm_exponent": 10.0,
+  "vae": {
+   "latentDim": 2,
+   "learningRate": 0.0005,
+   "vae_hiddenDim": 50,
+   "maxAttributeErrorPercent": 0.1,
+   "klFactor": 0.0001,
+   "numEpochs": 100000
+  },
+  "run_settings": {
+   "use_pretrained_vae": true,
+   "maxIterations": 350,
+   "rel_conv_tol": 1e-07,
+   "use_penalization": true,
+   "gamma_init": 0.001,
+   "gamma_factor": 1.1,
+   "gamma_max": 10,
+   "penalty_start_iter": 0,
+   "distance_penalty_disable_after_iter": 250,
+   "use_dynamic_gamma_scheduling": true,
+   "use_z_smoothing": true,
+   "z_smoothing_weight": 0.0001,
+   "z_smoothing_disable_after_iter": 250,
+   "use_heaviside_projection": true,
+   "beta_schedule_scheme": "PAPER",
+   "eta_proj": 0.5,
+   "z0_init_method": "ORIGIN",
+   "snap_to_real_material": false,
+   "use_constant_poissons_ratio": true,
+   "constant_poissons_ratio": 0.37,
+   "use_continuation": false,
+   "binarize_topology": true
+  }
+ },
+ "Airplane bracket": {
+  "num_elems": 49676,
+  "num_nodes": 58217,
+  "n_force": 174651,
+  "objective": [
+   "PNORM_STRESS",
+   "FAILURE_FACTOR"
+  ],
+  "constraints": [
+   [
+    "MASS",
+    null,
+    40000000.0
+   ],
+   [
+    "COST",
+    null,
+    750000000.0
+   ]
+  ],
+  "ExtrudeZ": false,
+  "KeepFixedElems": false,
+  "nDOFDesired": 150000,
+  "RelativeFilterRadius": 7.3,
+  "MaterialFilterRadius": null,
+  "database": "CustomAlloys20_3D.xlsx",
+  "pnorm_exponent": 10.0,
+  "vae": {
+   "latentDim": 3,
+   "learningRate": 0.0005,
+   "vae_hiddenDim": 50,
+   "maxAttributeErrorPercent": 0.1,
+   "klFactor": 0.0001,
+   "numEpochs": 100000
+  },
+  "run_settings": {
+   "use_pretrained_vae": true,
+   "maxIterations": 300,
+   "rel_conv_tol": 1e-07,
+   "use_penalization": true,
+   "gamma_init": 0.001,
+   "gamma_factor": 1.1,
+   "gamma_max": 10,
+   "penalty_start_iter": 0,
+   "distance_penalty_disable_after_iter": 250,
+   "use_dynamic_gamma_scheduling": true,
+   "use_z_smoothing": true,
+   "z_smoothing_weight": 0.0001,
+   "z_smoothing_disable_after_iter": 250,
+   "use_heaviside_projection": true,
+   "beta_schedule_scheme": "PAPER",
+   "eta_proj": 0.5,
+   "z0_init_method": "ORIGIN",
+   "snap_to_real_material": false,
+   "use_constant_poissons_ratio": false,
+   "constant_poissons_ratio": 0.3,
+   "use_continuation": false,
+   "binarize_topology": true
+  }
+ }
+}

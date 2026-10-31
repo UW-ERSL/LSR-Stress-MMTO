@@ -45,11 +45,6 @@ from PyTOImports import (
     increment_SIMP_STRUCTURAL_PENALTY,
     increment_SIMP_THERMAL_PENALTY,
 )
-from ExamplesPureStructural import (
-    MMTOExamplesPureStructural,
-    getMMTOProblemPureStructural,
-    material_colors,
-)
 from materialEncoder import MaterialEncoder 
 import AutodiffPureStructural as AD
 from mmto_utility_functions import (
@@ -117,7 +112,7 @@ def update_beta(beta_proj, mmaIterations, beta_schedule):
 
 def run_topopt(
     to_problem,
-    # ---- per-run sweep overrides (None => use the example's values) ----
+    # ---- per-run sweep overrides (None => use the project's values) ----
     n_dof_desired=None,
     relative_filter_radius=None,
     material_filter_radius=None,
@@ -186,12 +181,16 @@ def run_topopt(
     _args_at_start = dict(locals())   # the arguments as given; the run switches some off later
 
     history = init_run_history()
-    mesh_structural, mat_prop_struct, bc_struct, elem_body_force, to_params, vae_params = (
-        getMMTOProblemPureStructural(to_problem, nDOFDesired=n_dof_desired)
-    )
+    if not hasattr(to_problem, "build"):
+        raise TypeError(f"to_problem must be a Project, e.g. Project.load('projects/L-bracket.pyto'), "
+                        f"not {to_problem!r}; the coded examples are now the project files in projects/")
+    problem = to_problem
+    if n_dof_desired is not None and int(n_dof_desired) != problem.n_dof:
+        problem = problem.copy(n_dof=int(n_dof_desired))
+    mesh_structural, mat_prop_struct, bc_struct, elem_body_force, to_params, vae_params = problem.build()
 
-    # ---- per-run sweep overrides (None => keep the example's value) ---------
-     # Must be set AFTER the example
+    # ---- per-run sweep overrides (None => keep the project's value) ---------
+     # Must be set AFTER the project is built
     # (which assigns these) and BEFORE the filters are built at line ~285.
     # NOTE: MaterialFilterRadius=None makes r_z SILENTLY FOLLOW r_rho
     if relative_filter_radius is not None:
@@ -204,7 +203,7 @@ def run_topopt(
     print(f"[SWEEP] nDOFDesired={to_params.nDOFDesired}  "
           f"RelativeFilterRadius={to_params.RelativeFilterRadius}  "
           f"MaterialFilterRadius={to_params.MaterialFilterRadius}  "
-          f"P={pnorm_exponent if pnorm_exponent is not None else '(example default)'}")
+          f"P={pnorm_exponent if pnorm_exponent is not None else '(project default)'}")
     # ------------------------------------------------------------------------
 
     if to_params.MaterialsExcelFile is None:
@@ -666,54 +665,9 @@ def run_topopt(
     )
 
 if __name__ == "__main__":
-    # L-bracket benchmark, the r_rho = r_z = 3.5 cell.
+    # L-bracket benchmark, the r_rho = r_z = 3.5 cell, with the settings in its project file.
     # Expect Phi_p 2.5377, grey 2.47%, VF 0.1472 / 0.1472 / 0.0993.
+    from project import Project, run_arguments  # type: ignore
     save_dir = start_run(name="LBracket_BM1_rel3p5_rz3p5")
-    to_problem = MMTOExamplesPureStructural.LBracketTopLoad_Stress_BM1
-    run_topopt(
-        to_problem=to_problem,
-        save_dir=save_dir,
-
-        # grid and filters
-        relative_filter_radius=3.5,
-        material_filter_radius=3.5,          # pin it: None makes r_z follow r_rho
-        maxIterations=300,
-        rel_conv_tol=1e-7,
-        timeLimit=36000,
-
-        # VAE
-        use_pretrained_vae=True,
-        saveNet="./1-PureStructural/MaterialDataPureStructural/BM1_3Mats_2Attr.nt",
-        z0_init_method=Z0InitMethod.ORIGIN,
-        snap_to_real_material=False,
-
-        # material model
-        use_constant_poissons_ratio=False,
-        constant_poissons_ratio=0.3,
-        use_continuation=False,
-
-        # distance penalty
-        use_penalization=True,
-        gamma_init=1e-3,
-        gamma_factor=1.1,
-        gamma_max=10,
-        penalty_start_iter=0,
-        use_dynamic_gamma_scheduling=True,
-        distance_penalty_disable_after_iter=250,   # inert while dynamic scheduling is on
-
-        # latent smoothing
-        use_z_smoothing=True,
-        z_smoothing_weight=1e-4,
-        z_smoothing_disable_after_iter=250,
-
-        # Heaviside projection
-        use_heaviside_projection=True,
-        eta_proj=0.5,
-        beta_schedule_scheme=BetaScheduleScheme.PAPER_BM1,   # beta_max 16
-
-        # output
-        binarize_topology=True,
-        plot_progress=False,
-        plot_bcs=False,
-        verbose=True,
-    )
+    to_problem = Project.load(os.path.join(os.path.dirname(__file__), "..", "projects", "L-bracket.pyto"))
+    run_topopt(**run_arguments(to_problem, save_dir=save_dir))

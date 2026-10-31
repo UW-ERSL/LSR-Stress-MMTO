@@ -52,16 +52,10 @@ def _setup():
     """The U-bracket model at a random design, built once."""
     if _SETUP:
         return _SETUP
-    sys.path.insert(0, os.path.join(ROOT, "comparison"))
-    import run_both
-    from ExamplesPureStructural import MMTOExamplesPureStructural  # type: ignore
-    from MainPureStructural import BetaScheduleScheme, Z0InitMethod  # type: ignore
+    from project import Project, run_arguments  # type: ignore
 
-    args = run_both.run_args("U-bracket")
-    args.update(to_problem=MMTOExamplesPureStructural[args["to_problem"]],
-                beta_schedule_scheme=BetaScheduleScheme[args["beta_schedule_scheme"]],
-                z0_init_method=Z0InitMethod[args["z0_init_method"]],
-                n_dof_desired=N_DOF, maxIterations=1)
+    args = run_arguments(Project.load(os.path.join(ROOT, "projects", "U-bracket.pyto")), verbose=False)
+    args.update(n_dof_desired=N_DOF, maxIterations=1)
     s = _model_from_setup(args)
     model = s["model"]
     n = model.N

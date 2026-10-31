@@ -299,7 +299,7 @@ check("repository found", lambda: root or (_ for _ in ()).throw(RuntimeError("no
 
 for m in ("records", "render", "figures", "tables", "display"):
     check(f"utils.{m} imports", lambda m=m: importlib.import_module(f"utils.{m}"))
-check("PyTO-AD and the examples import", lambda: importlib.import_module("ExamplesPureStructural"))
+check("PyTO-AD and the projects import", lambda: importlib.import_module("project"))
 check("optimizer driver imports", lambda: importlib.import_module("MainPureStructural"))
 
 def pyto_ad_only():
@@ -313,21 +313,19 @@ def pyto_ad_only():
         raise RuntimeError(f"PyTO (main) modules were imported: {old}")
 check("only PyTO-AD is used (no PyTO main modules loaded)", pyto_ad_only)
 
+LBRACKET = os.path.join("projects", "L-bracket.pyto")
+
 def lbracket_mesh():
-    from ExamplesPureStructural import (MMTOExamplesPureStructural,
-                                        getMMTOProblemPureStructural)
-    mesh = getMMTOProblemPureStructural(
-        MMTOExamplesPureStructural.LBracketTopLoad_Stress_BM1)[0]
+    from project import Project
+    mesh = Project.load(LBRACKET).build(verbose=False)[0]
     if int(mesh.num_elems) != 12825:
         raise RuntimeError(f"expected 12825 elements, got {mesh.num_elems}")
 check("the L-bracket meshes to 12,825 elements", lbracket_mesh)
 
 def decoder():
-    from ExamplesPureStructural import (MMTOExamplesPureStructural,
-                                        getMMTOProblemPureStructural)
+    from project import Project
     from materialEncoder import MaterialEncoder
-    vae_params = getMMTOProblemPureStructural(
-        MMTOExamplesPureStructural.LBracketTopLoad_Stress_BM1)[5]
+    vae_params = Project.load(LBRACKET).build(verbose=False)[5]
     db = "./1-PureStructural/MaterialDataPureStructural/BM1_3Mats_2Attr"
     enc = MaterialEncoder(vae_params)
     enc.readExcel(db + ".xlsx")

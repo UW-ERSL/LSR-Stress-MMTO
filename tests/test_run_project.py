@@ -1,12 +1,12 @@
 """
 test_run_project.py
 ===================
-Running a Project: its settings cover every setting of run_topopt; the same problem run
-as a CustomProblem and as a Project gives the same numbers; the run record keeps the
-settings as they were given, says when a setting was switched off during the run, and
-stores the project so it can be rebuilt.
+Running a Project: its settings cover every setting of run_topopt; the run record keeps
+the settings as they were given, says when a setting was switched off during the run, and
+stores the project so it can be rebuilt. Runs made before the examples became project
+files are rebuilt from the project files.
 
-Two 4-iteration runs of a coarse U-bracket, about a minute in all.
+One 4-iteration run of a coarse U-bracket, under a minute.
 
     python tests/test_run_project.py        (or: python -m pytest tests)
 """
@@ -26,7 +26,6 @@ project_paths.bootstrap()
 
 import MainPureStructural as M  # noqa: E402  # type: ignore
 import run_io  # noqa: E402  # type: ignore
-from ExamplesPureStructural import CustomProblem  # noqa: E402  # type: ignore
 from project import (DEFAULT_SETTINGS, NOT_STORED, Project, run_arguments)  # noqa: E402  # type: ignore
 
 UBRACKET_PYTO = os.path.join(ROOT, "0-Common", "Models", "UBracket", "UBracket.pyto")
@@ -77,10 +76,6 @@ def runs():
         with tempfile.TemporaryDirectory() as d:
             args = run_arguments(p, save_dir=d, verbose=False)
             _RUNS["project"] = (p, _run(p, args))
-            custom = CustomProblem(pyto=UBRACKET_PYTO, database="6Materials_AF_3Attr", objective="FAILURE_FACTOR",
-                                   constraints=[("MASS", 0.0035)], n_dof=N_DOF, single_layer=True,
-                                   relative_filter_radius=3.5, pnorm_exponent=16)
-            _RUNS["custom"] = (custom, _run(custom, args))
     return _RUNS
 
 
@@ -106,20 +101,8 @@ def test_unknown_and_missing_settings():
     assert q.settings["vae"]["learningRate"] == 1e-4                # the database's known value
 
 
-def test_same_run_two_ways():
-    """CustomProblem and Project on the same problem: the same histories.
-
-    Not bit for bit: the same problem run twice in one process occasionally differs in
-    the last digits (about 1e-11 here, from the multithreaded solver), so the
-    comparison allows 1e-9.
-    """
-    r = runs()
-    hp, hc = r["project"][1]["history"], r["custom"][1]["history"]
-    assert hp.keys() == hc.keys()
-    for k in hp:
-        a, b = np.asarray(hp[k], dtype=float), np.asarray(hc[k], dtype=float)
-        assert a.shape == b.shape and np.allclose(a, b, rtol=1e-9, atol=0, equal_nan=True), k
-    assert len(hp["objective"]) >= ITERS
+def test_run_finishes():
+    assert len(runs()["project"][1]["history"]["objective"]) >= ITERS
 
 
 def test_record_keeps_settings_as_given():
@@ -142,7 +125,29 @@ def test_record_rebuilds_the_project():
 
     class FakeRun:
         config = {"arguments_resolved": {"to_problem": rec}}
-    assert render._custom_problem(FakeRun()).to_dict() == p.to_dict()
+    assert render._problem(FakeRun()).to_dict() == p.to_dict()
+
+
+def test_old_runs_rebuild():
+    """A run made under an old example name, or from a GUI file before projects, gets
+    the same mesh as before."""
+    from utils import render
+    from pyto_project import problem_from_pyto  # type: ignore
+
+    class Old:
+        config, example, descriptor = {}, "UBracket_Stress_FF", "old run"
+    assert render._problem(Old()).name == "U-bracket"
+    assert render.project_name("AirplaneBracket_Stress") == "Airplane bracket"
+    assert render.MIRROR_AXES[render.project_name("Beam_Liao_Pareto_FF")] == (0, 1, 2)
+
+    class OldGui:
+        example, descriptor = "custom_UBracket", "old GUI run"
+        config = {"arguments_resolved": {"to_problem": {"pyto": UBRACKET_PYTO, "database": "6Materials_AF_3Attr",
+                                                        "n_dof": N_DOF, "single_layer": True}},
+                  "topopt_params": {"nDOFDesired": N_DOF}}
+    OldGui.n_elems = int(problem_from_pyto(UBRACKET_PYTO, nDOFDesired=N_DOF, single_layer=True)[0].num_elems)
+    render._MESH_CACHE.clear()
+    assert int(render.mesh_for(OldGui()).num_elems) == OldGui.n_elems
 
 
 if __name__ == "__main__":

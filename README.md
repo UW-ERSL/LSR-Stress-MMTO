@@ -95,6 +95,8 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 | File | Purpose |
 |---|---|
 | `Tutorial.ipynb` | runs one example end to end |
+| `projects/` | the four examples as project files: geometry, supports, loads, materials, objective, constraints, settings |
+| `docs/project_reference.md` | everything a project file can hold, generated from the code |
 | `setup_environment.py` | installs everything; see Installation |
 | `requirements.txt` | Python packages the setup installs |
 
@@ -103,7 +105,10 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 | File | Purpose |
 |---|---|
 | `Models/` | geometry of the four design domains, as STL |
-| `StructuralFEAExamples.py` | mesh, loads and supports for each domain |
+| `project.py` | a project: saves and loads it, checks it, builds the problem, runs it |
+| `selections.py` | named regions of the mesh that supports, loads and keep-solid regions act on |
+| `pyto_project.py` | meshing, and the supports and loads picked in the PyTO-AD GUI |
+| `databases.py` | the material databases and the VAE settings each was trained with |
 | `materialEncoder.py` | reads a material database, trains or loads the VAE |
 | `networks.py` | the VAE network |
 | `materialColors.py` | the colour each material is drawn in |
@@ -115,7 +120,6 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 | File | Purpose |
 |---|---|
 | `MaterialDataPureStructural/` | material databases (`.xlsx`) and trained VAEs (`.nt`) |
-| `ExamplesPureStructural.py` | the four examples: objective, constraints, settings |
 | `MainPureStructural.py` | the optimization driver |
 | `AutodiffPureStructural.py` | the objective and constraints as differentiable functions; autograd gives their gradients |
 | `mmto_utility_functions.py` | filters, stress and mass diagnostics, run bookkeeping |
@@ -131,3 +135,4 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 | `render.py` | 2D panels and 3D voxel renders |
 | `display.py` | tables formatted for the notebook |
 | `project_paths.py` | locates the repository and sets up imports |
+| `reference.py` | writes `docs/project_reference.md` |

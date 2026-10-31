@@ -29,28 +29,42 @@ class RenderError(RuntimeError):
 _MESH_CACHE: dict = {}
 
 
-def _import_examples():
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Runs made before the examples became project files carry these names.
+OLD_NAMES = {
+    "LBracketTopLoad_Stress_BM1": "L-bracket",
+    "UBracket_Stress_FF":         "U-bracket",
+    "Beam_Liao_Pareto_FF":        "beam",
+    "AirplaneBracket_Stress":     "Airplane bracket",
+}
+
+
+def project_name(example):
+    """The project name of an example, for runs made under its old name too."""
+    return OLD_NAMES.get(example, example)
+
+
+def _problem(run: Run):
+    """The Project a run was made from."""
     try:
-        from ExamplesPureStructural import (  # type: ignore
-            MMTOExamplesPureStructural, getMMTOProblemPureStructural)
+        from project import Project  # type: ignore
     except ImportError as e:
         raise RenderError(
-            "could not import ExamplesPureStructural, which needs PyTO on "
-            "sys.path. Call project_paths.bootstrap() first, and check that "
-            f"PyTO is cloned beside this repository. Original error: {e}") from e
-    return MMTOExamplesPureStructural, getMMTOProblemPureStructural
-
-
-def _custom_problem(run: Run):
-    """The Project or CustomProblem a run was made from, else None."""
+            "could not import project, which needs PyTO on sys.path. Call "
+            "project_paths.bootstrap() first, and check that PyTO is cloned beside "
+            f"this repository. Original error: {e}") from e
     spec = ((run.config or {}).get("arguments_resolved") or {}).get("to_problem")
     if isinstance(spec, dict) and "project" in spec:
-        from project import Project  # type: ignore
         return Project.from_record(spec)
-    if not isinstance(spec, dict) or "pyto" not in spec:
-        return None
-    from ExamplesPureStructural import CustomProblem  # type: ignore
-    return CustomProblem(**spec)
+    if isinstance(spec, dict) and "pyto" in spec:          # made in the GUI, before projects
+        p = Project.load(spec["pyto"])
+        p.n_dof, p.single_layer = int(spec.get("n_dof", 30000)), bool(spec.get("single_layer", False))
+        return p
+    path = os.path.join(REPO, "projects", f"{project_name(run.example)}.pyto")
+    if not os.path.isfile(path):
+        raise RenderError(f"{run.descriptor}: no project file for example {run.example!r} ({path})")
+    return Project.load(path)
 
 
 def mesh_for(run: Run):
@@ -59,26 +73,19 @@ def mesh_for(run: Run):
     nDOFDesired comes from the run's own config, so the rebuild matches the grid
     the run solved on rather than the example's current default.
     """
-    Examples, getProblem = _import_examples()
-
     ndof = (run.config.get("topopt_params") or {}).get("nDOFDesired")
     key = (run.example, ndof)
 
     if key not in _MESH_CACHE:
-        try:
-            ex = _custom_problem(run) or Examples[run.example]
-        except KeyError as e:
-            raise RenderError(
-                f"{run.descriptor}: example {run.example!r} is not in "
-                f"MMTOExamplesPureStructural") from e
-        kw = {} if ndof is None else {"nDOFDesired": ndof}
-        _MESH_CACHE[key] = getProblem(ex, **kw)[0]
+        from pyto_project import make_mesh  # type: ignore
+        p = _problem(run)
+        _MESH_CACHE[key] = make_mesh(p.stl_path(), p.n_dof if ndof is None else int(ndof), p.single_layer)
 
     mesh = _MESH_CACHE[key]
     if int(mesh.num_elems) != run.n_elems:
         raise RenderError(
             f"{run.descriptor}: rebuilt mesh has {int(mesh.num_elems)} elements, "
-            f"record has {run.n_elems}. The example definition or the STL has "
+            f"record has {run.n_elems}. The project or the STL has "
             f"changed since the run"
             + (f" (nDOFDesired={ndof})." if ndof is not None
                else ", and the config carries no nDOFDesired to rebuild with."))
@@ -92,7 +99,7 @@ def material_colours(n_needed: int, example: str = None) -> list:
     materialColors.material_colors.
     """
     import matplotlib.colors as mcolors
-    palette = EXAMPLE_PALETTE.get(example)
+    palette = EXAMPLE_PALETTE.get(project_name(example))
     if palette is None:
         try:
             from materialColors import material_colors  # type: ignore
@@ -184,25 +191,25 @@ def draw_panel(ax, run: Run, field: str = "material", *,
 
 # Axes to reflect about, giving 2**k copies of the solved domain.
 MIRROR_AXES = {
-    "AirplaneBracket_Stress": (2,),         # half model, symmetry plane z = 0
-    "Beam_Liao_Pareto_FF":    (0, 1, 2),    # octant model
+    "Airplane bracket": (2,),         # half model, symmetry plane z = 0
+    "beam":             (0, 1, 2),    # octant model
 }
 
 # Per-example palettes. materialColors.py carries one active list plus
 # commented alternatives; the L-bracket benchmark uses the three-colour set its
 # material names refer to.
 EXAMPLE_PALETTE = {
-    "LBracketTopLoad_Stress_BM1": ["#FF0000", "#4b00f1", "#23FF24"],
+    "L-bracket": ["#FF0000", "#4b00f1", "#23FF24"],
 }
 
 # Databases whose spreadsheet names are internal codes. The paper labels these
 # A, B, C..., and so does everything here.
-LETTER_LABELS = {"AirplaneBracket_Stress"}
+LETTER_LABELS = {"Airplane bracket"}
 
 
 def material_labels(names, example=None) -> list:
     """Display names for the materials: letters where the paper uses letters."""
-    if example in LETTER_LABELS:
+    if project_name(example) in LETTER_LABELS:
         return [chr(ord("A") + i) for i in range(len(names))]
     return [str(n) for n in names]
 
@@ -243,7 +250,7 @@ def voxel_surface(run: Run, *, mesh=None, mirror: bool = True):
 
     solid = run.solid
     n_half = int(solid.sum())
-    axes = MIRROR_AXES.get(run.example, ()) if mirror else ()
+    axes = MIRROR_AXES.get(project_name(run.example), ()) if mirror else ()
     C, M = _reflect_centroids(centers[solid], run.material_indices[solid],
                               (dx, dy, dz), axes)
 
