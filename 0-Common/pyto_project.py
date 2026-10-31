@@ -10,6 +10,8 @@ project file is not used: the material properties come from the VAE, as in the o
 examples. Thermal loads and body forces in the project file are not used either.
 
 problem_from_pyto(path, nDOFDesired, single_layer)   mesh, mat_prop, bc, elem_body_force
+make_mesh(stl_path, nDOFDesired, single_layer)        the voxel mesh
+gui_bcs_on_mesh(project, mesh)                        fixed dofs, force of the GUI's supports and loads
 
 Supports: Fixed XYZ, Fixed X, Fixed Y, Fixed Z, on picked faces, picked nodes or box
 selections. Loads: a force (x, y, z) on picked faces, picked nodes or box selections,
@@ -109,24 +111,23 @@ def _nodes_of(selection, mesh, stl, boundary_nodes, boundary_points, tol, what):
     return np.array(sorted(nodes), dtype=int)
 
 
-def problem_from_pyto(path, nDOFDesired=30000, single_layer=False):
-    """Mesh, placeholder material, boundary conditions and body force from a .pyto file.
-
-    single_layer: one element through the thickness, for a flat part (as the L-bracket
-    and the U-bracket)
-    """
-    project = read_project(path)
-    supports, loads = _supports_and_loads(project)
-    if not supports:
-        raise ValueError(f"{path}: the project has no supports")
-    if not loads:
-        raise ValueError(f"{path}: the project has no loads")
-
+def make_mesh(stl_path, nDOFDesired, single_layer=False):
+    """The voxel mesh of an STL, with nDOFDesired / 3 elements asked for."""
     mesh = hex_mesher.HexMesher()
     if single_layer:
         mesh.minVoxelsPerAxis = 1
-    mesh.createMeshFromSTLFile(project["stl_file_path"], nElemsDesired=nDOFDesired / 3)
+    mesh.createMeshFromSTLFile(stl_path, nElemsDesired=nDOFDesired / 3)
     mesh.createEdofMatStructural()
+    return mesh
+
+
+def gui_bcs_on_mesh(project, mesh):
+    """Fixed dofs and force vector of the supports and loads picked in the GUI, on this mesh.
+    Empty when the project has none."""
+    supports, loads = _supports_and_loads(project)
+    force = np.zeros(3 * mesh.num_nodes)
+    if not supports and not loads:
+        return np.zeros(0, dtype=int), force
 
     stl = stl_reader.STLGeom(project["stl_file_path"])
     boundary_nodes = np.asarray(mesh.get_boundary_nodes())
@@ -140,14 +141,30 @@ def problem_from_pyto(path, nDOFDesired=30000, single_layer=False):
         fixed_dofs.extend((3 * nodes[:, None] + np.array(_SUPPORT_DOFS[kind])[None, :]).ravel())
         mesh.node_indices[nodes, 3] = _MARK_FIXED if kind == "Fixed XYZ" else _MARK_ROLLER
     fixed_dofs = np.unique(np.asarray(fixed_dofs, dtype=int))
-    dirichlet_values = np.zeros_like(fixed_dofs, dtype=float)
 
-    force = np.zeros(3 * mesh.num_nodes)
     for i, (*selection, f) in enumerate(loads):
         nodes = _nodes_of(selection, mesh, stl, boundary_nodes, boundary_points, tol, f"load {i + 1}")
         force.reshape(-1, 3)[nodes] += np.asarray(f, dtype=float) / len(nodes)
         mesh.node_indices[nodes, 3] = _MARK_LOAD
+    return fixed_dofs, force
 
+
+def problem_from_pyto(path, nDOFDesired=30000, single_layer=False):
+    """Mesh, placeholder material, boundary conditions and body force from a .pyto file.
+
+    single_layer: one element through the thickness, for a flat part (as the L-bracket
+    and the U-bracket)
+    """
+    project = read_project(path)
+    supports, loads = _supports_and_loads(project)
+    if not supports:
+        raise ValueError(f"{path}: the project has no supports")
+    if not loads:
+        raise ValueError(f"{path}: the project has no loads")
+
+    mesh = make_mesh(project["stl_file_path"], nDOFDesired, single_layer)
+    fixed_dofs, force = gui_bcs_on_mesh(project, mesh)
+    dirichlet_values = np.zeros_like(fixed_dofs, dtype=float)
     bc = bound_cond.BC(force=force, fixed_dofs=fixed_dofs, dirichlet_values=dirichlet_values)
 
     # placeholder single material; the real properties come from the VAE
