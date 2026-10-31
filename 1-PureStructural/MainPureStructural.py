@@ -627,6 +627,7 @@ def run_topopt(
         comment=getattr(to_params, "Comment", ""))
     run_config["during_run"] = dict(_during_run)
     run_config["provenance"] = _provenance
+    run_config["units"] = to_problem.unit_record()
     from PyTOImports import topopt_material_model  # type: ignore
     run_config["fixed_in_code"] = {
         "mma_move_limit": MMA_MOVE_LIMIT, "mma_kkt_tol": MMA_KKT_TOL,

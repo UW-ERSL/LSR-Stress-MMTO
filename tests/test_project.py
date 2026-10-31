@@ -169,6 +169,7 @@ def test_script_round_trip():
             p.complete_settings()
             q.complete_settings()
             assert q.to_dict() == p.to_dict(), os.path.basename(path)
+            assert q.units == p.units, os.path.basename(path)
         finally:
             if os.path.exists(script):
                 os.remove(script)

@@ -56,13 +56,23 @@ Lengths are numbers in model units, or `"<k>h"` for k times the largest element 
 
 A database is an .xlsx file: attribute names in row 1, units in row 2, then one row per material with its name in column A. Every column must be one of these attributes (or one of its other names); `python utils/database.py check <file>` checks a file.
 
-| attribute | other names | meaning | allowed range |
-|---|---|---|---|
-| `Density` |  | mass per unit volume | 0 < value |
-| `Youngs_Modulus` | Youngs Modulus, Young_Modulus, E | Young's modulus, the stiffness | 0 < value |
-| `Poissons_Ratio` | Poisson_Ratio, Poissons Ratio, nu | Poisson's ratio | -1 < value < 0.5 |
-| `Yield_Strength` | Yield Strength, Yield | yield strength, the stress at which the material yields | 0 < value |
-| `Cost` |  | price per unit mass | 0 <= value |
+| attribute | other names | meaning | allowed range | units |
+|---|---|---|---|---|
+| `Density` |  | mass per unit volume | 0 < value | kg/m^3, g/cm^3, t/mm^3, lb/in^3, lbf*s^2/in^4 |
+| `Youngs_Modulus` | Youngs Modulus, Young_Modulus, E | Young's modulus, the stiffness | 0 < value | Pa, kPa, MPa, GPa, psi, ksi |
+| `Poissons_Ratio` | Poisson_Ratio, Poissons Ratio, nu | Poisson's ratio | -1 < value < 0.5 | none (may be blank) |
+| `Yield_Strength` | Yield Strength, Yield | yield strength, the stress at which the material yields | 0 < value | Pa, kPa, MPa, GPa, psi, ksi |
+| `Cost` |  | price per unit mass | 0 <= value | USD/kg, USD/g, USD/t, USD/lb, USD/(lbf*s^2/in) |
+
+## Unit systems
+
+A project declares the units its numbers are in, as the PyTO-AD GUI does (`settings.unit_system` in the .pyto file; `p.units` in code). Nothing is converted: forces, lengths, bounds and the database are used as written. A database column in other units is reported before a run, with what it does to the results. `none` (no unit system) checks nothing.
+
+| system | length | force | stress | density | mass | cost per mass |
+|---|---|---|---|---|---|---|
+| `MKS` | m | N | Pa | kg/m^3 | kg | USD/kg |
+| `mmKS` | mm | N | MPa | t/mm^3 | t | USD/t |
+| `IPS` | in | lbf | psi | lbf*s^2/in^4 | lbf*s^2/in | USD/(lbf*s^2/in) |
 
 ## Quantities
 

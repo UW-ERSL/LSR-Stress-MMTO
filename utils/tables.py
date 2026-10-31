@@ -26,6 +26,10 @@ def summary(run, show=True):
              "r_rho": "r_rho", "r_z": "r_z", "nx": "grid", "n_dof": "target DOF",
              "material": "material", "P": "P", "fixed_radius": "fixed radius"}
     rows = [("example", run.example), ("run", run.descriptor)]
+    units = (run.config or {}).get("units") or {}
+    if units.get("system") not in (None, "none"):
+        rows.append(("units", f"{units['system']}: {units['length']}, {units['force']}, "
+                              f"{units['stress']}, {units['mass']}"))
     for k, v in run.params.items():
         if k == "params_from":
             continue

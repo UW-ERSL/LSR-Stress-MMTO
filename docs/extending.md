@@ -59,12 +59,16 @@ missing; `utils/reference.py` stops when a setting has no line in `SETTING_DOCS`
 
 ## A material attribute
 
-`ATTRIBUTES` in `0-Common/databases.py`. An `Attribute` has its name, what it measures, a
-one-line description, its allowed range, the units offered in the Excel template, and other
-names it may be written under in a database.
+`ATTRIBUTES` in `0-Common/databases.py`. An `Attribute` has its name, what it measures (one
+of `UNITS`, which gives its units), a one-line description, its allowed range, and other
+names it may be written under in a database. An attribute that measures `"ratio"` is
+dimensionless; its units cell may be left blank.
 
     Attribute("Yield_Strength", "stress", "yield strength, the stress at which the material yields",
-              low=0, units=_STRESS_UNITS, aliases=("Yield Strength", "Yield")),
+              low=0, aliases=("Yield Strength", "Yield")),
+
+A new kind of quantity (a conductivity, say) is a new entry in `UNITS`, with each unit's value
+in SI, and one in each of `UNIT_SYSTEMS`.
 
 A database column not in `ATTRIBUTES` is an error, so a new attribute is added here before
 it is used. The check and the template follow. Add a case to `tests/test_databases.py`.

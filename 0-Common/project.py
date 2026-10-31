@@ -58,8 +58,8 @@ import re
 import numpy as np
 
 import selections as S
-from databases import (DATABASE_DIR, DATABASE_VAE, VAEParams, check_database, database_attributes,
-                       recommended_latent_dim)
+from databases import (ATTRIBUTES, DATABASE_DIR, DATABASE_VAE, UNIT_SYSTEMS, VAEParams, check_database,
+                       database_attributes, database_units, recommended_latent_dim, unit_ratio)
 
 SCHEMA_VERSION = 1
 # _UPGRADES[n] turns an mmto section of version n into version n + 1. When the format
@@ -388,6 +388,27 @@ class Project:
     def stl_path(self):
         return self.stl if os.path.isabs(self.stl) else os.path.join(self.base_dir, self.stl)
 
+    @property
+    def units(self):
+        """The unit system: "MKS", "mmKS", "IPS" (those of the PyTO-AD GUI, kept where the GUI
+        keeps it, settings.unit_system) or "none". Numbers are never converted; the unit
+        system says what they are meant to be in, so that a database in other units is reported."""
+        return (self._gui.get("settings") or {}).get("unit_system", "none")
+
+    @units.setter
+    def units(self, system):
+        if system == "none":
+            (self._gui.get("settings") or {}).pop("unit_system", None)
+            return
+        settings = self._gui.setdefault("settings", {"temperature_unit": "Kelvin", "angle_unit": "Degree"})
+        settings["unit_system"] = system
+
+    def unit_record(self):
+        """The units of the run's numbers, for the run record."""
+        if self.units not in UNIT_SYSTEMS:
+            return {"system": self.units}
+        return dict(system=self.units, **UNIT_SYSTEMS[self.units])
+
     def database_paths(self):
         """(xlsx, VAE defaults or None) for the database name or path."""
         if self.database in DATABASE_VAE:
@@ -402,6 +423,8 @@ class Project:
             errors.append(f"STL file {self.stl_path()} does not exist")
         if self.physics != "structural":
             errors.append(f"physics {self.physics!r}: only 'structural' for now")
+        if self.units != "none" and self.units not in UNIT_SYSTEMS:
+            errors.append(f"units {self.units!r}: one of {', '.join(UNIT_SYSTEMS)} or 'none'")
         for i, bc in enumerate(self.bcs, 1):
             where = f"boundary condition {i} ({bc.get('kind')})"
             if bc.get("kind") not in BC_KINDS:
@@ -479,9 +502,65 @@ class Project:
                     out.append(f"material database: {q.name} needs a {c} column")
         return out
 
+    def _unit_warnings(self, xlsx):
+        """A database column in units other than the project's, with what it does to the results."""
+        from AutodiffPureStructural import QUANTITIES                                  # type: ignore
+        if self.units not in UNIT_SYSTEMS:
+            return []
+        system = UNIT_SYSTEMS[self.units]
+        f = self.formulation
+        objective = parse_expression((f.get("objective") or {}).get("expression") or "x()")[0]
+        bounds = {}
+        for c in f.get("constraints", []):
+            try:
+                bounds.setdefault(parse_expression(c["expression"])[0], []).append(c["bound"])
+            except Exception:                                                          # noqa: BLE001
+                pass
+        units = database_units(xlsx)
+        ratio = {n: unit_ratio(ATTRIBUTES[n].measures, u, self.units) for n, u in units.items()
+                 if u is not None and ATTRIBUTES[n].measures != "ratio"}
+
+        def times(r):
+            e = np.log10(r)
+            return f"10^{int(round(e))}" if abs(e - round(e)) < 1e-9 else f"{r:.4g}"
+
+        out = []
+        for name, r in ratio.items():
+            if abs(r - 1.0) < 1e-12:
+                continue
+            a = ATTRIBUTES[name]
+            say = (f"{name} is in {units[name]}, but the project's units are {self.units}, where it would be "
+                   f"in {system[a.measures]}: its numbers are {times(r)} times those {self.units} expects.")
+            if name == "Youngs_Modulus":
+                say += (f" Displacement and compliance come out {times(r)} times too small; stress and "
+                        f"failure factor are unaffected.")
+            elif name == "Yield_Strength":
+                if "FailureFactorPNorm" in bounds:
+                    say += (f" The failure factor comes out {times(1 / r)} times its value, so the constraint "
+                            f"FailureFactorPNorm() <= {bounds['FailureFactorPNorm'][0]:g} is a different "
+                            f"problem: it allows a true failure factor of "
+                            f"{bounds['FailureFactorPNorm'][0] * r:g}.")
+                elif objective == "FailureFactorPNorm":
+                    say += (f" The failure factor is reported {times(1 / r)} times its value; the design is "
+                            f"unaffected, since the objective is only scaled.")
+            elif name == "Density" and "Mass" in bounds:
+                say += (f" Mass comes out {times(r)} times its value in {system['mass']}: the bound "
+                        f"{bounds['Mass'][0]:g} means {bounds['Mass'][0] / r:g} {system['mass']}.")
+            out.append(say)
+        if "Cost" in bounds and "Cost" in ratio and "Density" in ratio:
+            r = ratio["Cost"] * ratio["Density"]
+            if abs(r - 1.0) > 1e-12:            # said once, under Cost if it is off, else under Density
+                k = [i for i, w in enumerate(out) if w.startswith("Cost is")] or \
+                    [i for i, w in enumerate(out) if w.startswith("Density is")]
+                out[k[0]] += (f" Cost() is density * cost per mass * volume: with these units it comes out "
+                              f"{times(r)} times its value in USD, so the bound {bounds['Cost'][0]:g} means "
+                              f"{bounds['Cost'][0] / r:g} USD.")
+        return out
+
     def warnings(self):
-        """What is allowed but deserves a look before a run: the database's warnings, and a
-        latent dimension other than the one recommended for the database."""
+        """What is allowed but deserves a look before a run: the database's warnings, a
+        database in units other than the project's, and a latent dimension other than the
+        one recommended for the database."""
         out = []
         if self.database is None:
             return out
@@ -490,6 +569,7 @@ class Project:
         if errors:
             return out
         out += [f"material database {os.path.basename(xlsx)}: {w}" for w in db_warnings]
+        out += self._unit_warnings(xlsx)
         d_eff, n_z = recommended_latent_dim(xlsx)
         latent = self.settings.get("vae", {}).get("latentDim")
         if latent is not None and int(latent) != n_z:
@@ -529,6 +609,12 @@ class Project:
         errors = self.validate()
         if errors:
             raise ValueError(f"project {self.name!r}:\n  " + "\n  ".join(errors))
+        if verbose:
+            shown = self.warnings()
+            if shown != getattr(self, "_shown_warnings", None):          # once per change, not every build
+                for w in shown:
+                    print(f"[{self.name}] warning: {w}")
+                self._shown_warnings = shown
         from PyTOImports import (bound_cond, mat_lib, topopt_material_model,          # type: ignore
                                  find_elements_with_fixedDOF)
         from mmto_common import MMTOParams                                            # type: ignore
@@ -673,6 +759,8 @@ class Project:
             lines.append(f"p.comment = {self.comment!r}")
         if self.physics != "structural":
             lines.append(f"p.physics = {self.physics!r}")
+        if self.units != "none":
+            lines.append(f"p.units = {self.units!r}")
         lines.append("")
         for name, sel in self.selections.items():
             lines.append(f"p.add_selection({name!r}, {sel!r})")
@@ -771,8 +859,6 @@ def run(project, save_dir=None, **run_options):
     errors = project.validate()
     if errors:
         raise ValueError(f"project {project.name!r}:\n  " + "\n  ".join(errors))
-    for w in project.warnings():
-        print(f"[{project.name}] warning: {w}")
     snapshot = project.copy()                    # the run gets, and records, the project as it is now
     args = run_arguments(snapshot, save_dir, **run_options)
     if run_io.WRITE_FILES:

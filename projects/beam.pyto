@@ -1,4 +1,9 @@
 {
+  "settings": {
+    "temperature_unit": "Kelvin",
+    "angle_unit": "Degree",
+    "unit_system": "mmKS"
+  },
   "stl_file_path": "../0-Common/Models/Beam_Liao/Ex1_Beam_design.stl",
   "mmto": {
     "schema_version": 1,

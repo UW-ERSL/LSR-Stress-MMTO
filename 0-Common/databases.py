@@ -37,16 +37,55 @@ DATABASE_VAE = {
 }
 
 
+# ---------------------------------------------------------------------- units
+# Nothing is converted: numbers are used as they are written. Units are declared (row 2 of
+# a database, the project's unit system) so that a mismatch can be reported.
+_IN, _LBF, _LB = 0.0254, 4.4482216152605, 0.45359237           # inch in m, pound-force in N, pound in kg
+_SLINCH = _LBF / _IN                                            # lbf s^2/in, the IPS unit of mass, in kg
+
+# what one unit is in SI, for each kind of quantity
+UNITS = {
+    "length": {"m": 1.0, "mm": 1e-3, "in": _IN},
+    "force": {"N": 1.0, "lbf": _LBF},
+    "stress": {"Pa": 1.0, "kPa": 1e3, "MPa": 1e6, "GPa": 1e9, "psi": _LBF / _IN ** 2, "ksi": 1e3 * _LBF / _IN ** 2},
+    "density": {"kg/m^3": 1.0, "g/cm^3": 1e3, "t/mm^3": 1e12, "lb/in^3": _LB / _IN ** 3,
+                "lbf*s^2/in^4": _SLINCH / _IN ** 3},
+    "mass": {"kg": 1.0, "t": 1e3, "lbf*s^2/in": _SLINCH},
+    "cost per mass": {"USD/kg": 1.0, "USD/g": 1e3, "USD/t": 1e-3, "USD/lb": 1 / _LB, "USD/(lbf*s^2/in)": 1 / _SLINCH},
+    "ratio": {"-": 1.0},
+}
+
+# The unit systems of the PyTO-AD GUI (settings.unit_system in a .pyto file). A project
+# without one is "none": its units are not checked.
+UNIT_SYSTEMS = {
+    "MKS":  {"length": "m", "force": "N", "stress": "Pa", "density": "kg/m^3", "mass": "kg",
+             "cost per mass": "USD/kg"},
+    "mmKS": {"length": "mm", "force": "N", "stress": "MPa", "density": "t/mm^3", "mass": "t",
+             "cost per mass": "USD/t"},
+    "IPS":  {"length": "in", "force": "lbf", "stress": "psi", "density": "lbf*s^2/in^4", "mass": "lbf*s^2/in",
+             "cost per mass": "USD/(lbf*s^2/in)"},
+}
+
+
+def unit_ratio(measures, unit, system):
+    """How many times larger a number written in unit is than the same value in the unit
+    system's unit: 10^6 for a stress in Pa in an mmKS project."""
+    return UNITS[measures][UNIT_SYSTEMS[system][measures]] / UNITS[measures][unit]
+
+
 # ---------------------------------------------------------------------- attributes
 class Attribute:
-    """One material attribute a database may hold. measures: what it is (stiffness,
-    stress, density, ...), for units; low, high: the allowed range, each end open unless
-    named in closed; units: offered in the Excel template."""
+    """One material attribute a database may hold. measures: what it is, one of UNITS
+    (stress, density, ratio, ...); its units are those of UNITS[measures], and "ratio"
+    means dimensionless (its units cell may be left blank). low, high: the allowed range,
+    each end open unless named in closed."""
 
-    def __init__(self, name, measures, doc, low=None, high=None, closed=(), units=(), aliases=()):
+    def __init__(self, name, measures, doc, low=None, high=None, closed=(), aliases=()):
+        if measures not in UNITS:
+            raise ValueError(f"attribute {name}: measures must be one of {', '.join(UNITS)}")
         self.name, self.measures, self.doc = name, measures, doc
         self.low, self.high, self.closed = low, high, tuple(closed)
-        self.units, self.aliases = tuple(units), tuple(aliases)
+        self.units, self.aliases = tuple(UNITS[measures]), tuple(aliases)
 
     def in_range(self, v):
         if self.low is not None and (v < self.low or (v == self.low and "low" not in self.closed)):
@@ -61,21 +100,17 @@ class Attribute:
         return f"{lo}value{hi}" if (lo or hi) else "any"
 
 
-_STRESS_UNITS = ("Pa", "kPa", "MPa", "GPa", "psi", "ksi")
-
 # Every attribute a database may hold. To add one, add an entry; the check and the Excel
 # template follow. A column not listed here is an error.
 ATTRIBUTES = {a.name: a for a in [
-    Attribute("Density", "density", "mass per unit volume", low=0,
-              units=("kg/m^3", "g/cm^3", "t/mm^3", "lb/in^3")),
-    Attribute("Youngs_Modulus", "stress", "Young's modulus, the stiffness", low=0, units=_STRESS_UNITS,
+    Attribute("Density", "density", "mass per unit volume", low=0),
+    Attribute("Youngs_Modulus", "stress", "Young's modulus, the stiffness", low=0,
               aliases=("Youngs Modulus", "Young_Modulus", "E")),
-    Attribute("Poissons_Ratio", "ratio", "Poisson's ratio", low=-1, high=0.5, units=("-",),
+    Attribute("Poissons_Ratio", "ratio", "Poisson's ratio", low=-1, high=0.5,
               aliases=("Poisson_Ratio", "Poissons Ratio", "nu")),
     Attribute("Yield_Strength", "stress", "yield strength, the stress at which the material yields",
-              low=0, units=_STRESS_UNITS, aliases=("Yield Strength", "Yield")),
-    Attribute("Cost", "cost per mass", "price per unit mass", low=0, closed=("low",),
-              units=("USD/kg", "USD/lb", "USD/g")),
+              low=0, aliases=("Yield Strength", "Yield")),
+    Attribute("Cost", "cost per mass", "price per unit mass", low=0, closed=("low",)),
 ]}
 _BY_ALIAS = {k.lower(): a.name for a in ATTRIBUTES.values() for k in (a.name,) + a.aliases}
 
@@ -129,6 +164,16 @@ def database_attributes(path):
     return [attribute_name(n) for n in _read(path).iloc[0, 1:].tolist()]
 
 
+def database_units(path):
+    """Each column's unit as written in row 2 (None when blank), by registry name."""
+    df = _read(path)
+    out = {}
+    for c in range(1, df.shape[1]):
+        u = df.iat[1, c]
+        out[attribute_name(df.iat[0, c])] = None if (u is None or str(u).strip() in ("", "nan")) else str(u).strip()
+    return out
+
+
 def recommended_latent_dim(path):
     """(d_eff, n_z): the participation ratio of the normalized database, and the latent
     dimension recommended for it, the smallest integer at or above d_eff (at least 1)."""
@@ -142,7 +187,8 @@ def recommended_latent_dim(path):
 
 
 def check_database(path):
-    """(errors, warnings) for a database file. Units are not checked."""
+    """(errors, warnings) for a database file. A unit must be one of its attribute's; whether
+    it suits a project's unit system is checked by the project (Project.warnings)."""
     import math
     import numpy as np
     from openpyxl.utils import get_column_letter
@@ -180,6 +226,12 @@ def check_database(path):
             errors.append(f"{cell(0, c)}: {name} appears twice")
             continue
         names[c] = name
+        a, u = ATTRIBUTES[name], df.iat[1, c]
+        if blank(u):
+            if a.measures != "ratio":
+                errors.append(f"{cell(1, c)}: no units for {name}; one of {', '.join(a.units)}")
+        elif str(u).strip() not in a.units:
+            errors.append(f"{cell(1, c)}: {str(u).strip()!r} is not a unit of {name}; one of {', '.join(a.units)}")
 
     materials = {}
     for r in range(2, df.shape[0]):
@@ -213,6 +265,39 @@ def check_database(path):
     return errors, warnings_
 
 
+def convert_database(path, system, out):
+    """A copy of the database with every column in the unit system's units: the one
+    conversion there is, explicit, into a new file."""
+    import warnings
+    from openpyxl import load_workbook
+    errors, _ = check_database(path)
+    if errors:
+        raise ValueError(f"{path} has errors; run the check first:\n  " + "\n  ".join(errors))
+    if system not in UNIT_SYSTEMS:
+        raise ValueError(f"unit system {system!r}: one of {', '.join(UNIT_SYSTEMS)}")
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Data Validation extension")
+        wb = load_workbook(path)
+    ws = wb.worksheets[0]
+    changed = []
+    for c in range(2, ws.max_column + 1):
+        name = attribute_name(ws.cell(row=1, column=c).value)
+        if name not in ATTRIBUTES or ATTRIBUTES[name].measures == "ratio":
+            continue
+        a, unit = ATTRIBUTES[name], str(ws.cell(row=2, column=c).value).strip()
+        r = unit_ratio(a.measures, unit, system)
+        if r == 1.0:
+            continue
+        for row in range(3, ws.max_row + 1):
+            v = ws.cell(row=row, column=c).value
+            if v is not None:
+                ws.cell(row=row, column=c, value=float(v) / r)
+        ws.cell(row=2, column=c, value=UNIT_SYSTEMS[system][a.measures])
+        changed.append(f"{name}: {unit} -> {UNIT_SYSTEMS[system][a.measures]}")
+    wb.save(out)
+    return changed
+
+
 # ---------------------------------------------------------------------- the Excel template
 def write_template(path, attributes, n_materials=5):
     """An empty database to fill in: the attributes in row 1, a units list under each in
@@ -236,9 +321,13 @@ def write_template(path, attributes, n_materials=5):
         units.error = f"Choose one of: {', '.join(a.units)}"
         ws.add_data_validation(units)
         units.add(f"{col}2")
-        number = DataValidation(type="decimal", operator="between",
-                                formula1=str(-1e300 if a.low is None else a.low),
-                                formula2=str(1e300 if a.high is None else a.high))
+        first = f"{col}3"                       # Excel shifts the formula down the column
+        conditions = [f"ISNUMBER({first})"]
+        if a.low is not None:
+            conditions.append(f"{first}{'>=' if 'low' in a.closed else '>'}{a.low}")
+        if a.high is not None:
+            conditions.append(f"{first}{'<=' if 'high' in a.closed else '<'}{a.high}")
+        number = DataValidation(type="custom", formula1=f"AND({','.join(conditions)})")
         number.error = f"{name}: a number, {a.range_text()}"
         ws.add_data_validation(number)
         number.add(f"{col}3:{col}{last}")

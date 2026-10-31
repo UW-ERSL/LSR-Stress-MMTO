@@ -41,7 +41,7 @@ def generate():
     import selections as S                                                  # type: ignore
     from AutodiffPureStructural import QUANTITIES                           # type: ignore
     from project import BC_KINDS, DEFAULT_SETTINGS, SETTING_DOCS, VAE_PARAMS  # type: ignore
-    from databases import ATTRIBUTES                                        # type: ignore
+    from databases import ATTRIBUTES, UNIT_SYSTEMS                          # type: ignore
 
     out = ["# Project reference", "",
            "Generated from the code by `python utils/reference.py`; do not edit by hand.", "",
@@ -69,8 +69,19 @@ def generate():
             "A database is an .xlsx file: attribute names in row 1, units in row 2, then one row per "
             "material with its name in column A. Every column must be one of these attributes (or one "
             "of its other names); `python utils/database.py check <file>` checks a file.", "",
-            "| attribute | other names | meaning | allowed range |", "|---|---|---|---|"]
-    out += [f"| `{a.name}` | {', '.join(a.aliases)} | {a.doc} | {a.range_text()} |" for a in ATTRIBUTES.values()]
+            "| attribute | other names | meaning | allowed range | units |", "|---|---|---|---|---|"]
+    out += [f"| `{a.name}` | {', '.join(a.aliases)} | {a.doc} | {a.range_text()} | "
+            f"{'none (may be blank)' if a.measures == 'ratio' else ', '.join(a.units)} |"
+            for a in ATTRIBUTES.values()]
+
+    kinds = ("length", "force", "stress", "density", "mass", "cost per mass")
+    out += ["", "## Unit systems", "",
+            "A project declares the units its numbers are in, as the PyTO-AD GUI does (`settings.unit_system` "
+            "in the .pyto file; `p.units` in code). Nothing is converted: forces, lengths, bounds and the "
+            "database are used as written. A database column in other units is reported before a run, with "
+            "what it does to the results. `none` (no unit system) checks nothing.", "",
+            "| system | " + " | ".join(kinds) + " |", "|---|" + "---|" * len(kinds)]
+    out += [f"| `{k}` | " + " | ".join(v[q] for q in kinds) + " |" for k, v in UNIT_SYSTEMS.items()]
 
     out += ["", "## Quantities", "",
             "An objective or a constraint is one quantity, e.g. `Mass()` or "

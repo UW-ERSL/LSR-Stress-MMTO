@@ -124,6 +124,9 @@ def test_record_has_provenance():
         commit = prov[repo]["commit"]
         assert commit == "unknown" or re.fullmatch(r"[0-9a-f]{40}", commit), (repo, commit)
     assert prov["packages"]["numpy"] == np.__version__ and prov["python"]
+    units = runs()["project"][1]["config"]["units"]
+    assert units == {"system": "MKS", "length": "m", "force": "N", "stress": "Pa", "density": "kg/m^3",
+                     "mass": "kg", "cost per mass": "USD/kg"}, units       # the U-bracket GUI file says MKS
     with tempfile.TemporaryDirectory() as d:                        # not a git checkout
         assert run_io.git_state(d)["commit"] == "unknown"
 

@@ -1,4 +1,9 @@
 {
+  "settings": {
+    "temperature_unit": "Kelvin",
+    "angle_unit": "Degree",
+    "unit_system": "mmKS"
+  },
   "stl_file_path": "../0-Common/Models/AirplaneBracket/AirplaneBracket.stl",
   "mmto": {
     "schema_version": 1,

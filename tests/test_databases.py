@@ -20,7 +20,8 @@ project_paths.bootstrap()
 
 from openpyxl import Workbook, load_workbook  # noqa: E402
 from databases import (ATTRIBUTES, DATABASE_DIR, DATABASE_VAE, VAEParams, attribute_name,  # noqa: E402
-                       check_database, recommended_latent_dim, write_template)  # type: ignore
+                       check_database, convert_database, database_units, recommended_latent_dim,
+                       unit_ratio, write_template)  # type: ignore
 
 SHIPPED = os.path.join(ROOT, DATABASE_DIR)
 GOOD = [["Attributes", "Density", "Youngs_Modulus", "Yield_Strength"],
@@ -77,6 +78,12 @@ def test_errors_name_the_cell():
         change(rows)
         errors, _ = errors_of(rows)
         assert any(says in e for e in errors), (says, errors)
+    rows = [list(r) for r in GOOD]
+    rows[1][2] = None                                        # Youngs_Modulus without units
+    assert any("C2: no units for Youngs_Modulus" in e for e in errors_of(rows)[0])
+    rows = [list(r) for r in GOOD]
+    rows[1][1] = "MPa"                                       # not a unit of density
+    assert any("B2: 'MPa' is not a unit of Density" in e for e in errors_of(rows)[0])
     errors, _ = errors_of(GOOD[:3])
     assert "at least two materials" in errors[0]
     errors, _ = errors_of([["Attributes", "Poissons_Ratio"], ["Material/Units", "-"], ["A", 0.3], ["B", 0.6]])
@@ -102,6 +109,8 @@ def test_template():
         assert [c.value for c in main[1]] == ["Attributes", "Density", "Youngs_Modulus", "Yield_Strength"]
         lists = [v for v in main.data_validations.dataValidation if v.type == "list"]
         assert any("MPa" in v.formula1 and "C2" in str(v.sqref) for v in lists)
+        rules = {str(v.sqref): v.formula1 for v in main.data_validations.dataValidation if v.type == "custom"}
+        assert rules["C3:C5"] == "AND(ISNUMBER(C3),C3>0)"         # E = 0 refused, as by the check
         assert wb["Reference"].max_row == 1 + len(ATTRIBUTES)
         errors, _ = check_database(path)                       # empty: every value is missing
         assert any("no value" in e for e in errors)
@@ -116,6 +125,39 @@ def test_template():
             assert "not known attributes: Colour" in str(e)
         else:
             raise AssertionError("an unknown attribute was accepted")
+
+
+def test_units():
+    assert unit_ratio("stress", "Pa", "mmKS") == 1e6 and unit_ratio("stress", "MPa", "mmKS") == 1.0
+    assert abs(unit_ratio("density", "lb/in^3", "IPS") - 386.0886) < 1e-3     # pound-mass vs pound-force: g
+    errors, _ = errors_of([["Attributes", "Youngs_Modulus", "Poissons_Ratio"], ["Material/Units", "Pa", None],
+                           ["A", 1.0, 0.3], ["B", 2.0, 0.35]])
+    assert errors == []                                      # a dimensionless column may have no units
+    with tempfile.TemporaryDirectory() as d:
+        beam = os.path.join(SHIPPED, "Beam_8Mats_3Attr_v4_spectrum2D.xlsx")
+        out = os.path.join(d, "beam_mmKS.xlsx")
+        changed = convert_database(beam, "mmKS", out)
+        assert changed == ["Density: kg/m^3 -> t/mm^3", "Youngs_Modulus: Pa -> MPa"], changed
+        assert check_database(out) == ([], [])
+        assert database_units(out) == {"Density": "t/mm^3", "Youngs_Modulus": "MPa", "Yield_Strength": "MPa"}
+        from databases import _read  # type: ignore
+        a, b = _read(beam), _read(out)
+        assert float(b.iat[2, 2]) == float(a.iat[2, 2]) / 1e6 and float(b.iat[2, 3]) == float(a.iat[2, 3])
+
+
+def test_benchmark_unit_warnings():
+    """The benchmarks declare the units they are set up in; the paper's databases mix units,
+    and each mismatch is reported with what it does to the results."""
+    from project import Project  # type: ignore
+    counts = {}
+    for name in ("L-bracket", "U-bracket", "beam", "Airplane bracket"):
+        p = Project.load(os.path.join(ROOT, "projects", f"{name}.pyto"))
+        counts[name] = (p.units, [w.split(" is in ")[0] for w in p.warnings()])
+    assert counts == {"L-bracket": ("mmKS", ["Youngs_Modulus"]), "U-bracket": ("none", []),
+                      "beam": ("mmKS", ["Density", "Youngs_Modulus"]),
+                      "Airplane bracket": ("mmKS", ["Density", "Youngs_Modulus", "Cost"])}, counts
+    w = Project.load(os.path.join(ROOT, "projects", "Airplane bracket.pyto")).warnings()
+    assert "the bound 4e+07 means 4e-05 t" in w[0] and "the bound 7.5e+08 means 0.75 USD" in w[2]
 
 
 def test_project_uses_the_check():
@@ -148,6 +190,17 @@ def test_project_uses_the_check():
         assert p.warnings() == []
         p.settings["vae"]["latentDim"] = n_z + 2
         assert any("is recommended" in w for w in p.warnings())
+        p.settings["vae"]["latentDim"] = n_z
+
+        p.units = "mmKS"                                       # GOOD is in Pa: Y too
+        assert "the design is unaffected" in "\n".join(p.warnings())          # the failure factor as objective
+        p.objective("Compliance()")
+        p.constraint("FailureFactorPNorm()", "<=", 1.0)                       # and as a constraint
+        assert "FailureFactorPNorm() <= 1 is a different problem" in "\n".join(p.warnings())
+        p.units = "Imperial"
+        assert any("units 'Imperial'" in e for e in p.validate())
+        p.units = "none"
+        assert p.units == "none" and p.warnings() == []
 
 
 if __name__ == "__main__":

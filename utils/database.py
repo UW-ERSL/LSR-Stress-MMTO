@@ -9,6 +9,10 @@ Material databases from the command line (from the repository folder):
     python utils/database.py template my_db.xlsx Density Youngs_Modulus Yield_Strength
         an empty database to fill in, with a units list under each attribute and a
         Reference sheet; the attributes known are those in ATTRIBUTES, 0-Common/databases.py
+
+    python utils/database.py convert my_db.xlsx mmKS my_db_mmKS.xlsx
+        a copy of the database in the units of a unit system (MKS, mmKS or IPS); the
+        original is not changed. Nothing else in the code converts units.
 """
 import os
 import sys
@@ -18,7 +22,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def main(argv):
     sys.path.insert(0, os.path.join(ROOT, "0-Common"))
-    from databases import ATTRIBUTES, check_database, recommended_latent_dim, write_template
+    from databases import ATTRIBUTES, check_database, convert_database, recommended_latent_dim, write_template
 
     if len(argv) >= 2 and argv[0] == "check":
         path = argv[1]
@@ -36,6 +40,11 @@ def main(argv):
     if len(argv) >= 3 and argv[0] == "template":
         path = write_template(argv[1], argv[2:])
         print(f"wrote {path}")
+        return 0
+    if len(argv) == 4 and argv[0] == "convert":
+        for line in convert_database(argv[1], argv[2], argv[3]) or ["already in those units"]:
+            print(line)
+        print(f"wrote {argv[3]}")
         return 0
     print(__doc__)
     print("known attributes: " + ", ".join(ATTRIBUTES))

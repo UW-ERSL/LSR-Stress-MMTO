@@ -1,4 +1,9 @@
 {
+  "settings": {
+    "temperature_unit": "Kelvin",
+    "angle_unit": "Degree",
+    "unit_system": "mmKS"
+  },
   "stl_file_path": "../0-Common/Models/LBracket_BM1/LBracket_BM1.STL",
   "mmto": {
     "schema_version": 1,
@@ -15,7 +20,8 @@
         "triangles": [
           12,
           13
-        ]
+        ],
+        "tol": null
       },
       "corner": {
         "type": "rows",
