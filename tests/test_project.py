@@ -48,9 +48,15 @@ def coded_ubracket(base_dir=UBRACKET):
 
 
 def test_round_trip():
+    try:
+        coded_ubracket().save(os.path.join(tempfile.gettempdir(), "x.pyto"))
+    except ValueError as e:
+        assert "saved as a .mmto file" in str(e)
+    else:
+        raise AssertionError("a project was saved as .pyto")
     with tempfile.TemporaryDirectory() as d:
         p = coded_ubracket()
-        a, b = os.path.join(d, "a.pyto"), os.path.join(d, "b.pyto")
+        a, b = os.path.join(d, "a.mmto"), os.path.join(d, "b.mmto")
         p.save(a)
         q = Project.load(a)
         assert q.to_dict() == p.to_dict()
@@ -171,7 +177,7 @@ def test_build_gui_project_matches_problem_from_pyto():
 def test_script_round_trip():
     """Every project in projects/ exported to a script, the script run: the same project."""
     import glob
-    for path in sorted(glob.glob(os.path.join(ROOT, "projects", "*.pyto"))):
+    for path in sorted(glob.glob(os.path.join(ROOT, "projects", "*.mmto"))):
         p = Project.load(path)
         script = os.path.join(os.path.dirname(path), "_round_trip_test.py")
         try:
@@ -217,8 +223,8 @@ def test_gui_picks_become_the_project():
         assert p._gui["settings"] == json.load(open(os.path.join(UBRACKET, "UBracket.pyto")))["settings"]
         p.database = "6Materials_AF_3Attr"
         p.objective("FailureFactorPNorm()")
-        p.save(os.path.join(d, "UBracket.pyto"))
-        q = Project.load(os.path.join(d, "UBracket.pyto"))
+        p.save(os.path.join(d, "UBracket.mmto"))
+        q = Project.load(os.path.join(d, "UBracket.mmto"))
         assert q.to_dict() == p.to_dict()
         text = open(q.to_script(os.path.join(d, "u.py"))).read()
         assert "gui_support1" in text and "halfspaces(" in text
@@ -274,7 +280,7 @@ def test_gui_sections_survive_a_save():
         p = Project.load(os.path.join(UBRACKET, "UBracket.pyto"))
         p.database = "6Materials_AF_3Attr"
         p.objective("FailureFactorPNorm()")
-        out = os.path.join(d, "u.pyto")
+        out = os.path.join(d, "u.mmto")
         p.save(out)
         saved = json.load(open(out))
         original = json.load(open(os.path.join(UBRACKET, "UBracket.pyto")))
@@ -290,7 +296,7 @@ def test_schema_upgrades():
     import project as P  # type: ignore
     with tempfile.TemporaryDirectory() as d:
         p = coded_ubracket()
-        path = os.path.join(d, "u.pyto")
+        path = os.path.join(d, "u.mmto")
         p.save(path)
         data = json.load(open(path))
         old = dict(data, mmto=dict(data["mmto"], schema_version=0))

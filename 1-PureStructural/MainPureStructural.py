@@ -184,7 +184,7 @@ def run_topopt(
 
     history = init_run_history()
     if not hasattr(to_problem, "build"):
-        raise TypeError(f"to_problem must be a Project, e.g. Project.load('projects/L-bracket.pyto'), "
+        raise TypeError(f"to_problem must be a Project, e.g. Project.load('projects/L-bracket.mmto'), "
                         f"not {to_problem!r}; the coded examples are now the project files in projects/")
     problem = to_problem
     if n_dof_desired is not None and int(n_dof_desired) != problem.n_dof:
@@ -672,5 +672,5 @@ if __name__ == "__main__":
     # Expect Phi_p 2.5377, grey 2.47%, VF 0.1472 / 0.1472 / 0.0993.
     from project import Project, run_arguments  # type: ignore
     save_dir = start_run(name="LBracket_BM1_rel3p5_rz3p5")
-    to_problem = Project.load(os.path.join(os.path.dirname(__file__), "..", "projects", "L-bracket.pyto"))
+    to_problem = Project.load(os.path.join(os.path.dirname(__file__), "..", "projects", "L-bracket.mmto"))
     run_topopt(**run_arguments(to_problem, save_dir=save_dir))

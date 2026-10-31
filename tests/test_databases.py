@@ -151,12 +151,12 @@ def test_benchmark_unit_warnings():
     from project import Project  # type: ignore
     counts = {}
     for name in ("L-bracket", "U-bracket", "beam", "Airplane bracket"):
-        p = Project.load(os.path.join(ROOT, "projects", f"{name}.pyto"))
+        p = Project.load(os.path.join(ROOT, "projects", f"{name}.mmto"))
         counts[name] = (p.units, [w.split(" is in ")[0] for w in p.warnings()])
     assert counts == {"L-bracket": ("mmKS", ["Youngs_Modulus"]), "U-bracket": ("none", []),
                       "beam": ("mmKS", ["Density", "Youngs_Modulus"]),
                       "Airplane bracket": ("mmKS", ["Density", "Youngs_Modulus", "Cost"])}, counts
-    w = Project.load(os.path.join(ROOT, "projects", "Airplane bracket.pyto")).warnings()
+    w = Project.load(os.path.join(ROOT, "projects", "Airplane bracket.mmto")).warnings()
     assert "the bound 4e+07 means 4e-05 t" in w[0] and "the bound 7.5e+08 means 0.75 USD" in w[2]
 
 

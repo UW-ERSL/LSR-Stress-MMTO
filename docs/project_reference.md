@@ -2,7 +2,7 @@
 
 Generated from the code by `python utils/reference.py`; do not edit by hand.
 
-A project is a PyTO-AD project file (.pyto) with an `mmto` section, which holds the whole problem. Supports and loads picked in the PyTO-AD GUI become selections (`gui_support1`, `gui_load1`, ...) and boundary conditions of the mmto section when the project is loaded, and are removed from the GUI's own section; the rest of what the GUI saved is kept.
+A project is an LSR MMTO project file (.mmto): the layout of a PyTO-AD project file, with an `mmto` section, which holds the whole problem. Supports and loads picked in the PyTO-AD GUI become selections (`gui_support1`, `gui_load1`, ...) and boundary conditions of the mmto section when the project is loaded, and are removed from the GUI's own section; the rest of what the GUI saved is kept.
 
 ## The mmto section
 
@@ -66,7 +66,7 @@ A database is an .xlsx file: attribute names in row 1, units in row 2, then one 
 
 ## Unit systems
 
-A project declares the units its numbers are in, as the PyTO-AD GUI does (`settings.unit_system` in the .pyto file; `p.units` in code). Nothing is converted: forces, lengths, bounds and the database are used as written. A database column in other units is reported before a run, with what it does to the results. `none` (no unit system) checks nothing.
+A project declares the units its numbers are in, as the PyTO-AD GUI does (`settings.unit_system` in the project file; `p.units` in code). Nothing is converted: forces, lengths, bounds and the database are used as written. A database column in other units is reported before a run, with what it does to the results. `none` (no unit system) checks nothing.
 
 | system | length | force | stress | density | mass | cost per mass |
 |---|---|---|---|---|---|---|

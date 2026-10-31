@@ -61,7 +61,7 @@ def _problem(run: Run):
         p = Project.load(spec["pyto"])
         p.n_dof, p.single_layer = int(spec.get("n_dof", 30000)), bool(spec.get("single_layer", False))
         return p
-    path = os.path.join(REPO, "projects", f"{project_name(run.example)}.pyto")
+    path = os.path.join(REPO, "projects", f"{project_name(run.example)}.mmto")
     if not os.path.isfile(path):
         raise RenderError(f"{run.descriptor}: no project file for example {run.example!r} ({path})")
     return Project.load(path)

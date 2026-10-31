@@ -3,9 +3,10 @@ project.py
 ==========
 One MMTO problem as a project: geometry, named selections, boundary conditions,
 keep-solid regions, material database, objective and constraints, and settings.
-A project is saved in a PyTO-AD project file (.pyto), in its own "mmto" section;
-the rest of what the PyTO-AD GUI saved in the same file is kept, except its supports
-and loads, which become part of the mmto section (see below).
+A project is saved as an LSR MMTO project file (.mmto): the layout of a PyTO-AD project
+file, with the problem in its own "mmto" section. Project.load also reads a PyTO-AD project
+file (.pyto); the rest of what the PyTO-AD GUI saved is kept, except its supports and loads,
+which become part of the mmto section (see below).
 
     from project import Project
     from selections import face, box
@@ -16,8 +17,8 @@ and loads, which become part of the mmto section (see below).
     p.database = "6Materials_AF_3Attr"
     p.objective("FailureFactorPNorm()")
     p.constraint("Mass()", "<=", 3.5e-3)
-    p.save("bracket.pyto")
-    q = Project.load("bracket.pyto")
+    p.save("bracket.mmto")
+    q = Project.load("bracket.mmto")
     mesh, mat_prop, bc, body_force, to_params, vae_params = q.build()
     run(q)                                  # optimizes; results and a copy of q in results/bracket
     q.to_script("bracket_setup.py")         # the same project as Python calls, to read or edit
@@ -294,7 +295,7 @@ class Project:
         self.database = None
         self.formulation = {"objective": None, "constraints": []}
         self.settings = {k: dict(v) for k, v in DEFAULT_SETTINGS.items()}
-        self._gui = {}                          # everything else in the .pyto, kept for the GUI
+        self._gui = {}                          # everything else in the file, kept for the GUI
 
     # ------------------------------------------------------------------ building it up
     def add_selection(self, name, selection):
@@ -715,7 +716,10 @@ class Project:
         return data
 
     def save(self, path):
-        """Write the project, every setting included, with the other sections it was loaded with."""
+        """Write the project, every setting included, with the other sections it was loaded with.
+        Always as .mmto: a .pyto file opened and saved in the PyTO-AD GUI would lose its mmto section."""
+        if not path.lower().endswith(".mmto"):
+            raise ValueError(f"{path}: an LSR MMTO project is saved as a .mmto file")
         path = os.path.abspath(path)
         self.complete_settings()
         data = self._file_data(path)
@@ -743,7 +747,7 @@ class Project:
                         for t in getattr(s, "parts", ())})
         lines = [f'"""{self.name}: rebuilds the project {self.name!r}. Written by Project.to_script.',
                  "",
-                 f"    python {_from_repo(path)}       (from the repository folder; saves {self.name}.pyto next to it)",
+                 f"    python {_from_repo(path)}       (from the repository folder; saves {self.name}.mmto next to it)",
                  '"""',
                  "import os",
                  "import sys",
@@ -785,7 +789,7 @@ class Project:
         if changed:
             lines += ["", "# settings that differ from a new project's; the rest are the defaults"]
             lines += [f"p.settings[{sec!r}][{k!r}] = {v!r}" for sec, k, v in changed]
-        lines += ["", f"p.save(os.path.join(HERE, {self.name + '.pyto'!r}))", ""]
+        lines += ["", f"p.save(os.path.join(HERE, {self.name + '.mmto'!r}))", ""]
         with open(path, "w") as fh:
             fh.write("\n".join(lines))
         return path
@@ -867,7 +871,7 @@ def run(project, save_dir=None, **run_options):
     args = run_arguments(snapshot, save_dir, **run_options)
     if run_io.WRITE_FILES:
         os.makedirs(args["save_dir"], exist_ok=True)
-        path = os.path.abspath(os.path.join(args["save_dir"], f"{project.name}.pyto"))
+        path = os.path.abspath(os.path.join(args["save_dir"], f"{project.name}.mmto"))
         with open(path, "w") as fh:
             json.dump(snapshot._file_data(path), fh, indent=2)
     return run_topopt(**args)

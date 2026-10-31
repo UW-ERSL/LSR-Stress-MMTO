@@ -55,7 +55,7 @@ UNITS = {
     "ratio": {"-": 1.0},
 }
 
-# The unit systems of the PyTO-AD GUI (settings.unit_system in a .pyto file). A project
+# The unit systems of the PyTO-AD GUI (settings.unit_system in a .mmto or .pyto file). A project
 # without one is "none": its units are not checked.
 UNIT_SYSTEMS = {
     "MKS":  {"length": "m", "force": "N", "stress": "Pa", "density": "kg/m^3", "mass": "kg",

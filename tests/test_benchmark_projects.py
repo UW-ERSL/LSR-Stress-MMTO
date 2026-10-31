@@ -1,7 +1,7 @@
 """
 test_benchmark_projects.py
 ==========================
-The four benchmarks (projects/*.pyto) against what their coded versions gave before
+The four benchmarks (projects/*.mmto) against what their coded versions gave before
 they were retired: tests/data/benchmarks.npz holds the fixed dofs, imposed values,
 forces and keep-solid elements, tests/data/benchmarks.json the mesh size, the
 optimization parameters, the VAE settings and the run settings.
@@ -42,7 +42,7 @@ def compare_problem(example):
     ref = json.load(open(DATA + ".json"))[example]
     key = example.replace(" ", "_").replace("-", "_")
 
-    p = Project.load(os.path.join(PROJECTS, f"{example}.pyto"))
+    p = Project.load(os.path.join(PROJECTS, f"{example}.mmto"))
     mesh, _, bc, _, tp, vae = p.build(verbose=False)
     assert (mesh.num_elems, mesh.num_nodes) == (ref["num_elems"], ref["num_nodes"]), "mesh size"
 

@@ -313,7 +313,7 @@ def pyto_ad_only():
         raise RuntimeError(f"PyTO (main) modules were imported: {old}")
 check("only PyTO-AD is used (no PyTO main modules loaded)", pyto_ad_only)
 
-LBRACKET = os.path.join("projects", "L-bracket.pyto")
+LBRACKET = os.path.join("projects", "L-bracket.mmto")
 
 def lbracket_mesh():
     from project import Project

@@ -60,7 +60,7 @@ def _setup():
         return _SETUP
     from project import Project, run_arguments  # type: ignore
 
-    args = run_arguments(Project.load(os.path.join(ROOT, "projects", "U-bracket.pyto")), verbose=False)
+    args = run_arguments(Project.load(os.path.join(ROOT, "projects", "U-bracket.mmto")), verbose=False)
     args.update(n_dof_desired=N_DOF, maxIterations=1)
     s = _model_from_setup(args)
     model = s["model"]

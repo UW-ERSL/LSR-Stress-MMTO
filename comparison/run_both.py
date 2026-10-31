@@ -16,7 +16,7 @@ It needs:
     for this branch (each made by its branch's setup_environment.py)
 
 Each run goes to comparison/reference/<branch>/<example>/, with its log in run.log.
-The problem and every setting come from projects/<example>.pyto. main has no project
+The problem and every setting come from projects/<example>.mmto. main has no project
 files, so it gets its own coded version of the example, under the name below, and the
 same settings.
 """
@@ -68,7 +68,7 @@ from MainPureStructural import run_topopt, Z0InitMethod, BetaScheduleScheme
 args = dict(spec["args"])
 if branch == "autodiff":
     from project import Project
-    args["to_problem"] = Project.load(os.path.join("projects", spec["example"] + ".pyto"))
+    args["to_problem"] = Project.load(os.path.join("projects", spec["example"] + ".mmto"))
 else:
     accepted = set(inspect.signature(run_topopt).parameters)
     for k in sorted(set(args) - accepted):
@@ -113,7 +113,7 @@ def branch_of(repo):
 
 def settings_of(example, python):
     """The project's settings, read in the autodiff environment."""
-    path = os.path.join(REPO, "projects", f"{example}.pyto")
+    path = os.path.join(REPO, "projects", f"{example}.mmto")
     out = subprocess.run([python, "-c", SETTINGS, path], cwd=REPO, capture_output=True, text=True)
     lines = [l for l in out.stdout.splitlines() if l.startswith("SETTINGS ")]
     if out.returncode != 0 or not lines:
