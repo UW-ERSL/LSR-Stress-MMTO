@@ -57,15 +57,33 @@ from it.
 `test_settings_cover_run_topopt` in `tests/test_run_project.py` fails when an argument is
 missing; `utils/reference.py` stops when a setting has no line in `SETTING_DOCS`.
 
+## A material attribute
+
+`ATTRIBUTES` in `0-Common/databases.py`. An `Attribute` has its name, what it measures, a
+one-line description, its allowed range, the units offered in the Excel template, and other
+names it may be written under in a database.
+
+    Attribute("Yield_Strength", "stress", "yield strength, the stress at which the material yields",
+              low=0, units=_STRESS_UNITS, aliases=("Yield Strength", "Yield")),
+
+A database column not in `ATTRIBUTES` is an error, so a new attribute is added here before
+it is used. The check and the template follow. Add a case to `tests/test_databases.py`.
+
 ## A material database
 
 An `.xlsx` in `1-PureStructural/MaterialDataPureStructural/`: row 1 the attribute names,
 row 2 their units, then one row per material. A project names it by file name without
-`.xlsx`, or by a path.
+`.xlsx`, or by a path. Start from a template, and check it before use:
+
+    python utils/database.py template my_db.xlsx Density Youngs_Modulus Yield_Strength
+    python utils/database.py check my_db.xlsx
+
+The check also gives the latent dimension recommended for the database.
 
 To ship a trained VAE with it, put the `.nt` file beside the `.xlsx` and add the settings it
 was trained with to `DATABASE_VAE` in `0-Common/databases.py`. A database not listed there
-starts from `VAEParams`.
+starts from `VAEParams`, with the recommended latent dimension; a project that sets another
+one runs with a warning.
 
 ## A change to the project file format
 

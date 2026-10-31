@@ -58,7 +58,8 @@ import re
 import numpy as np
 
 import selections as S
-from databases import DATABASE_DIR, DATABASE_VAE, VAEParams
+from databases import (DATABASE_DIR, DATABASE_VAE, VAEParams, check_database, database_attributes,
+                       recommended_latent_dim)
 
 SCHEMA_VERSION = 1
 # _UPGRADES[n] turns an mmto section of version n into version n + 1. When the format
@@ -421,8 +422,10 @@ class Project:
             errors.append("no material database")
         else:
             xlsx, _ = self.database_paths()
-            if not os.path.isfile(xlsx):
-                errors.append(f"material database {xlsx} does not exist")
+            db_errors = check_database(xlsx)[0]
+            errors += [f"material database {os.path.basename(xlsx)}: {e}" for e in db_errors]
+            if not db_errors:
+                errors += self._missing_columns(database_attributes(xlsx))
         for section, values in self.settings.items():
             known = set(DEFAULT_SETTINGS.get(section, {})) | (set(VAE_PARAMS) if section == "vae" else set())
             if section not in DEFAULT_SETTINGS:
@@ -458,6 +461,43 @@ class Project:
                 errors.append(f"constraint {i}: {e}")
         return errors
 
+    def _missing_columns(self, columns):
+        """Columns the physics and the objective and constraints read that the database lacks."""
+        from AutodiffPureStructural import PHYSICS_NEEDS, QUANTITIES                  # type: ignore
+        out = [f"material database: the {self.physics} model needs a {c} column"
+               for c in PHYSICS_NEEDS.get(self.physics, ()) if c not in columns]
+        by_name = {q.name: q for q in QUANTITIES}
+        f = self.formulation
+        for expr in [(f.get("objective") or {}).get("expression")] + \
+                    [c.get("expression") for c in f.get("constraints", [])]:
+            try:
+                q = by_name.get(parse_expression(expr)[0])
+            except Exception:                                                          # noqa: BLE001
+                continue                                    # a bad expression is reported on its own
+            for c in (q.needs if q else ()):
+                if c not in columns:
+                    out.append(f"material database: {q.name} needs a {c} column")
+        return out
+
+    def warnings(self):
+        """What is allowed but deserves a look before a run: the database's warnings, and a
+        latent dimension other than the one recommended for the database."""
+        out = []
+        if self.database is None:
+            return out
+        xlsx, _ = self.database_paths()
+        errors, db_warnings = check_database(xlsx)
+        if errors:
+            return out
+        out += [f"material database {os.path.basename(xlsx)}: {w}" for w in db_warnings]
+        d_eff, n_z = recommended_latent_dim(xlsx)
+        latent = self.settings.get("vae", {}).get("latentDim")
+        if latent is not None and int(latent) != n_z:
+            out.append(f"latentDim is {latent}; the database's effective dimension is d_eff = {d_eff:.2f}, "
+                       f"so {n_z} is recommended. A latent space larger than the database needs has "
+                       f"stopped runs from converging before.")
+        return out
+
     def complete_settings(self):
         """Fill every missing setting from the defaults; returns what was filled."""
         filled = []
@@ -469,7 +509,11 @@ class Project:
                     filled.append(f"{section}.{k}")
         vae_defaults = {k: getattr(VAEParams(), k) for k in VAE_PARAMS}
         if self.database is not None:
-            vae_defaults.update(self.database_paths()[1] or {})
+            xlsx, known = self.database_paths()
+            if known:                                       # a shipped database: what its network was trained with
+                vae_defaults.update(known)
+            elif "latentDim" not in self.settings["vae"] and not check_database(xlsx)[0]:
+                vae_defaults["latentDim"] = recommended_latent_dim(xlsx)[1]
         for k in VAE_PARAMS:
             if k not in self.settings["vae"]:
                 self.settings["vae"][k] = vae_defaults[k]
@@ -727,6 +771,8 @@ def run(project, save_dir=None, **run_options):
     errors = project.validate()
     if errors:
         raise ValueError(f"project {project.name!r}:\n  " + "\n  ".join(errors))
+    for w in project.warnings():
+        print(f"[{project.name}] warning: {w}")
     snapshot = project.copy()                    # the run gets, and records, the project as it is now
     args = run_arguments(snapshot, save_dir, **run_options)
     if run_io.WRITE_FILES:

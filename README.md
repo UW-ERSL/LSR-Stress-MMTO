@@ -97,7 +97,7 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 | `Tutorial.ipynb` | runs one example end to end |
 | `projects/` | the four examples as project files: geometry, supports, loads, materials, objective, constraints, settings |
 | `docs/project_reference.md` | everything a project file can hold, generated from the code |
-| `docs/extending.md` | how to add a quantity, a selection type, a boundary condition, a setting or a database |
+| `docs/extending.md` | how to add a quantity, a selection type, a boundary condition, a setting, a material attribute or a database |
 | `setup_environment.py` | installs everything; see Installation |
 | `requirements.txt` | Python packages the setup installs |
 
@@ -109,7 +109,7 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 | `project.py` | a project: saves and loads it, checks it, builds the problem, runs it |
 | `selections.py` | named regions of the mesh that supports, loads and keep-solid regions act on |
 | `pyto_project.py` | meshing, and the supports and loads picked in the PyTO-AD GUI |
-| `databases.py` | the material databases and the VAE settings each was trained with |
+| `databases.py` | the attributes a material database may hold, the check of a database, the VAE settings of each shipped database |
 | `materialEncoder.py` | reads a material database, trains or loads the VAE |
 | `networks.py` | the VAE network |
 | `materialColors.py` | the colour each material is drawn in |
@@ -137,3 +137,4 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 | `display.py` | tables formatted for the notebook |
 | `project_paths.py` | locates the repository and sets up imports |
 | `reference.py` | writes `docs/project_reference.md` |
+| `database.py` | checks a material database, and writes an empty one to fill in |

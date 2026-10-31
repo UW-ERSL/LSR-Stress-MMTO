@@ -52,6 +52,18 @@ Lengths are numbers in model units, or `"<k>h"` for k times the largest element 
 | `force` | a total force [Fx, Fy, Fz], split equally over the nodes |
 | `traction` | pressure * area along a direction, split equally over the nodes; area a number or 'bbox' |
 
+## Material database attributes
+
+A database is an .xlsx file: attribute names in row 1, units in row 2, then one row per material with its name in column A. Every column must be one of these attributes (or one of its other names); `python utils/database.py check <file>` checks a file.
+
+| attribute | other names | meaning | allowed range |
+|---|---|---|---|
+| `Density` |  | mass per unit volume | 0 < value |
+| `Youngs_Modulus` | Youngs Modulus, Young_Modulus, E | Young's modulus, the stiffness | 0 < value |
+| `Poissons_Ratio` | Poisson_Ratio, Poissons Ratio, nu | Poisson's ratio | -1 < value < 0.5 |
+| `Yield_Strength` | Yield Strength, Yield | yield strength, the stress at which the material yields | 0 < value |
+| `Cost` |  | price per unit mass | 0 <= value |
+
 ## Quantities
 
 An objective or a constraint is one quantity, e.g. `Mass()` or `MaterialVolumeFraction(2, tau=0.5)`. A constraint is value / bound - 1 <= 0.

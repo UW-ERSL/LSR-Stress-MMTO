@@ -9,6 +9,7 @@ import matplotlib.cm as cm
 import os
 import sys
 import warnings
+from databases import attribute_name, normalize, participation_ratio
 
 class MaterialEncoder:
     def __init__(self, vae_params):
@@ -41,29 +42,14 @@ class MaterialEncoder:
             # the databases carry Excel data validation, which openpyxl drops
             warnings.filterwarnings("ignore", message="Data Validation extension")
             df = pd.read_excel(self.excel_file, header=None)
-        attribute_names = df.iloc[0, 1:].tolist()
+        attribute_names = [attribute_name(n) for n in df.iloc[0, 1:].tolist()]   # aliases -> registry names
         units = df.iloc[1, 1:].tolist()
         material_names = df.iloc[2:, 0].tolist()
         values = df.iloc[2:, 1:].to_numpy(dtype=float)
 
         self.rawData = values
 
-        normalizedData = np.zeros_like(values)
-        dataScaleMin = np.zeros(values.shape[1])
-        dataScaleMax = np.zeros(values.shape[1])
-
-        for i, name in enumerate(attribute_names):
-            col = values[:, i]
-            if name in ['E0', 'E1', 'E2', 'E3', 'Y0', 'Y1', 'Y2', 'Y3']:
-                log_col = np.log10(col)
-                dataScaleMin[i] = log_col.min()
-                dataScaleMax[i] = log_col.max()
-                normalizedData[:, i] = (log_col - dataScaleMin[i]) / (dataScaleMax[i] - dataScaleMin[i] + 1e-12)
-            else:
-                norm_col = col
-                dataScaleMin[i] = norm_col.min()
-                dataScaleMax[i] = norm_col.max()
-                normalizedData[:, i] = (norm_col - dataScaleMin[i]) / (dataScaleMax[i] - dataScaleMin[i] + 1e-12)
+        normalizedData, dataScaleMin, dataScaleMax = normalize(values, attribute_names)
 
         scaledMaterialData = torch.tensor(normalizedData, dtype=torch.get_default_dtype())
 
@@ -93,18 +79,8 @@ class MaterialEncoder:
         Uses normalized data already created in preprocessData.
         """
         X = self.scaledMaterialData.detach().cpu().numpy()
-        pca = PCA().fit(X)
-        lambdas = np.asarray(pca.explained_variance_, dtype=float)
-
-        if np.all(lambdas <= 1e-16):
-            self.intrinsic_dim = 0.0
-            self.pca_explained_variance = lambdas
-            self.pca_explained_variance_ratio = np.zeros_like(lambdas)
-            return self.intrinsic_dim
-
-        self.intrinsic_dim = float((np.sum(lambdas) ** 2) / np.sum(lambdas ** 2))
-        self.pca_explained_variance = lambdas
-        self.pca_explained_variance_ratio = np.asarray(pca.explained_variance_ratio_, dtype=float)
+        self.intrinsic_dim, self.pca_explained_variance, self.pca_explained_variance_ratio = \
+            participation_ratio(X)
         return self.intrinsic_dim
 
 

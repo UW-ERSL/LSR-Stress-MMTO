@@ -41,6 +41,7 @@ def generate():
     import selections as S                                                  # type: ignore
     from AutodiffPureStructural import QUANTITIES                           # type: ignore
     from project import BC_KINDS, DEFAULT_SETTINGS, SETTING_DOCS, VAE_PARAMS  # type: ignore
+    from databases import ATTRIBUTES                                        # type: ignore
 
     out = ["# Project reference", "",
            "Generated from the code by `python utils/reference.py`; do not edit by hand.", "",
@@ -63,6 +64,13 @@ def generate():
 
     out += ["", "## Boundary conditions", "", "| kind | means |", "|---|---|"]
     out += [f"| `{k}` | {v.doc} |" for k, v in BC_KINDS.items()]
+
+    out += ["", "## Material database attributes", "",
+            "A database is an .xlsx file: attribute names in row 1, units in row 2, then one row per "
+            "material with its name in column A. Every column must be one of these attributes (or one "
+            "of its other names); `python utils/database.py check <file>` checks a file.", "",
+            "| attribute | other names | meaning | allowed range |", "|---|---|---|---|"]
+    out += [f"| `{a.name}` | {', '.join(a.aliases)} | {a.doc} | {a.range_text()} |" for a in ATTRIBUTES.values()]
 
     out += ["", "## Quantities", "",
             "An objective or a constraint is one quantity, e.g. `Mass()` or "

@@ -221,11 +221,9 @@ def heaviside(x_filt, beta, eta):
 def decode(enc, z, use_constant_nu, nu_const):
     """E, nu per element, plus every decoded property, from the VAE decoder, inside the tree."""
     props = enc.getMaterialProperties(enc.vaeNet.decoder(z))
-    E = props["Youngs_Modulus"]
-    nu_key = next((k for k in ("Poissons_Ratio", "Poisson_Ratio", "poissons_ratio",
-                               "poisson_ratio", "nu", "Nu") if k in props), None)
-    nu = (torch.full_like(E, float(nu_const)) if (use_constant_nu or nu_key is None)
-          else props[nu_key])
+    E = props["Youngs_Modulus"]                 # column names are registry names (databases.ATTRIBUTES)
+    nu = (torch.full_like(E, float(nu_const)) if (use_constant_nu or "Poissons_Ratio" not in props)
+          else props["Poissons_Ratio"])
     return E, nu, props
 
 
@@ -264,6 +262,7 @@ def material_volume_fraction(xb, z, z_real, material_id, tau):
 #   needs        material database columns it reads (checked, with a clear error)
 #   fn(m, opt)   the value, a torch scalar; a constraint is fn / limit - 1 <= 0
 STRUCTURAL = "structural"
+PHYSICS_NEEDS = {STRUCTURAL: ("Youngs_Modulus",)}      # database columns every problem of a physics reads
 
 
 class Quantity:
