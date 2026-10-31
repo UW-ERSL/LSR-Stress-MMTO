@@ -61,12 +61,9 @@ import selections as S
 from databases import DATABASE_DIR, DATABASE_VAE, VAEParams
 
 SCHEMA_VERSION = 1
-BC_KINDS = {
-    "fixed": "the given dofs (x, y, z) held at 0",
-    "displacement": "the given dofs held at a nonzero value",
-    "force": "a total force [Fx, Fy, Fz], split equally over the nodes",
-    "traction": "pressure * area along a direction, split equally over the nodes; area a number or 'bbox'",
-}
+# _UPGRADES[n] turns an mmto section of version n into version n + 1. When the format
+# changes: raise SCHEMA_VERSION and add the function here; old files then still load.
+_UPGRADES = {}
 _AXES = {"x": 0, "y": 1, "z": 2}
 _MARK_FIXED, _MARK_LOAD, _MARK_ROLLER = 1, 2, 3
 
@@ -135,6 +132,97 @@ def _dofs(dofs):
     if not dofs or any(c not in _AXES for c in dofs) or len(set(dofs)) != len(dofs):
         raise ValueError(f"dofs must be letters from 'xyz', e.g. 'xyz' or 'y', not {dofs!r}")
     return [_AXES[c] for c in sorted(dofs, key="xyz".index)]
+
+
+def upgrade(m, name="project"):
+    """An mmto section brought to the current SCHEMA_VERSION, through _UPGRADES."""
+    m = dict(m)
+    version = m.get("schema_version", SCHEMA_VERSION)
+    if version > SCHEMA_VERSION:
+        raise ValueError(f"{name}: written by a newer version (schema {version})")
+    while version < SCHEMA_VERSION:
+        if version not in _UPGRADES:
+            raise ValueError(f"{name}: schema {version} has no upgrade to {version + 1}")
+        m = _UPGRADES[version](m)
+        version += 1
+        m["schema_version"] = version
+    return m
+
+
+# ---------------------------------------------------------------------- boundary conditions
+class BCKind:
+    """One kind of boundary condition. role is "support" or "load"; check(bc) gives a list
+    of errors; apply(bc, nodes, mesh, state, where) puts it on the mesh, in
+    state["values"] (dof -> imposed value) or state["force"]; script(bc, on) is the
+    Project call that makes it. Supports are applied before loads, each in the order given."""
+
+    def __init__(self, doc, role, check, apply, script):
+        self.doc, self.role, self.check, self.apply, self.script = doc, role, check, apply, script
+
+
+def _check_dofs(bc):
+    try:
+        _dofs(bc.get("dofs"))
+        return []
+    except ValueError as e:
+        return [str(e)]
+
+
+def _check_direction(bc):
+    d = np.asarray(bc.get("direction", []), dtype=float)
+    if d.shape != (3,) or not np.any(d):
+        return ["direction must be three numbers, not all zero"]
+    if bc.get("area") == "bbox" and np.count_nonzero(d) != 1:
+        return ["area 'bbox' needs a direction along x, y or z; give a number instead"]
+    return []
+
+
+def _apply_support(bc, n, mesh, state, where):
+    values, v = state["values"], float(bc.get("value", 0.0))
+    for d in (3 * n[:, None] + np.array(_dofs(bc["dofs"]))[None, :]).ravel():
+        if values.get(int(d), v) != v:
+            raise ValueError(f"{where}: dof {int(d)} is already given the value {values[int(d)]}, here {v}")
+        values[int(d)] = v
+    mesh.node_indices[n, 3] = _MARK_FIXED if len(bc["dofs"]) == 3 else _MARK_ROLLER
+
+
+def _add_load(total, n, mesh, state):
+    state["force"].reshape(-1, 3)[n] += total / len(n)
+    mesh.node_indices[n, 3] = _MARK_LOAD
+
+
+def _apply_force(bc, n, mesh, state, where):
+    _add_load(np.asarray(bc["total"], dtype=float), n, mesh, state)
+
+
+def _apply_traction(bc, n, mesh, state, where):
+    d = np.asarray(bc["direction"], dtype=float)
+    d = d / np.linalg.norm(d)
+    area = bc["area"]
+    if area == "bbox":
+        tol = 0.5 * float(np.min(mesh.elem_size))
+        p = np.asarray(mesh.node_xyz, dtype=float)[n]
+        a, b = [k for k in range(3) if d[k] == 0]
+        area = max(np.ptp(p[:, a]), tol) * max(np.ptp(p[:, b]), tol)
+    _add_load(bc["pressure"] * area * d, n, mesh, state)
+
+
+BC_KINDS = {
+    "fixed": BCKind(
+        "the given dofs (x, y, z) held at 0", "support", _check_dofs, _apply_support,
+        lambda bc, on: f"p.add_support({on}, dofs={bc['dofs']!r})"),
+    "displacement": BCKind(
+        "the given dofs held at a nonzero value", "support", _check_dofs, _apply_support,
+        lambda bc, on: f"p.add_support({on}, dofs={bc['dofs']!r}, value={bc['value']!r})"),
+    "force": BCKind(
+        "a total force [Fx, Fy, Fz], split equally over the nodes", "load", lambda bc: [], _apply_force,
+        lambda bc, on: f"p.add_force({on}, total={bc['total']!r})"),
+    "traction": BCKind(
+        "pressure * area along a direction, split equally over the nodes; area a number or 'bbox'",
+        "load", _check_direction, _apply_traction,
+        lambda bc, on: f"p.add_traction({on}, pressure={bc['pressure']!r}, "
+                       f"direction={bc['direction']!r}, area={bc['area']!r})"),
+}
 
 
 def _from_repo(path):
@@ -320,20 +408,11 @@ class Project:
                 continue
             if bc.get("on") not in self.selections:
                 errors.append(f"{where}: no selection named {bc.get('on')!r}")
-            if bc["kind"] in ("fixed", "displacement"):
-                try:
-                    _dofs(bc.get("dofs"))
-                except ValueError as e:
-                    errors.append(f"{where}: {e}")
-            if bc["kind"] == "traction":
-                d = np.asarray(bc.get("direction", []), dtype=float)
-                if d.shape != (3,) or not np.any(d):
-                    errors.append(f"{where}: direction must be three numbers, not all zero")
-                elif bc.get("area") == "bbox" and np.count_nonzero(d) != 1:
-                    errors.append(f"{where}: area 'bbox' needs a direction along x, y or z; give a number instead")
-        if not any(bc.get("kind") in ("fixed", "displacement") for bc in self.bcs):
+            errors += [f"{where}: {e}" for e in BC_KINDS[bc["kind"]].check(bc)]
+        roles = {BC_KINDS[bc["kind"]].role for bc in self.bcs if bc.get("kind") in BC_KINDS}
+        if "support" not in roles:
             errors.append("no supports")
-        if not any(bc.get("kind") in ("force", "traction") for bc in self.bcs):
+        if "load" not in roles:
             errors.append("no loads")
         for n in self.keep_solid_names:
             if n not in self.selections:
@@ -421,40 +500,15 @@ class Project:
                 raise ValueError(f"{where}: selection {name!r} has no nodes on this mesh")
             return nodes_of[name]
 
-        # ---- supports
-        values = {}                                                    # dof -> imposed value
-        for i, bc in enumerate(self.bcs, 1):
-            if bc["kind"] not in ("fixed", "displacement"):
-                continue
-            n = nodes(bc["on"], f"boundary condition {i}")
-            v = float(bc.get("value", 0.0))
-            for d in (3 * n[:, None] + np.array(_dofs(bc["dofs"]))[None, :]).ravel():
-                if values.get(int(d), v) != v:
-                    raise ValueError(f"boundary condition {i}: dof {int(d)} is already given the value "
-                                     f"{values[int(d)]}, here {v}")
-                values[int(d)] = v
-            mesh.node_indices[n, 3] = _MARK_FIXED if len(bc["dofs"]) == 3 else _MARK_ROLLER
-
-        # ---- loads
-        force = np.zeros(3 * mesh.num_nodes)
-        for i, bc in enumerate(self.bcs, 1):
-            if bc["kind"] not in ("force", "traction"):
-                continue
-            n = nodes(bc["on"], f"boundary condition {i}")
-            if bc["kind"] == "force":
-                total = np.asarray(bc["total"], dtype=float)
-            else:
-                d = np.asarray(bc["direction"], dtype=float)
-                d = d / np.linalg.norm(d)
-                area = bc["area"]
-                if area == "bbox":
-                    tol = 0.5 * float(np.min(mesh.elem_size))
-                    p = np.asarray(mesh.node_xyz, dtype=float)[n]
-                    a, b = [k for k in range(3) if d[k] == 0]
-                    area = max(np.ptp(p[:, a]), tol) * max(np.ptp(p[:, b]), tol)
-                total = bc["pressure"] * area * d
-            force.reshape(-1, 3)[n] += total / len(n)
-            mesh.node_indices[n, 3] = _MARK_LOAD
+        # ---- supports, then loads (BC_KINDS)
+        state = {"values": {}, "force": np.zeros(3 * mesh.num_nodes)}   # values: dof -> imposed value
+        for role in ("support", "load"):
+            for i, bc in enumerate(self.bcs, 1):
+                kind = BC_KINDS[bc["kind"]]
+                if kind.role == role:
+                    where = f"boundary condition {i}"
+                    kind.apply(bc, nodes(bc["on"], where), mesh, state, where)
+        values, force = state["values"], state["force"]
 
         fixed_dofs = np.array(sorted(values), dtype=int)
         dirichlet_values = np.array([values[d] for d in fixed_dofs], dtype=float)
@@ -579,15 +633,7 @@ class Project:
         for name, sel in self.selections.items():
             lines.append(f"p.add_selection({name!r}, {sel!r})")
         for bc in self.bcs:
-            on = repr(bc["on"])
-            if bc["kind"] in ("fixed", "displacement"):
-                value = f", value={bc['value']!r}" if bc["kind"] == "displacement" else ""
-                lines.append(f"p.add_support({on}, dofs={bc['dofs']!r}{value})")
-            elif bc["kind"] == "force":
-                lines.append(f"p.add_force({on}, total={bc['total']!r})")
-            elif bc["kind"] == "traction":
-                lines.append(f"p.add_traction({on}, pressure={bc['pressure']!r}, "
-                             f"direction={bc['direction']!r}, area={bc['area']!r})")
+            lines.append(BC_KINDS[bc["kind"]].script(bc, repr(bc["on"])))
         if self.keep_solid_names:
             lines.append(f"p.keep_solid({', '.join(map(repr, self.keep_solid_names))})")
         if self.keep_support_elements:
@@ -634,9 +680,7 @@ class Project:
 
     @classmethod
     def _from_data(cls, data, base_dir, default_name):
-        m = data.get("mmto") or {}
-        if m.get("schema_version", SCHEMA_VERSION) > SCHEMA_VERSION:
-            raise ValueError(f"{default_name}: written by a newer version (schema {m['schema_version']})")
+        m = upgrade(data.get("mmto") or {}, default_name)
         mesh = m.get("mesh", {})
         p = cls(m.get("name") or default_name, data.get("stl_file_path", ""),
                 n_dof=mesh.get("n_dof", 30000), single_layer=mesh.get("single_layer", False),

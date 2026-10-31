@@ -12,10 +12,13 @@ Writes into save_dir:
 Nothing is written unless a save_dir is passed. Reader: utils/records.py.
 """
 import os
+import sys
 import json
 import pickle
 import datetime
+import platform
 import importlib
+import subprocess
 import numpy as np
 
 
@@ -184,6 +187,59 @@ def _material_summary(mat_encoder, z_real_points, material_colors):
         }
     except Exception as e:
         out["real_material_properties_error"] = str(e)
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# provenance: the code and the packages a run was made with                   #
+# --------------------------------------------------------------------------- #
+_PACKAGES = ("numpy", "scipy", "torch", "numba", "pyvista", "pandas", "openpyxl", "mmapy", "pypardiso")
+
+
+def _git(folder, *args):
+    try:
+        out = subprocess.run(["git", "-C", folder, *args], capture_output=True, text=True, timeout=10)
+        return out.stdout if out.returncode == 0 else None
+    except Exception:
+        return None
+
+
+def git_state(folder):
+    """Commit, branch and the tracked files changed since that commit; "unknown" when the
+    folder is not a git checkout (a zip download) or git is not installed."""
+    commit = _git(folder, "rev-parse", "HEAD")
+    if commit is None:
+        return {"commit": "unknown", "branch": "unknown", "changed_files": "unknown"}
+    status = _git(folder, "status", "--porcelain", "--untracked-files=no") or ""
+    return {"commit": commit.strip(),
+            "branch": (_git(folder, "rev-parse", "--abbrev-ref", "HEAD") or "unknown").strip(),
+            "changed_files": [line[3:] for line in status.splitlines() if line.strip()]}
+
+
+def provenance():
+    """The code this run is made with: this repository and PyTO-AD as git commits with
+    their uncommitted changes, the Python version, the platform and the package versions.
+    Never raises."""
+    out = {}
+    try:
+        out["repository"] = git_state(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        try:
+            import pyto
+            out["pyto_ad"] = git_state(os.path.dirname(os.path.abspath(pyto.__file__)))
+        except Exception:
+            out["pyto_ad"] = {"commit": "unknown", "branch": "unknown", "changed_files": "unknown"}
+        out["python"] = sys.version.split()[0]
+        out["platform"] = platform.platform()
+        from importlib import metadata
+        packages = {}
+        for name in _PACKAGES:
+            try:
+                packages[name] = metadata.version(name)
+            except Exception:
+                packages[name] = "not installed"
+        out["packages"] = packages
+    except Exception as e:
+        out["error"] = f"{type(e).__name__}: {e}"
     return out
 
 

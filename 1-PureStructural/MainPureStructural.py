@@ -179,6 +179,8 @@ def run_topopt(
       Pz = lambda * sum_ell sum_e x_e * ( z_e^(ell) - ((H z^(ell))/Hs)_e )^2
     """
     _args_at_start = dict(locals())   # the arguments as given; the run switches some off later
+    import run_io as _run_io
+    _provenance = _run_io.provenance()   # the code as it is when the run starts
 
     history = init_run_history()
     if not hasattr(to_problem, "build"):
@@ -605,7 +607,6 @@ def run_topopt(
     tEnd = time.time()
     print(f"Total optimization time: {tEnd - tStart:.2f} seconds")
     # ---- assemble the full parameter manifest (no plotting; saved as YAML+pkl) ----
-    import run_io as _run_io
     _run_args = dict(_args_at_start, saveNet=saveNet)   # as given, with the VAE file resolved
     _iters = None
     try:
@@ -625,6 +626,7 @@ def run_topopt(
         runtime_sec=(tEnd - tStart), iterations=_iters,
         comment=getattr(to_params, "Comment", ""))
     run_config["during_run"] = dict(_during_run)
+    run_config["provenance"] = _provenance
     from PyTOImports import topopt_material_model  # type: ignore
     run_config["fixed_in_code"] = {
         "mma_move_limit": MMA_MOVE_LIMIT, "mma_kkt_tol": MMA_KKT_TOL,

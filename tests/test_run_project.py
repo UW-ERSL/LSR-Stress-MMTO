@@ -116,6 +116,18 @@ def test_record_keeps_settings_as_given():
     assert fixed["stress_relaxation_exponent"] == 0.5
 
 
+def test_record_has_provenance():
+    """The run record says which code made it."""
+    import re
+    prov = runs()["project"][1]["config"]["provenance"]
+    for repo in ("repository", "pyto_ad"):
+        commit = prov[repo]["commit"]
+        assert commit == "unknown" or re.fullmatch(r"[0-9a-f]{40}", commit), (repo, commit)
+    assert prov["packages"]["numpy"] == np.__version__ and prov["python"]
+    with tempfile.TemporaryDirectory() as d:                        # not a git checkout
+        assert run_io.git_state(d)["commit"] == "unknown"
+
+
 def test_record_rebuilds_the_project():
     p, out = runs()["project"]
     rec = json.loads(json.dumps(out["config"]["arguments_resolved"]["to_problem"]))

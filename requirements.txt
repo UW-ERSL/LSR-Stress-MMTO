@@ -38,6 +38,7 @@ PyQt5
 openpyxl                   # the .xlsx engine pandas uses for the databases
 ipython                    # image display in the notebooks
 ipykernel                  # registers the environment as a Jupyter kernel
+pytest                     # the tests in tests/
 
 # --- optional ---
 # cupy-cuda11x             # GPU acceleration; needs CUDA 11 and an NVIDIA card.

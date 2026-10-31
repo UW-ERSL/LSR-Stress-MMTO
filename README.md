@@ -97,6 +97,7 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 | `Tutorial.ipynb` | runs one example end to end |
 | `projects/` | the four examples as project files: geometry, supports, loads, materials, objective, constraints, settings |
 | `docs/project_reference.md` | everything a project file can hold, generated from the code |
+| `docs/extending.md` | how to add a quantity, a selection type, a boundary condition, a setting or a database |
 | `setup_environment.py` | installs everything; see Installation |
 | `requirements.txt` | Python packages the setup installs |
 

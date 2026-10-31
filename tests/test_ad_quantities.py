@@ -26,6 +26,12 @@ project_paths.bootstrap()
 from PyTOImports import TO_QOI  # noqa: E402  # type: ignore
 from utils.gradcheck import _model_from_setup  # noqa: E402
 
+try:                                        # about a minute: skipped by  pytest -m "not slow"
+    import pytest
+    pytestmark = pytest.mark.slow
+except ImportError:                         # run directly, without pytest
+    pass
+
 TOL = 1e-5
 STEPS = (1e-3, 1e-4, 1e-5)                # as utils/gradcheck.py; below 1e-5 round-off in the solve takes over
 N_DOF = 3000

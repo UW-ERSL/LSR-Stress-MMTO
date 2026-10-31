@@ -266,6 +266,45 @@ def test_gui_sections_survive_a_save():
         assert [bc["on"] for bc in saved["mmto"]["bcs"]] == ["gui_support1", "gui_load1"]
 
 
+def test_schema_upgrades():
+    """A file of an older schema is brought up to date on loading; a newer one is refused."""
+    import project as P  # type: ignore
+    with tempfile.TemporaryDirectory() as d:
+        p = coded_ubracket()
+        path = os.path.join(d, "u.pyto")
+        p.save(path)
+        data = json.load(open(path))
+        old = dict(data, mmto=dict(data["mmto"], schema_version=0))
+        old["mmto"]["remark"] = old["mmto"].pop("comment")               # pretend version 0 called it remark
+        json.dump(old, open(path, "w"))
+        try:
+            Project.load(path)
+        except ValueError as e:
+            assert "has no upgrade" in str(e)
+        else:
+            raise AssertionError("a version 0 file loaded with no upgrade")
+        P._UPGRADES[0] = lambda m: dict({k: v for k, v in m.items() if k != "remark"}, comment=m["remark"])
+        try:
+            q = Project.load(path)
+        finally:
+            del P._UPGRADES[0]
+        assert q.to_dict() == p.to_dict()                                # saved again, it is version 1
+        json.dump(dict(data, mmto=dict(data["mmto"], schema_version=P.SCHEMA_VERSION + 1)), open(path, "w"))
+        try:
+            Project.load(path)
+        except ValueError as e:
+            assert "newer version" in str(e)
+        else:
+            raise AssertionError("a file from a newer version was accepted")
+
+
+def test_bc_kinds():
+    """Every kind of boundary condition is a support or a load, and is documented."""
+    from project import BC_KINDS  # type: ignore
+    for name, kind in BC_KINDS.items():
+        assert kind.role in ("support", "load") and kind.doc, name
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in [(k, v) for k, v in list(globals().items()) if k.startswith("test_")]:

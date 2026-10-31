@@ -62,7 +62,7 @@ def generate():
         out.append(f"| `{name}` | {fields} | {doc} |")
 
     out += ["", "## Boundary conditions", "", "| kind | means |", "|---|---|"]
-    out += [f"| `{k}` | {v} |" for k, v in BC_KINDS.items()]
+    out += [f"| `{k}` | {v.doc} |" for k, v in BC_KINDS.items()]
 
     out += ["", "## Quantities", "",
             "An objective or a constraint is one quantity, e.g. `Mass()` or "
