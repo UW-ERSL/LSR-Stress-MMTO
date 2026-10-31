@@ -73,7 +73,7 @@ git clone https://github.com/UW-ERSL/PyTO-AD.git ../PyTO-AD
 ```
 
 ```
-git -C ../PyTO-AD checkout 19c53506
+git -C ../PyTO-AD checkout e52704a
 ```
 
 To use a PyTO-AD you already have instead, it must sit next to this folder and be named `PyTO-AD`. If yours has another name, run `mklink /J PyTO-AD <its name>` in the folder that holds both.

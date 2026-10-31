@@ -36,7 +36,7 @@ ENV = "lsr-stress-mmto-ad"
 PYTHON = "3.11"
 
 SOLVER_URL = "https://github.com/UW-ERSL/PyTO-AD.git"
-SOLVER_COMMIT = "19c535068713c49f8eb1e30d9306f7501b22d754"
+SOLVER_COMMIT = "e52704a23d2c0a5aac33411c9fc975b4c402d244"
 SOLVER_DIR = "PyTO-AD"
 
 HERE = os.path.dirname(os.path.abspath(__file__))

@@ -643,6 +643,10 @@ class Project:
         fixed_dofs = np.array(sorted(values), dtype=int)
         dirichlet_values = np.array([values[d] for d in fixed_dofs], dtype=float)
         bc = bound_cond.BC(force=force, fixed_dofs=fixed_dofs, dirichlet_values=dirichlet_values)
+        well_posed, worst = bound_cond.check_rigid_body_constraint(mesh, bc)       # as PyTO-AD's FEA does, but
+        if not well_posed:                                                          # before the VAE and the run
+            raise ValueError(f"project {self.name!r}: the supports leave the part free to move or rotate in a "
+                             f"direction the loads push (relative size {worst:.3g}); add supports that hold it")
 
         # ---- optimization parameters
         common = self.settings.get("common", {})

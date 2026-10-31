@@ -136,6 +136,22 @@ def test_conflicting_values_are_refused():
         raise AssertionError("conflicting imposed values were accepted")
 
 
+def test_free_rigid_body_motion_is_refused():
+    """Held at one node and pushed sideways at the top, the bracket is free to rotate: build stops,
+    before the VAE and the run."""
+    p = Project("pinned", stl="UBracket.STL", n_dof=N_DOF, single_layer=True, base_dir=UBRACKET)
+    p.add_support(S.nearest([0.0, 0.0, 0.0]), dofs="xyz")
+    p.add_force(S.box([0.75, 0.9, -1], [1.0, 1.0, 1]), total=[-1.0, 0.0, 0.0])
+    p.database = "6Materials_AF_3Attr"
+    p.objective("FailureFactorPNorm()")
+    try:
+        p.build(verbose=False)
+    except ValueError as e:
+        assert "free to move or rotate" in str(e), str(e)
+    else:
+        raise AssertionError("an under-supported problem was built")
+
+
 def test_build_gui_project_matches_problem_from_pyto():
     """A project made in the PyTO-AD GUI gives exactly the boundary conditions it gave before."""
     from pyto_project import problem_from_pyto  # type: ignore
@@ -222,10 +238,12 @@ def test_gui_picks_of_every_kind_match_the_gui():
     new = {"fixed_faces_indices": [0, 1, 2], "fixed_faces_z_indices": [5],
            "load_faces_indices": [[8, 9]], "load_forces": [[0.0, -2.0, 0.0]],
            "point_supports": [{"type": "Fixed Y", "points": [[0.5, 0.0, 0.0], [0.6, 0.02, 0.01]],
-                               "regions": box}],
+                               "regions": box},
+                              {"type": "Fixed XYZ", "points": [], "regions": box}],   # holds it: well posed
            "point_loads": [{"points": [[0.98, 1.0, 0.0]], "regions": [], "force": [-1.0, 0.0, 0.0]}],
            "constraint_counts": {"fixed_triangles": 4, "loaded_triangles": 2}}
-    old = {"constraint_data": [{"type": "Fixed X", "triangles": [0, 1], "points": [[0.5, 0.0, 0.0]]}],
+    old = {"constraint_data": [{"type": "Fixed X", "triangles": [0, 1], "points": [[0.5, 0.0, 0.0]]},
+                               {"type": "Fixed XYZ", "triangles": [], "points": [], "regions": box}],
            "force_data": [{"type": "force_xyz", "triangles": [], "points": [], "regions": box,
                            "force_x": 0.0, "force_y": 3.0, "force_z": 0.0}]}
     for layout, sbc in (("new", new), ("old", None)):
