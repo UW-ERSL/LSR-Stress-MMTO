@@ -4,7 +4,8 @@ project.py
 One MMTO problem as a project: geometry, named selections, boundary conditions,
 keep-solid regions, material database, objective and constraints, and settings.
 A project is saved in a PyTO-AD project file (.pyto), in its own "mmto" section;
-whatever the PyTO-AD GUI saved in the same file is kept as it is.
+the rest of what the PyTO-AD GUI saved in the same file is kept, except its supports
+and loads, which become part of the mmto section (see below).
 
     from project import Project
     from selections import face, box
@@ -19,6 +20,7 @@ whatever the PyTO-AD GUI saved in the same file is kept as it is.
     q = Project.load("bracket.pyto")
     mesh, mat_prop, bc, body_force, to_params, vae_params = q.build()
     run(q)                                  # optimizes; results and a copy of q in results/bracket
+    q.to_script("bracket_setup.py")         # the same project as Python calls, to read or edit
 
 build() returns what getMMTOProblemPureStructural returns for a benchmark.
 
@@ -35,7 +37,10 @@ Boundary conditions (each acts on a named selection, evaluated on the mesh nodes
                    area is a number, or "bbox": the bounding box of the loaded nodes
                    seen along an axis-aligned direction (each side at least half an
                    element). "bbox" is approximate; it is there for the airplane bracket.
-Supports and loads picked in the PyTO-AD GUI (its "structuralBC" section) are added to these.
+Supports and loads picked in the PyTO-AD GUI (its "structuralBC" section) are turned into
+selections and boundary conditions here when the project is loaded, with the GUI's own rules
+(stl_faces with tol 0.8, nearest boundary node, halfspaces), and the GUI's lists are emptied:
+the mmto section is the whole problem.
 
 Forces are used as given, with no unit conversion: they must be in the units of the
 material database.
@@ -55,7 +60,12 @@ import selections as S
 
 SCHEMA_VERSION = 1
 DATABASE_DIR = os.path.join("1-PureStructural", "MaterialDataPureStructural")
-BC_KINDS = ("fixed", "displacement", "force", "traction")
+BC_KINDS = {
+    "fixed": "the given dofs (x, y, z) held at 0",
+    "displacement": "the given dofs held at a nonzero value",
+    "force": "a total force [Fx, Fy, Fz], split equally over the nodes",
+    "traction": "pressure * area along a direction, split equally over the nodes; area a number or 'bbox'",
+}
 _AXES = {"x": 0, "y": 1, "z": 2}
 _MARK_FIXED, _MARK_LOAD, _MARK_ROLLER = 1, 2, 3
 
@@ -77,6 +87,43 @@ DEFAULT_SETTINGS = {
                  "snap_to_real_material": False, "z0_init_method": "ORIGIN", "binarize_topology": True},
     "vae": {"use_pretrained_vae": True, "saveNet": None},
 }
+# one line per setting, for docs/project_reference.md (and later the GUI)
+SETTING_DOCS = {
+    "maxIterations": "largest number of MMA iterations",
+    "relative_filter_radius": "density filter radius, in element sizes",
+    "material_filter_radius": "radius of the latent smoothing neighbourhood, in element sizes; None = relative_filter_radius",
+    "pnorm_exponent": "p of the p-norm that aggregates stress or failure factor",
+    "beta_schedule_scheme": "Heaviside sharpness schedule: beta = 1, then x1.5 every 5 iterations after 50, "
+                            "up to 32 (PAPER) or 16 (PAPER_BM1)",
+    "timeLimit": "wall-clock limit of the optimization, seconds",
+    "rel_conv_tol": "stop when the objective and constraints change by less than this, relatively",
+    "use_penalization": "penalty on the distance from each solid element's latent point to the nearest real material",
+    "gamma_init": "starting weight of that penalty",
+    "gamma_max": "largest weight of that penalty",
+    "gamma_factor": "the weight is multiplied by this each iteration while it ramps up",
+    "penalty_start_iter": "first iteration of the penalty, without dynamic scheduling",
+    "distance_penalty_disable_after_iter": "iteration at which the penalty is switched off, without dynamic scheduling",
+    "use_dynamic_gamma_scheduling": "start the weight's ramp when the objective plateaus, instead of at fixed iterations",
+    "use_z_smoothing": "penalty on latent points that differ from their neighbours' (material flicker)",
+    "z_smoothing_weight": "weight of that penalty",
+    "z_smoothing_disable_after_iter": "iteration at which that penalty is switched off",
+    "use_heaviside_projection": "push the filtered density toward 0 or 1",
+    "eta_proj": "threshold of that projection",
+    "use_continuation": "raise the SIMP penalty by 0.25 every 10 iterations",
+    "use_constant_poissons_ratio": "use constant_poissons_ratio instead of the decoded Poisson's ratio",
+    "constant_poissons_ratio": "the Poisson's ratio used when it is held constant",
+    "snap_to_real_material": "in the reported design, replace each latent point by the nearest real material's",
+    "z0_init_method": "starting latent point: ORIGIN (z = 0), LIGHTEST, HEAVIEST material, or UNIFORM random",
+    "binarize_topology": "in the reported design, round the density to 0 or 1, keeping the volume",
+    "use_pretrained_vae": "load the trained VAE from saveNet if it exists; otherwise train one",
+    "saveNet": "the VAE file; None = the .nt file next to the database's .xlsx",
+    "latentDim": "latent dimension of the VAE",
+    "learningRate": "VAE training learning rate",
+    "vae_hiddenDim": "width of the VAE's hidden layers",
+    "maxAttributeErrorPercent": "VAE training stops once every attribute is reproduced within this percent",
+    "klFactor": "weight of the KL term in VAE training",
+    "numEpochs": "largest number of VAE training epochs",
+}
 # the VAE's own settings, also in settings.vae; they start from the database's known values
 VAE_PARAMS = ("latentDim", "learningRate", "vae_hiddenDim", "maxAttributeErrorPercent", "klFactor", "numEpochs")
 # run_topopt arguments about one run's output, not the problem; n_dof_desired is mesh.n_dof
@@ -87,6 +134,13 @@ def _dofs(dofs):
     if not dofs or any(c not in _AXES for c in dofs) or len(set(dofs)) != len(dofs):
         raise ValueError(f"dofs must be letters from 'xyz', e.g. 'xyz' or 'y', not {dofs!r}")
     return [_AXES[c] for c in sorted(dofs, key="xyz".index)]
+
+
+def _from_repo(path):
+    """path relative to the repository folder, as one types it there."""
+    from utils.project_paths import find_root                               # type: ignore
+    root = find_root(os.path.dirname(path))
+    return os.path.relpath(path, root).replace("\\", "/") if root else os.path.basename(path)
 
 
 def parse_expression(text):
@@ -159,14 +213,58 @@ class Project:
         self.selections[name] = selection
         return name
 
+    def _free_name(self, prefix):
+        i = 1
+        while f"{prefix}{i}" in self.selections:
+            i += 1
+        return f"{prefix}{i}"
+
     def _on(self, on, kind):
         """A selection name; a Selection given directly is stored under a generated name."""
         if isinstance(on, S.Selection):
-            i = 1
-            while f"{kind}{i}" in self.selections:
-                i += 1
-            return self.add_selection(f"{kind}{i}", on)
+            return self.add_selection(self._free_name(kind), on)
         return on
+
+    def _adopt_gui_picks(self):
+        """Supports and loads picked in the PyTO-AD GUI become selections and boundary
+        conditions of this project, with the GUI's own rules; the GUI's lists are emptied,
+        so the problem is defined in one place."""
+        from pyto_project import _SUPPORT_DOFS, _supports_and_loads                  # type: ignore
+        supports, loads = _supports_and_loads(self._gui) if self._gui else ([], [])
+        if not supports and not loads:
+            return []
+
+        def selection(triangles, points, regions, what):
+            parts = [S.stl_faces(triangles, tol=0.8)] if len(triangles) else []
+            parts += [S.nearest(point, boundary=True) for point in points]
+            parts += [S.halfspaces(r["normals"], r["origins"]) for r in regions]
+            if not parts:
+                raise ValueError(f"[{self.name}] {what} picked in the PyTO-AD GUI has no faces, "
+                                 f"nodes or boxes")
+            return parts[0] if len(parts) == 1 else S.union(*parts)
+
+        names = []
+        for i, (kind, triangles, points, regions) in enumerate(supports):
+            name = self.add_selection(self._free_name("gui_support"),
+                                      selection(triangles, points, regions, f"support {i + 1}"))
+            self.add_support(name, dofs="".join("xyz"[d] for d in _SUPPORT_DOFS[kind]))
+            names.append(name)
+        for i, (triangles, points, regions, f) in enumerate(loads):
+            name = self.add_selection(self._free_name("gui_load"),
+                                      selection(triangles, points, regions, f"load {i + 1}"))
+            self.add_force(name, total=f)
+            names.append(name)
+        sbc = self._gui.get("structuralBC")
+        if isinstance(sbc, dict):
+            self._gui["structuralBC"] = {k: [] if isinstance(v, list) else
+                                         {kk: 0 for kk in v} if isinstance(v, dict) else v
+                                         for k, v in sbc.items()}
+        for k in ("constraint_data", "force_data"):
+            if k in self._gui:
+                self._gui[k] = []
+        print(f"[{self.name}] the supports and loads picked in the PyTO-AD GUI are now selections "
+              f"{', '.join(names)} of this project")
+        return names
 
     def add_support(self, on, dofs="xyz", value=0.0):
         _dofs(dofs)
@@ -233,11 +331,9 @@ class Project:
                     errors.append(f"{where}: direction must be three numbers, not all zero")
                 elif bc.get("area") == "bbox" and np.count_nonzero(d) != 1:
                     errors.append(f"{where}: area 'bbox' needs a direction along x, y or z; give a number instead")
-        from pyto_project import _supports_and_loads                      # type: ignore
-        gui_supports, gui_loads = _supports_and_loads(self._gui) if self._gui else ([], [])
-        if not gui_supports and not any(bc.get("kind") in ("fixed", "displacement") for bc in self.bcs):
+        if not any(bc.get("kind") in ("fixed", "displacement") for bc in self.bcs):
             errors.append("no supports")
-        if not gui_loads and not any(bc.get("kind") in ("force", "traction") for bc in self.bcs):
+        if not any(bc.get("kind") in ("force", "traction") for bc in self.bcs):
             errors.append("no loads")
         for n in self.keep_solid_names:
             if n not in self.selections:
@@ -315,7 +411,7 @@ class Project:
                                  find_elements_with_fixedDOF)
         from mmto_common import MMTOParams                                            # type: ignore
         from ExamplesPureStructural import VAEParams                                  # type: ignore
-        from pyto_project import make_mesh, gui_bcs_on_mesh                           # type: ignore
+        from pyto_project import make_mesh                                            # type: ignore
 
         mesh = make_mesh(self.stl_path(), self.n_dof, self.single_layer)
         nodes_of = {}
@@ -343,7 +439,6 @@ class Project:
 
         # ---- loads
         force = np.zeros(3 * mesh.num_nodes)
-        loaded = set()
         for i, bc in enumerate(self.bcs, 1):
             if bc["kind"] not in ("force", "traction"):
                 continue
@@ -361,22 +456,7 @@ class Project:
                     area = max(np.ptp(p[:, a]), tol) * max(np.ptp(p[:, b]), tol)
                 total = bc["pressure"] * area * d
             force.reshape(-1, 3)[n] += total / len(n)
-            loaded.update(n.tolist())
             mesh.node_indices[n, 3] = _MARK_LOAD
-
-        # ---- supports and loads picked in the GUI, if any
-        if self._gui:
-            gui = dict(self._gui, stl_file_path=self.stl_path())
-            gui_fixed, gui_force = gui_bcs_on_mesh(gui, mesh)
-            for d in gui_fixed:
-                if values.get(int(d), 0.0) != 0.0:
-                    raise ValueError(f"dof {int(d)} is fixed in the GUI and given {values[int(d)]} here")
-                values[int(d)] = 0.0
-            both = loaded & set(np.flatnonzero(np.any(gui_force.reshape(-1, 3) != 0, axis=1)).tolist())
-            if both and verbose:
-                print(f"[{self.name}] warning: {len(both)} nodes are loaded both in the GUI and here; "
-                      f"the forces add up")
-            force += gui_force
 
         fixed_dofs = np.array(sorted(values), dtype=int)
         dirichlet_values = np.array([values[d] for d in fixed_dofs], dtype=float)
@@ -439,9 +519,6 @@ class Project:
     def _file_data(self, path):
         """The JSON a project file at path holds, with the STL path relative to it."""
         data = dict(self._gui)
-        if os.path.isfile(path):
-            with open(path) as fh:
-                data.update({k: v for k, v in json.load(fh).items() if k not in ("mmto", "stl_file_path")})
         stl = self.stl_path()
         try:
             stl = os.path.relpath(stl, os.path.dirname(path))
@@ -452,13 +529,86 @@ class Project:
         return data
 
     def save(self, path):
-        """Write the project, every setting included; other sections of an existing .pyto are kept."""
+        """Write the project, every setting included, with the other sections it was loaded with."""
         path = os.path.abspath(path)
         self.complete_settings()
         data = self._file_data(path)
         with open(path, "w") as fh:
             json.dump(data, fh, indent=2)
         self.base_dir, self.stl = os.path.dirname(path), data["stl_file_path"]
+
+    def to_script(self, path):
+        """Write a Python script that rebuilds this project with the same calls, next to it.
+
+        Settings that differ from a new project's are written; the rest are the defaults.        """
+        path = os.path.abspath(path)
+        if os.path.normcase(os.path.dirname(path)) != os.path.normcase(self.base_dir):
+            raise ValueError(f"save the script in {self.base_dir}, next to the project, so that the "
+                             "relative paths in it stay valid")
+        stl = self.stl if not os.path.isabs(self.stl) else os.path.relpath(self.stl, self.base_dir)
+        stl = stl.replace("\\", "/")
+        reference = Project(self.name, stl, base_dir=self.base_dir)
+        reference.database = self.database
+        reference.complete_settings()
+        mine = self.copy()
+        mine.complete_settings()
+        types = sorted({type(s).__name__.lower() for s in self.selections.values()} |
+                       {type(t).__name__.lower() for s in self.selections.values()
+                        for t in getattr(s, "parts", ())})
+        lines = [f'"""{self.name}: rebuilds the project {self.name!r}. Written by Project.to_script.',
+                 "",
+                 f"    python {_from_repo(path)}       (from the repository folder; saves {self.name}.pyto next to it)",
+                 '"""',
+                 "import os",
+                 "import sys",
+                 "",
+                 "sys.path.insert(0, os.getcwd())",
+                 "from utils import project_paths",
+                 "",
+                 "project_paths.bootstrap()",
+                 "",
+                 "from project import Project",
+                 f"from selections import {', '.join(types)}" if types else "",
+                 "",
+                 "HERE = os.path.dirname(os.path.abspath(__file__))",
+                 f"p = Project({self.name!r}, stl={stl!r}, n_dof={self.n_dof}, single_layer={self.single_layer},",
+                 "            base_dir=HERE)"]
+        if self.comment:
+            lines.append(f"p.comment = {self.comment!r}")
+        if self.physics != "structural":
+            lines.append(f"p.physics = {self.physics!r}")
+        lines.append("")
+        for name, sel in self.selections.items():
+            lines.append(f"p.add_selection({name!r}, {sel!r})")
+        for bc in self.bcs:
+            on = repr(bc["on"])
+            if bc["kind"] in ("fixed", "displacement"):
+                value = f", value={bc['value']!r}" if bc["kind"] == "displacement" else ""
+                lines.append(f"p.add_support({on}, dofs={bc['dofs']!r}{value})")
+            elif bc["kind"] == "force":
+                lines.append(f"p.add_force({on}, total={bc['total']!r})")
+            elif bc["kind"] == "traction":
+                lines.append(f"p.add_traction({on}, pressure={bc['pressure']!r}, "
+                             f"direction={bc['direction']!r}, area={bc['area']!r})")
+        if self.keep_solid_names:
+            lines.append(f"p.keep_solid({', '.join(map(repr, self.keep_solid_names))})")
+        if self.keep_support_elements:
+            lines.append("p.keep_support_elements = True")
+        lines += ["", f"p.database = {self.database!r}"]
+        obj = self.formulation.get("objective")
+        if obj:
+            lines.append(f"p.objective({obj['expression']!r})")
+        for c in self.formulation.get("constraints", []):
+            lines.append(f"p.constraint({c['expression']!r}, {c['op']!r}, {c['bound']!r})")
+        changed = [(sec, k, v) for sec, values in mine.settings.items() for k, v in values.items()
+                   if reference.settings.get(sec, {}).get(k, object()) != v]
+        if changed:
+            lines += ["", "# settings that differ from a new project's; the rest are the defaults"]
+            lines += [f"p.settings[{sec!r}][{k!r}] = {v!r}" for sec, k, v in changed]
+        lines += ["", f"p.save(os.path.join(HERE, {self.name + '.pyto'!r}))", ""]
+        with open(path, "w") as fh:
+            fh.write("\n".join(lines))
+        return path
 
     def copy(self, **changes):
         import copy
@@ -505,6 +655,7 @@ class Project:
         p.settings = {k: dict(stored.get(k, {})) for k in DEFAULT_SETTINGS}    # missing ones: filled at build
         p.settings.update({k: dict(v) for k, v in stored.items() if k not in DEFAULT_SETTINGS})
         p._gui = {k: v for k, v in data.items() if k not in ("mmto", "stl_file_path")}
+        p._adopt_gui_picks()
         return p
 
 

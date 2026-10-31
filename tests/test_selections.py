@@ -27,6 +27,11 @@ class GridMesh:
         c = np.arange(n, dtype=float) + 0.5
         self.elem_centers = np.array([[x, y, z] for z in c for y in c for x in c])
         self.elem_size = [1.0, 1.0, 1.0]
+        self.n = n
+
+    def get_boundary_nodes(self):
+        on = np.any((self.node_xyz == 0) | (self.node_xyz == self.n), axis=1)
+        return np.flatnonzero(on)
 
 
 MESH = GridMesh()
@@ -96,10 +101,34 @@ def test_element_size_lengths_and_rows():
 def test_stl_faces():
     """stl_faces asks the mesh for the nodes on those triangles (PyTO-AD's own lookup)."""
     class FakeMesh(GridMesh):
+        stlGeom = type("STL", (), {"stl_n_triangles": 100})()
+
         def get_nodes_on_triangles(self, tris):
             return [5, 3, 3] if list(tris) == [12, 13] else []
     assert list(S.stl_faces([12, 13]).evaluate(FakeMesh())) == [3, 5]
     assert S.from_dict(S.stl_faces([12, 13]).to_dict()).triangles == [12, 13]
+    try:
+        S.stl_faces([200]).evaluate(FakeMesh())
+    except ValueError as e:
+        assert "not in the STL" in str(e)
+    else:
+        raise AssertionError("a triangle outside the STL was accepted")
+
+
+def test_gui_box_and_point():
+    """A box dragged in the GUI (six planes) and a picked point, on boundary nodes only."""
+    lo, hi = np.array([0.0, 0.0, 0.0]), np.array([2.0, 2.0, 2.0])
+    normals = [[-1, 0, 0], [1, 0, 0], [0, -1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1]]
+    origins = [lo, hi, lo, hi, lo, hi]
+    box = S.halfspaces(normals, origins)
+    inside = set(S.box(lo, hi, pad=0).evaluate(MESH).tolist())
+    boundary = set(MESH.get_boundary_nodes().tolist())
+    assert set(box.evaluate(MESH).tolist()) == inside & boundary
+    assert count(box) == 27 - 8              # the 8 nodes with every coordinate 1 or 2 are inside the part
+    assert count(S.halfspaces(normals, origins, boundary=False)) == 27
+    p = S.nearest([5.2, 5.1, 4.6], boundary=True).evaluate(MESH)        # an interior point
+    assert MESH.node_xyz[p[0]].tolist() in ([5, 5, 0], [5, 5, 10], [5, 0, 5], [0, 5, 5], [10, 5, 5], [5, 10, 5])
+    assert S.nearest([5.2, 5.1, 4.6]).evaluate(MESH).tolist() != p.tolist()
 
 
 def test_combinations():
@@ -116,13 +145,15 @@ def test_json_round_trip():
     sels = [S.box([0, 0, 0], [2, 2, 2]), S.cylinder([5, 5, 0], "z", 1.5, 1.0, (0, 2), pad=0),
             S.cylinder([5, 5, 0], [0, 0, 1], 1.0), S.sphere([5, 5, 5], 1.0), S.plane("y", 3.0),
             S.face("xmax"), S.near_face("zmin", 2.0), S.near_face("zmax", "1.5h"), S.nearest([1, 2, 3]),
-            S.ids([1, 2]), S.rows("xmax", "y", 3),
+            S.ids([1, 2]), S.rows("xmax", "y", 3), S.nearest([1, 2, 3], boundary=True),
+            S.halfspaces([[1, 0, 0]], [[2, 0, 0]]), S.halfspaces([[1, 0, 0]], [[2, 0, 0]], boundary=False),
             S.union(S.face("xmin"), S.intersect(S.face("ymin"), S.difference(S.face("zmin"), S.ids([0]))))]
     for s in sels:
         d = json.loads(json.dumps(s.to_dict()))
         t = S.from_dict(d)
         assert t.to_dict() == s.to_dict(), (s, t)
-        for on in ("nodes", "elements") if s.TYPE != "rows" else ("nodes",):
+        node_only = s.TYPE == "rows" or getattr(s, "boundary", False)
+        for on in ("nodes", "elements") if not node_only else ("nodes",):
             assert np.array_equal(t.evaluate(MESH, on), s.evaluate(MESH, on)), (s, on)
     try:
         S.from_dict({"type": "cone"})

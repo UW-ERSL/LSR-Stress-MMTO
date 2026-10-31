@@ -30,7 +30,9 @@ Types (to_dict / from_dict give the JSON form a project file stores):
     face(side)                                   the plane at the mesh's extreme, side "xmin" ... "zmax"
     near_face(side, distance)                    within distance of that extreme (strictly)
     nearest(point)                               the single closest node or element
-    stl_faces(triangles)                         nodes on these triangles of the STL (nodes only)
+    stl_faces(triangles, tol=None)               boundary nodes on these triangles of the STL (nodes only)
+    halfspaces(normals, origins, boundary=True)  inside a set of planes, e.g. a box dragged in the GUI
+    nearest(point, boundary=True)                the closest boundary node, as a point picked in the GUI
     rows(face, axis, n, end="max")               the n outermost node rows of a face along an
                                                  axis, e.g. rows("xmax", "y", 8) (nodes only)
     ids(indices)                                 explicit indices; tied to one mesh
@@ -143,6 +145,7 @@ def from_dict(d):
 
 # ----------------------------------------------------------------------------- shapes
 class box(Selection):
+    """Points with lo <= p <= hi."""
     TYPE, fields = "box", ("lo", "hi", "pad")
 
     def __init__(self, lo, hi, pad="auto"):
@@ -154,6 +157,7 @@ class box(Selection):
 
 
 class cylinder(Selection):
+    """Points whose distance to the axis is in [inner_radius, radius]; along = (t0, t1) limits (p - center) . axis."""
     TYPE, fields = "cylinder", ("center", "axis", "radius", "inner_radius", "along", "pad")
 
     def __init__(self, center, axis, radius, inner_radius=0.0, along=None, pad="auto"):
@@ -186,6 +190,7 @@ class cylinder(Selection):
 
 
 class sphere(Selection):
+    """Points within radius of center."""
     TYPE, fields = "sphere", ("center", "radius", "pad")
 
     def __init__(self, center, radius, pad="auto"):
@@ -197,6 +202,7 @@ class sphere(Selection):
 
 
 class plane(Selection):
+    """Points with |p_axis - value| < pad."""
     TYPE, fields = "plane", ("axis", "value", "pad")
 
     def __init__(self, axis, value, pad="auto"):
@@ -213,6 +219,7 @@ def _side(side):
 
 
 class face(Selection):
+    """The plane at the mesh's extreme on one side: xmin, xmax, ymin, ymax, zmin or zmax."""
     TYPE, fields = "face", ("side", "pad")
 
     def __init__(self, side, pad="auto"):
@@ -226,6 +233,7 @@ class face(Selection):
 
 
 class near_face(Selection):
+    """Points strictly within distance of the mesh's extreme on one side."""
     TYPE, fields = "near_face", ("side", "distance")
 
     def __init__(self, side, distance):
@@ -241,17 +249,28 @@ class near_face(Selection):
 
 
 class nearest(Selection):
-    TYPE, fields = "nearest", ("point",)
+    """The single node or element closest to point; boundary=True only looks at nodes on
+    the mesh boundary, as the PyTO-AD GUI does for a picked point."""
+    TYPE, fields = "nearest", ("point", "boundary")
 
-    def __init__(self, point):
+    def __init__(self, point, boundary=False):
         self.point = list(map(float, point))
+        self.boundary = bool(boundary)
 
     def evaluate(self, mesh, on="nodes", base_dir=None):
         p = _points(mesh, on)
-        return np.array([int(np.argmin(np.sum((p - np.array(self.point)) ** 2, axis=1)))])
+        if not self.boundary:
+            return np.array([int(np.argmin(np.sum((p - np.array(self.point)) ** 2, axis=1)))])
+        if on != "nodes":
+            raise ValueError("nearest with boundary=True selects nodes only")
+        from scipy.spatial import cKDTree
+        keep = np.asarray(mesh.get_boundary_nodes())
+        _, i = cKDTree(p[keep]).query(np.asarray(self.point, dtype=float).reshape(1, 3))
+        return np.array([int(keep[int(i[0])])])
 
 
 class ids(Selection):
+    """Explicit node or element numbers; tied to one mesh."""
     TYPE, fields = "ids", ("indices",)
 
     def __init__(self, indices):
@@ -266,16 +285,55 @@ class ids(Selection):
 
 
 class stl_faces(Selection):
-    """Mesh nodes on triangles of the STL the mesh was made from (PyTO-AD's own lookup)."""
-    TYPE, fields = "stl_faces", ("triangles",)
+    """Boundary nodes on triangles of the STL the mesh was made from: within tol times the
+    smallest element size of a triangle. tol None is PyTO-AD's own lookup (0.707); the
+    PyTO-AD GUI uses 0.8."""
+    TYPE, fields = "stl_faces", ("triangles", "tol")
 
-    def __init__(self, triangles):
+    def __init__(self, triangles, tol=None):
         self.triangles = [int(t) for t in triangles]
+        self.tol = None if tol is None else float(tol)
 
     def evaluate(self, mesh, on="nodes", base_dir=None):
         if on != "nodes":
             raise ValueError("stl_faces selects nodes only")
-        return np.unique(np.asarray(mesh.get_nodes_on_triangles(self.triangles), dtype=int))
+        stl = mesh.stlGeom
+        bad = [t for t in self.triangles if t >= stl.stl_n_triangles]
+        if bad:
+            raise ValueError(f"stl_faces: triangles {bad[:5]} are not in the STL, which has "
+                             f"{stl.stl_n_triangles}; the selection was made for a different STL")
+        if self.tol is None:
+            return np.unique(np.asarray(mesh.get_nodes_on_triangles(self.triangles), dtype=int))
+        boundary = np.asarray(mesh.get_boundary_nodes())
+        points = np.asarray(mesh.node_xyz, dtype=float)[boundary]
+        tol = self.tol * min(mesh.elem_size)
+        nodes = set()
+        for t in self.triangles:
+            nodes.update(boundary[stl.find_points_triangle_distances_vectorized(points, t) < tol].tolist())
+        return np.array(sorted(nodes), dtype=int)
+
+
+class halfspaces(Selection):
+    """Points on the inner side of every plane: n . (p - o) <= 1e-12 for each normal n and
+    origin o. A box dragged in the PyTO-AD GUI is six such planes. boundary=True keeps only
+    nodes on the mesh boundary, as the GUI does."""
+    TYPE, fields = "halfspaces", ("normals", "origins", "boundary")
+
+    def __init__(self, normals, origins, boundary=True):
+        self.normals = [list(map(float, n)) for n in normals]
+        self.origins = [list(map(float, o)) for o in origins]
+        self.boundary = bool(boundary)
+
+    def evaluate(self, mesh, on="nodes", base_dir=None):
+        p = _points(mesh, on)
+        n, o = np.asarray(self.normals, dtype=float), np.asarray(self.origins, dtype=float)
+        if self.boundary:
+            if on != "nodes":
+                raise ValueError("halfspaces with boundary=True selects nodes only")
+            keep = np.asarray(mesh.get_boundary_nodes())
+            inside = np.all(p[keep] @ n.T - np.sum(n * o, axis=1)[None, :] <= 1e-12, axis=1)
+            return np.sort(keep[inside]).astype(int)
+        return np.flatnonzero(np.all(p @ n.T - np.sum(n * o, axis=1)[None, :] <= 1e-12, axis=1)).astype(int)
 
 
 class rows(Selection):
@@ -309,6 +367,7 @@ def _resolve(path, base_dir):
 
 
 class inside_stl(Selection):
+    """Points inside a closed STL surface."""
     TYPE, fields = "inside_stl", ("path",)
 
     def __init__(self, path):
@@ -325,6 +384,7 @@ class inside_stl(Selection):
 
 
 class function(Selection):
+    """Whatever a Python function name(mesh, on) in file.py returns."""
     TYPE, fields = "function", ("ref",)
 
     def __init__(self, ref):
@@ -346,6 +406,7 @@ class function(Selection):
 
 # ----------------------------------------------------------------------------- combinations
 class Union(Selection):
+    """Points in any of the parts."""
     TYPE = "union"
 
     def __init__(self, *parts):
@@ -362,6 +423,7 @@ class Union(Selection):
 
 
 class Intersect(Union):
+    """Points in all of the parts."""
     TYPE = "intersect"
 
     def evaluate(self, mesh, on="nodes", base_dir=None):
@@ -372,6 +434,7 @@ class Intersect(Union):
 
 
 class Difference(Union):
+    """Points in the first part but not the second."""
     TYPE = "difference"
 
     def __init__(self, a, b):

@@ -7,6 +7,7 @@ The meshes are coarse U-brackets, so this runs in well under a minute.
 
     python tests/test_project.py        (or: python -m pytest tests)
 """
+import json
 import os
 import sys
 import tempfile
@@ -151,9 +152,105 @@ def test_build_gui_project_matches_problem_from_pyto():
     assert np.array_equal(bc.dirichlet_values, bc0.dirichlet_values)
 
 
-def test_gui_sections_survive_a_save():
-    """Saving from code keeps what the GUI wrote in the same file."""
+def test_script_round_trip():
+    """Every project in projects/ exported to a script, the script run: the same project."""
+    import glob
+    for path in sorted(glob.glob(os.path.join(ROOT, "projects", "*.pyto"))):
+        p = Project.load(path)
+        script = os.path.join(os.path.dirname(path), "_round_trip_test.py")
+        try:
+            p.to_script(script)
+            code = open(script).read()
+            assert code.rstrip().splitlines()[-1].startswith("p.save(")
+            body = "\n".join(code.rstrip().splitlines()[:-1])           # everything but the save
+            ns = {"__file__": script, "__name__": "round_trip"}
+            exec(compile(body, script, "exec"), ns)
+            q = ns["p"]
+            p.complete_settings()
+            q.complete_settings()
+            assert q.to_dict() == p.to_dict(), os.path.basename(path)
+        finally:
+            if os.path.exists(script):
+                os.remove(script)
+
+
+def _gui_copy(d, structural_bc=None):
+    """A copy of the U-bracket GUI project in d, with other GUI picks when given."""
     import json
+    import shutil
+    shutil.copy(os.path.join(UBRACKET, "UBracket.STL"), d)
+    data = json.load(open(os.path.join(UBRACKET, "UBracket.pyto")))
+    if structural_bc is not None:
+        data["structuralBC"] = structural_bc
+    path = os.path.join(d, "UBracket.pyto")
+    json.dump(data, open(path, "w"), indent=2)
+    return path
+
+
+def test_gui_picks_become_the_project():
+    """Opening a GUI project turns its picks into selections and bcs; saved and opened
+    again, nothing is converted twice, and the script shows the whole problem."""
+    with tempfile.TemporaryDirectory() as d:
+        p = Project.load(_gui_copy(d))
+        assert p.bcs == [{"kind": "fixed", "on": "gui_support1", "dofs": "xyz"},
+                         {"kind": "force", "on": "gui_load1", "total": [-1.0, 0.0, 0.0]}]
+        assert p.selections["gui_support1"].TYPE == "halfspaces"
+        sbc = p._gui["structuralBC"]
+        assert all(v == [] for v in sbc.values() if isinstance(v, list))
+        assert p._gui["settings"] == json.load(open(os.path.join(UBRACKET, "UBracket.pyto")))["settings"]
+        p.database = "6Materials_AF_3Attr"
+        p.objective("FailureFactorPNorm()")
+        p.save(os.path.join(d, "UBracket.pyto"))
+        q = Project.load(os.path.join(d, "UBracket.pyto"))
+        assert q.to_dict() == p.to_dict()
+        text = open(q.to_script(os.path.join(d, "u.py"))).read()
+        assert "gui_support1" in text and "halfspaces(" in text
+    try:
+        p.to_script(os.path.join(ROOT, "elsewhere.py"))
+    except ValueError as e:
+        assert "next to the project" in str(e)
+    else:
+        raise AssertionError("a script away from the project was accepted")
+
+
+def test_gui_picks_of_every_kind_match_the_gui():
+    """Faces, picked nodes and boxes, alone and together, in both GUI layouts: the same
+    fixed dofs and force vector as the GUI's own rules (pyto_project.gui_bcs_on_mesh)."""
+    from pyto_project import gui_bcs_on_mesh, make_mesh, read_project  # type: ignore
+    box = json.load(open(os.path.join(UBRACKET, "UBracket.pyto")))["structuralBC"]["point_supports"][0]["regions"]
+    new = {"fixed_faces_indices": [0, 1, 2], "fixed_faces_z_indices": [5],
+           "load_faces_indices": [[8, 9]], "load_forces": [[0.0, -2.0, 0.0]],
+           "point_supports": [{"type": "Fixed Y", "points": [[0.5, 0.0, 0.0], [0.6, 0.02, 0.01]],
+                               "regions": box}],
+           "point_loads": [{"points": [[0.98, 1.0, 0.0]], "regions": [], "force": [-1.0, 0.0, 0.0]}],
+           "constraint_counts": {"fixed_triangles": 4, "loaded_triangles": 2}}
+    old = {"constraint_data": [{"type": "Fixed X", "triangles": [0, 1], "points": [[0.5, 0.0, 0.0]]}],
+           "force_data": [{"type": "force_xyz", "triangles": [], "points": [], "regions": box,
+                           "force_x": 0.0, "force_y": 3.0, "force_z": 0.0}]}
+    for layout, sbc in (("new", new), ("old", None)):
+        with tempfile.TemporaryDirectory() as d:
+            path = _gui_copy(d, sbc)
+            if layout == "old":
+                data = json.load(open(path))
+                del data["structuralBC"]
+                data.update(old)
+                json.dump(data, open(path, "w"))
+            gui = read_project(path)
+            mesh0 = make_mesh(gui["stl_file_path"], N_DOF, single_layer=True)
+            fixed0, force0 = gui_bcs_on_mesh(gui, mesh0)
+            p = Project.load(path)
+            p.n_dof, p.single_layer = N_DOF, True
+            p.database = "6Materials_AF_3Attr"
+            p.objective("Compliance()")
+            mesh, _, bc, _, _, _ = p.build(verbose=False)
+            assert np.array_equal(np.sort(bc.fixed_dofs), fixed0), layout
+            assert np.array_equal(bc.force, force0), layout
+            assert not np.any(bc.dirichlet_values), layout
+
+
+def test_gui_sections_survive_a_save():
+    """Saving from code keeps what the GUI wrote in the same file, except its supports and
+    loads, which are now in the mmto section."""
     with tempfile.TemporaryDirectory() as d:
         p = Project.load(os.path.join(UBRACKET, "UBracket.pyto"))
         p.database = "6Materials_AF_3Attr"
@@ -163,8 +260,10 @@ def test_gui_sections_survive_a_save():
         saved = json.load(open(out))
         original = json.load(open(os.path.join(UBRACKET, "UBracket.pyto")))
         for k in original:
-            if k != "stl_file_path":
+            if k not in ("stl_file_path", "structuralBC"):
                 assert saved[k] == original[k], k
+        assert saved["structuralBC"]["point_supports"] == [] and saved["structuralBC"]["point_loads"] == []
+        assert [bc["on"] for bc in saved["mmto"]["bcs"]] == ["gui_support1", "gui_load1"]
 
 
 if __name__ == "__main__":
