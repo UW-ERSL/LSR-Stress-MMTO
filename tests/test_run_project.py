@@ -89,6 +89,24 @@ def test_settings_cover_run_topopt():
     assert covered - arguments == set(), f"not run_topopt arguments: {sorted(covered - arguments)}"
 
 
+def test_progress_and_stop():
+    """progress() hears every iteration; should_stop() ends the run there, and the design reached so far
+    is still post-processed (the GUI's Run and Stop)."""
+    p = ubracket_project()
+    p.settings["common"]["maxIterations"] = 20
+    seen = []
+    with tempfile.TemporaryDirectory() as d:
+        args = run_arguments(p, save_dir=d, verbose=False)
+        args.update(progress=seen.append, should_stop=lambda: len(seen) >= 3)
+        captured = _run(p, args)
+    assert [s["iteration"] for s in seen] == [0, 1, 2]
+    s = seen[-1]
+    n = len(s["x_phys"])
+    assert s["z"].shape[0] == n and s["z_real"].shape[1] == s["z"].shape[1] and len(s["constraints"]) == 1
+    assert captured["config"]["during_run"]["stopped_at_iter"] == 3
+    assert "progress" not in json.dumps(captured["config"]["run"], default=str)    # watching is not recorded
+
+
 def test_unknown_and_missing_settings():
     p = ubracket_project()
     p.settings["advanced"]["gama_max"] = 5.0                       # a typo

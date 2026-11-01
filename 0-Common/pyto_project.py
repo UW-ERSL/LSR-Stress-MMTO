@@ -118,7 +118,8 @@ def make_mesh(stl_path, nDOFDesired, single_layer=False):
         mesh.minVoxelsPerAxis = 1
     mesh.createMeshFromSTLFile(stl_path, nElemsDesired=nDOFDesired / 3)
     mesh.createEdofMatStructural()
-    return mesh
+    mesh.elem_size = np.asarray(mesh.elem_size, dtype=float)   # an array, not a list: Numba-compiled code
+    return mesh                                                # stops taking lists in a coming version
 
 
 def gui_bcs_on_mesh(project, mesh):

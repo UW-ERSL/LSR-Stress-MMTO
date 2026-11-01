@@ -55,14 +55,16 @@ Box = QtWidgets.QMessageBox
 
 @contextlib.contextmanager
 def answers(question=Box.Yes):
-    """Message boxes answered without showing them: question() gives question, warning() OK."""
-    saved = Box.question, Box.warning
+    """Message boxes answered without showing them: question() gives question, warning() and
+    information() OK."""
+    saved = Box.question, Box.warning, Box.information
     Box.question = staticmethod(lambda *a, **k: question)
     Box.warning = staticmethod(lambda *a, **k: Box.Ok)
+    Box.information = staticmethod(lambda *a, **k: Box.Ok)
     try:
         yield
     finally:
-        Box.question, Box.warning = saved
+        Box.question, Box.warning, Box.information = saved
 
 
 @contextlib.contextmanager
@@ -79,7 +81,7 @@ def test_what_it_takes_from_pyto_ad():
     from gui import pyto_ad
     assert hasattr(pyto_ad.ProjectsWindow, "load_geometry") and hasattr(pyto_ad.MainWindow, "init_state")
     assert {c["name"] for c in pyto_ad.MainWindow.BUTTON_CONFIG} >= set(G.SIDEBAR) - set(G.PANELS) - \
-        {"Supports and loads"}
+        {"Supports and loads", "Run"}
     assert all(hasattr(pyto_ad.MainWindow, m) for m in ("update_LivVar", "_raise_if_open",
                                                          "start_box_node_selection"))
     assert all(hasattr(pyto_ad.StructuralLoadsWindow, m) for m in ("redraw_loads", "refresh_applied_list"))
@@ -768,6 +770,112 @@ def test_outline_one_row_measure():
         w._mouse_at = (5, 5)
         w._look_up_mouse()
         assert calls == [(5, 5)]
+
+
+def _wait(condition, seconds=600):
+    import time
+    end = time.time() + seconds
+    while not condition() and time.time() < end:
+        APP.processEvents()
+        time.sleep(0.05)
+    APP.processEvents()
+    return condition()
+
+
+def test_run():
+    """Run: a real short optimization from the strip; live plot and design; results in a folder of its
+    own with the tabs at the end; Stop ends a run early and keeps its design; nothing closes mid-run."""
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        w.show()
+        w.project.n_dof, w.project.single_layer = 3000, True
+        w.project.settings["common"]["maxIterations"] = 3
+        assert w.save_project()
+        r = w.open_run_panel()
+        assert r is w.run_window and r.windowTitle() == "Run"
+        assert not hasattr(r, "spec")                                         # PyTO-AD's formulation: not here
+        assert r.start_optimization()
+        assert _wait(lambda: not r.optimization_running), "the run did not finish"
+        assert r.status.text().startswith("Run finished after 3 iterations"), r.status.text()
+        assert os.path.isfile(os.path.join(r.save_dir, "run_data.npz"))
+        assert os.path.isfile(os.path.join(r.save_dir, "L-bracket.mmto"))     # what ran, beside it
+        assert [r.tabs.tabText(i) for i in range(r.tabs.count())] == ["Progress", "Log", "Convergence",
+                                                                      "Latent space", "Summary"]
+        assert "mmto_design" in w.plotter.actors and not w.part_actor().GetVisibility()
+        r.view_button.setChecked(True)                                        # Show setup
+        assert w.part_actor().GetVisibility() and not w.plotter.actors["mmto_design"].GetVisibility()
+        first = r.save_dir
+
+        w.project.settings["common"]["maxIterations"] = 50                   # Stop: early, design kept
+        assert w.save_project() and r.start_optimization()
+        assert r.save_dir != first                                            # a folder per run
+        assert _wait(lambda: len(r.history["objective"]) >= 2)
+        with answers():
+            assert not w.open_project(w.path)                                 # not while it runs
+            r.parentWidget().close()
+        assert G.in_open_strip(r)                                             # the strip stays
+        r.stop_optimization()
+        assert _wait(lambda: not r.optimization_running)
+        assert r.status.text().startswith("Run stopped"), r.status.text()
+        assert os.path.isfile(os.path.join(r.save_dir, "run_data.npz"))
+
+        w.project.formulation["objective"] = None                            # a project that cannot run
+        assert not r.start_optimization() and "Cannot start" in r.status.text()
+
+
+def test_snap_copy_outline_colour_new_database():
+    """Snap rounds Measure and a copied point; a click on the part with a form open copies the point;
+    outlines are magenta whatever the place; New database writes a template and uses it."""
+    import selections as S  # type: ignore
+
+    class Picker:
+        def GetCellId(self):
+            return 2
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        w.show()
+        w.snap.setCurrentIndex([t for t, _ in G.SNAPS].index("Snap: 1"))
+        assert list(w.snapped([119.76, 80.02, 1.0])) == [120.0, 80.0, 1.0]
+        w.measure.setChecked(True)
+        w.on_left_button_press([0.2, 0.3, 1.0], Picker())
+        w.on_left_button_press([29.7, 40.4, 1.0], Picker())
+        assert w.measured.text().startswith("Distance 50 mm")                 # (0, 0) to (30, 40), snapped
+        w.measure.setChecked(False)
+
+        panel = w.open_supports_and_loads_panel()
+        panel.add_region()                                                    # a form open: a click copies
+        w.on_left_button_press([119.76, 80.02, 1.0], Picker())
+        assert APP.clipboard().text() == "120, 80, 1"
+        assert panel.stack.currentWidget().copied.text() == "Copied 120, 80, 1: paste it with Ctrl+V"
+        panel.stack.currentWidget().findChild(SP.RegionDialog).reject()
+
+        w.draw_outline("mmto_outline", S.box([0, 0, 0], [10, 10, 1]), SP.LOAD_COLOUR)
+        colour = w.plotter.actors["mmto_outline"].GetProperty().GetColor()
+        assert [round(c * 255) for c in colour] == [196, 0, 196]               # magenta, not the red given
+
+        m = panels.MaterialsPanel(w, w.project)
+        real = panels.NewDatabaseDialog.exec_
+        try:
+            def fill(dialog):
+                dialog.name.setText("steels")
+                dialog.ticks["Cost"].setChecked(True)
+                dialog.count.setValue(4)
+                dialog.open_now.setChecked(False)
+                return 1
+            panels.NewDatabaseDialog.exec_ = fill
+            path = m.new_database()
+        finally:
+            panels.NewDatabaseDialog.exec_ = real
+        assert path == os.path.join(d, "steels.xlsx") and os.path.isfile(path)
+        assert m.project.database == "steels.xlsx" and "fill it in Excel" in m.report.toPlainText()
+        from databases import database_attributes  # type: ignore
+        assert database_attributes(path) == ["Density", "Youngs_Modulus", "Poissons_Ratio", "Cost"]
+        n = panels.NewDatabaseDialog(m, d)
+        n.name.setText("steels")
+        assert n.problems() == ["steels.xlsx is already there; choose another name"]
+        from databases import DATABASE_DIR  # type: ignore
+        n.folder.setText(os.path.join(ROOT, DATABASE_DIR))
+        assert any("come with LSR MMTO" in e for e in n.problems())
 
 
 if __name__ == "__main__":

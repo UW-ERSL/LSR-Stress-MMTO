@@ -26,9 +26,17 @@ from .pyto_ad import (FILE_DIALOG_OPTIONS, UNIT_SYSTEMS, GeometryWindow, MainWin
                       StructuralLoadsWindow, UnitsWindow)
 
 APP = "LSR MMTO"
+OUTLINE_COLOUR = "#c400c4"                  # place shapes: magenta, unlike the part, supports, loads, places
+SNAPS = [("Snap: off", 0.0), ("Snap: 0.1", 0.1), ("Snap: 1", 1.0), ("Snap: 5", 5.0), ("Snap: 10", 10.0)]
 PROJECT_FILTER = "LSR MMTO project (*.mmto)"
-SIDEBAR = ("Units", "Geometry", "Materials", "Supports and loads", "Formulation", "Settings", "Display Options")
+SIDEBAR = ("Units", "Geometry", "Materials", "Supports and loads", "Formulation", "Settings", "Run",
+           "Display Options")
 PANELS = {"Materials": MaterialsPanel, "Formulation": FormulationPanel, "Settings": SettingsPanel}
+
+
+def point_text(p):
+    """A point as a field takes it: 120, 80, 1."""
+    return ", ".join(format(float(v), ".6g") for v in p)
 
 
 class Strip(QtWidgets.QDockWidget):
@@ -49,6 +57,11 @@ class Strip(QtWidgets.QDockWidget):
 
     def closeEvent(self, event):
         dialog = self.widget()
+        if getattr(dialog, "optimization_running", False):        # a run going: its strip stays (Stop first)
+            QtWidgets.QMessageBox.information(self, "Run", "A run is going. Stop it first: the Stop button "
+                                                           "keeps the design reached so far.")
+            event.ignore()
+            return
         self.is_open = False
         if getattr(self.window_, self.attr, None) is dialog:       # closed is gone: nothing may call it after
             delattr(self.window_, self.attr)                        # (Units' Apply updates an open Pick window)
@@ -212,12 +225,18 @@ class MMTOWindow(MainWindow):
         self.measure.setToolTip("Click two points on the part to see the distance between them; Esc to stop")
         self.measure.toggled.connect(self._measure_toggled)
         self.measured = QtWidgets.QLabel("")
+        self.snap = QtWidgets.QComboBox()
+        for text, step in SNAPS:
+            self.snap.addItem(text, step)
+        self.snap.setToolTip("Round the point under the mouse, a copied point and Measure to this step, in the "
+                             "project's length unit")
         self._measure_points = []
         self._measure_esc = QtWidgets.QShortcut(QKeySequence(QtCore.Qt.Key_Escape), self,
                                                 activated=lambda: self.measure.setChecked(False))
         self._measure_esc.setEnabled(False)                         # Esc stops measuring, and only that
         self.statusBar().addPermanentWidget(self.measured)
         self.statusBar().addPermanentWidget(self.coords)
+        self.statusBar().addPermanentWidget(self.snap)
         self.statusBar().addPermanentWidget(self.measure)
         self.statusBar().addPermanentWidget(self.ruler_box)
         self._rulers = []
@@ -325,6 +344,15 @@ class MMTOWindow(MainWindow):
         finally:
             self._looking = False
 
+    def part_actor(self):
+        """The part's own actor in the 3D view (its STL), or None."""
+        n = len(self.stl_geom.mesh.vectors) if getattr(self, "stl_geom", None) else -1
+        for actor in self.plotter.renderer.GetActors():
+            data = actor.GetMapper().GetInput() if actor.GetMapper() else None
+            if data is not None and data.GetNumberOfCells() == n:
+                return actor
+        return None
+
     def _index_part(self):
         """The lookup searches only the part, through an index of its triangles built once per part."""
         import vtk
@@ -332,16 +360,13 @@ class MMTOWindow(MainWindow):
             return
         self._picker.InitializePickList()
         self._picker.RemoveAllLocators()
-        n = len(self.stl_geom.mesh.vectors) if getattr(self, "stl_geom", None) else -1
-        for actor in self.plotter.renderer.GetActors():
-            data = actor.GetMapper().GetInput() if actor.GetMapper() else None
-            if data is not None and data.GetNumberOfCells() == n:
-                locator = vtk.vtkStaticCellLocator()
-                locator.SetDataSet(data)
-                locator.BuildLocator()
-                self._picker.AddLocator(locator)
-                self._picker.AddPickList(actor)
-                break
+        actor = self.part_actor()
+        if actor is not None:
+            locator = vtk.vtkStaticCellLocator()
+            locator.SetDataSet(actor.GetMapper().GetInput())
+            locator.BuildLocator()
+            self._picker.AddLocator(locator)
+            self._picker.AddPickList(actor)
         self._picker.SetPickFromList(True)
 
     def show_point_under_mouse(self, position=None):
@@ -350,13 +375,21 @@ class MMTOWindow(MainWindow):
             return
         x, y = position or self._mouse_at
         if self._picker.Pick(x, y, 0, self.plotter.renderer) and self._picker.GetCellId() >= 0:
-            p = self._picker.GetPickPosition()
-            self.coords.setText(f"x {p[0]:.4g}   y {p[1]:.4g}   z {p[2]:.4g} {self.length_unit()}")
+            p = np.asarray(self._picker.GetPickPosition())
+            self.coords.setText(f"x {p[0]:.4g}   y {p[1]:.4g}   z {p[2]:.4g}" + (
+                f"  \u2192  {point_text(self.snapped(p))}" if self.snap.currentData() else "") +
+                f" {self.length_unit()}")
         else:
             self.coords.setText("")
         panel = getattr(self, "supports_panel", None)
         if in_open_strip(panel):                                    # also on the form in front, if any
             panel.show_mouse(self.coords.text())
+
+    def snapped(self, p):
+        """p rounded to the Snap step (unchanged with Snap off)."""
+        step = self.snap.currentData() or 0.0
+        p = np.asarray(p, dtype=float)
+        return np.round(p / step) * step if step else p
 
     # ------------------------------------------------------------------ measuring
     def _measure_toggled(self, on):
@@ -366,14 +399,23 @@ class MMTOWindow(MainWindow):
         self.measured.setText("Measure: click the first point" if on else "")
 
     def on_left_button_press(self, picked_point, picker=None):
-        """A click on the part: a point to measure while Measure is on, otherwise picking as usual."""
+        """A click on the part, by what is in front: Measure on, a point to measure; the Pick strip open,
+        picking; a form open under Supports and loads, the (snapped) point copied to paste; else picking."""
+        panel = getattr(self, "supports_panel", None)
         if not self.measure.isChecked():
+            form_open = in_open_strip(panel) and panel.stack.currentIndex() > 0
+            if form_open and not in_open_strip(getattr(self, "structural_loads_window", None)):
+                if picker is not None and picker.GetCellId() >= 0:
+                    text = point_text(self.snapped(picked_point))
+                    QtWidgets.QApplication.clipboard().setText(text)
+                    panel.show_copied(text)
+                return None
             return super().on_left_button_press(picked_point, picker)
         if picker is None or picker.GetCellId() < 0:
             return
         if len(self._measure_points) == 2:                          # a third click starts again
             self._measure_points = []
-        self._measure_points.append(np.asarray(picked_point, dtype=float))
+        self._measure_points.append(self.snapped(picked_point))
         self._draw_measure()
         if len(self._measure_points) == 1:
             self.measured.setText("Measure: click the second point")
@@ -444,7 +486,7 @@ class MMTOWindow(MainWindow):
         return answer == QtWidgets.QMessageBox.Discard
 
     def closeEvent(self, event):
-        if self._ask_to_save():
+        if not self.run_going() and self._ask_to_save():
             event.accept()
         else:
             event.ignore()
@@ -453,10 +495,19 @@ class MMTOWindow(MainWindow):
     def _folder(self):
         return os.path.dirname(self.path) if self.path else os.getcwd()
 
+    def run_going(self):
+        """True, after saying so, when a run is going: no other project, no closing, until it stops."""
+        run = getattr(self, "run_window", None)
+        if in_open_strip(run) and run.optimization_running:
+            QtWidgets.QMessageBox.information(self, APP, "A run is going. Stop it first (Run > Stop); the design "
+                                                         "reached so far is kept.")
+            return True
+        return False
+
     def new_project(self, stl=None):
         """A project on an STL, every setting at its default; not saved until Save."""
         from project import Project  # type: ignore
-        if not self._ask_to_save():
+        if self.run_going() or not self._ask_to_save():
             return False
         if stl is None:
             stl, _ = QtWidgets.QFileDialog.getOpenFileName(self, "New project: choose the STL", self._folder(),
@@ -471,7 +522,7 @@ class MMTOWindow(MainWindow):
 
     def open_project(self, path=None):
         from project import Project  # type: ignore
-        if not self._ask_to_save():
+        if self.run_going() or not self._ask_to_save():
             return False
         if path is None:
             path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Open project", self._folder(), PROJECT_FILTER,
@@ -524,7 +575,7 @@ class MMTOWindow(MainWindow):
 
     def _show(self, project, path):
         """Make project the one in the window: PyTO-AD's state reset, units synced, the STL drawn."""
-        for attr in ("supports_panel", "structural_loads_window"):  # windows on the previous project
+        for attr in ("supports_panel", "structural_loads_window", "run_window"):  # windows on the previous project
             w = getattr(self, attr, None)
             if w is not None:
                 try:
@@ -621,6 +672,21 @@ class MMTOWindow(MainWindow):
             self.supports_panel = SupportsPanel(self)
             Strip(self.supports_panel, self, "supports_panel")
         return self.supports_panel
+
+    def open_run_panel(self):
+        """The Run strip (PyTO-AD's Optimize window on LSR MMTO's run), beside Supports and loads."""
+        if self.project is None:
+            QtWidgets.QMessageBox.information(self, APP, "Start a project first: File > New or File > Open.")
+            return None
+        if not self._raise_if_open("run_window"):
+            from .run import RunWindow
+            self.run_window = RunWindow(self)
+            strip = Strip(self.run_window, self, "run_window")
+            panel = getattr(self, "supports_panel", None)
+            if in_open_strip(panel):
+                self.tabifyDockWidget(panel.parentWidget(), strip)
+            strip.raise_()
+        return self.run_window
 
     def open_structural_loads_window(self):
         """The Pick window, docked (in place of MainWindow.open_structural_loads_window)."""
@@ -743,12 +809,13 @@ class MMTOWindow(MainWindow):
                               name=f"mmto_arrow{i}")
 
     def draw_outline(self, name, selection, colour):
-        """The place's shape as edges, in colour (place_outline); nothing for a place without one."""
+        """The place's shape as edges, always in OUTLINE_COLOUR, apart from every colour the nodes use
+        (place_outline); nothing for a place without one. colour is the nodes', kept for the call."""
         import selections as S  # type: ignore
         self.plotter.remove_actor(name, reset_camera=False)
         shape = place_outline(S.resolved(selection, self.project.selections), self.preview_mesh())
         if shape is not None:
-            self.plotter.add_mesh(shape, color=colour, style="wireframe", line_width=2, pickable=False, name=name,
+            self.plotter.add_mesh(shape, color=OUTLINE_COLOUR, style="wireframe", line_width=2, pickable=False, name=name,
                                   reset_camera=False)       # edges, not a see-through surface: transparency
                                                             # can hide the text over the 3D view
 

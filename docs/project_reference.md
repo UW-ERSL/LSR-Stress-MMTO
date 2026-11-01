@@ -26,7 +26,7 @@ Lengths are numbers in model units, or `"<k>h"` for k times the largest element 
 
 | type | fields | selects |
 |---|---|---|
-| `box` | lo, hi, pad | Points with lo <= p <= hi. |
+| `box` | lo, hi, pad | Points with lo <= p <= hi; the corners may come in any order. By default pad is half the element size along each axis, so a box thinner than an element still catches the nearest layer. |
 | `cylinder` | center, axis, radius, inner_radius, along, pad | Points whose distance to the axis is in [inner_radius, radius]; along = (t0, t1) limits (p - center) . axis. |
 | `difference` | parts | Points in the first part but not the second. |
 | `face` | side, pad | The plane at the mesh's extreme on one side: xmin, xmax, ymin, ymax, zmin or zmax. |
@@ -37,7 +37,8 @@ Lengths are numbers in model units, or `"<k>h"` for k times the largest element 
 | `intersect` | parts | Points in all of the parts. |
 | `near_face` | side, distance | Points strictly within distance of the mesh's extreme on one side. |
 | `nearest` | point, boundary | The single node or element closest to point; boundary=True only looks at nodes on the mesh boundary, as the PyTO-AD GUI does for a picked point. |
-| `plane` | axis, value, pad | Points with \|p_axis - value\| < pad. |
+| `place` | name | Another selection of the project, by name. Only a project can evaluate it: Project.evaluate puts the named selection in (resolved) each time, so a combination follows later edits of its parts. |
+| `plane` | axis, value, pad, limits | Points with \|p_axis - value\| <= pad; by default pad is half the element size along axis. limits, e.g. {"y": [100, 120]}, keeps only the part of the cut between those values of the other axes (each widened by pad along its own axis). |
 | `rows` | face, axis, n, end | The n outermost node rows of a face, counted along an axis: e.g. the 8 highest rows of the right face. Rows are node layers, so their height is n element sizes. |
 | `sphere` | center, radius, pad | Points within radius of center. |
 | `stl_faces` | triangles, tol | Boundary nodes on triangles of the STL the mesh was made from: within tol times the smallest element size of a triangle. tol None is PyTO-AD's own lookup (0.707); the PyTO-AD GUI uses 0.8. |

@@ -127,8 +127,10 @@ SETTING_DOCS = {
 }
 # the VAE's own settings, also in settings.vae; they start from the database's known values
 VAE_PARAMS = ("latentDim", "learningRate", "vae_hiddenDim", "maxAttributeErrorPercent", "klFactor", "numEpochs")
-# run_topopt arguments about one run's output, not the problem; n_dof_desired is mesh.n_dof
-NOT_STORED = ("to_problem", "save_dir", "plot_progress", "plot_bcs", "verbose", "plotter")
+# run_topopt arguments about one run's output or about watching it, not the problem; n_dof_desired
+# is mesh.n_dof
+NOT_STORED = ("to_problem", "save_dir", "plot_progress", "plot_bcs", "verbose", "plotter", "progress",
+              "should_stop")
 
 
 def _dofs(dofs):
@@ -992,7 +994,8 @@ class Project:
 
 
 # ---------------------------------------------------------------------- running
-def run_arguments(project, save_dir=None, verbose=True, plot_progress=False, plot_bcs=False, plotter=None):
+def run_arguments(project, save_dir=None, verbose=True, plot_progress=False, plot_bcs=False, plotter=None,
+                  progress=None, should_stop=None):
     """The keyword arguments run_topopt gets for this project."""
     from MainPureStructural import BetaScheduleScheme, Z0InitMethod                    # type: ignore
     project.complete_settings()
@@ -1003,7 +1006,8 @@ def run_arguments(project, save_dir=None, verbose=True, plot_progress=False, plo
     args["z0_init_method"] = Z0InitMethod[args["z0_init_method"]]
     args.update(to_problem=project, n_dof_desired=project.n_dof,
                 save_dir=save_dir if save_dir is not None else os.path.join("results", project.name),
-                verbose=verbose, plot_progress=plot_progress, plot_bcs=plot_bcs, plotter=plotter)
+                verbose=verbose, plot_progress=plot_progress, plot_bcs=plot_bcs, plotter=plotter,
+                progress=progress, should_stop=should_stop)
     return args
 
 

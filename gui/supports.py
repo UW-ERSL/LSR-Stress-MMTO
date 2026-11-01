@@ -81,7 +81,7 @@ PLACES_HELP = ("A place is the part of the model a support or load acts on: face
                "described (a face of the part, a box, a cylinder...). Each place has a name, like clamp or "
                "corner, which shows under Where, so several supports and loads can share one place. Open Places "
                "to rename a place, change it, or tick Keep solid so the optimization never removes it.")
-MOUSE_HINT = "Hover over the part to read its coordinates."
+MOUSE_HINT = "Hover over the part to read its coordinates; click it to copy the point."
 LENGTHS = {"radius", "inner_radius", "distance", "value", "pad", "along"}   # a length unit beside them
 POINTS = {"center", "lo", "hi", "point"}                    # x, y, z
 OPTIONAL = {"along", "tol"}                                 # empty means None
@@ -661,6 +661,13 @@ def bc_value(bc, units=None):
     return "; ".join(parts)
 
 
+def _clear_label(page, name):
+    try:
+        getattr(page, name).setText("")
+    except RuntimeError:                                            # the page has closed
+        pass
+
+
 def field_unit(measures, units):
     from databases import UNIT_SYSTEMS  # type: ignore
     if measures is None or units not in UNIT_SYSTEMS:
@@ -944,8 +951,10 @@ class SupportsPanel(QtWidgets.QDialog):
         title = QtWidgets.QLabel(f"<b>{dialog.windowTitle()}</b>")
         page.mouse = QtWidgets.QLabel(MOUSE_HINT)                   # the point under the mouse, while here
         page.mouse.setStyleSheet(GREY)
+        page.copied = QtWidgets.QLabel("")                          # a point copied by a click, for a while
+        page.copied.setStyleSheet("color: #1a7f37;")
         dialog.setWindowFlags(QtCore.Qt.Widget)
-        for widget in (title, dialog, page.mouse):
+        for widget in (title, dialog, page.mouse, page.copied):
             box.addWidget(widget)
         box.setStretch(1, 1)
         self.stack.addWidget(page)
@@ -959,6 +968,13 @@ class SupportsPanel(QtWidgets.QDialog):
             page.deleteLater()
         dialog.finished.connect(finished)
         return dialog
+
+    def show_copied(self, text):
+        """A click on the part while a form is open: what went to the clipboard."""
+        page = self.stack.currentWidget()
+        if hasattr(page, "copied"):
+            page.copied.setText(f"Copied {text}: paste it with Ctrl+V")
+            QtCore.QTimer.singleShot(5000, lambda p=page: _clear_label(p, "copied"))
 
     def show_mouse(self, text):
         """The point under the mouse, on the page in front (the list has the status bar for it)."""

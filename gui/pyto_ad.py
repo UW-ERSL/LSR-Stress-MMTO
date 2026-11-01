@@ -10,6 +10,7 @@ the GUI.
     GeometryWindow     loading an STL (also from SolidWorks)
     ProjectsWindow     its load_geometry draws an STL and turns picking on
     StructuralLoadsWindow   picking supports and loads with the mouse
+    StructuralTopOptWindow  running an optimization: its worker thread, signals, live plot and log
     FILE_DIALOG_OPTIONS
 
 Also used, as MainWindow's own methods: update_LivVar (told when a pick is applied) and
@@ -17,6 +18,6 @@ _raise_if_open; and the Structural Loads window's redraw_loads and refresh_appli
 """
 import PyTOImports  # noqa: F401  # type: ignore  # puts PyTO-AD on sys.path
 from pyto.gui.PyTOGUI import (FILE_DIALOG_OPTIONS, GeometryWindow, MainWindow,  # noqa: F401  # type: ignore
-                              ProjectsWindow, StructuralLoadsWindow, UnitsWindow)
+                              ProjectsWindow, StructuralLoadsWindow, StructuralTopOptWindow, UnitsWindow)
 
 UNIT_SYSTEMS = ("MKS", "mmKS", "IPS")          # the choices of UnitsWindow

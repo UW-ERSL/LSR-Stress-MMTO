@@ -111,6 +111,10 @@ def update_beta(beta_proj, mmaIterations, beta_schedule):
 
     return min(beta_proj * beta_schedule["beta_factor"], beta_schedule["beta_max"]), True
 
+class _StopRequested(Exception):
+    """Raised inside the MMA callback when should_stop() says so; run_topopt catches it."""
+
+
 def run_topopt(
     to_problem,
     # ---- per-run sweep overrides (None => use the project's values) ----
@@ -168,6 +172,13 @@ def run_topopt(
     use_z_smoothing=False,
     z_smoothing_weight=1e-3,
     z_smoothing_disable_after_iter=50,
+    # -------------------------------
+    # Watching from outside (the GUI): not part of the problem, not recorded
+    # -------------------------------
+    progress=None,             # progress(state) after each iteration: iteration, objective, constraints,
+                               # x_phys, z (per element), z_real (the materials' latent points)
+    should_stop=None,          # should_stop() before each iteration: True ends the run there, and the
+                               # design reached so far is post-processed and saved as usual
 ):
     """
     DENSITY FILTER + HEAVISIDE PROJECTION (density ONLY):
@@ -180,6 +191,8 @@ def run_topopt(
       Pz = lambda * sum_ell sum_e x_e * ( z_e^(ell) - ((H z^(ell))/Hs)_e )^2
     """
     _args_at_start = dict(locals())   # the arguments as given; the run switches some off later
+    for _k in ("progress", "should_stop"):
+        _args_at_start.pop(_k, None)
     import run_io as _run_io
     _provenance = _run_io.provenance()   # the code as it is when the run starts
 
@@ -390,6 +403,9 @@ def run_topopt(
           8. log, update beta continuation / SIMP continuation
         """
         nonlocal mmaIterations, obj0, Sd0, gamma, beta_proj, use_z_smoothing, use_penalization, _dyn_ramp_started
+        nonlocal _last_zeta
+        if should_stop is not None and should_stop():
+            raise _StopRequested
         if (
             use_z_smoothing
             and z_smoothing_disable_after_iter is not None
@@ -533,6 +549,11 @@ def run_topopt(
 
         log_objective_and_constraints(history, obj, J_phys, Jn, P, Pn, Pzn, cons,
                                       to_params, verbose=verbose)
+        _last_zeta = zeta.copy()
+        if progress is not None:
+            progress({"iteration": int(mmaIterations), "objective": float(J_phys),
+                      "constraints": [float(c) for c in np.ravel(cons)], "x_phys": np.array(x_phys),
+                      "z": np.array(z), "z_real": zRealPoints.detach().cpu().numpy()})
 
         # ================ CONTINUATION + BETA UPDATE ==================
         mmaIterations += 1
@@ -597,22 +618,28 @@ def run_topopt(
     nConstraints = len(to_params.Constraints)
 
     tStart = time.time()
-    optResults = runMMA(
-        nVariables,
-        nConstraints,
-        MMTO_optimization_function,
-        zeta0.reshape(-1, 1),
-        lowerBound,
-        upperBound,
-        maxIterations=maxIterations,
-        timeLimitSecs=timeLimit,
-        move_limit=MMA_MOVE_LIMIT,
-        kktTol=MMA_KKT_TOL,
-        fTolerance=rel_conv_tol,
-        gTolerance=rel_conv_tol,
-        verbose=False,
-    )
-    zetaOptimal = np.asarray(optResults[0]).flatten()
+    _last_zeta = zeta0.flatten().copy()
+    try:
+        optResults = runMMA(
+            nVariables,
+            nConstraints,
+            MMTO_optimization_function,
+            zeta0.reshape(-1, 1),
+            lowerBound,
+            upperBound,
+            maxIterations=maxIterations,
+            timeLimitSecs=timeLimit,
+            move_limit=MMA_MOVE_LIMIT,
+            kktTol=MMA_KKT_TOL,
+            fTolerance=rel_conv_tol,
+            gTolerance=rel_conv_tol,
+            verbose=False,
+        )
+        zetaOptimal = np.asarray(optResults[0]).flatten()
+    except _StopRequested:                     # stopped from outside: the last design evaluated
+        zetaOptimal = _last_zeta
+        _during_run["stopped_at_iter"] = int(mmaIterations)
+        print(f"Stopped at iteration {mmaIterations}; saving the design reached so far.")
     tEnd = time.time()
     print(f"Total optimization time: {tEnd - tStart:.2f} seconds")
     # ---- assemble the full parameter manifest (no plotting; saved as YAML+pkl) ----
