@@ -95,11 +95,19 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 | File | Purpose |
 |---|---|
 | `Tutorial.ipynb` | runs one example end to end |
+| `run_gui.py` | starts the LSR MMTO GUI: `python run_gui.py`, or `python run_gui.py projects/beam.mmto` |
 | `projects/` | the four examples as project files: geometry, supports, loads, materials, objective, constraints, settings |
 | `docs/project_reference.md` | everything a project file can hold, generated from the code |
 | `docs/extending.md` | how to add a quantity, a selection type, a boundary condition, a setting, a material attribute or a database |
 | `setup_environment.py` | installs everything; see Installation |
 | `requirements.txt` | Python packages the setup installs |
+
+### `gui/`
+
+| File | Purpose |
+|---|---|
+| `main_window.py` | the window: New, Open and Save of .mmto projects, units, geometry |
+| `pyto_ad.py` | everything the GUI takes from the PyTO-AD GUI |
 
 ### `0-Common/`
 
