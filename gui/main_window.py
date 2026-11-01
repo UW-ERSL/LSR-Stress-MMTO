@@ -7,8 +7,8 @@ Project.save, so a project opened and saved with no edits is written back unchan
 
     python run_gui.py [project.mmto]        (from the repository folder)
 
-The sidebar keeps PyTO-AD's Units, Geometry and Display Options. The panels for materials,
-the formulation, the settings and the supports and loads come in the next steps.
+The sidebar keeps PyTO-AD's Units, Geometry and Display Options, and adds Materials,
+Formulation and Settings (panels.py). Supports and loads come in the next step.
 """
 import json
 import os
@@ -17,12 +17,14 @@ import sys
 from PyQt5 import QtWidgets
 from PyQt5.QtGui import QKeySequence
 
+from .panels import FormulationPanel, MaterialsPanel, SettingsPanel
 from .pyto_ad import (FILE_DIALOG_OPTIONS, UNIT_SYSTEMS, GeometryWindow, MainWindow, ProjectsWindow,
                       UnitsWindow)
 
 APP = "LSR MMTO"
 PROJECT_FILTER = "LSR MMTO project (*.mmto)"
-SIDEBAR = ("Units", "Geometry", "Display Options")
+SIDEBAR = ("Units", "Geometry", "Materials", "Formulation", "Settings", "Display Options")
+PANELS = {"Materials": MaterialsPanel, "Formulation": FormulationPanel, "Settings": SettingsPanel}
 
 
 def mmto_file_error(path):
@@ -74,9 +76,12 @@ def summary(project):
 
 
 class MMTOWindow(MainWindow):
-    """PyTO-AD's MainWindow with a Project, a File menu, and the sidebar cut to SIDEBAR."""
+    """PyTO-AD's MainWindow with a Project, a File menu, and the sidebar of SIDEBAR: PyTO-AD's
+    buttons where it has them, ours (PANELS) for the rest."""
 
-    BUTTON_CONFIG = [c for c in MainWindow.BUTTON_CONFIG if c["name"] in SIDEBAR]
+    BUTTON_CONFIG = [next((c for c in MainWindow.BUTTON_CONFIG if c["name"] == name),
+                          {"name": name, "icon": "arrow", "always_enabled": True,
+                           "handler": f"open_{name.lower()}_panel"}) for name in SIDEBAR]
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -261,6 +266,37 @@ class MMTOWindow(MainWindow):
             for w in self.project.warnings():
                 self.message_text.append(f"Warning: {w}")
             self._refresh_title()
+
+    # ------------------------------------------------------------------ Materials, Formulation, Settings
+    def open_panel(self, name):
+        """One of PANELS on the project; OK puts its changes in, Cancel drops them."""
+        if self.project is None:
+            QtWidgets.QMessageBox.information(self, APP, "Start a project first: File > New or File > Open.")
+            return None
+        panel = PANELS[name](self, self.project)
+        if panel.exec_():
+            self.apply_panel(panel)
+        return panel
+
+    def apply_panel(self, panel):
+        lines = panel.apply(self.project)
+        for line in lines:
+            self.message_text.append(line)
+        if lines:
+            for e in self.project.validate():
+                self.message_text.append(f"Error: {e}")
+            for w in self.project.warnings():
+                self.message_text.append(f"Warning: {w}")
+        self._refresh_title()
+
+    def open_materials_panel(self):
+        return self.open_panel("Materials")
+
+    def open_formulation_panel(self):
+        return self.open_panel("Formulation")
+
+    def open_settings_panel(self):
+        return self.open_panel("Settings")
 
     # ------------------------------------------------------------------ geometry
     def open_geometry_window(self):

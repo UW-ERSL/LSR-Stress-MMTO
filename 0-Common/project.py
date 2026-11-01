@@ -60,7 +60,8 @@ import numpy as np
 
 import selections as S
 from databases import (ATTRIBUTES, DATABASE_DIR, DATABASE_VAE, UNIT_SYSTEMS, VAEParams, check_database,
-                       database_attributes, database_units, recommended_latent_dim, unit_ratio)
+                       database_attributes, database_units, in_shipped_folder, recommended_latent_dim,
+                       unit_ratio)
 
 SCHEMA_VERSION = 1
 # _UPGRADES[n] turns an mmto section of version n into version n + 1. When the format
@@ -134,6 +135,18 @@ def _dofs(dofs):
     if not dofs or any(c not in _AXES for c in dofs) or len(set(dofs)) != len(dofs):
         raise ValueError(f"dofs must be letters from 'xyz', e.g. 'xyz' or 'y', not {dofs!r}")
     return [_AXES[c] for c in sorted(dofs, key="xyz".index)]
+
+
+def network_shape(path):
+    """(inputs, hidden width, latent dimension) of the VAE saved in path, read from its weights;
+    None when the file is not such a network."""
+    import torch
+    try:
+        sd = torch.load(path, map_location="cpu", weights_only=True)
+        hidden, n_in = sd["encoder.linear1.weight"].shape
+        return int(n_in), int(hidden), int(sd["encoder.linear2.weight"].shape[0])
+    except Exception:                                                                  # noqa: BLE001
+        return None
 
 
 def upgrade(m, name="project"):
@@ -257,7 +270,7 @@ def parse_expression(text):
 
 def to_params_form(text, role, bound=None):
     """The old to_params tuple for an expression: (TO_QOI, option) or (TO_QOI, option, bound)."""
-    from AutodiffPureStructural import QUANTITIES          # type: ignore
+    from AutodiffPureStructural import DEFAULT_TAU, QUANTITIES                       # type: ignore
     from PyTOImports import TO_QOI                         # type: ignore
     name, args, kwargs = parse_expression(text)
     by_name = {q.name: q for q in QUANTITIES}
@@ -272,7 +285,7 @@ def to_params_form(text, role, bound=None):
     if kind == "material":
         if len(args) != 1 or set(kwargs) - {"tau"}:
             raise ValueError(f"expression {text!r}: write MaterialVolumeFraction(material, tau=...)")
-        opt = {"material_id": int(args[0]), "tau": float(kwargs.get("tau", 0.5))}
+        opt = {"material_id": int(args[0]), "tau": float(kwargs.get("tau", DEFAULT_TAU))}
     else:
         if args or kwargs:
             raise ValueError(f"expression {text!r}: {name} takes no arguments")
@@ -450,6 +463,7 @@ class Project:
             errors += [f"material database {os.path.basename(xlsx)}: {e}" for e in db_errors]
             if not db_errors:
                 errors += self._missing_columns(database_attributes(xlsx))
+                errors += self.vae_check()[0]
         for section, values in self.settings.items():
             known = set(DEFAULT_SETTINGS.get(section, {})) | (set(VAE_PARAMS) if section == "vae" else set())
             if section not in DEFAULT_SETTINGS:
@@ -474,6 +488,21 @@ class Project:
                 to_params_form(obj.get("expression"), "objective")
             except ValueError as e:
                 errors.append(f"objective: {e}")
+        taus = set()
+        for c in self.formulation.get("constraints", []):
+            try:
+                name, _, kwargs = parse_expression(c.get("expression"))
+            except ValueError:
+                continue
+            if name == "MaterialVolumeFraction":
+                from AutodiffPureStructural import DEFAULT_TAU                         # type: ignore
+                taus.add(float(kwargs.get("tau", DEFAULT_TAU)))
+        if len(taus) > 1:
+            listed = ", ".join(f"{t:g}" for t in sorted(taus))
+            errors.append(f"the material volume fraction constraints use different tau ({listed}); one tau "
+                          f"applies to all of them: use the same value")
+        if any(t <= 0 for t in taus):
+            errors.append("tau must be greater than 0")
         for i, c in enumerate(self.formulation.get("constraints", []), 1):
             if c.get("op") != "<=":
                 errors.append(f"constraint {i}: only '<=' for now")
@@ -571,13 +600,62 @@ class Project:
             return out
         out += [f"material database {os.path.basename(xlsx)}: {w}" for w in db_warnings]
         out += self._unit_warnings(xlsx)
-        d_eff, n_z = recommended_latent_dim(xlsx)
-        latent = self.settings.get("vae", {}).get("latentDim")
-        if latent is not None and int(latent) != n_z:
-            out.append(f"latentDim is {latent}; the database's effective dimension is d_eff = {d_eff:.2f}, "
-                       f"so {n_z} is recommended. A latent space larger than the database needs has "
-                       f"stopped runs from converging before.")
+        out += self.vae_check()[1]
         return out
+
+    def network_path(self):
+        """The VAE file a run loads or trains: settings.vae.saveNet, or else the .nt next to the
+        database's .xlsx with the same name (my_db.xlsx, my_db.nt)."""
+        xlsx, _ = self.database_paths()
+        return self.settings.get("vae", {}).get("saveNet") or os.path.splitext(xlsx)[0] + ".nt"
+
+    def vae_check(self):
+        """(errors, warnings, status) about the VAE: a run that would train into the shipped folder,
+        a trained network that does not fit the settings or the database, a network a run would
+        replace, a latent dimension other than the recommended one; status says which network the
+        database has. For a database that passes its check."""
+        vae = self.settings.get("vae", {})
+        xlsx, _ = self.database_paths()
+        nt = self.network_path()
+        name = os.path.basename(nt)
+        shipped, exists = in_shipped_folder(nt), os.path.isfile(nt) and os.path.getsize(nt) > 0
+        train = not vae.get("use_pretrained_vae", True) or not exists
+        errors, warnings_ = [], []
+        if train and shipped:
+            errors.append(f"a run would train a new VAE and save it over the shipped {name}; to train a different "
+                          f"network, copy {os.path.basename(xlsx)} to a folder of your own and use the copy")
+        elif train and exists:
+            warnings_.append(f"{name} exists: the next run trains a new network and replaces it (the old one is "
+                             f"kept as {os.path.splitext(name)[0]}.previous.nt). To keep both, copy "
+                             f"{os.path.basename(xlsx)} first.")
+        if not train:
+            shape = network_shape(nt)
+            if shape is None:
+                errors.append(f"{name} could not be read as a VAE network")
+            else:
+                n_in, hidden, latent = shape
+                n_columns = len(database_attributes(xlsx))
+                if n_in != n_columns:
+                    errors.append(f"{name} takes {n_in} attributes, but {os.path.basename(xlsx)} has {n_columns}: "
+                                  f"it was trained on another database")
+                for key, have in (("latentDim", latent), ("vae_hiddenDim", hidden)):
+                    if vae.get(key) is not None and int(vae[key]) != have:
+                        errors.append(f"{key} is {vae[key]}, but {name} was trained with {have}: set it to {have}, "
+                                      f"or switch off use_pretrained_vae to train a new network")
+        d_eff, n_z = recommended_latent_dim(xlsx)
+        latent = vae.get("latentDim")
+        if latent is not None and int(latent) > n_z:
+            warnings_.append(f"latentDim is {latent}; the database's effective dimension is d_eff = {d_eff:.2f}, "
+                             f"so {n_z} is recommended. A latent space larger than the database needs has "
+                             f"stopped runs from converging before.")
+        elif latent is not None and int(latent) < n_z:
+            warnings_.append(f"latentDim is {latent}; the database's effective dimension is d_eff = {d_eff:.2f}, "
+                             f"so {n_z} is recommended. A latent space smaller than the database needs cannot "
+                             f"reproduce every material: expect large reconstruction errors, and decoded "
+                             f"properties that do not match the real materials.")
+        status = f"Network: {name}, " + ("shipped." if shipped and exists else "found." if exists else
+                                         f"none yet. The first run trains {name}.")
+        return errors, warnings_, status
 
     def complete_settings(self):
         """Fill every missing setting from the defaults; returns what was filled."""

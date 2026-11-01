@@ -172,6 +172,40 @@ def test_record_stores_display():
     assert old.material_labels == old.material_names == ["Mat1_Red", "Mat2_Blue", "Mate3_Green"]
 
 
+def test_vae_training_guards():
+    """Training never writes into the shipped folder, and a network being replaced is kept as
+    <name>.previous.nt."""
+    import shutil
+    from databases import DATABASE_DIR  # type: ignore
+    p = ubracket_project()                                              # 6Materials_AF_3Attr, shipped
+    shipped = os.path.join(ROOT, DATABASE_DIR, "6Materials_AF_3Attr")
+    with tempfile.TemporaryDirectory() as d:
+        p.settings["vae"]["use_pretrained_vae"] = False                 # the project check refuses it
+        assert any("save it over the shipped 6Materials_AF_3Attr.nt" in e for e in p.validate())
+        p.settings["vae"]["use_pretrained_vae"] = True                  # and so does the run, called directly
+        args = run_arguments(p, save_dir=d, verbose=False)
+        args.update(use_pretrained_vae=False, saveNet=os.path.join(ROOT, DATABASE_DIR, "new.nt"))
+        try:
+            _run(p, args)
+        except ValueError as e:
+            assert "would overwrite the shipped new.nt" in str(e), e
+        else:
+            raise AssertionError("a run trained into the shipped folder")
+        assert not os.path.exists(os.path.join(ROOT, DATABASE_DIR, "new.nt"))
+        p.settings["vae"]["use_pretrained_vae"] = False
+        for ext in (".xlsx", ".nt"):
+            shutil.copy(shipped + ext, os.path.join(d, "ggd" + ext))
+        old = open(os.path.join(d, "ggd.nt"), "rb").read()
+        p.database = os.path.join(d, "ggd.xlsx")
+        p.settings["vae"]["numEpochs"] = 3                              # a poor network: MMA may overflow
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            _run(p, run_arguments(p, save_dir=d, verbose=False))
+        assert open(os.path.join(d, "ggd.previous.nt"), "rb").read() == old
+        assert open(os.path.join(d, "ggd.nt"), "rb").read() != old      # the new network
+
+
 def test_old_runs_rebuild():
     """A run made under an old example name, or from a GUI file before projects, gets
     the same mesh as before."""

@@ -14,6 +14,14 @@ from dataclasses import dataclass
 DATABASE_DIR = os.path.join("1-PureStructural", "MaterialDataPureStructural")
 
 
+def in_shipped_folder(path):
+    """True when path is in DATABASE_DIR, the folder of the shipped databases and their networks,
+    which a run never writes into."""
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    norm = lambda p: os.path.normcase(os.path.realpath(p))                   # noqa: E731
+    return norm(os.path.dirname(os.path.abspath(path))) == norm(os.path.join(repo, DATABASE_DIR))
+
+
 @dataclass(slots=True)
 class VAEParams:
     """VAE settings for a database that has none of its own."""
@@ -173,6 +181,18 @@ def database_units(path):
         u = df.iat[1, c]
         out[attribute_name(df.iat[0, c])] = None if (u is None or str(u).strip() in ("", "nan")) else str(u).strip()
     return out
+
+
+def database_table(path):
+    """(names, attributes, units, values): the materials, the columns' registry names, each
+    column's unit as written (None when blank) and the numbers, one row per material."""
+    import numpy as np
+    df = _read(path)
+    names = [str(m).strip() for m in df.iloc[2:, 0].tolist()]
+    attributes = [attribute_name(n) for n in df.iloc[0, 1:].tolist()]
+    units = [None if (u is None or str(u).strip() in ("", "nan")) else str(u).strip() for u in df.iloc[1, 1:]]
+    values = np.array([[float(v) for v in row] for row in df.iloc[2:, 1:].to_numpy()])
+    return names, attributes, units, values
 
 
 def recommended_latent_dim(path):

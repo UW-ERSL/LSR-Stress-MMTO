@@ -22,6 +22,7 @@ import numpy as np
 import torch
 import time
 import os
+import shutil
 import sys
 
 from enum import Enum
@@ -29,7 +30,7 @@ from enum import Enum
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../0-Common")))
 
-from databases import material_display
+from databases import in_shipped_folder, material_display
 from PyTOImports import (
     deflation,
     linear_solvers,
@@ -226,6 +227,13 @@ def run_topopt(
         print(f"Loading pre-trained autoencoder from file: {saveNet}")
         matEncoder.loadAutoencoderFromFile(saveNet)
     else:
+        if in_shipped_folder(saveNet):
+            raise ValueError(f"training a new VAE would overwrite the shipped {os.path.basename(saveNet)}; to train "
+                             f"a different network, copy the database to a folder of your own and use the copy")
+        if vae_file_exists:                                 # one step of undo: the network being replaced
+            previous = os.path.splitext(saveNet)[0] + ".previous.nt"
+            shutil.copy2(saveNet, previous)
+            print(f"Keeping the network being replaced as {previous}")
         print(f"Training autoencoder and saving to: {saveNet}")
         time_start = time.time()
         matEncoder.trainAutoencoder(

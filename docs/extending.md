@@ -25,6 +25,8 @@ function of the model's state and add an entry; autograd gives the gradient.
   `TO_QOI` counterpart also needs a change in `to_params_form` in `0-Common/project.py`.
 - Add it to `QUANTITIES` in `tests/test_ad_quantities.py`, which checks the gradient against
   finite differences.
+- The GUI's Formulation panel lists it by itself; add the unit of its bound to `bound_unit` in
+  `gui/panels.py`.
 
 ## A selection type
 
@@ -56,6 +58,9 @@ from it.
 
 `test_settings_cover_run_topopt` in `tests/test_run_project.py` fails when an argument is
 missing; `utils/reference.py` stops when a setting has no line in `SETTING_DOCS`.
+
+In the GUI, give it a place in `LAYOUT` and a label in `LABELS`, `gui/panels.py`;
+`test_settings_panel_covers_every_setting` in `tests/test_gui.py` fails until it has both.
 
 ## A material attribute
 
@@ -89,7 +94,9 @@ with; the template has one, filled with the default colours. The colours painted
 template are the defaults and do not follow edits to the text.
 
 To ship a trained VAE with it, put the `.nt` file beside the `.xlsx` and add the settings it
-was trained with to `DATABASE_VAE` in `0-Common/databases.py`. A database not listed there
+was trained with to `DATABASE_VAE` in `0-Common/databases.py`. A database's network is always
+the `.nt` beside it with the same name; a run never trains into the shipped folder, and a run
+that replaces a network keeps the old one as `<name>.previous.nt`. A database not listed there
 starts from `VAEParams`, with the recommended latent dimension; a project that sets another
 one runs with a warning.
 

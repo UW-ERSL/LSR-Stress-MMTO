@@ -258,6 +258,46 @@ def test_project_uses_the_check():
         assert p.units == "none" and p.warnings() == []
 
 
+def test_vae_check():
+    """A database's network is the .nt next to it with the same name. A trained network must fit the
+    settings and the database; a run never trains into the shipped folder; replacing a network warns."""
+    from project import Project, network_shape  # type: ignore
+    for name in ("L-bracket", "U-bracket", "beam", "Airplane bracket", "rectangular beam"):
+        p = Project.load(os.path.join(ROOT, "projects", f"{name}.mmto"))
+        errors, warnings, status = p.vae_check()
+        assert errors == [] and warnings == [] and status.endswith("shipped."), (name, errors, warnings)
+    p = Project.load(os.path.join(ROOT, "projects", "L-bracket.mmto"))
+    p.settings["vae"]["latentDim"] = 4
+    assert p.vae_check()[0] == ["latentDim is 4, but BM1_3Mats_2Attr.nt was trained with 2: set it to 2, or "
+                                "switch off use_pretrained_vae to train a new network"]
+    assert any("latentDim is 4, but" in e for e in p.validate())
+    p.settings["vae"]["use_pretrained_vae"] = False
+    assert "save it over the shipped BM1_3Mats_2Attr.nt" in p.vae_check()[0][0]
+    p.settings["vae"]["latentDim"] = 1                                       # smaller than recommended
+    assert "smaller than the database needs cannot reproduce every material" in p.vae_check()[1][0]
+
+    with tempfile.TemporaryDirectory() as d:
+        bm1 = os.path.join(SHIPPED, "BM1_3Mats_2Attr")
+        shutil.copy(bm1 + ".xlsx", os.path.join(d, "ggd.xlsx"))
+        p = Project.load(os.path.join(ROOT, "projects", "L-bracket.mmto"))
+        p.base_dir, p.database = d, "ggd.xlsx"
+        assert p.network_path() == os.path.join(d, "ggd.nt")
+        assert p.vae_check() == ([], [], "Network: ggd.nt, none yet. The first run trains ggd.nt.")
+        shutil.copy(bm1 + ".nt", os.path.join(d, "ggd.nt"))
+        assert p.vae_check() == ([], [], "Network: ggd.nt, found.") and network_shape(p.network_path()) == (2, 50, 2)
+        p.settings["vae"]["use_pretrained_vae"] = False                          # retrain: allowed, with a warning
+        errors, warnings, _ = p.vae_check()
+        assert errors == [] and warnings == ["ggd.nt exists: the next run trains a new network and replaces it "
+                                             "(the old one is kept as ggd.previous.nt). To keep both, copy "
+                                             "ggd.xlsx first."]
+        p.settings["vae"]["use_pretrained_vae"] = True
+        shutil.copy(os.path.join(SHIPPED, "CustomAlloys20_3D.nt"), os.path.join(d, "ggd.nt"))   # another database's
+        errors = p.vae_check()[0]
+        assert "ggd.nt takes 4 attributes, but ggd.xlsx has 2: it was trained on another database" in errors
+        open(os.path.join(d, "ggd.nt"), "w").write("not a network")
+        assert p.vae_check()[0] == ["ggd.nt could not be read as a VAE network"]
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in [(k, v) for k, v in list(globals().items()) if k.startswith("test_")]:

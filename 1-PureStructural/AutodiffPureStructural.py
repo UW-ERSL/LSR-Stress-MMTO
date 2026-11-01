@@ -243,6 +243,9 @@ def latent_smoothing(xb, z, Hm, Hsm):
     return torch.sum(xb[:, None] * (z - zbar) ** 2)
 
 
+DEFAULT_TAU = 0.5        # sharpness of the material assignment, the same for every material volume fraction
+
+
 def material_volume_fraction(xb, z, z_real, material_id, tau):
     """V_k = (1/N) sum_e xb_e * softmax_k(-||z_e - z_k||^2 / tau)."""
     logits = -((z[:, None, :] - z_real[None, :, :]) ** 2).sum(-1) / tau
@@ -308,7 +311,7 @@ def _volume_fraction(m, opt):
 
 def _material_volume_fraction(m, opt):
     return material_volume_fraction(m.x_phys, m.z, m.z_real,
-                                    int(opt["material_id"]), float(opt.get("tau", 1.0)))
+                                    int(opt["material_id"]), float(opt.get("tau", DEFAULT_TAU)))
 
 
 QUANTITIES = [
