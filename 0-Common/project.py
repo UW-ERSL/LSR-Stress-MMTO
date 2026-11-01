@@ -169,10 +169,14 @@ class BCKind:
     """One kind of boundary condition. role is "support" or "load"; check(bc) gives a list
     of errors; apply(bc, nodes, mesh, state, where) puts it on the mesh, in
     state["values"] (dof -> imposed value) or state["force"]; script(bc, on) is the
-    Project call that makes it. Supports are applied before loads, each in the order given."""
+    Project call that makes it. Supports are applied before loads, each in the order given.
+    fields: its values, as (name, kind, measures, doc); kind is "dofs" (some of x, y, z),
+    "number", "vector" (three numbers) or "area" (a number or "bbox"); measures is what
+    the number is (one of UNITS, or "area"), for its unit. The GUI's form is made from them."""
 
-    def __init__(self, doc, role, check, apply, script):
+    def __init__(self, doc, role, check, apply, script, fields=()):
         self.doc, self.role, self.check, self.apply, self.script = doc, role, check, apply, script
+        self.fields = tuple(fields)
 
 
 def _check_dofs(bc):
@@ -181,6 +185,13 @@ def _check_dofs(bc):
         return []
     except ValueError as e:
         return [str(e)]
+
+
+def _check_force(bc):
+    f = np.asarray(bc.get("total", []), dtype=float)
+    if f.shape != (3,) or not np.any(f):
+        return ["total must be three numbers, not all zero"]
+    return []
 
 
 def _check_direction(bc):
@@ -225,18 +236,23 @@ def _apply_traction(bc, n, mesh, state, where):
 BC_KINDS = {
     "fixed": BCKind(
         "the given dofs (x, y, z) held at 0", "support", _check_dofs, _apply_support,
-        lambda bc, on: f"p.add_support({on}, dofs={bc['dofs']!r})"),
+        lambda bc, on: f"p.add_support({on}, dofs={bc['dofs']!r})",
+        [("dofs", "dofs", None, "the directions held")]),
     "displacement": BCKind(
         "the given dofs held at a nonzero value", "support", _check_dofs, _apply_support,
-        lambda bc, on: f"p.add_support({on}, dofs={bc['dofs']!r}, value={bc['value']!r})"),
+        lambda bc, on: f"p.add_support({on}, dofs={bc['dofs']!r}, value={bc['value']!r})",
+        [("dofs", "dofs", None, "the directions moved"), ("value", "number", "length", "the displacement")]),
     "force": BCKind(
-        "a total force [Fx, Fy, Fz], split equally over the nodes", "load", lambda bc: [], _apply_force,
-        lambda bc, on: f"p.add_force({on}, total={bc['total']!r})"),
+        "a total force [Fx, Fy, Fz], split equally over the nodes", "load", _check_force, _apply_force,
+        lambda bc, on: f"p.add_force({on}, total={bc['total']!r})",
+        [("total", "vector", "force", "the total force, split equally over the nodes")]),
     "traction": BCKind(
         "pressure * area along a direction, split equally over the nodes; area a number or 'bbox'",
         "load", _check_direction, _apply_traction,
         lambda bc, on: f"p.add_traction({on}, pressure={bc['pressure']!r}, "
-                       f"direction={bc['direction']!r}, area={bc['area']!r})"),
+                       f"direction={bc['direction']!r}, area={bc['area']!r})",
+        [("pressure", "number", "stress", "the pressure"), ("direction", "vector", None, "the direction it pushes"),
+         ("area", "area", "area", "the area it acts on, or bbox: the region's extent across the direction")]),
 }
 
 
@@ -330,11 +346,31 @@ class Project:
         return on
 
     def _adopt_gui_picks(self):
-        """Supports and loads picked in the PyTO-AD GUI become selections and boundary
-        conditions of this project, with the GUI's own rules; the GUI's lists are emptied,
-        so the problem is defined in one place."""
+        """Supports and loads picked in the PyTO-AD GUI and stored in the file become selections
+        and boundary conditions of this project; the file's GUI lists are emptied, so the problem
+        is defined in one place."""
+        names = self.adopt_picks(self._gui) if self._gui else []
+        if not names:
+            return []
+        sbc = self._gui.get("structuralBC")
+        if isinstance(sbc, dict):
+            self._gui["structuralBC"] = {k: [] if isinstance(v, list) else
+                                         {kk: 0 for kk in v} if isinstance(v, dict) else v
+                                         for k, v in sbc.items()}
+        for k in ("constraint_data", "force_data"):
+            if k in self._gui:
+                self._gui[k] = []
+        print(f"[{self.name}] the supports and loads picked in the PyTO-AD GUI are now selections "
+              f"{', '.join(names)} of this project")
+        return names
+
+    def adopt_picks(self, gui):
+        """Supports and loads picked in the PyTO-AD GUI (a project file's GUI section, or the GUI's
+        constraint_data and force_data lists) as selections and boundary conditions of this project,
+        with the GUI's own rules: faces as stl_faces (tol 0.8), a clicked node as its nearest
+        boundary node, a dragged box as halfspaces. Returns the names of the new selections."""
         from pyto_project import _SUPPORT_DOFS, _supports_and_loads                  # type: ignore
-        supports, loads = _supports_and_loads(self._gui) if self._gui else ([], [])
+        supports, loads = _supports_and_loads(gui)
         if not supports and not loads:
             return []
 
@@ -358,16 +394,6 @@ class Project:
                                       selection(triangles, points, regions, f"load {i + 1}"))
             self.add_force(name, total=f)
             names.append(name)
-        sbc = self._gui.get("structuralBC")
-        if isinstance(sbc, dict):
-            self._gui["structuralBC"] = {k: [] if isinstance(v, list) else
-                                         {kk: 0 for kk in v} if isinstance(v, dict) else v
-                                         for k, v in sbc.items()}
-        for k in ("constraint_data", "force_data"):
-            if k in self._gui:
-                self._gui[k] = []
-        print(f"[{self.name}] the supports and loads picked in the PyTO-AD GUI are now selections "
-              f"{', '.join(names)} of this project")
         return names
 
     def add_support(self, on, dofs="xyz", value=0.0):
@@ -694,38 +720,17 @@ class Project:
                 for w in shown:
                     print(f"[{self.name}] warning: {w}")
                 self._shown_warnings = shown
-        from PyTOImports import (bound_cond, mat_lib, topopt_material_model,          # type: ignore
+        from PyTOImports import (mat_lib, topopt_material_model,                      # type: ignore
                                  find_elements_with_fixedDOF)
         from mmto_common import MMTOParams                                            # type: ignore
         from pyto_project import make_mesh                                            # type: ignore
 
         mesh = make_mesh(self.stl_path(), self.n_dof, self.single_layer)
-        nodes_of = {}
-
-        def nodes(name, where):
-            if name not in nodes_of:
-                nodes_of[name] = self.selections[name].evaluate(mesh, "nodes", self.base_dir)
-            if len(nodes_of[name]) == 0:
-                raise ValueError(f"{where}: selection {name!r} has no nodes on this mesh")
-            return nodes_of[name]
-
-        # ---- supports, then loads (BC_KINDS)
-        state = {"values": {}, "force": np.zeros(3 * mesh.num_nodes)}   # values: dof -> imposed value
-        for role in ("support", "load"):
-            for i, bc in enumerate(self.bcs, 1):
-                kind = BC_KINDS[bc["kind"]]
-                if kind.role == role:
-                    where = f"boundary condition {i}"
-                    kind.apply(bc, nodes(bc["on"], where), mesh, state, where)
-        values, force = state["values"], state["force"]
-
-        fixed_dofs = np.array(sorted(values), dtype=int)
-        dirichlet_values = np.array([values[d] for d in fixed_dofs], dtype=float)
-        bc = bound_cond.BC(force=force, fixed_dofs=fixed_dofs, dirichlet_values=dirichlet_values)
-        well_posed, worst = bound_cond.check_rigid_body_constraint(mesh, bc)       # as PyTO-AD's FEA does, but
-        if not well_posed:                                                          # before the VAE and the run
-            raise ValueError(f"project {self.name!r}: the supports leave the part free to move or rotate in a "
-                             f"direction the loads push (relative size {worst:.3g}); add supports that hold it")
+        bc, _ = self.supports_and_loads(mesh)
+        fixed_dofs, force = bc.fixed_dofs, bc.force
+        error = self.rigid_body_error(mesh, bc)                     # as PyTO-AD's FEA does, but before the
+        if error:                                                   # VAE and the run
+            raise ValueError(f"project {self.name!r}: {error}")
 
         # ---- optimization parameters
         common = self.settings.get("common", {})
@@ -766,6 +771,42 @@ class Project:
                   f"fixed dofs={len(fixed_dofs)}  total force={np.round(force.reshape(-1, 3).sum(0), 6).tolist()}  "
                   f"keep solid={0 if to_params.ElemsToKeep is None else len(to_params.ElemsToKeep)}")
         return mesh, mat_prop, bc, None, to_params, vae_params
+
+    def supports_and_loads(self, mesh):
+        """(PyTO-AD BC, {selection name: its nodes}): the supports, then the loads (BC_KINDS), on mesh.
+        ValueError for a selection with no nodes or a dof given two values."""
+        from PyTOImports import bound_cond                                            # type: ignore
+        nodes_of = {}
+
+        def nodes(name, where):
+            if name not in nodes_of:
+                nodes_of[name] = self.selections[name].evaluate(mesh, "nodes", self.base_dir)
+            if len(nodes_of[name]) == 0:
+                raise ValueError(f"{where}: selection {name!r} has no nodes on this mesh")
+            return nodes_of[name]
+
+        state = {"values": {}, "force": np.zeros(3 * mesh.num_nodes)}   # values: dof -> imposed value
+        for role in ("support", "load"):
+            for i, bc in enumerate(self.bcs, 1):
+                kind = BC_KINDS[bc["kind"]]
+                if kind.role == role:
+                    where = f"boundary condition {i}"
+                    kind.apply(bc, nodes(bc["on"], where), mesh, state, where)
+        values, force = state["values"], state["force"]
+        fixed_dofs = np.array(sorted(values), dtype=int)
+        dirichlet_values = np.array([values[d] for d in fixed_dofs], dtype=float)
+        return bound_cond.BC(force=force, fixed_dofs=fixed_dofs, dirichlet_values=dirichlet_values), nodes_of
+
+    @staticmethod
+    def rigid_body_error(mesh, bc):
+        """Why the supports let the part move where the loads push, or None (PyTO-AD's check)."""
+        from PyTOImports import bound_cond                                            # type: ignore
+        well_posed, worst = bound_cond.check_rigid_body_constraint(mesh, bc)
+        if well_posed:
+            return None
+        size = "" if worst is None else f" (relative size {worst:.3g})"
+        return (f"the supports leave the part free to move or rotate in a direction the loads push{size}; "
+                f"add supports that hold it")
 
     # ------------------------------------------------------------------ files
     def to_dict(self):

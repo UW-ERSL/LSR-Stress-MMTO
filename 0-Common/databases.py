@@ -230,6 +230,14 @@ def check_database(path):
                 f"materials below, with the material names in column A; it has {df.shape[0]} rows "
                 f"and {df.shape[1]} columns"], []
 
+    blank_row1 = [c for c in range(1, df.shape[1]) if blank(df.iat[0, c])]
+    known_row2 = [attribute_name(df.iat[1, c]) for c in range(1, df.shape[1])
+                  if not blank(df.iat[1, c]) and attribute_name(df.iat[1, c]) in ATTRIBUTES]
+    if 2 * len(blank_row1) > df.shape[1] - 1 and known_row2:
+        return [f"row 1 is mostly empty and row 2 holds attribute names ({', '.join(known_row2)}): the table seems "
+                f"to start a row down. Row 1 must hold the attribute names, row 2 the units, and the materials "
+                f"start in row 3"], []
+
     names = {}
     for c in range(1, df.shape[1]):
         raw = df.iat[0, c]
@@ -281,6 +289,16 @@ def check_database(path):
         if len(column) == df.shape[0] - 2 and len(set(column)) == 1:
             warnings_.append(f"{name} is {column[0]:g} for every material, so it tells the VAE nothing "
                              f"about the materials")
+
+    if not errors and names:                                   # the VAE cannot tell identical materials apart
+        same = {}
+        for r in materials:
+            same.setdefault(tuple(float(df.iat[r, c]) for c in names), []).append(r)
+        for rows in same.values():
+            if len(rows) > 1:
+                errors.append(f"{', '.join(cell(r, 0) for r in rows)}: {', '.join(materials[r] for r in rows)} have "
+                              f"the same value in every attribute, so the VAE cannot tell them apart; keep one, "
+                              f"or correct a value")
 
     if not errors:
         _, _, display_errors, display_warnings = _display(path, [str(m).strip() for m in materials.values()])

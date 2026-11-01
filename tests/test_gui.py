@@ -8,7 +8,10 @@ agree; the title marks unsaved changes and closing asks; the unit system goes bo
 between the project and the Units dialog; selections made of triangle numbers are found
 before the STL is changed. The Materials, Formulation and Settings panels: OK with no edits
 changes nothing, Cancel drops edits, every setting has a row, quantities the database cannot
-give are greyed out with the reason, a new database brings its VAE settings. About half a minute.
+give are greyed out with the reason, a new database brings its VAE settings. Supports and loads:
+a region typed or filled in is the selection a script makes, a code line is never run,
+picks applied in PyTO-AD's Structural Loads window are adopted, the preview counts the run's
+nodes and runs the rigid-body check. About a minute.
 
     python tests/test_gui.py        (or: python -m pytest tests)
 """
@@ -30,6 +33,15 @@ project_paths.bootstrap()
 from PyQt5 import QtCore, QtGui, QtWidgets  # noqa: E402
 
 APP = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+
+def _quiet(kind, context, message):
+    """Qt's messages, less the ones the off-screen mode prints for every 3D view it cannot draw."""
+    if not any(s in message for s in ("OpenGL", "propagateSizeHints")):
+        sys.stderr.write(message + "\n")
+
+
+QtCore.qInstallMessageHandler(_quiet)
 
 from gui import main_window as G  # noqa: E402
 from project import Project  # noqa: E402  # type: ignore
@@ -64,7 +76,12 @@ def scratch():
 def test_what_it_takes_from_pyto_ad():
     from gui import pyto_ad
     assert hasattr(pyto_ad.ProjectsWindow, "load_geometry") and hasattr(pyto_ad.MainWindow, "init_state")
-    assert {c["name"] for c in pyto_ad.MainWindow.BUTTON_CONFIG} >= set(G.SIDEBAR) - set(G.PANELS)
+    assert {c["name"] for c in pyto_ad.MainWindow.BUTTON_CONFIG} >= set(G.SIDEBAR) - set(G.PANELS) - \
+        {"Supports and loads"}
+    from pyto.gui.PyTOGUI import StructuralLoadsWindow  # type: ignore   # picking: adopted on each Apply
+    assert all(hasattr(pyto_ad.MainWindow, m) for m in ("open_structural_loads_window", "update_LivVar",
+                                                         "_raise_if_open", "start_box_node_selection"))
+    assert all(hasattr(StructuralLoadsWindow, m) for m in ("redraw_loads", "refresh_applied_list"))
     w = G.MMTOWindow()
     assert list(w.sidebar_buttons) == list(G.SIDEBAR) and w.windowTitle() == "LSR MMTO"
     assert [m.title() for m in (a.menu() for a in w.menuBar().actions())] == ["&File", "&Help"]
@@ -353,6 +370,127 @@ def test_vae_tab():
     f = panels.FormulationPanel(G.MMTOWindow(), Project.load(os.path.join(PROJECTS, "beam.mmto")))
     f.rows[0]["widgets"]["bound"].setText("abc")
     assert f.problems() == ["constraint 1: the bound is not a number"]
+
+
+# ---------------------------------------------------------------------- supports and loads
+from gui import supports as SP  # noqa: E402
+
+
+def test_code_line():
+    """A code line gives the same selection as a script; anything that is not a selection is refused."""
+    for name in NAMES:
+        for s in Project.load(os.path.join(PROJECTS, f"{name}.mmto")).selections.values():
+            assert SP.parse_selection(repr(s)).to_dict() == s.to_dict(), s
+    assert SP.parse_selection('rows(face="xmax", axis="y", n=8, end="max")').to_dict() == \
+        {"type": "rows", "face": "xmax", "axis": "y", "n": 8, "end": "max"}
+    for bad, says in (('__import__("os").system("dir")', "is not a selection type"),
+                      ('box(lo=[0, 0, 0], hi=open("x"))', "open is not a selection type"),
+                      ('face(**{"side": "xmin"})', "** arguments"), ('function("f.py:g")', "not a selection type"),
+                      ("2 + 2", "only numbers, text, lists and selections"), ("face(", "not a selection")):
+        try:
+            SP.parse_selection(bad)
+        except ValueError as e:
+            assert says in str(e), (bad, e)
+        else:
+            raise AssertionError(f"accepted {bad}")
+
+
+def test_region_and_bc_forms():
+    import selections as S  # type: ignore
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        r = SP.RegionDialog(w, w.project)
+        r.type.setCurrentText("rows")                                        # fixed choices: dropdowns
+        assert r.inputs["face"].count() == 6 and not r.inputs["face"].isEditable()
+        r.inputs["face"].setCurrentText("xmax")
+        r.inputs["axis"].setCurrentText("y")
+        r.inputs["n"].setText("8")
+        assert r.selection().to_dict() == S.rows("xmax", "y", 8).to_dict()
+        r.type.setCurrentText("nearest")
+        assert isinstance(r.inputs["boundary"], QtWidgets.QCheckBox)
+        r.type.setCurrentText("box")
+        assert r.inputs["pad"].currentText() == "auto" and r.inputs["pad"].isEditable()
+        r.inputs["lo"].setText("[0, 38, 0]")
+        r.inputs["hi"].setText("[2, 40, 1]")
+        assert r.problems() == [] and r.selection().to_dict() == S.box([0, 38, 0], [2, 40, 1]).to_dict()
+        r.tabs.setCurrentIndex(1)                                             # the form, as a code line
+        assert r.code.text() == "box(lo=[0.0, 38.0, 0.0], hi=[2.0, 40.0, 1.0], pad='auto')"
+        r.name.setText("clamp")
+        assert r.problems() == ["there is already a region named clamp"]
+        for name in NAMES:                                                    # every existing region, on the form
+            p = Project.load(os.path.join(PROJECTS, f"{name}.mmto"))
+            for k, s in p.selections.items():
+                e = SP.RegionDialog(w, p, k)
+                got = e.from_form() if e.tabs.currentIndex() == 0 else e.selection()
+                assert got.to_dict() == s.to_dict(), (name, k, got, s)
+        for name in NAMES:                                                    # the forms with no edits change nothing
+            p = Project.load(os.path.join(PROJECTS, f"{name}.mmto"))
+            for bc in p.bcs:
+                assert SP.BCDialog(w, p, bc).bc() == bc, bc
+        b = SP.BCDialog(w, w.project)
+        b.kind.setCurrentText("traction")
+        b.inputs["direction"][1][1].set_value(-1.0)
+        b.inputs["pressure"][1].set_value(75)
+        assert b.problems() == [] and b.bc() == {"kind": "traction", "on": "clamp", "pressure": 75.0,
+                                                 "direction": [0.0, -1.0, 0.0], "area": "bbox"}
+        assert SP.field_unit("stress", "mmKS") == "MPa" and SP.field_unit("area", "mmKS") == "mm^2"
+
+
+def test_supports_panel():
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        panel = w.open_supports_and_loads_panel()
+        panel.preview()
+        mesh = w.preview_mesh()
+        _, nodes_of = w.project.supports_and_loads(mesh)
+        assert panel.counts == {k: len(v) for k, v in nodes_of.items()} == {"clamp": 114, "corner": 16}
+        assert "The supports hold the part against the loads." in panel.report.text()
+        with answers():
+            assert not panel.delete_region("clamp") and "clamp" in w.project.selections   # used by fixed 1
+        panel.rename("corner", "tip")
+        assert w.project.bcs[1]["on"] == "tip" and "tip" in w.project.selections
+        panel.delete_bc(0)                                                    # no support: free to move
+        panel.preview()
+        assert "free to move or rotate" in panel.report.text()
+        assert panel.delete_region("clamp") and "clamp" not in w.project.selections
+        panel.set_keep_solid("tip", True)
+        assert w.project.keep_solid_names == ["tip"] and w.is_dirty()
+
+
+def test_picks_are_adopted():
+    """An Apply in PyTO-AD's Structural Loads window adds to the project what loading a file with the same
+    picks adds; a torque is refused; PyTO-AD's lists are left empty."""
+    picks = {"constraint_data": [{"type": "Fixed X", "triangles": [12, 13]}],
+             "force_data": [{"type": "force_xyz", "triangles": [], "points": [[0.0, 0.0, 0.0]], "regions": [],
+                             "force_x": 0.0, "force_y": -1.0, "force_z": 0.0, "load_set": 0}]}
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        expected = w.project.copy()
+        expected.adopt_picks(json.loads(json.dumps(picks)))
+        w.open_structural_loads_window()
+        w.constraint_data = list(picks["constraint_data"])
+        w.force_data = list(picks["force_data"]) + [{"type": "torque", "triangles": [1], "torque": 1.0}]
+        w.update_LivVar("structural_loads.forces_applied", True)
+        for _ in range(5):
+            APP.processEvents()
+        assert w.project.to_dict() == expected.to_dict()
+        assert w.constraint_data == [] and w.force_data == []
+        assert "Added to the project: fixed on region gui_support1 (dofs=x)" in w.message_text.toPlainText()
+        lw = w.structural_loads_window                                       # a force on a face, as clicked
+        w.select_triangles(10)
+        lw.load_type.setCurrentText("Force")
+        lw.force_spinboxes["X"].setValue(1.0)
+        lw.on_apply_clicked()
+        for _ in range(5):
+            APP.processEvents()
+        assert not [n for n in w.plotter.actors if "_text_" in str(n)]       # no label left behind as a dot
+        assert w.project.bcs[-1] == {"kind": "force", "on": "gui_load2", "total": [1.0, 0.0, 0.0]}
+        w.selected_points = [[0.0, 0.0, 0.0]]                                  # picked, not applied
+        w.update_point_markers()
+        panel = w.open_supports_and_loads_panel()
+        panel.clear_preview()
+        assert w.selected_points == [] and "selected_points" not in w.plotter.actors
+        assert "A torque is not one of LSR MMTO's loads" in w.message_text.toPlainText()
 
 
 if __name__ == "__main__":

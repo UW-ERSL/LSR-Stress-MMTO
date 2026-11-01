@@ -10,6 +10,10 @@ the GUI.
     GeometryWindow     loading an STL (also from SolidWorks)
     ProjectsWindow     its load_geometry draws an STL and turns picking on
     FILE_DIALOG_OPTIONS
+
+Also used, as MainWindow's own methods: open_structural_loads_window (picking), update_LivVar
+(told when a pick is applied), and the Structural Loads window's redraw_loads and
+refresh_applied_list.
 """
 import PyTOImports  # noqa: F401  # type: ignore  # puts PyTO-AD on sys.path
 from pyto.gui.PyTOGUI import (FILE_DIALOG_OPTIONS, GeometryWindow, MainWindow,  # noqa: F401  # type: ignore

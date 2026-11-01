@@ -8,22 +8,26 @@ Project.save, so a project opened and saved with no edits is written back unchan
     python run_gui.py [project.mmto]        (from the repository folder)
 
 The sidebar keeps PyTO-AD's Units, Geometry and Display Options, and adds Materials,
-Formulation and Settings (panels.py). Supports and loads come in the next step.
+Formulation and Settings (panels.py) and Supports and loads (supports.py). Picking with the
+mouse is PyTO-AD's Structural Loads window; each Apply in it is adopted into the project.
 """
 import json
 import os
+import re
 import sys
 
-from PyQt5 import QtWidgets
+import numpy as np
+from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtGui import QKeySequence
 
 from .panels import FormulationPanel, MaterialsPanel, SettingsPanel
+from .supports import KEEP_COLOUR, LOAD_COLOUR, OTHER_COLOUR, SUPPORT_COLOUR, SupportsPanel
 from .pyto_ad import (FILE_DIALOG_OPTIONS, UNIT_SYSTEMS, GeometryWindow, MainWindow, ProjectsWindow,
                       UnitsWindow)
 
 APP = "LSR MMTO"
 PROJECT_FILTER = "LSR MMTO project (*.mmto)"
-SIDEBAR = ("Units", "Geometry", "Materials", "Formulation", "Settings", "Display Options")
+SIDEBAR = ("Units", "Geometry", "Materials", "Supports and loads", "Formulation", "Settings", "Display Options")
 PANELS = {"Materials": MaterialsPanel, "Formulation": FormulationPanel, "Settings": SettingsPanel}
 
 
@@ -81,11 +85,12 @@ class MMTOWindow(MainWindow):
 
     BUTTON_CONFIG = [next((c for c in MainWindow.BUTTON_CONFIG if c["name"] == name),
                           {"name": name, "icon": "arrow", "always_enabled": True,
-                           "handler": f"open_{name.lower()}_panel"}) for name in SIDEBAR]
+                           "handler": f"open_{name.lower().replace(' ', '_')}_panel"}) for name in SIDEBAR]
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.project, self.path, self._saved = None, None, None
+        self._mesh, self._mesh_key, self.preview_on = None, None, False
         self.message_text.setText(f"{APP}. File > New starts a project from an STL; File > Open opens a "
                                   f".mmto project.")
         self._build_menu()
@@ -223,6 +228,14 @@ class MMTOWindow(MainWindow):
 
     def _show(self, project, path):
         """Make project the one in the window: PyTO-AD's state reset, units synced, the STL drawn."""
+        for attr in ("supports_panel", "structural_loads_window"):  # windows on the previous project
+            w = getattr(self, attr, None)
+            if w is not None:
+                try:
+                    w.close()
+                except RuntimeError:
+                    pass
+        self.preview_on = False
         self.project, self.path = project, path
         self._saved = self._state() if path else None
         filled = project.complete_settings()                        # a file missing settings: filled, unsaved
@@ -297,6 +310,164 @@ class MMTOWindow(MainWindow):
 
     def open_settings_panel(self):
         return self.open_panel("Settings")
+
+    # ------------------------------------------------------------------ supports and loads
+    def open_supports_and_loads_panel(self):
+        if self.project is None:
+            QtWidgets.QMessageBox.information(self, APP, "Start a project first: File > New or File > Open.")
+            return None
+        if not self._raise_if_open("supports_panel"):
+            self.supports_panel = SupportsPanel(self)
+            self.supports_panel.show()
+        return self.supports_panel
+
+    def project_changed(self):
+        self._refresh_title()
+
+    def update_LivVar(self, key, value=True):
+        """PyTO-AD's state update; after an Apply in its Structural Loads window, the pick is adopted
+        into the project (once the Apply has finished)."""
+        super().update_LivVar(key, value)
+        if self.project is not None and key in ("structural_loads.forces_applied",
+                                                "structural_loads.fixed_constraints"):
+            QtCore.QTimer.singleShot(0, self.adopt_picks)
+
+    def adopt_picks(self):
+        """The supports and loads applied in PyTO-AD's Structural Loads window become regions and
+        supports and loads of the project, and leave PyTO-AD's lists: the project is the only list."""
+        torques = [f for f in self.force_data if f.get("type") == "torque"]
+        forces = [f for f in self.force_data if f.get("type", "force_xyz") == "force_xyz"]
+        sets = sorted({f.get("load_set", 0) for f in forces} - {0})
+        names, before = [], len(self.project.bcs)
+        if self.constraint_data or forces:
+            try:
+                names = self.project.adopt_picks({"constraint_data": list(self.constraint_data),
+                                                  "force_data": forces})
+            except (NotImplementedError, ValueError) as e:
+                self.message_text.append(f"Not added: {e}")
+        for bc in self.project.bcs[before:]:                        # say what each pick became
+            values = ", ".join(f"{k}={v}" for k, v in bc.items() if k not in ("kind", "on"))
+            self.message_text.append(f"Added to the project: {bc['kind']} on region {bc['on']} ({values}). "
+                                     f"Supports and loads lists it.")
+        if torques:
+            self.message_text.append("A torque is not one of LSR MMTO's loads, so it was not added.")
+        if sets:
+            self.message_text.append(f"Load sets {sets}: LSR MMTO has one load case for now, so these loads "
+                                     f"were added to it.")
+        self.constraint_data, self.force_data = [], []
+        self.constrained_triangles.clear()
+        w = getattr(self, "structural_loads_window", None)
+        try:
+            if w is not None:
+                w.redraw_loads()
+                w.refresh_applied_list()
+        except RuntimeError:                                        # the window was already deleted
+            pass
+        for name in list(self.plotter.actors):     # a load's label is two actors; the redraw leaves the
+            if re.search(r"(force|torque)_text_\d+(-points)?$", str(name)):          # point: a stray dot
+                self.plotter.remove_actor(name, reset_camera=False)
+        panel = getattr(self, "supports_panel", None)
+        try:
+            if panel is not None and panel.isVisible():
+                panel.after_change()
+                return names
+        except RuntimeError:
+            pass
+        if self.preview_on:
+            self.draw_supports_and_loads()
+        self._refresh_title()
+        return names
+
+    def preview_mesh(self):
+        """The mesh a run of the project uses, built once and kept until the STL or the dofs change."""
+        from pyto_project import make_mesh  # type: ignore
+        p = self.project
+        key = (os.path.abspath(p.stl_path()), p.n_dof, p.single_layer)
+        if key != self._mesh_key:
+            self.message_text.append(f"Building the mesh ({p.n_dof} dofs) for the preview...")
+            QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
+            try:
+                QtWidgets.QApplication.processEvents()
+                self._mesh = make_mesh(p.stl_path(), p.n_dof, p.single_layer)
+                self._mesh_key = key
+            finally:
+                QtWidgets.QApplication.restoreOverrideCursor()
+        return self._mesh
+
+    def draw_points(self, name, points, colour, size=10):
+        import pyvista as pv
+        self.plotter.remove_actor(name, reset_camera=False)
+        if len(points):
+            self.plotter.add_mesh(pv.PolyData(np.asarray(points, dtype=float)), color=colour, point_size=size,
+                                  render_points_as_spheres=True, pickable=False, name=name)
+
+    def clear_picks(self):
+        """Faces and nodes picked but not applied: unselected, their markers gone."""
+        self.selected_points, self.selected_regions = [], []
+        self.update_point_markers()
+        if self.stl_geom:
+            self.stl_geom.tri_highlight = [False] * len(self.stl_geom.tri_highlight)
+            self.update_highlights()
+
+    def clear_preview(self):
+        for name in [n for n in list(self.plotter.actors) if str(n).startswith("mmto_")]:
+            self.plotter.remove_actor(name, reset_camera=False)
+        self.preview_on = False
+        self.plotter.render()
+
+    def draw_supports_and_loads(self):
+        """Every region on the run's mesh: supports blue, loads red with an arrow each, other regions
+        orange, keep-solid elements grey. Returns (report lines, {region: node count})."""
+        import pyvista as pv
+        from project import BC_KINDS  # type: ignore
+        p, mesh = self.project, self.preview_mesh()
+        self.clear_preview()
+        xyz, centres = np.asarray(mesh.node_xyz, dtype=float), np.asarray(mesh.elem_centers, dtype=float)
+        role = {}
+        for bc in p.bcs:
+            if bc.get("kind") in BC_KINDS:
+                role.setdefault(bc["on"], set()).add(BC_KINDS[bc["kind"]].role)
+        lines, counts = [], {}
+        for name, s in p.selections.items():
+            nodes = s.evaluate(mesh, "nodes", p.base_dir)
+            counts[name] = len(nodes)
+            colour = (SUPPORT_COLOUR if "support" in role.get(name, ()) else
+                      LOAD_COLOUR if "load" in role.get(name, ()) else OTHER_COLOUR)
+            if name in role or name not in p.keep_solid_names:
+                self.draw_points(f"mmto_{name}", xyz[nodes], colour)
+            if name in p.keep_solid_names:                         # the kept elements, as grey blocks
+                elems = s.evaluate(mesh, "elements", p.base_dir)
+                if len(elems):
+                    h = np.asarray(mesh.elem_size, dtype=float)
+                    blocks = pv.PolyData(centres[elems]).glyph(
+                        geom=pv.Cube(x_length=h[0], y_length=h[1], z_length=h[2]), scale=False, orient=False)
+                    self.plotter.add_mesh(blocks, color=KEEP_COLOUR, pickable=False, name=f"mmto_keep_{name}")
+                lines.append(f"Keep solid {name}: {len(elems)} elements")
+            if len(nodes) == 0:
+                lines.append(f"<span style='color:#b00000'>{name} has no nodes on this mesh</span>")
+        size = float(np.linalg.norm(np.ptp(xyz, axis=0)))
+        for i, bc in enumerate(p.bcs):
+            if bc.get("kind") not in ("force", "traction") or bc.get("on") not in p.selections:
+                continue
+            d = np.asarray(bc.get("total") or bc.get("direction"), dtype=float)
+            nodes = p.selections[bc["on"]].evaluate(mesh, "nodes", p.base_dir)
+            if np.linalg.norm(d) == 0 or len(nodes) == 0:
+                continue
+            d = d / np.linalg.norm(d)
+            start = xyz[nodes].mean(axis=0) - 0.15 * size * d
+            self.plotter.add_mesh(pv.Arrow(start, d, scale=0.15 * size), color=LOAD_COLOUR, pickable=False,
+                                  name=f"mmto_arrow{i}")
+        try:
+            bc_obj, _ = p.supports_and_loads(mesh)
+            error = p.rigid_body_error(mesh, bc_obj) if p.bcs else None
+            lines.append(f"<span style='color:#b00000'>Error: {error}</span>" if error else
+                         "The supports hold the part against the loads." if p.bcs else "No supports or loads yet.")
+        except (ValueError, KeyError) as e:
+            lines.append(f"<span style='color:#b00000'>Error: {e}</span>")
+        lines.insert(0, f"Preview on the run's mesh: {mesh.num_elems} elements, {mesh.num_nodes} nodes.")
+        self.preview_on = True
+        self.plotter.render()
+        return lines, counts
 
     # ------------------------------------------------------------------ geometry
     def open_geometry_window(self):

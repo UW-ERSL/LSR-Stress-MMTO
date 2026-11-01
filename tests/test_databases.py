@@ -90,6 +90,14 @@ def test_errors_name_the_cell():
     assert any("B2: 'MPa' is not a unit of Density" in e for e in errors_of(rows)[0])
     errors, _ = errors_of(GOOD[:3])
     assert "at least two materials" in errors[0]
+    rows = [list(r) for r in GOOD]
+    rows[4][1:] = rows[2][1:]                                # C has A's numbers
+    assert errors_of(rows)[0] == ["A3, A5: A, C have the same value in every attribute, so the VAE cannot "
+                                  "tell them apart; keep one, or correct a value"]
+    errors, _ = errors_of([["My materials"]] + [list(r) for r in GOOD])     # a title row above the table
+    assert errors == ["row 1 is mostly empty and row 2 holds attribute names (Density, Youngs_Modulus, "
+                      "Yield_Strength): the table seems to start a row down. Row 1 must hold the attribute "
+                      "names, row 2 the units, and the materials start in row 3"], errors
     errors, _ = errors_of([["Attributes", "Poissons_Ratio"], ["Material/Units", "-"], ["A", 0.3], ["B", 0.6]])
     assert "-1 < value < 0.5" in errors[0], errors
     assert "ATTRIBUTES in 0-Common/databases.py" in errors_of([["Attributes", "Colour"], ["u", "-"],

@@ -108,6 +108,7 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 |---|---|
 | `main_window.py` | the window: New, Open and Save of .mmto projects, units, geometry |
 | `panels.py` | the Materials, Formulation and Settings panels |
+| `supports.py` | the Supports and loads panel: regions, supports, loads, keep solid, preview |
 | `pyto_ad.py` | everything the GUI takes from the PyTO-AD GUI |
 
 ### `0-Common/`
