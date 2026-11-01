@@ -78,10 +78,9 @@ def test_what_it_takes_from_pyto_ad():
     assert hasattr(pyto_ad.ProjectsWindow, "load_geometry") and hasattr(pyto_ad.MainWindow, "init_state")
     assert {c["name"] for c in pyto_ad.MainWindow.BUTTON_CONFIG} >= set(G.SIDEBAR) - set(G.PANELS) - \
         {"Supports and loads"}
-    from pyto.gui.PyTOGUI import StructuralLoadsWindow  # type: ignore   # picking: adopted on each Apply
-    assert all(hasattr(pyto_ad.MainWindow, m) for m in ("open_structural_loads_window", "update_LivVar",
-                                                         "_raise_if_open", "start_box_node_selection"))
-    assert all(hasattr(StructuralLoadsWindow, m) for m in ("redraw_loads", "refresh_applied_list"))
+    assert all(hasattr(pyto_ad.MainWindow, m) for m in ("update_LivVar", "_raise_if_open",
+                                                         "start_box_node_selection"))
+    assert all(hasattr(pyto_ad.StructuralLoadsWindow, m) for m in ("redraw_loads", "refresh_applied_list"))
     w = G.MMTOWindow()
     assert list(w.sidebar_buttons) == list(G.SIDEBAR) and w.windowTitle() == "LSR MMTO"
     assert [m.title() for m in (a.menu() for a in w.menuBar().actions())] == ["&File", "&Help"]
@@ -108,7 +107,7 @@ def test_only_mmto_projects_open():
     pyto = os.path.join(ROOT, "0-Common", "Models", "UBracket", "UBracket.pyto")
     with answers(), scratch() as d:
         assert not w.open_project(pyto)
-        assert ".pyto file opens in PyTO-AD" in G.mmto_file_error(pyto)
+        assert "is not an LSR MMTO project (.mmto)" in G.mmto_file_error(pyto)
         plain = os.path.join(d, "plain.mmto")
         json.dump({"stl_file_path": "x.STL"}, open(plain, "w"))
         assert not w.open_project(plain) and "no mmto section" in G.mmto_file_error(plain)
@@ -226,12 +225,12 @@ def test_cancel_changes_nothing():
 
 
 def test_settings_panel_covers_every_setting():
-    from project import DEFAULT_SETTINGS, SETTING_DOCS, VAE_PARAMS  # type: ignore
+    from project import DEFAULT_SETTINGS, VAE_PARAMS  # type: ignore
     keys = panels.all_setting_keys()
     want = {(s, k) for s, v in DEFAULT_SETTINGS.items() for k in v} | {("vae", k) for k in VAE_PARAMS} | \
         {("mesh", "n_dof"), ("mesh", "single_layer")}
     assert len(keys) == len(set(keys)) and set(keys) == want, set(keys) ^ want
-    assert all(k in panels.LABELS and (k in SETTING_DOCS or k in panels.MESH_DOCS) for _, k in keys)
+    assert all(k in panels.LABELS and k in panels.HELP for _, k in keys)
 
 
 def test_settings_panel_edits():
@@ -239,24 +238,24 @@ def test_settings_panel_edits():
         w = opened("L-bracket", d)
         s = panels.SettingsPanel(w, w.project)
         row, label, reset = s.rows[("common", "maxIterations")]
-        assert not label.font().bold() and not reset.isEnabled()
+        assert not label.font().bold() and not reset.isVisibleTo(s)                # reset: only on a change
         row.set(5)
         s._mark("common", "maxIterations")
-        assert label.font().bold() and reset.isEnabled()
-        assert s.rows[("group", "Run length")][0].text() == "Run length"
+        assert label.font().bold() and reset.isVisibleTo(s)
+        assert s.rows[("group", "Advanced")][0].text() == "Advanced"
         s.rows[("advanced", "timeLimit")][0].set(60)
         s._mark("advanced", "timeLimit")
-        assert s.rows[("group", "Run length")][0].text() == "Run length  (1 changed)"
+        assert s.rows[("group", "Advanced")][0].text() == "Advanced  (1 changed)"
         s.rows[("common", "material_filter_radius")][0].none.setChecked(True)  # same as the density filter
         s.rows[("mesh", "n_dof")][0].widget.setText("abc")
-        assert s.problems() == ["Mesh dofs (n_dof) is not a number"]
+        assert s.problems() == ["Mesh dofs is not a number"]
         s.reset("mesh", "n_dof")
         assert s.problems() == []
         lines = s.apply(w.project)
         assert w.project.settings["common"]["maxIterations"] == 5 and w.project.n_dof == 30000
         assert w.project.settings["advanced"]["timeLimit"] == 60
         assert w.project.settings["common"]["material_filter_radius"] is None
-        assert lines and "maxIterations 300 -> 5" in lines[0]
+        assert lines and "Max iterations 300 -> 5" in lines[0]
         assert w.is_dirty()
 
 
@@ -266,13 +265,13 @@ def test_formulation_panel():
         f = panels.FormulationPanel(w, w.project)
         model = f.objective.model()
         enabled = {model.item(i).text(): model.item(i).isEnabled() for i in range(model.rowCount())}
-        assert enabled == {"Compliance": True, "Mass": False, "StressPNorm": True, "FailureFactorPNorm": False}
-        assert f.reason("Mass").startswith("Mass needs a Density column; the database has Youngs_Modulus")
-        assert f.reason("Cost") == ("Cost needs a Density and a Cost column; the database has Youngs_Modulus, "
-                                    "Poissons_Ratio")
+        assert enabled == {"Compliance": True, "Mass": False, "Stress (p-norm)": True,
+                           "Failure factor (p-norm)": False}
+        assert f.reason("Mass") == "needs a Density column in the database"
+        assert f.reason("Cost") == "needs a Density and a Cost column in the database"
         f.rows[2]["widgets"]["bound"].set_value(0.2)
         row = f.add_row(None)
-        row["widgets"]["quantity"].setCurrentText("MaterialVolumeFraction")
+        row["widgets"]["quantity"].setCurrentText("Material volume fraction")
         row["widgets"]["material"].setCurrentIndex(1)
         row["widgets"]["bound"].set_value(0.05)
         f.remove_row(f.rows[0])
@@ -296,7 +295,7 @@ def test_formulation_panel():
         assert all(model.item(i).isEnabled() for i in range(model.rowCount()))
         assert [r["widgets"]["unit"].text() for r in f.rows] == ["t", "USD"]   # the bounds 4e7 and 7.5e8, in mmKS
         assert not f.tau_box.isVisibleTo(f) and not f.rows[0]["widgets"]["material"].isVisibleTo(f)  # Mass, Cost
-        f.rows[0]["widgets"]["quantity"].setCurrentText("MaterialVolumeFraction")
+        f.rows[0]["widgets"]["quantity"].setCurrentText("Material volume fraction")
         assert f.tau_box.isVisibleTo(f) and f.rows[0]["widgets"]["material"].isVisibleTo(f)
         f.remove_row(f.rows[0])
         assert not f.tau_box.isVisibleTo(f)
@@ -326,7 +325,7 @@ def test_materials_panel():
         lines = m.apply(w.project)
         vae = w.project.settings["vae"]
         assert w.project.database == "CustomAlloys20_3D" and vae["latentDim"] == 3 and vae["numEpochs"] == 100000
-        assert lines[0] == "Database: CustomAlloys20_3D" and "latentDim 2 -> 3" in lines[1]
+        assert lines[0] == "Database: CustomAlloys20_3D" and "Latent dimension 2 -> 3" in lines[1]
         m = panels.MaterialsPanel(w, w.project)
         m.set_database(os.path.join(ROOT, DATABASE_DIR, "BM1_3Mats_2Attr.xlsx"))     # a shipped file: by name
         assert m.project.database == "BM1_3Mats_2Attr"
@@ -357,7 +356,8 @@ def test_vae_tab():
         w.project.settings["vae"]["latentDim"] = 4                            # a file that does not fit its network
         s = panels.SettingsPanel(w, w.project)
         assert s.rows[("vae", "latentDim")][0].get() == 2
-        assert s.apply(w.project) == ["Settings: latentDim 4 -> 2", "latentDim: set to the trained network's"]
+        assert s.apply(w.project) == ["Settings: Latent dimension 4 -> 2",
+                                      "Latent dimension: set to the trained network's"]
 
         shutil.copy(os.path.join(ROOT, DATABASE_DIR, "BM1_3Mats_2Attr.xlsx"), os.path.join(d, "ggd.xlsx"))
         w.project.database = "ggd.xlsx"                                       # one of yours, no network yet
@@ -400,17 +400,28 @@ def test_region_and_bc_forms():
     with scratch() as d:
         w = opened("L-bracket", d)
         r = SP.RegionDialog(w, w.project)
-        r.type.setCurrentText("rows")                                        # fixed choices: dropdowns
+        shown = [r.type.itemText(i) for i in range(r.type.count())]
+        assert "Picked faces" not in shown and "Rows on a face" in shown     # made with the mouse: not offered
+        r.type.setCurrentText("Rows on a face")                              # fixed choices: dropdowns
         assert r.inputs["face"].count() == 6 and not r.inputs["face"].isEditable()
-        r.inputs["face"].setCurrentText("xmax")
+        assert r.form.labelForField(r.inputs["n"]).text() == "Number of rows"
+        r.inputs["face"].setCurrentText("Right (x max)")
         r.inputs["axis"].setCurrentText("y")
         r.inputs["n"].setText("8")
         assert r.selection().to_dict() == S.rows("xmax", "y", 8).to_dict()
-        r.type.setCurrentText("nearest")
+        r.type.setCurrentText("Closest node")
         assert isinstance(r.inputs["boundary"], QtWidgets.QCheckBox)
-        r.type.setCurrentText("box")
-        assert r.inputs["pad"].currentText() == "auto" and r.inputs["pad"].isEditable()
-        r.inputs["lo"].setText("[0, 38, 0]")
+        r.type.setCurrentText("Cylinder")                                    # Length from / to: both or neither
+        r.inputs["center"].setText("0, 0, 0")
+        r.inputs["radius"].setText("2")
+        assert r.selection().along is None
+        r.inputs["along"][0].setText("-3.5")
+        assert r.problems() == ["Length from and Length to: give both, or leave both empty"]
+        r.inputs["along"][1].setText("3")
+        assert r.selection().along == [-3.5, 3.0]
+        r.type.setCurrentText("Box")
+        assert r.inputs["pad"].currentText() == "Automatic" and r.inputs["pad"].isEditable()
+        r.inputs["lo"].setText("0, 38, 0")                                   # a point without brackets
         r.inputs["hi"].setText("[2, 40, 1]")
         assert r.problems() == [] and r.selection().to_dict() == S.box([0, 38, 0], [2, 40, 1]).to_dict()
         r.tabs.setCurrentIndex(1)                                             # the form, as a code line
@@ -428,17 +439,30 @@ def test_region_and_bc_forms():
             for bc in p.bcs:
                 assert SP.BCDialog(w, p, bc).bc() == bc, bc
         b = SP.BCDialog(w, w.project)
-        b.kind.setCurrentText("traction")
+        b.kind.setCurrentText("Pressure")
         b.inputs["direction"][1][1].set_value(-1.0)
         b.inputs["pressure"][1].set_value(75)
         assert b.problems() == [] and b.bc() == {"kind": "traction", "on": "clamp", "pressure": 75.0,
                                                  "direction": [0.0, -1.0, 0.0], "area": "bbox"}
         assert SP.field_unit("stress", "mmKS") == "MPa" and SP.field_unit("area", "mmKS") == "mm^2"
+        texts = [SP.describe(s) for s in w.project.selections.values()]      # the tables, in words
+        assert texts[1] == "Rows on a face: Face Right (x max), Counted along y, Number of rows 8", texts
+        assert SP.bc_values(w.project.bcs[0]) == "Held in x, y, z"
+        code_talk = ("PyTO", "Python", "pad", "bbox", "inner_radius", "1e-12", "(t0", "xmax", "None")
+        for i in range(r.type.count()):                                      # every region type, every label
+            r.type.setCurrentIndex(i)
+            for label in r.tabs.widget(0).findChildren(QtWidgets.QLabel):
+                assert not any(x in label.text() for x in code_talk), label.text()
+        for k in range(b.kind.count()):                                       # every support and load
+            b.kind.setCurrentIndex(k)
+            for label in b.findChildren(QtWidgets.QLabel):
+                assert not any(x in label.text() for x in code_talk), label.text()
 
 
 def test_supports_panel():
     with scratch() as d:
         w = opened("L-bracket", d)
+        w.show()
         panel = w.open_supports_and_loads_panel()
         panel.preview()
         mesh = w.preview_mesh()
@@ -465,6 +489,7 @@ def test_picks_are_adopted():
                              "force_x": 0.0, "force_y": -1.0, "force_z": 0.0, "load_set": 0}]}
     with scratch() as d:
         w = opened("L-bracket", d)
+        w.show()
         expected = w.project.copy()
         expected.adopt_picks(json.loads(json.dumps(picks)))
         w.open_structural_loads_window()
@@ -475,7 +500,7 @@ def test_picks_are_adopted():
             APP.processEvents()
         assert w.project.to_dict() == expected.to_dict()
         assert w.constraint_data == [] and w.force_data == []
-        assert "Added to the project: fixed on region gui_support1 (dofs=x)" in w.message_text.toPlainText()
+        assert "Added: Fixed support on gui_support1 (x)" in w.message_text.toPlainText()
         lw = w.structural_loads_window                                       # a force on a face, as clicked
         w.select_triangles(10)
         lw.load_type.setCurrentText("Force")
@@ -491,6 +516,124 @@ def test_picks_are_adopted():
         panel.clear_preview()
         assert w.selected_points == [] and "selected_points" not in w.plotter.actors
         assert "A torque is not one of LSR MMTO's loads" in w.message_text.toPlainText()
+
+
+def test_docked():
+    """Supports and loads and the Pick window sit on the right edge of the window, not over the 3D view;
+    a second click raises the open one; Close (or a new project) removes the strip."""
+    docks = lambda w: [d for d in w.findChildren(QtWidgets.QDockWidget) if d.isVisible()]  # noqa: E731
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        w.show()
+        panel = w.open_supports_and_loads_panel()
+        assert w.open_supports_and_loads_panel() is panel and len(docks(w)) == 1
+        assert w.dockWidgetArea(panel.parent()) == QtCore.Qt.RightDockWidgetArea
+        w.open_structural_loads_window()
+        assert [x.windowTitle() for x in docks(w)] == ["Supports and loads", w.structural_loads_window.windowTitle()]
+        w.structural_loads_window.close()                                    # its own Close button
+        APP.processEvents()
+        assert [x.windowTitle() for x in docks(w)] == ["Supports and loads"]
+        w.open_project(w.path)                                               # the strips go with the project
+        APP.processEvents()
+        assert docks(w) == []
+        panel = w.open_supports_and_loads_panel()
+        panel.parent().close()                                               # the strip's x
+        APP.processEvents()
+        assert docks(w) == [] and w.open_supports_and_loads_panel().isVisible()
+
+
+def test_add_flow():
+    """Add offers both ways; an empty list says what to do; New shape makes a place without leaving the
+    dialog; a pick takes the list's place and Apply brings the list back with the new entry selected;
+    each warning is said once."""
+    import selections as S  # type: ignore
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        w.show()
+        panel = w.open_supports_and_loads_panel()
+        add = [b for b in panel.findChildren(QtWidgets.QPushButton) if b.text() == "Add"][0]
+        assert [a.text() for a in add.menu().actions()] == ["Click on the part...", "Enter by hand..."]
+        assert not panel.empty.isVisibleTo(panel) and not panel.regions.isVisibleTo(panel)   # Places: closed
+        b = SP.BCDialog(panel, w.project)                                    # New shape, then OK
+        real = SP.RegionDialog.exec_
+        try:
+            SP.RegionDialog.exec_ = lambda self: (self.type.setCurrentText("Face of the part"), 1)[1]
+            b.new_shape()
+        finally:
+            SP.RegionDialog.exec_ = real
+        assert b.on.currentText() == "region1" and "region1" not in w.project.selections   # not yet: on OK
+        assert b.new_regions["region1"].to_dict() == S.face("xmin").to_dict()
+        w.project.bcs.clear()
+        panel.refresh()
+        assert panel.empty.isVisibleTo(panel) and not panel.bcs.isVisibleTo(panel)
+        front = lambda: [t.tabText(t.currentIndex()) for t in w.findChildren(QtWidgets.QTabBar)  # noqa: E731
+                         if t.isVisible() and t.count() > 1]
+        panel.pick()                                                          # the round trip
+        APP.processEvents()
+        pick = w.structural_loads_window
+        assert front() == ["Pick"]                                            # in the list's place
+        assert w.open_supports_and_loads_panel() is panel                     # the list's tab: no second copy
+        assert front() == ["Supports and loads"]
+        w.open_structural_loads_window()                                      # the same one, to the front
+        assert w.structural_loads_window is pick and front() == ["Pick"]
+        w.select_triangles(10)
+        pick.load_type.setCurrentText("Force")
+        pick.force_spinboxes["Y"].setValue(-2.0)
+        pick.on_apply_clicked()
+        for _ in range(5):
+            APP.processEvents()
+        assert front() == [] and panel.isVisible() and w.project.bcs[-1]["kind"] == "force"   # Pick closed
+        assert panel._selected(panel.bcs) == len(w.project.bcs) - 1
+        assert not hasattr(w, "structural_loads_window")                     # gone, and nothing points at it
+        G.UnitsWindow(w, w.settings).apply_settings()                         # once crashed on the deleted Pick
+        text = w.message_text.toPlainText()
+        assert text.count("Warning: the database gives Youngs Modulus") == 1
+        w.apply_panel(type("P", (), {"apply": lambda self, p: ["changed"]})())   # a change: said again? no
+        assert w.message_text.toPlainText().count("Warning: the database gives Youngs Modulus") == 1
+
+
+def test_scale():
+    """The Ruler tick shows and hides the scales; the region form says how big the part is; the point
+    under the mouse is read off the part."""
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        assert w.part_extent_text() == "The part spans x 0 to 200, y 0 to 200, z 0 to 1 mm."
+        assert w._rulers == []                                                # off by default
+        w.ruler_box.setChecked(True)
+        assert len(w._rulers) == 2                                            # x and y: a 1 mm plate has no z
+        assert w.open_project(w.path) and len(w._rulers) == 2                 # kept on for the next project
+        w.ruler_box.setChecked(False)
+        assert w._rulers == []
+        r = SP.RegionDialog(w.open_supports_and_loads_panel(), w.project)
+        assert any(label.text() == w.part_extent_text() for label in r.findChildren(QtWidgets.QLabel))
+
+
+def test_region_preview_clears():
+    """In the region form, Clear takes the preview off the part, any edit does too, and so does closing."""
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        panel = w.open_supports_and_loads_panel()
+        on_part = lambda: "mmto_region" in w.plotter.actors                       # noqa: E731
+        r = SP.RegionDialog(panel, w.project, preview=panel.preview_one)
+        r.type.setCurrentText("Flat cut")
+        r.inputs["axis"].setCurrentText("x")
+        r.inputs["value"].setText("12")
+        r.show_preview()
+        assert on_part() and "nodes" in r.result.text()
+        r.inputs["value"].setText("20")                                       # an edit: the old preview goes
+        assert not on_part() and r.result.text() == ""
+        r.show_preview()
+        assert on_part()
+        r.clear_shown()                                                       # the Clear button
+        assert not on_part()
+        r.show_preview()
+        r.type.setCurrentText("Box")                                          # another type: goes too
+        assert not on_part()
+        r.type.setCurrentText("Flat cut")
+        r.inputs["value"].setText("20")
+        r.show_preview()
+        r.reject()                                                            # Cancel: nothing left behind
+        assert not on_part()
 
 
 if __name__ == "__main__":

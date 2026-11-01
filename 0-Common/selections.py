@@ -17,8 +17,10 @@ pad widens every bound, in model units. The default "auto" is half the smallest 
 size for nodes, so a face at x = 0 still catches nodes at x = 1e-12, and 0 for element
 centers, which sit half an element from any face and would otherwise pull in the next
 layer. plane and face always take half an element by default, since they need a
-width: on elements, face gives the outermost layer. "half" forces half an element;
-pad=0 is exact.
+width: on elements, face gives the outermost layer. plane takes half the element size
+along its own axis, so any value inside the part catches the nearest layer of nodes (half
+the smallest size, the thickness of a thin plate, leaves gaps between layers). "half"
+forces half an element; pad=0 is exact.
 
 Types (to_dict / from_dict give the JSON form a project file stores):
     box(lo, hi)                                  lo <= p <= hi
@@ -26,7 +28,7 @@ Types (to_dict / from_dict give the JSON form a project file stores):
                                                  distance to the axis in [inner_radius, radius];
                                                  along = (t0, t1) limits (p - center) . axis
     sphere(center, radius)
-    plane(axis, value)                           |p_axis - value| < pad
+    plane(axis, value)                           |p_axis - value| <= pad
     face(side)                                   the plane at the mesh's extreme, side "xmin" ... "zmax"
     near_face(side, distance)                    within distance of that extreme (strictly)
     nearest(point)                               the single closest node or element
@@ -85,11 +87,13 @@ def _keep(v):
     return float(v)
 
 
-def _pad(mesh, pad, on):
+def _pad(mesh, pad, on, axis=None):
+    """pad in model units; "half" is half the smallest element size, or along axis (0, 1, 2) if given."""
     if pad == "auto":
         pad = "half" if on == "nodes" else 0.0
     if pad == "half":
-        return 0.5 * float(np.min(mesh.elem_size))
+        h = np.asarray(mesh.elem_size, dtype=float)
+        return 0.5 * float(np.min(h) if axis is None else h[axis])
     return _length(mesh, pad)
 
 
@@ -202,14 +206,15 @@ class sphere(Selection):
 
 
 class plane(Selection):
-    """Points with |p_axis - value| < pad."""
+    """Points with |p_axis - value| <= pad; by default pad is half the element size along axis."""
     TYPE, fields = "plane", ("axis", "value", "pad")
 
     def __init__(self, axis, value, pad="auto"):
         self.axis, self.value, self.pad = axis, float(value), pad
 
     def _mask(self, p, mesh, on):
-        return np.abs(p[:, _AXES[self.axis]] - self.value) < _pad(mesh, self.pad, "nodes")
+        k = _AXES[self.axis]
+        return np.abs(p[:, k] - self.value) <= _pad(mesh, self.pad, "nodes", axis=k)
 
 
 def _side(side):

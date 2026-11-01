@@ -585,8 +585,9 @@ class Project:
             if abs(r - 1.0) < 1e-12:
                 continue
             a = ATTRIBUTES[name]
-            say = (f"{name} is in {units[name]}, but the project's units are {self.units}, where it would be "
-                   f"in {system[a.measures]}: its numbers are {times(r)} times those {self.units} expects.")
+            say = (f"the database gives {name.replace('_', ' ')} in {units[name]}, but the project's units "
+                   f"({self.units}) expect {system[a.measures]}: its numbers are {times(r)} times what they "
+                   f"should be.")
             if name == "Youngs_Modulus":
                 say += (f" Displacement and compliance come out {times(r)} times too small; stress and "
                         f"failure factor are unaffected.")
@@ -606,8 +607,8 @@ class Project:
         if "Cost" in bounds and "Cost" in ratio and "Density" in ratio:
             r = ratio["Cost"] * ratio["Density"]
             if abs(r - 1.0) > 1e-12:            # said once, under Cost if it is off, else under Density
-                k = [i for i, w in enumerate(out) if w.startswith("Cost is")] or \
-                    [i for i, w in enumerate(out) if w.startswith("Density is")]
+                k = [i for i, w in enumerate(out) if w.startswith("the database gives Cost ")] or \
+                    [i for i, w in enumerate(out) if w.startswith("the database gives Density ")]
                 out[k[0]] += (f" Cost() is density * cost per mass * volume: with these units it comes out "
                               f"{times(r)} times its value in USD, so the bound {bounds['Cost'][0]:g} means "
                               f"{bounds['Cost'][0] / r:g} USD.")

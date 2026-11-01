@@ -48,6 +48,33 @@ class NumberEdit(QtWidgets.QLineEdit):
         return int(v) if self.integer else v
 
 
+class Info(QtWidgets.QToolButton):
+    """A small (i): the explanation shows on a click, or when the mouse rests on it."""
+
+    def __init__(self, text, parent=None):
+        super().__init__(parent)
+        self.setText("i")
+        self.setToolTip(text)
+        self.setCursor(QtCore.Qt.PointingHandCursor)
+        self.setFixedSize(18, 18)
+        self.setStyleSheet("QToolButton { border: 1px solid #8a8a8a; border-radius: 9px; color: #555555; "
+                           "font: bold italic 9pt 'Georgia'; background: transparent; } "
+                           "QToolButton:hover { background: #e6eefc; }")
+        self.clicked.connect(lambda: QtWidgets.QToolTip.showText(
+            self.mapToGlobal(self.rect().bottomLeft()), self.toolTip(), self))
+
+
+def with_info(widget, text):
+    """widget with an (i) beside it, as one widget."""
+    box = QtWidgets.QWidget()
+    row = QtWidgets.QHBoxLayout(box)
+    row.setContentsMargins(0, 0, 0, 0)
+    row.addWidget(widget)
+    row.addWidget(Info(text))
+    row.addStretch()
+    return box
+
+
 def same(a, b):
     """True when a value read back from a widget equals the stored one (1 == 1.0, 'PAPER' == 'PAPER')."""
     if isinstance(a, bool) or isinstance(b, bool):
@@ -123,7 +150,7 @@ class MaterialsPanel(QtWidgets.QDialog):
         layout.addWidget(self.table, stretch=1)
         self.report = QtWidgets.QTextEdit()
         self.report.setReadOnly(True)
-        self.report.setFixedHeight(120)
+        self.report.setFixedHeight(64)
         layout.addWidget(self.report)
         ok_cancel(self, layout)
         self._refresh()
@@ -198,12 +225,14 @@ class MaterialsPanel(QtWidgets.QDialog):
             self.table.setItem(i, 1, QtWidgets.QTableWidgetItem(name))
             for j in range(values.shape[1]):
                 self.table.setItem(i, 2 + j, QtWidgets.QTableWidgetItem(format(values[i, j], ".6g")))
+        self.table.verticalHeader().setVisible(False)
+        self.table.setColumnHidden(1, list(labels) == list(names))      # Material: only when the labels differ
         self.table.resizeColumnsToContents()
         if not errors:
             d_eff, n_z = recommended_latent_dim(xlsx)
-            lines.insert(0, f"{len(names)} materials. Effective dimension d_eff = {d_eff:.2f}: latent dimension "
-                            f"{n_z} recommended.")
-        self.report.setText("\n".join(lines) or "No errors, no warnings.")
+            lines.insert(0, f"{len(names)} materials; latent dimension {n_z} recommended (effective dimension "
+                            f"{d_eff:.2f}).")
+        self.report.setText("\n".join(lines))
 
     def apply(self, project):
         """The database, and on a change the VAE settings of the new one. Returns lines saying what changed."""
@@ -216,14 +245,28 @@ class MaterialsPanel(QtWidgets.QDialog):
         before = {k: project.settings["vae"].get(k) for k in VAE_PARAMS + ("saveNet",)}
         project.database = q.database
         project.settings["vae"] = q.settings["vae"]
-        changed = [f"{k} {before[k]} -> {q.settings['vae'][k]}" for k in before
+        changed = [f"{LABELS.get(k, k)} {before[k]} -> {q.settings['vae'][k]}" for k in before
                    if not same(before[k], q.settings["vae"][k])]
         return [f"Database: {q.database}"] + ([f"VAE settings for it: {', '.join(changed)}"] if changed else [])
 
 
 # ---------------------------------------------------------------------- Formulation
-TAU_DOC = ("how sharply each element is counted as its nearest material when a material's volume fraction is "
-           "measured: small is sharp, large is blurred. One value for every material volume fraction constraint.")
+TAU_DOC = ("How sharply each element counts as its nearest material when a material's volume is measured: "
+           "small is sharp, large is blurred. One value for every material volume fraction constraint.")
+# the quantities as the panel shows them, and what each is
+QUANTITY_NAMES = {"Compliance": "Compliance", "Mass": "Mass", "Cost": "Cost", "StressPNorm": "Stress (p-norm)",
+                  "FailureFactorPNorm": "Failure factor (p-norm)", "VolumeFraction": "Volume fraction",
+                  "MaterialVolumeFraction": "Material volume fraction"}
+QUANTITY_HELP = {
+    "Compliance": "How much the part gives under the loads. Lower is stiffer.",
+    "Mass": "The mass of the part, from each material's density.",
+    "Cost": "The cost of the part, from each material's density and cost per mass.",
+    "StressPNorm": "One value close to the highest von Mises stress in the part.",
+    "FailureFactorPNorm": "One value close to the highest stress / yield strength in the part. Above 1 means "
+                          "some element yields.",
+    "VolumeFraction": "The share of the design space filled with material, 0 to 1.",
+    "MaterialVolumeFraction": "The share of the design space filled with one chosen material, 0 to 1.",
+}
 
 
 def bound_unit(name, units):
@@ -265,24 +308,21 @@ class FormulationPanel(QtWidgets.QDialog):
         self.columns, self.labels, self.colours = database_columns(project)
         layout = QtWidgets.QVBoxLayout(self)
 
-        layout.addWidget(QtWidgets.QLabel("<b>Objective</b> (minimized)"))
+        layout.addWidget(QtWidgets.QLabel("<b>Minimize</b>"))
         self.objective = self._quantity_combo("objective")
         obj = self.original.get("objective")
         self._set_quantity(self.objective, obj and obj.get("expression"))
         layout.addWidget(self.objective)
 
-        layout.addWidget(QtWidgets.QLabel("<b>Constraints</b> (each: quantity &lt;= bound)"))
+        layout.addWidget(QtWidgets.QLabel("<b>Constraints</b>"))
         self.tau_box = QtWidgets.QWidget()                      # shown only with a material volume fraction
         tau_row = QtWidgets.QHBoxLayout(self.tau_box)
         tau_row.setContentsMargins(0, 0, 0, 0)
         self.tau = NumberEdit(self._stored_tau())
         self.tau.setFixedWidth(80)
-        tau_help = QtWidgets.QLabel(TAU_DOC)
-        tau_help.setStyleSheet(GREY)
-        tau_help.setWordWrap(True)
-        for widget in (QtWidgets.QLabel("Material assignment sharpness (tau)"), self.tau, tau_help):
+        for widget in (QtWidgets.QLabel("Material sharpness (tau)"), self.tau, Info(TAU_DOC)):
             tau_row.addWidget(widget)
-        tau_row.setStretch(2, 1)
+        tau_row.addStretch()
         layout.addWidget(self.tau_box)
         self.rows_box = QtWidgets.QVBoxLayout()
         layout.addLayout(self.rows_box)
@@ -314,7 +354,7 @@ class FormulationPanel(QtWidgets.QDialog):
         return DEFAULT_TAU
 
     def _show_tau(self):
-        self.tau_box.setVisible(any(e["widgets"]["quantity"].currentText() == "MaterialVolumeFraction"
+        self.tau_box.setVisible(any(e["widgets"]["quantity"].currentData() == "MaterialVolumeFraction"
                                     for e in self.rows))
 
     def reason(self, name):
@@ -323,7 +363,7 @@ class FormulationPanel(QtWidgets.QDialog):
             return None
         missing = [c for c in self.quantities[name].needs if c not in self.columns]
         if missing:
-            return f"{name} needs a {' and a '.join(missing)} column; the database has {', '.join(self.columns)}"
+            return f"needs a {' and a '.join(missing)} column in the database"
         return None
 
     def _quantity_combo(self, role):
@@ -332,13 +372,14 @@ class FormulationPanel(QtWidgets.QDialog):
         for name, q in self.quantities.items():
             if (q.objective if role == "objective" else q.constraint) is None:
                 continue
-            item = QtGui.QStandardItem(name)
+            item = QtGui.QStandardItem(QUANTITY_NAMES.get(name, name))
+            item.setData(name, QtCore.Qt.UserRole)
             why = self.reason(name)
             if why:
                 item.setEnabled(False)
-                item.setToolTip(why)
+                item.setToolTip(f"Not available: {why}")
             else:
-                item.setToolTip(q.doc)
+                item.setToolTip(QUANTITY_HELP.get(name, ""))
             model.appendRow(item)
         combo.setModel(model)
         combo.setCurrentIndex(-1)
@@ -353,7 +394,7 @@ class FormulationPanel(QtWidgets.QDialog):
             name = parse_expression(expression)[0]
         except ValueError:
             name = None
-        combo.setCurrentIndex(combo.findText(name) if name else -1)
+        combo.setCurrentIndex(combo.findData(name) if name else -1)
 
     def add_row(self, constraint):
         """A constraint row: quantity, material (MaterialVolumeFraction only), <=, bound, unit."""
@@ -364,7 +405,7 @@ class FormulationPanel(QtWidgets.QDialog):
                    "why": QtWidgets.QLabel(), "remove": QtWidgets.QPushButton("Remove")}
         n = len(self.labels) if self.labels else 0
         for i in range(n):
-            widgets["material"].addItem(swatch(self.colours[i]), f"{self.labels[i]} (material {i})", i)
+            widgets["material"].addItem(swatch(self.colours[i]), self.labels[i], i)
         widgets["bound"].setFixedWidth(150)
         widgets["unit"].setStyleSheet(GREY)
         widgets["why"].setStyleSheet("color: #b00000;")
@@ -385,7 +426,7 @@ class FormulationPanel(QtWidgets.QDialog):
                     widgets["material"].setCurrentIndex(widgets["material"].findData(i))
             except ValueError:
                 pass
-        widgets["quantity"].currentTextChanged.connect(lambda _=None, e=entry: self._update_row(e))
+        widgets["quantity"].currentIndexChanged.connect(lambda _=None, e=entry: self._update_row(e))
         widgets["remove"].clicked.connect(lambda _=False, e=entry: self.remove_row(e))
         self.rows.append(entry)
         self.rows_box.addLayout(row)
@@ -394,9 +435,10 @@ class FormulationPanel(QtWidgets.QDialog):
 
     def _update_row(self, entry):
         w = entry["widgets"]
-        name = w["quantity"].currentText()
+        name = w["quantity"].currentData()
         w["material"].setVisible(name == "MaterialVolumeFraction")
-        w["unit"].setText(bound_unit(name, self.units) if name else "")
+        unit = bound_unit(name, self.units) if name else ""
+        w["unit"].setText("" if unit in ("fraction of the design domain", "no units") else unit)
         w["why"].setText(self.reason(name) or "" if name else "")
         if hasattr(self, "tau_box"):
             self._show_tau()
@@ -415,7 +457,7 @@ class FormulationPanel(QtWidgets.QDialog):
         out = []
         for k, e in enumerate(self.rows, 1):
             w = e["widgets"]
-            if not w["quantity"].currentText():
+            if not w["quantity"].currentData():
                 out.append(f"constraint {k}: choose a quantity")
             if not w["bound"].ok():
                 out.append(f"constraint {k}: the bound is not a number")
@@ -433,7 +475,7 @@ class FormulationPanel(QtWidgets.QDialog):
     def formulation(self):
         """The formulation as the panel shows it, each unchanged entry exactly as it was."""
         obj = self.original.get("objective")
-        name = self.objective.currentText()
+        name = self.objective.currentData()
         if not name:
             objective = None
         elif obj and self._same_expression(obj.get("expression"), f"{name}()"):
@@ -443,7 +485,7 @@ class FormulationPanel(QtWidgets.QDialog):
         constraints = []
         for e in self.rows:
             w, old = e["widgets"], e["original"] or {}
-            name = w["quantity"].currentText()
+            name = w["quantity"].currentData()
             if name == "MaterialVolumeFraction":
                 expression = f"MaterialVolumeFraction({w['material'].currentData() or 0}, tau={self.tau.value():g})"
             else:
@@ -469,9 +511,35 @@ class FormulationPanel(QtWidgets.QDialog):
         if f == project.formulation:
             return []
         project.formulation = f
-        obj = f["objective"]
-        return (["Objective: " + (f"minimize {obj['expression']}" if obj else "(none)")] +
-                [f"Constraint: {c['expression']} <= {c['bound']:g}" for c in f["constraints"]])
+        return formulation_lines(f, project)
+
+
+def formulation_lines(f, project):
+    """The formulation in words, for the message panel: Minimize Stress (p-norm); Mass <= 0.4 t; ..."""
+    from project import parse_expression  # type: ignore
+    _, labels, _ = database_columns(project)
+
+    def words(expression):
+        try:
+            name, args, _ = parse_expression(expression)
+        except ValueError:
+            return expression
+        shown = QUANTITY_NAMES.get(name, name)
+        if name == "MaterialVolumeFraction" and args:
+            i = int(args[0])
+            shown += f" of {labels[i] if labels and i < len(labels) else f'material {i}'}"
+        return shown
+
+    obj = f.get("objective")
+    lines = ["Minimize " + (words(obj["expression"]) if obj else "(nothing chosen)")]
+    for c in f.get("constraints", []):
+        try:
+            unit = bound_unit(parse_expression(c["expression"])[0], project.units)
+        except ValueError:
+            unit = ""
+        unit = "" if unit in ("no units", "fraction of the design domain", "no unit system declared") else f" {unit}"
+        lines.append(f"Constraint: {words(c['expression'])} <= {c['bound']:g}{unit}")
+    return lines
 
 
 # ---------------------------------------------------------------------- Settings
@@ -497,8 +565,53 @@ LABELS = {
     "maxAttributeErrorPercent": "Stop at attribute error [%]", "klFactor": "KL weight",
     "numEpochs": "Max epochs",
 }
-MESH_DOCS = {"n_dof": "number of degrees of freedom the mesh is built for",
-             "single_layer": "one element through the thickness: a 2D problem"}
+# what each setting does, in plain words: shown by its (i)
+HELP = {
+    "n_dof": "How fine the mesh is: the number of unknowns it is built for. More is finer, and slower.",
+    "single_layer": "One element through the thickness, for a flat (2D) part.",
+    "maxIterations": "The optimization stops after this many iterations.",
+    "relative_filter_radius": "The smallest feature the design may have, in element sizes. Larger gives smoother, "
+                              "simpler designs.",
+    "material_filter_radius": "How far material choices are smoothed between neighbouring elements, in element "
+                              "sizes. Ticked: the same as the density filter radius.",
+    "pnorm_exponent": "How closely the single stress value follows the highest stress in the part. Larger is "
+                      "closer, but harder to optimize.",
+    "beta_schedule_scheme": "How fast the design is pushed to clear solid and empty: PAPER sharpens up to 32, "
+                            "PAPER_BM1 up to 16.",
+    "timeLimit": "The optimization stops after this many seconds.",
+    "rel_conv_tol": "The optimization stops early once the design changes by less than this, relatively, "
+                    "between iterations.",
+    "use_heaviside_projection": "Pushes each element towards fully solid or fully empty.",
+    "eta_proj": "The density at which that push splits solid from empty.",
+    "use_penalization": "Pushes each element's material towards one of the real materials in the database.",
+    "gamma_init": "How strong that push is at the start.",
+    "gamma_max": "How strong it can get.",
+    "gamma_factor": "How much stronger it gets each iteration.",
+    "penalty_start_iter": "The iteration it starts at.",
+    "distance_penalty_disable_after_iter": "The iteration it stops at.",
+    "use_dynamic_gamma_scheduling": "Start the push when the design stops improving, instead of at a set "
+                                    "iteration.",
+    "use_z_smoothing": "Discourages neighbouring elements from flickering between materials.",
+    "z_smoothing_weight": "How strong that smoothing is.",
+    "z_smoothing_disable_after_iter": "The iteration it stops at.",
+    "use_continuation": "Raises the SIMP penalty step by step during the run.",
+    "use_constant_poissons_ratio": "One Poisson's ratio for every material, instead of each material's own.",
+    "constant_poissons_ratio": "The Poisson's ratio used when Constant Poisson's ratio is ticked.",
+    "z0_init_method": "The material every element starts with: ORIGIN (the middle of the material map), the "
+                      "LIGHTEST or HEAVIEST material, or UNIFORM (random).",
+    "snap_to_real_material": "In the final design, give each element the nearest real material.",
+    "binarize_topology": "In the final design, make each element fully solid or empty, keeping the volume.",
+    "use_pretrained_vae": "Use the network already trained for this database. Unticked, the next run trains a "
+                          "new one.",
+    "saveNet": "The trained network: always the .nt file next to the database, with the same name.",
+    "latentDim": "How many numbers describe one material in the material map.",
+    "learningRate": "The step size of the network's training.",
+    "vae_hiddenDim": "The size of the network's inner layers.",
+    "maxAttributeErrorPercent": "Training stops once the network reproduces every material property within "
+                                "this percent.",
+    "klFactor": "How strongly training keeps the material map compact and smooth.",
+    "numEpochs": "Training stops after this many passes at the latest.",
+}
 # (tab, group, [(section, key), ...]); section "mesh" is Project.n_dof and Project.single_layer
 LAYOUT = [
     ("Optimization", "Main", [("mesh", "n_dof"), ("mesh", "single_layer"), ("common", "maxIterations"),
@@ -519,14 +632,23 @@ LAYOUT = [
                                          "vae_hiddenDim", "maxAttributeErrorPercent", "klFactor", "numEpochs")]),
 ]
 # settings that may be None, and what None means
-OPTIONAL = {"material_filter_radius": "same as the density filter",
-            "saveNet": "the .nt file next to the database"}
+OPTIONAL = {"material_filter_radius": "same as density filter",
+            "saveNet": "next to the database"}
 VAE_KEYS = ("latentDim", "learningRate", "vae_hiddenDim", "maxAttributeErrorPercent", "klFactor", "numEpochs")
-VAE_NOTE = ("A database's network is the .nt file next to it with the same name (my_db.xlsx and my_db.nt). "
-            "If it is missing, the first run trains it. A shipped database can't be retrained: copy its .xlsx "
-            "to a folder of your own first.")
+VAE_NOTE = ("A database's network is the .nt file next to its .xlsx, with the same name (my_db.xlsx and "
+            "my_db.nt). If there is none, the first run trains one. A database that comes with LSR MMTO can't be "
+            "retrained: copy its .xlsx to a folder of your own first.")
 INTEGERS = {"n_dof", "maxIterations", "timeLimit", "penalty_start_iter", "distance_penalty_disable_after_iter",
             "z_smoothing_disable_after_iter", "latentDim", "vae_hiddenDim", "numEpochs"}
+
+
+def shown_setting(key, value):
+    """A setting's value in words: on/off, a number, or what an empty one means."""
+    if value is None:
+        return OPTIONAL.get(key, "none")
+    if isinstance(value, bool):
+        return "on" if value else "off"
+    return format(value, "g") if isinstance(value, (int, float)) else str(value)
 
 
 def setting_choices():
@@ -609,82 +731,89 @@ class SettingRow:
 
 
 class SettingsPanel(QtWidgets.QDialog):
-    """Every setting of a run, on two tabs: Optimization (the main ones open, the rest in groups
-    that open on a click) and VAE. A setting not at its default is in bold, with a reset."""
+    """Every setting of a run, on two tabs: Optimization (the main ones open, the rest under Advanced,
+    which opens on a click) and VAE. A setting not at its default is in bold, with a reset button."""
 
     def __init__(self, parent, project):
-        from project import SETTING_DOCS  # type: ignore
         super().__init__(parent)
         self.setWindowTitle("Settings")
-        self.resize(1150, 700)
+        self.resize(720, 560)
         self.project = project
         self.defaults = defaults_for(project)
         choices = setting_choices()
-        self.rows = {}                                          # (section, key) -> SettingRow, label
+        self.rows = {}                                          # (section, key) -> SettingRow, label, reset
         layout = QtWidgets.QVBoxLayout(self)
         tabs = QtWidgets.QTabWidget()
         layout.addWidget(tabs)
-        pages = {}
+        pages, advanced = {}, None
         for tab, group, keys in LAYOUT:
             if tab not in pages:
                 scroll = QtWidgets.QScrollArea()
                 scroll.setWidgetResizable(True)
+                scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
                 inner = QtWidgets.QWidget()
                 pages[tab] = QtWidgets.QVBoxLayout(inner)
                 scroll.setWidget(inner)
                 tabs.addTab(scroll, tab)
             box = QtWidgets.QWidget()
             grid = QtWidgets.QGridLayout(box)
-            grid.setColumnStretch(2, 1)
+            grid.setColumnStretch(4, 1)
+            grid.setColumnMinimumWidth(0, 270 if group in ("Main", "VAE") else 258)   # every group lines up
+            grid.setColumnMinimumWidth(1, 290)
             for r, (section, key) in enumerate(keys):
-                value = self.current(section, key)
-                row = SettingRow(key, value, choices)
+                row = SettingRow(key, self.current(section, key), choices)
                 label = QtWidgets.QLabel(LABELS[key])
-                doc = MESH_DOCS.get(key) or SETTING_DOCS.get(key, "")
-                label.setToolTip(f"{key}: {doc}")
-                row.widget.setToolTip(f"{key}: {doc}")
-                help_ = QtWidgets.QLabel(doc)
-                help_.setStyleSheet(GREY)
-                help_.setWordWrap(True)
-                help_.setMinimumWidth(320)
-                reset = QtWidgets.QPushButton("Reset")
-                reset.setToolTip(f"back to {self.defaults[section].get(key)!r}")
+                reset = QtWidgets.QToolButton()                 # shown only on a value other than the default
+                reset.setText("\u21ba")
+                reset.setAutoRaise(True)
+                reset.setToolTip(f"Back to the default: {shown_setting(key, self.defaults[section].get(key))}")
+                policy = reset.sizePolicy()
+                policy.setRetainSizeWhenHidden(True)
+                reset.setSizePolicy(policy)
                 reset.clicked.connect(lambda _=False, s=section, k=key: self.reset(s, k))
                 editor = QtWidgets.QHBoxLayout()
                 if row.none is not None:
                     editor.addWidget(row.none)
                 editor.addWidget(row.widget)
-                if not isinstance(row.widget, QtWidgets.QCheckBox):
-                    row.widget.setFixedWidth(200)
+                if key == "saveNet":                            # always next to the database: no path to type
+                    row.widget.setVisible(False)
+                elif not isinstance(row.widget, QtWidgets.QCheckBox):
+                    row.widget.setFixedWidth(80 if row.none is not None else 140)
                 grid.addWidget(label, r, 0)
                 grid.addLayout(editor, r, 1, QtCore.Qt.AlignLeft)
-                grid.addWidget(help_, r, 2)
-                grid.addWidget(reset, r, 3)
+                grid.addWidget(reset, r, 2)
+                grid.addWidget(Info(HELP.get(key, "")), r, 3)
                 self.rows[(section, key)] = (row, label, reset)
                 row.changed_signal(lambda s=section, k=key: self._mark(s, k))
-            if group == "VAE":
-                note = QtWidgets.QLabel(VAE_NOTE)
-                note.setWordWrap(True)
-                note.setStyleSheet(GREY)
+            if group == "VAE":                                  # the network, its checks, then the settings
                 self.vae_status, self.vae_checks = QtWidgets.QLabel(), QtWidgets.QLabel()
                 self.vae_checks.setWordWrap(True)
-                for widget in (note, self.vae_status, self.vae_checks):
-                    pages[tab].addWidget(widget)
-            if group in ("Main", "VAE"):
-                pages[tab].addWidget(QtWidgets.QLabel(f"<b>{group}</b>"))
+                pages[tab].addWidget(with_info(self.vae_status, VAE_NOTE))
+                pages[tab].addWidget(self.vae_checks)
                 pages[tab].addWidget(box)
-            else:
-                header = QtWidgets.QToolButton()
-                header.setCheckable(True)
-                header.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
-                header.setArrowType(QtCore.Qt.RightArrow)
-                header.setStyleSheet("QToolButton { border: none; font-weight: bold; }")
-                header.toggled.connect(lambda on, b=box, h=header: (b.setVisible(on), h.setArrowType(
-                    QtCore.Qt.DownArrow if on else QtCore.Qt.RightArrow)))
-                box.setVisible(False)
-                pages[tab].addWidget(header)
+            elif group == "Main":
                 pages[tab].addWidget(box)
-                self.rows[("group", group)] = (header, keys)
+            else:                                               # every other group: under Advanced, closed
+                if advanced is None:
+                    header = QtWidgets.QToolButton()
+                    header.setCheckable(True)
+                    header.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
+                    header.setArrowType(QtCore.Qt.RightArrow)
+                    header.setStyleSheet("QToolButton { border: none; font-weight: bold; }")
+                    advanced = QtWidgets.QWidget()
+                    advanced_layout = QtWidgets.QVBoxLayout(advanced)
+                    advanced_layout.setContentsMargins(12, 0, 0, 0)
+                    advanced.setVisible(False)
+                    header.toggled.connect(lambda on, b=advanced, h=header: (b.setVisible(on), h.setArrowType(
+                        QtCore.Qt.DownArrow if on else QtCore.Qt.RightArrow)))
+                    pages[tab].addWidget(header)
+                    pages[tab].addWidget(advanced)
+                    self.rows[("group", "Advanced")] = (header, [])
+                title = QtWidgets.QLabel(group)
+                title.setStyleSheet(GREY)
+                advanced_layout.addWidget(title)
+                advanced_layout.addWidget(box)
+                self.rows[("group", "Advanced")][1].extend(keys)
         for page in pages.values():
             page.addStretch()
         for (section, key) in list(self.rows):
@@ -747,6 +876,7 @@ class SettingsPanel(QtWidgets.QDialog):
             row.widget.setEnabled(not trained)
             if trained:
                 reset.setEnabled(False)
+                reset.setVisible(False)
         self._vae_refresh()
 
     def _vae_refresh(self):
@@ -777,7 +907,8 @@ class SettingsPanel(QtWidgets.QDialog):
         font.setBold(changed)
         label.setFont(font)
         reset.setEnabled(changed or not row.ok())
-        for name, entry in self.rows.items():                   # "Distance penalty (2 changed)"
+        reset.setVisible(reset.isEnabled())
+        for name, entry in self.rows.items():                   # "Advanced  (2 changed)"
             if name[0] == "group" and (section, key) in entry[1]:
                 header, keys = entry
                 n = sum(1 for s, k in keys if self.rows[(s, k)][0].ok() and
@@ -789,7 +920,7 @@ class SettingsPanel(QtWidgets.QDialog):
         self._mark(section, key)
 
     def problems(self):
-        return [f"{LABELS[k]} ({k}) is not a number" for (s, k), entry in self.rows.items()
+        return [f"{LABELS[k]} is not a number" for (s, k), entry in self.rows.items()
                 if s != "group" and not entry[0].ok()]
 
     def accept(self):
@@ -808,14 +939,15 @@ class SettingsPanel(QtWidgets.QDialog):
             new, old = entry[0].get(), self.current(section, key)
             if same(new, old) and (new is None) == (old is None):
                 continue
-            changed.append(f"{key} {old!r} -> {new!r}")
+            changed.append(f"{LABELS[key]} {shown_setting(key, old)} -> {shown_setting(key, new)}")
             if section == "mesh":
                 setattr(project, key, int(new) if key == "n_dof" else bool(new))
             else:
                 project.settings.setdefault(section, {})[key] = new
         out = ["Settings: " + ", ".join(changed)] if changed else []
         if self.vae_synced:
-            out.append(f"{', '.join(dict.fromkeys(self.vae_synced))}: set to the trained network's")
+            out.append(f"{', '.join(LABELS[k] for k in dict.fromkeys(self.vae_synced))}: set to the trained "
+                       f"network's")
         return out
 
 

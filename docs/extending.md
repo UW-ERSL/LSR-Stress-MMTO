@@ -38,8 +38,9 @@ write `_mask` (a True/False per point) or `evaluate` (indices). Saving and loadi
         """The plane at the mesh's extreme on one side: xmin, xmax, ymin, ymax, zmin or zmax."""
         TYPE, fields = "face", ("side", "pad")
 
-The GUI's region form and code line pick it up by itself: the form's fields are `fields`, with
-the defaults of `__init__`, and its first docstring line is shown above them.
+The code line in the GUI picks it up by itself. For the region form, add it to `FORM` in
+`gui/supports.py`: the name the form shows, a plain description, and a label for each field
+(the form never shows the code names).
 
 Add it to `tests/test_selections.py`, including the round trip through `to_dict`.
 
@@ -49,8 +50,9 @@ Add it to `tests/test_selections.py`, including the round trip through `to_dict`
 `"load"`), `check(bc)` returning a list of errors, `apply(bc, nodes, mesh, state, where)`
 writing into `state["values"]` (dof to imposed value) or `state["force"]`, `script(bc, on)`
 returning the `Project` call that makes it, and `fields`, its values as
-`(name, kind, measures, doc)`, from which the GUI makes its form. Add an `add_...` method to
-`Project` for it.
+`(name, kind, measures, doc)`, from which the GUI makes its form; give it a name, a plain
+description and labels in `BC_FORM`, `gui/supports.py`. Add an `add_...` method to `Project`
+for it.
 
 Add a build test to `tests/test_project.py`; `test_script_round_trip` checks `script`.
 

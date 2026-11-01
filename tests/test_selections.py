@@ -53,6 +53,11 @@ def test_face_plane_near_face():
     assert count(S.face("zmax")) == 121
     assert count(S.face("xmin"), "elements") == 100               # the outermost layer only
     assert np.array_equal(S.face("zmin").evaluate(MESH), S.plane("z", 0.0).evaluate(MESH))
+    plate = GridMesh()                                            # 1.418 wide in x, 1 thick, as the L-bracket
+    plate.node_xyz = plate.node_xyz * [1.418, 1.0, 1.0]
+    plate.elem_size = [1.418, 1.418, 1.0]
+    for x in np.linspace(0.0, 14.18, 41):                        # every x in the part: the nearest column
+        assert len(S.plane("x", x).evaluate(plate)) >= 121, x
     assert count(S.near_face("xmin", 2.0), "elements") == 200    # centers 0.5 and 1.5
     assert count(S.near_face("xmax", 2.0), "elements") == 200
 

@@ -21,9 +21,9 @@ from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtGui import QKeySequence
 
 from .panels import FormulationPanel, MaterialsPanel, SettingsPanel
-from .supports import KEEP_COLOUR, LOAD_COLOUR, OTHER_COLOUR, SUPPORT_COLOUR, SupportsPanel
+from .supports import KEEP_COLOUR, LOAD_COLOUR, OTHER_COLOUR, SUPPORT_COLOUR, SupportsPanel, bc_name, bc_value
 from .pyto_ad import (FILE_DIALOG_OPTIONS, UNIT_SYSTEMS, GeometryWindow, MainWindow, ProjectsWindow,
-                      UnitsWindow)
+                      StructuralLoadsWindow, UnitsWindow)
 
 APP = "LSR MMTO"
 PROJECT_FILTER = "LSR MMTO project (*.mmto)"
@@ -31,11 +31,79 @@ SIDEBAR = ("Units", "Geometry", "Materials", "Supports and loads", "Formulation"
 PANELS = {"Materials": MaterialsPanel, "Formulation": FormulationPanel, "Settings": SettingsPanel}
 
 
+class Strip(QtWidgets.QDockWidget):
+    """A non-modal dialog docked on the right edge of the window, so it does not cover the 3D view.
+    Its own Close, or the strip's x, closes both; dragging the strip's title bar floats it."""
+
+    def __init__(self, dialog, window, attr):
+        super().__init__(dialog.windowTitle(), window)
+        self.is_open = True                                         # also while behind another strip's tab
+        self.window_, self.attr = window, attr                      # window.<attr> is the dialog while open
+        self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+        dialog.setWindowFlags(QtCore.Qt.Widget)
+        self.setWidget(dialog)
+        dialog.finished.connect(self.close)
+        window.addDockWidget(QtCore.Qt.RightDockWidgetArea, self)
+        dialog.show()
+        self.show()
+
+    def closeEvent(self, event):
+        dialog = self.widget()
+        self.is_open = False
+        if getattr(self.window_, self.attr, None) is dialog:       # closed is gone: nothing may call it after
+            delattr(self.window_, self.attr)                        # (Units' Apply updates an open Pick window)
+        if dialog is not None and dialog.isVisible():
+            dialog.close()                                          # its own clean-up (Pick: the node dots)
+        super().closeEvent(event)
+
+
+def in_open_strip(widget):
+    """True when widget is docked in a strip that is open, in front or behind a tab."""
+    try:
+        strip = widget.parentWidget() if widget is not None else None    # (the Pick window's .parent is
+        return isinstance(strip, Strip) and strip.is_open                # the main window, not a method)
+    except RuntimeError:                                            # already deleted
+        return False
+
+
+class PickWindow(StructuralLoadsWindow):
+    """Picking supports and loads with the mouse: Selection, Type, the force, Apply. Each Apply goes
+    straight into the project (MMTOWindow.adopt_picks), so there is no list of applied loads here, no
+    load set (one load case) and no torque (not one of LSR MMTO's loads)."""
+
+    def init_window(self):
+        super().init_window()
+        self.setWindowTitle("Pick")
+
+    def create_load_set_control(self, parent_layout):
+        self.load_set_spin = QtWidgets.QSpinBox(self)               # read when a load is applied: always 0
+        self.load_set_spin.setVisible(False)
+
+    def create_load_type_control(self, parent_layout):
+        layout = QtWidgets.QHBoxLayout()
+        layout.addWidget(QtWidgets.QLabel("Type"))
+        self.load_type = QtWidgets.QComboBox()
+        self.load_type.addItems([k for k in self.LOAD_TYPES if k != "Torque"])
+        layout.addWidget(self.load_type)
+        parent_layout.addLayout(layout)
+
+    def create_buttons(self, parent_layout):
+        self.apply_button = QtWidgets.QPushButton("Apply")
+        parent_layout.addWidget(self.apply_button)
+
+    def init_ui(self):
+        super().init_ui()
+        self.applied_list.parent().setVisible(False)                # always empty: Apply adds to the project
+        hint = QtWidgets.QLabel("Click faces on the part, choose the type and value, then Apply.")
+        hint.setWordWrap(True)
+        self.layout().insertWidget(0, hint)
+        self.layout().addStretch()
+
+
 def mmto_file_error(path):
     """Why the file at path cannot be opened in the GUI, or None. Only .mmto projects open here."""
     if not path.lower().endswith(".mmto"):
-        return (f"{os.path.basename(path)} is not an LSR MMTO project (.mmto). A PyTO-AD .pyto file opens "
-                f"in PyTO-AD, or in code with Project.load.")
+        return f"{os.path.basename(path)} is not an LSR MMTO project (.mmto)."
     try:
         with open(path) as fh:
             data = json.load(fh)
@@ -58,27 +126,6 @@ def triangle_selections(project):
     return [name for name, s in project.selections.items() if has(s.to_dict())]
 
 
-def summary(project):
-    """The project as lines of text for the message panel."""
-    p = project
-    lines = [f"Units: {p.units}" + ("  (none declared: Units sets one)" if p.units == "none" else ""),
-             f"Database: {p.database or '(none)'}",
-             f"Selections ({len(p.selections)}): " + (", ".join(f"{k} = {s}" for k, s in p.selections.items())
-                                                       or "(none)")]
-    bcs = [f"{bc['kind']} on {bc['on']} (" + ", ".join(f"{k}={v}" for k, v in bc.items() if k not in ("kind", "on"))
-           + ")" for bc in p.bcs]
-    lines.append(f"Supports and loads ({len(bcs)}): " + ("; ".join(bcs) or "(none)"))
-    if p.keep_solid_names:
-        lines.append("Keep solid: " + ", ".join(p.keep_solid_names))
-    f = p.formulation
-    obj = f.get("objective")
-    lines.append("Objective: " + (f"{obj['sense']} {obj['expression']}" if obj else "(none)"))
-    for c in f.get("constraints", []):
-        lines.append(f"Constraint: {c['expression']} {c['op']} {c['bound']:g}")
-    lines.append(f"Mesh: {p.n_dof} dofs" + (", single layer" if p.single_layer else ""))
-    return lines
-
-
 class MMTOWindow(MainWindow):
     """PyTO-AD's MainWindow with a Project, a File menu, and the sidebar of SIDEBAR: PyTO-AD's
     buttons where it has them, ours (PANELS) for the rest."""
@@ -91,6 +138,7 @@ class MMTOWindow(MainWindow):
         super().__init__(parent)
         self.project, self.path, self._saved = None, None, None
         self._mesh, self._mesh_key, self.preview_on = None, None, False
+        self._said = set()                                          # errors and warnings already shown
         self.message_text.setText(f"{APP}. File > New starts a project from an STL; File > Open opens a "
                                   f".mmto project.")
         self._build_menu()
@@ -98,7 +146,90 @@ class MMTOWindow(MainWindow):
 
     # ------------------------------------------------------------------ the window
     def create_status_bar(self):
-        self.statusBar().addWidget(QtWidgets.QLabel(f"{APP}, built on PyTO-AD."))
+        """The name on the left; on the right, the point under the mouse and the Ruler tick."""
+        self.statusBar().addWidget(QtWidgets.QLabel(APP))
+        self.coords = QtWidgets.QLabel("")
+        self.coords.setStyleSheet("color: #666666;")
+        self.coords.setMinimumWidth(240)
+        self.ruler_box = QtWidgets.QCheckBox("Ruler")
+        self.ruler_box.setToolTip("Show scales along the part, in the project's length unit")
+        self.ruler_box.toggled.connect(lambda on: self.draw_ruler())
+        self.statusBar().addPermanentWidget(self.coords)
+        self.statusBar().addPermanentWidget(self.ruler_box)
+        self._rulers = []
+        self._picker = None
+        QtCore.QTimer.singleShot(0, self._track_mouse)              # once the 3D view exists
+
+    # ------------------------------------------------------------------ scale: the ruler and the mouse
+    def length_unit(self):
+        from .supports import field_unit
+        return field_unit("length", self.project.units) if self.project is not None else ""
+
+    def part_bounds(self):
+        """(lowest, highest) corner of the part's STL, or None with no part."""
+        if not getattr(self, "stl_geom", None):
+            return None
+        p = np.asarray(self.stl_geom.mesh.vectors, dtype=float).reshape(-1, 3)
+        return p.min(axis=0), p.max(axis=0)
+
+    def part_extent_text(self):
+        """The part's extent in words, for the region form: x 0 to 200, y 0 to 200, z 0 to 1 mm."""
+        b = self.part_bounds()
+        if b is None:
+            return ""
+        lo, hi = b
+        parts = ", ".join(f"{a} {lo[k]:.4g} to {hi[k]:.4g}" for k, a in enumerate("xyz"))
+        return f"The part spans {parts} {self.length_unit()}".rstrip() + "."
+
+    def draw_ruler(self):
+        """Scales along the part's lowest x and y edges (and z, when the part has thickness), on or off
+        with the Ruler tick."""
+        for actor in self._rulers:
+            self.plotter.remove_actor(actor, reset_camera=False)
+        self._rulers = []
+        b = self.part_bounds()
+        if b is not None and self.ruler_box.isChecked():
+            lo, hi = b
+            size = float(np.max(hi - lo))
+            off = 0.03 * size
+            style = dict(number_labels=5, font_size_factor=0.6, label_size_factor=1.3, tick_length=3,
+                         label_color="#8a8a8a", tick_color="#b5b5b5",
+                         label_format="%.0f" if size >= 20 else "%.3g")
+            x0, y0, z1 = lo[0] - off, lo[1] - off, hi[2]
+            lines = [([lo[0], y0, z1], [hi[0], y0, z1], False, self.length_unit()),
+                     ([x0, hi[1], z1], [x0, lo[1], z1], True, "")]
+            if hi[2] - lo[2] > 0.05 * size:                         # a plate shows no z scale
+                lines.append(([x0, y0, lo[2]], [x0, y0, hi[2]], False, ""))
+            for a, b_, flip, title in lines:
+                actor = self.plotter.add_ruler(a, b_, flip_range=flip, title=title, **style)
+                for prop in (actor.GetLabelTextProperty(), actor.GetTitleTextProperty()):
+                    prop.ItalicOff()
+                    prop.BoldOff()
+                    prop.ShadowOff()
+                actor.SetPickable(False)
+                self._rulers.append(actor)
+        self.plotter.render()
+
+    def _track_mouse(self):
+        """The point of the part under the mouse, in the status bar."""
+        import vtk
+        try:
+            self._picker = vtk.vtkCellPicker()
+            self._picker.SetTolerance(0.0005)
+            self.plotter.iren.add_observer("MouseMoveEvent", lambda *_: self.show_point_under_mouse())
+        except Exception:                                           # noqa: BLE001  (no 3D view: no readout)
+            self._picker = None
+
+    def show_point_under_mouse(self, position=None):
+        if self._picker is None or self.part_bounds() is None:
+            self.coords.setText("")
+            return
+        x, y = position or self.plotter.iren.get_event_position()
+        if self._picker.Pick(x, y, 0, self.plotter.renderer) and self._picker.GetCellId() >= 0:
+            p = self._picker.GetPickPosition()
+            self.coords.setText(f"x {p[0]:.4g}   y {p[1]:.4g}   z {p[2]:.4g} {self.length_unit()}")
+        else:
+            self.coords.setText("")
 
     def _build_menu(self):
         file_menu = self.menuBar().addMenu("&File")
@@ -117,7 +248,7 @@ class MMTOWindow(MainWindow):
     def _about(self):
         QtWidgets.QMessageBox.information(
             self, f"About {APP}", f"{APP}: multi-material topology optimization with a latent material "
-                                  f"space, built on PyTO-AD.")
+                                  f"space.")
 
     # ------------------------------------------------------------------ unsaved changes
     def _state(self):
@@ -241,25 +372,34 @@ class MMTOWindow(MainWindow):
         filled = project.complete_settings()                        # a file missing settings: filled, unsaved
         self.init_state()                                           # PyTO-AD's own fresh state
         self._units_to_window()
-        self.message_text.clear()
-        self.message_text.append(f"Project {project.name}" + (f": {path}" if path else " (not saved yet)"))
+        for actor in self._rulers:                                  # the old part's scales
+            self.plotter.remove_actor(actor, reset_camera=False)
+        self._rulers = []
         if os.path.isfile(project.stl_path()):
             loader = ProjectsWindow(self)                           # its load_geometry draws the STL, picking on
             loader.load_geometry(project.stl_path())
             loader.deleteLater()
         else:
             self.plotter.clear_actors()
+        self.draw_ruler()
+        self.message_text.clear()                                   # the loader's own lines go too
+        self.message_text.append(f"Project {project.name}" + (f": {path}" if path else " (not saved yet)"))
+        if not os.path.isfile(project.stl_path()):
             self.message_text.append(f"STL not found: {project.stl_path()}")
-        for line in summary(project):
-            self.message_text.append(line)
         if filled:
-            self.message_text.append(f"{len(filled)} settings missing from the file were set to their defaults "
-                                     f"({', '.join(filled)}); Save writes them.")
-        for e in project.validate():
-            self.message_text.append(f"Error: {e}")
-        for w in project.warnings():
-            self.message_text.append(f"Warning: {w}")
+            self.message_text.append(f"{len(filled)} settings missing from the file were set to their defaults; "
+                                     f"Save writes them.")
+        self._said = set()
+        self._say_checks()
         self._refresh_title()
+
+    def _say_checks(self):
+        """The project's errors and warnings in the message panel, each once: a later change repeats none."""
+        for line in [f"Error: {e}" for e in self.project.validate()] + \
+                    [f"Warning: {w}" for w in self.project.warnings()]:
+            if line not in self._said:
+                self._said.add(line)
+                self.message_text.append(line)
 
     # ------------------------------------------------------------------ units
     def _units_to_window(self):
@@ -276,8 +416,7 @@ class MMTOWindow(MainWindow):
         if dialog.exec_() and self.project is not None and self.project.units != self.settings.unit_system:
             self.project.units = self.settings.unit_system
             self.message_text.append(f"Project units: {self.project.units}. Numbers are not converted.")
-            for w in self.project.warnings():
-                self.message_text.append(f"Warning: {w}")
+            self._say_checks()
             self._refresh_title()
 
     # ------------------------------------------------------------------ Materials, Formulation, Settings
@@ -296,10 +435,7 @@ class MMTOWindow(MainWindow):
         for line in lines:
             self.message_text.append(line)
         if lines:
-            for e in self.project.validate():
-                self.message_text.append(f"Error: {e}")
-            for w in self.project.warnings():
-                self.message_text.append(f"Warning: {w}")
+            self._say_checks()
         self._refresh_title()
 
     def open_materials_panel(self):
@@ -318,8 +454,26 @@ class MMTOWindow(MainWindow):
             return None
         if not self._raise_if_open("supports_panel"):
             self.supports_panel = SupportsPanel(self)
-            self.supports_panel.show()
+            Strip(self.supports_panel, self, "supports_panel")
         return self.supports_panel
+
+    def open_structural_loads_window(self):
+        """The Pick window, docked (in place of MainWindow.open_structural_loads_window)."""
+        if not self._raise_if_open("structural_loads_window"):
+            self.structural_loads_window = PickWindow(self)
+            strip = Strip(self.structural_loads_window, self, "structural_loads_window")
+            panel = getattr(self, "supports_panel", None)
+            if in_open_strip(panel):                                # in the list's place, as a tab beside it
+                self.tabifyDockWidget(panel.parentWidget(), strip)
+            strip.raise_()
+
+    def _raise_if_open(self, attr):
+        """A docked window that is open, also behind a tab, comes to the front: no second copy."""
+        w = getattr(self, attr, None)
+        if in_open_strip(w):
+            w.parentWidget().raise_()
+            return True
+        return super()._raise_if_open(attr)
 
     def project_changed(self):
         self._refresh_title()
@@ -346,9 +500,8 @@ class MMTOWindow(MainWindow):
             except (NotImplementedError, ValueError) as e:
                 self.message_text.append(f"Not added: {e}")
         for bc in self.project.bcs[before:]:                        # say what each pick became
-            values = ", ".join(f"{k}={v}" for k, v in bc.items() if k not in ("kind", "on"))
-            self.message_text.append(f"Added to the project: {bc['kind']} on region {bc['on']} ({values}). "
-                                     f"Supports and loads lists it.")
+            self.message_text.append(f"Added: {bc_name(bc['kind'])} on {bc['on']} "
+                                     f"({bc_value(bc, self.project.units)})")
         if torques:
             self.message_text.append("A torque is not one of LSR MMTO's loads, so it was not added.")
         if sets:
@@ -367,12 +520,14 @@ class MMTOWindow(MainWindow):
             if re.search(r"(force|torque)_text_\d+(-points)?$", str(name)):          # point: a stray dot
                 self.plotter.remove_actor(name, reset_camera=False)
         panel = getattr(self, "supports_panel", None)
-        try:
-            if panel is not None and panel.isVisible():
-                panel.after_change()
-                return names
-        except RuntimeError:
-            pass
+        if in_open_strip(panel):
+            panel.after_change()
+            if len(self.project.bcs) > before:                      # the round trip: back to the list,
+                if in_open_strip(w):                                # the new entry selected
+                    w.close()
+                panel.parentWidget().raise_()
+                panel.bcs.selectRow(len(self.project.bcs) - 1)
+            return names
         if self.preview_on:
             self.draw_supports_and_loads()
         self._refresh_title()
@@ -461,10 +616,11 @@ class MMTOWindow(MainWindow):
             bc_obj, _ = p.supports_and_loads(mesh)
             error = p.rigid_body_error(mesh, bc_obj) if p.bcs else None
             lines.append(f"<span style='color:#b00000'>Error: {error}</span>" if error else
-                         "The supports hold the part against the loads." if p.bcs else "No supports or loads yet.")
+                         "<span style='color:#1a7f37'>The supports hold the part against the loads.</span>"
+                         if p.bcs else "No supports or loads yet.")
         except (ValueError, KeyError) as e:
             lines.append(f"<span style='color:#b00000'>Error: {e}</span>")
-        lines.insert(0, f"Preview on the run's mesh: {mesh.num_elems} elements, {mesh.num_nodes} nodes.")
+        lines.insert(0, f"Mesh of the run: {mesh.num_elems} elements, {mesh.num_nodes} nodes")
         self.preview_on = True
         self.plotter.render()
         return lines, counts
