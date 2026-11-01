@@ -35,17 +35,23 @@ FORM = {
     "near_face": ("Near a face", "Nodes within a set distance of one outer face.",
                   {"side": "Side", "distance": "Distance"}),
     "plane": ("Flat cut", "Nodes on a flat cut through the part. For example, every node where y is 38: "
-              "Cut across y, At 38.", {"axis": "Cut across", "value": "At"}),
+              "Cut across y, At 38. To keep only part of the cut, fill in the from and to of the other "
+              "directions, e.g. x from 0 to 40; leave them empty for the whole cut.",
+              {"axis": "Cut across", "value": "At", "limits": "from / to"}),
     "box": ("Box", "Nodes inside a box given by two opposite corners.", {"lo": "Corner 1", "hi": "Corner 2"}),
     "sphere": ("Sphere", "Nodes within a radius of a point.", {"center": "Centre", "radius": "Radius"}),
     "cylinder": ("Cylinder", "Nodes inside a cylinder, or a tube if you give an inner radius. Good for holes "
-                 "and bolt bores. Leave Length from and Length to empty for a cylinder through the whole part; "
-                 "otherwise they set its ends, measured along the axis from the point on the axis.",
+                 "and bolt bores. Leave the ends empty for a cylinder through the whole part. With the axis "
+                 "along x, y or z the ends are coordinates, e.g. x from 22 to 61; along a tilted axis they "
+                 "are distances from the point on the axis.",
                  {"center": "Point on the axis", "axis": "Axis direction", "radius": "Radius",
-                  "inner_radius": "Inner radius (0 = solid)", "along": ("Length from", "Length to")}),
+                  "inner_radius": "Inner radius (0 = solid)", "along": ("From", "To")}),
     "nearest": ("Closest node", "The one node closest to a point.",
                 {"point": "Point", "boundary": "Surface nodes only"}),
-    "inside_stl": ("Inside a shape", "Nodes inside a closed shape loaded from an STL file.", {"path": "File"}),
+    "inside_stl": ("Inside an STL", "Nodes inside a closed surface loaded from an STL file.", {"path": "File"}),
+    "combined": ("Combined places", "Two places of this project joined, overlapped or one taken from the other. "
+                 "It follows them: edit Place A or Place B later and this place changes with it.",
+                 {"how": "How", "a": "Place A", "b": "Place B"}),
     # made with the mouse: offered only when editing a region that is one
     "stl_faces": ("Picked faces", "Faces you clicked with the mouse. Snap distance is how close a node must "
                   "be to a face to count, in element sizes; leave it empty for the usual 0.7.",
@@ -57,12 +63,25 @@ FORM = {
             {"indices": "Node numbers"}),
 }
 PICKED = {"stl_faces", "halfspaces", "ids"}
-TOLERANCE = ("Tolerance", "How far outside the shape a node may sit and still count. Automatic is right "
+HOW = [("Join: in A or in B", "union"), ("Overlap: in both A and B", "intersect"),
+       ("A minus B: in A, not in B", "difference")]
+
+
+def combined_parts(selection):
+    """(how, A, B) of a union, intersect or difference of two named places, or None."""
+    import selections as S  # type: ignore
+    d = selection.to_dict()
+    parts = d.get("of", [])
+    if d["type"] in dict((v, k) for k, v in HOW) and len(parts) == 2 and all(p["type"] == "place" for p in parts):
+        return d["type"], parts[0]["name"], parts[1]["name"]
+    return None
+TOLERANCE = ("Tolerance", "How far outside the place a node may sit and still count. Automatic is right "
                           "almost always; or type a length.")
-PLACES_HELP = ("A place is the part of the model a support or load acts on: faces you clicked, or a shape you "
+PLACES_HELP = ("A place is the part of the model a support or load acts on: faces you clicked, or a place you "
                "described (a face of the part, a box, a cylinder...). Each place has a name, like clamp or "
                "corner, which shows under Where, so several supports and loads can share one place. Open Places "
                "to rename a place, change it, or tick Keep solid so the optimization never removes it.")
+MOUSE_HINT = "Hover over the part to read its coordinates."
 LENGTHS = {"radius", "inner_radius", "distance", "value", "pad", "along"}   # a length unit beside them
 POINTS = {"center", "lo", "hi", "point"}                    # x, y, z
 OPTIONAL = {"along", "tol"}                                 # empty means None
@@ -139,6 +158,8 @@ def show_value(field, value):
             return shown
     if value is None:
         return ""
+    if isinstance(value, float):
+        return format(value, ".12g")                                # 5, not 5.0; 12 digits: kept exactly
     if isinstance(value, (list, tuple)) and all(isinstance(x, (int, float)) for x in value):
         return ", ".join(format(x, ".12g") for x in value)              # 0, -4, 0; 12 digits: kept exactly
     return value if isinstance(value, str) else repr(value)
@@ -147,6 +168,11 @@ def show_value(field, value):
 def describe(selection):
     """A region in words, for the regions table: e.g. Face of the part: Side Right (x max)."""
     kind = selection.TYPE
+    combo = combined_parts(selection)
+    if combo:
+        how = {"union": "join of", "intersect": "overlap of", "difference": "minus"}[combo[0]]
+        return (f"Combined places: {combo[1]} minus {combo[2]}" if combo[0] == "difference" else
+                f"Combined places: {how} {combo[1]} and {combo[2]}")
     if kind not in FORM:
         return repr(selection)
     defaults = dict(type_fields(type(selection)))
@@ -156,7 +182,12 @@ def describe(selection):
         if value == defaults.get(field) or value is None:
             continue
         if field == "along":
-            parts.append(f"Length from {show_value('', value[0])} to {show_value('', value[1])}")
+            axis = getattr(selection, "axis", None)
+            if isinstance(axis, str) and axis in "xyz" and all(isinstance(v, (int, float)) for v in value):
+                c = selection.center["xyz".index(axis)]
+                parts.append(f"{axis} from {show_value('', c + value[0])} to {show_value('', c + value[1])}")
+            else:
+                parts.append(f"from {show_value('', value[0])} to {show_value('', value[1])} along the axis")
         else:
             parts.append(f"{field_label(kind, field)} {show_value(field, value)}")
     return f"{shown_name(kind)}: " + ", ".join(parts)
@@ -170,7 +201,9 @@ def type_fields(cls):
 
 def used_by(project, name):
     """What uses the region: its supports and loads, and keep solid."""
+    import selections as S  # type: ignore
     out = [f"{bc_name(bc['kind'])} {i}" for i, bc in enumerate(project.bcs, 1) if bc.get("on") == name]
+    out += [f"combined place {k}" for k, s in project.selections.items() if name in S.names_in(s)]
     return out + (["keep solid"] if name in project.keep_solid_names else [])
 
 
@@ -181,13 +214,13 @@ class RegionDialog(QtWidgets.QDialog):
     def __init__(self, parent, project, name=None, preview=None):
         super().__init__(parent)
         self.setWindowFlag(QtCore.Qt.WindowContextHelpButtonHint, False)
-        self.setWindowTitle("Region")
+        self.setWindowTitle("Place")
         self.resize(520, 380)
         self.project, self.old_name, self.preview = project, name, preview
         layout = QtWidgets.QVBoxLayout(self)
         row = QtWidgets.QHBoxLayout()
         row.addWidget(QtWidgets.QLabel("Name"))
-        self.name = QtWidgets.QLineEdit(name or project._free_name("region"))
+        self.name = QtWidgets.QLineEdit(name or project._free_name("place"))
         row.addWidget(self.name)
         layout.addLayout(row)
 
@@ -198,6 +231,9 @@ class RegionDialog(QtWidgets.QDialog):
         current = project.selections.get(name)
         kept = {current.TYPE} if current is not None else set()      # a picked region: its own type too
         self.types = {k: c for k, c in selection_types().items() if k in FORM and (k not in PICKED or k in kept)}
+        self.others = [n for n in project.selections if n != name]  # places this one may combine
+        if len(self.others) >= 2:
+            self.types["combined"] = None
         for k in sorted(self.types, key=list(FORM).index):
             self.type.addItem(shown_name(k), k)
         self.type_info = Info("")
@@ -246,16 +282,17 @@ class RegionDialog(QtWidgets.QDialog):
 
         self.inputs = {}
         self.type.currentIndexChanged.connect(lambda _: (self.changed(), self._fill_form(self.kind())))
-        if current is not None and current.TYPE in self.types:
+        current_kind = None if current is None else "combined" if combined_parts(current) else current.TYPE
+        if current is not None and current_kind in self.types:
             self.type.blockSignals(True)
-            self.type.setCurrentIndex(self.type.findData(current.TYPE))
+            self.type.setCurrentIndex(self.type.findData(current_kind))
             self.type.blockSignals(False)
-            self._fill_form(current.TYPE, current)
+            self._fill_form(current_kind, current)
         else:
             self._fill_form(self.kind())
         if current is not None:
             self.code.setText(repr(current))
-            if current.TYPE not in self.types:
+            if current_kind not in self.types:
                 self.tabs.setCurrentIndex(1)
         self.tabs.currentChanged.connect(self._switch)              # after: opening on the code line copies nothing
         self.code.textChanged.connect(self.changed)
@@ -269,18 +306,64 @@ class RegionDialog(QtWidgets.QDialog):
         cls = self.types[kind]
         self.type_info.setToolTip(FORM[kind][1])
         self.inputs = {}
+        if kind == "combined":                                      # How, Place A, Place B: by name, live
+            how, a, b = combined_parts(selection) if selection is not None else ("union", None, None)
+            boxes = {"how": QtWidgets.QComboBox(), "a": QtWidgets.QComboBox(), "b": QtWidgets.QComboBox()}
+            for shown, v in HOW:
+                boxes["how"].addItem(shown, v)
+            boxes["how"].setCurrentIndex(boxes["how"].findData(how))
+            for key, pick, default in (("a", a, 0), ("b", b, 1)):
+                boxes[key].addItems(self.others)
+                boxes[key].setCurrentIndex(self.others.index(pick) if pick in self.others else default)
+            for key, box in boxes.items():
+                self.form.addRow(FORM["combined"][2][key], box)
+                box.currentIndexChanged.connect(self.changed)
+            self.inputs = boxes
+            return
         for field, default in type_fields(cls):
             value = getattr(selection, field) if selection is not None else \
                 None if default is inspect.Parameter.empty else default
+            if field == "limits":                                   # from / to for the other two axes
+                box = {}
+                for a in "xyz":
+                    ends = (value or {}).get(a, ("", ""))
+                    pair = tuple(QtWidgets.QLineEdit("" if e == "" else show_value("", e)) for e in ends)
+                    row = QtWidgets.QWidget()
+                    row_layout = QtWidgets.QHBoxLayout(row)
+                    row_layout.setContentsMargins(0, 0, 0, 0)
+                    for b in pair:
+                        b.setPlaceholderText("optional")
+                        b.textChanged.connect(self.changed)
+                        row_layout.addWidget(b)
+                    if self.length_unit:
+                        unit = QtWidgets.QLabel(self.length_unit)
+                        unit.setStyleSheet(GREY)
+                        row_layout.addWidget(unit)
+                    self.form.addRow(f"{a} from / to", row)
+                    box[a] = (pair, row)
+                self.inputs[field] = box
+                self.inputs["axis"].currentIndexChanged.connect(self._show_limits)
+                self._show_limits()
+                continue
             if field == "along":                                    # two boxes: the ends
-                ends = value or ("", "")
+                ends = list(value) if value else ["", ""]
+                axis = getattr(selection, "axis", None)
+                if value and isinstance(axis, str) and axis in "xyz" and \
+                        all(isinstance(e, (int, float)) for e in ends):     # shown as coordinates
+                    c = selection.center["xyz".index(axis)]
+                    ends = [c + e for e in ends]
                 box = tuple(QtWidgets.QLineEdit(show_value("", e) if e != "" else "") for e in ends)
+                self._along_rows = []
                 for b, label in zip(box, FORM[kind][2]["along"]):
                     b.setPlaceholderText("optional")
-                    self.form.addRow(label, self._beside(b, self.length_unit))
+                    row = self._beside(b, self.length_unit)
+                    self.form.addRow(label, row)
+                    self._along_rows.append(row)
                 self.inputs[field] = box
                 for b in box:
                     b.textChanged.connect(self.changed)
+                self.inputs["axis"].currentTextChanged.connect(self._label_along)
+                self._label_along()
                 continue
             if field in CHOICES:
                 options, editable = CHOICES[field]
@@ -332,6 +415,41 @@ class RegionDialog(QtWidgets.QDialog):
         super().showEvent(event)
         self._fit()
 
+    def _cylinder_axis(self):
+        """x, y or z when the cylinder's axis is one of them, else None (a tilted axis)."""
+        axis = self._axis_value()
+        return axis if axis in ("x", "y", "z") else None
+
+    def _axis_value(self):
+        """The axis box's value: x, y, z, or what was typed in it (a direction such as 1, 1, 0)."""
+        box = self.inputs.get("axis")
+        if box is None:
+            return ""
+        text = box.currentText().strip()
+        index = box.findText(text)
+        return (box.itemData(index) if index >= 0 and box.itemData(index) else text).strip()
+
+    def _label_along(self, *_):
+        """Cylinder: the ends as coordinates (x from / x to) for an x, y or z axis, else distances."""
+        axis = self._cylinder_axis()
+        texts = (f"{axis} from", f"{axis} to") if axis else ("From (distance)", "To (distance)")
+        for row, text in zip(getattr(self, "_along_rows", []), texts):
+            label = self.form.labelForField(row)
+            if label is not None:
+                label.setText(text)
+
+    def _show_limits(self, *_):
+        """Flat cut: from / to rows for the two axes the cut is not across."""
+        limits = self.inputs.get("limits")
+        if not limits:
+            return
+        cut = self._axis_value()
+        for a, (pair, row) in limits.items():
+            row.setVisible(a != cut)
+            label = self.form.labelForField(row)
+            if label is not None:
+                label.setVisible(a != cut)
+
     @staticmethod
     def _beside(widget, unit, info=None):
         """widget with its unit, and an (i), after it."""
@@ -379,15 +497,40 @@ class RegionDialog(QtWidgets.QDialog):
 
     def from_form(self):
         kind = self.kind()
+        if kind == "combined":
+            import selections as S  # type: ignore
+            how, a, b = (self.inputs["how"].currentData(), self.inputs["a"].currentText(),
+                         self.inputs["b"].currentText())
+            if a == b:
+                raise ValueError("Place A and Place B must be different places")
+            return {"union": S.union, "intersect": S.intersect, "difference": S.difference}[how](
+                S.place(a), S.place(b))
         cls = self.types[kind]
         kwargs = {}
         for field, box in self.inputs.items():
             label = field_label(kind, field)
+            if field == "limits":
+                cut = kwargs.get("axis") or self.inputs["axis"].currentData()
+                limits = {}
+                for a, (pair, _) in box.items():
+                    ends = [b.text().strip() for b in pair]
+                    if a == cut or not any(ends):
+                        continue
+                    if not all(ends):
+                        raise ValueError(f"{a} from / to: give both, or leave both empty")
+                    limits[a] = [self._value(label, e) for e in ends]
+                kwargs[field] = limits or None
+                continue
             if field == "along":
                 ends = [b.text().strip() for b in box]
                 if any(ends) and not all(ends):
-                    raise ValueError("Length from and Length to: give both, or leave both empty")
+                    raise ValueError("the two ends: give both, or leave both empty")
                 kwargs[field] = [self._value(label, e) for e in ends] if all(ends) else None
+                axis = self._cylinder_axis()
+                if kwargs[field] and axis and isinstance(kwargs.get("center"), list) and \
+                        all(isinstance(e, (int, float)) for e in kwargs[field]):   # coordinates -> from the point
+                    c = float(kwargs["center"]["xyz".index(axis)])
+                    kwargs[field] = [e - c for e in kwargs[field]]
                 continue
             if isinstance(box, QtWidgets.QCheckBox):
                 kwargs[field] = box.isChecked()
@@ -425,9 +568,11 @@ class RegionDialog(QtWidgets.QDialog):
         if not name.isidentifier():
             out.append(f"name {name!r}: letters, digits and _, not starting with a digit")
         elif name != self.old_name and name in self.project.selections:
-            out.append(f"there is already a region named {name}")
+            out.append(f"there is already a place named {name}")
         try:
-            self.selection()
+            import selections as S  # type: ignore
+            selection = self.selection()
+            S.resolved(selection, dict(self.project.selections, **{name: selection}), (name,))
         except ValueError as e:
             out.append(str(e))
         return out
@@ -459,7 +604,7 @@ class RegionDialog(QtWidgets.QDialog):
     def accept(self):
         problems = self.problems()
         if problems:
-            QtWidgets.QMessageBox.warning(self, "Region", "\n".join(problems))
+            QtWidgets.QMessageBox.warning(self, "Place", "\n".join(problems))
             return
         super().accept()
 
@@ -467,12 +612,12 @@ class RegionDialog(QtWidgets.QDialog):
 # ---------------------------------------------------------------------- a support or load
 # What the support or load dialog shows for each kind: its name, what it is, and a label per value.
 BC_FORM = {
-    "fixed": ("Fixed support", "Holds the region still in the ticked directions.", {"dofs": "Held in"}),
-    "displacement": ("Moved support", "Moves the region by a set distance in the ticked directions.",
+    "fixed": ("Fixed support", "Holds the place still in the ticked directions.", {"dofs": "Held in"}),
+    "displacement": ("Moved support", "Moves the place by a set distance in the ticked directions.",
                      {"dofs": "Moved in", "value": "Distance"}),
-    "force": ("Force", "A total force on the region, shared equally by its nodes.", {"total": "Total force"}),
-    "traction": ("Pressure", "A pressure on the region, turned into a force: Pressure times Area, pushing along "
-                 "Direction, shared equally by its nodes. Tick Area from the region to use the region's size "
+    "force": ("Force", "A total force on the place, shared equally by its nodes.", {"total": "Total force"}),
+    "traction": ("Pressure", "A pressure on the place, turned into a force: Pressure times Area, pushing along "
+                 "Direction, shared equally by its nodes. Tick Area from the place to use the place's size "
                  "across the direction (Direction must then be along x, y or z).",
                  {"pressure": "Pressure", "direction": "Direction", "area": "Area"}),
 }
@@ -492,7 +637,7 @@ def bc_values(bc, units=None):
         if k == "dofs":
             text = ", ".join(v)
         elif v == "bbox":
-            text = "from the region"
+            text = "from the place"
         else:
             text = show_value("", v)
         out.append(f"{labels.get(k, k)} {text}")
@@ -531,7 +676,8 @@ class BCDialog(QtWidgets.QDialog):
         from project import BC_KINDS  # type: ignore
         super().__init__(parent)
         self.preview = preview
-        self.new_regions = {}                                       # made here with New shape; added on OK
+        self.pages = None                                           # the strip's open_page, when docked
+        self.new_regions = {}                                       # made here with New place; added on OK
         self.setWindowFlag(QtCore.Qt.WindowContextHelpButtonHint, False)
         self.setWindowTitle("Support or load")
         self.resize(480, 220)
@@ -550,10 +696,10 @@ class BCDialog(QtWidgets.QDialog):
         top.addRow("Type", kind_row)
         where_row = QtWidgets.QHBoxLayout()
         where_row.addWidget(self.on, stretch=1)
-        new_shape = QtWidgets.QPushButton("New shape...")
-        new_shape.setToolTip("Describe a new place: a face of the part, a box, a cylinder, ...")
-        new_shape.clicked.connect(self.new_shape)
-        where_row.addWidget(new_shape)
+        new_place = QtWidgets.QPushButton("New place...")
+        new_place.setToolTip("Describe a new place: a face of the part, a box, a cylinder, ...")
+        new_place.clicked.connect(self.new_shape)
+        where_row.addWidget(new_place)
         top.addRow("Where", where_row)
         layout.addLayout(top)
         self.form = QtWidgets.QFormLayout()
@@ -595,7 +741,7 @@ class BCDialog(QtWidgets.QDialog):
                     row.addWidget(QtWidgets.QLabel(label))
                     row.addWidget(w)
             elif typ == "area":
-                widget = (QtWidgets.QCheckBox("from the region"),
+                widget = (QtWidgets.QCheckBox("from the place"),
                           NumberEdit(0.0 if value in (None, "bbox") else value))
                 widget[0].setChecked(value in (None, "bbox"))
                 widget[1].setEnabled(value not in (None, "bbox"))
@@ -614,15 +760,21 @@ class BCDialog(QtWidgets.QDialog):
             self.inputs[name] = (typ, widget)
 
     def new_shape(self):
-        """A new place from the region form; it joins the project when the dialog is closed with OK."""
+        """A new place from the place form, a page over this one when docked; it joins the project when
+        this dialog is closed with OK."""
         q = self.project.copy()
         q.selections.update(self.new_regions)
         dialog = RegionDialog(self, q, preview=self.preview)
-        if dialog.exec_():
-            name = dialog.name.text().strip()
-            self.new_regions[name] = dialog.selection()
+
+        def ok(d):
+            name = d.name.text().strip()
+            self.new_regions[name] = d.selection()
             self.on.addItem(name)
             self.on.setCurrentText(name)
+        if self.pages is not None:
+            return self.pages(dialog, ok)
+        if dialog.exec_():
+            ok(dialog)
         return dialog
 
     def bc(self):
@@ -648,7 +800,7 @@ class BCDialog(QtWidgets.QDialog):
     def problems(self):
         out = []
         if not self.on.currentText():
-            out.append("Where: choose a place, or make one with New shape")
+            out.append("Where: choose a place, or make one with New place")
         labels = BC_FORM.get(self.kind.currentData(), ("", "", {}))[2]
         for name, (typ, widget) in self.inputs.items():
             name = labels.get(name, name)
@@ -691,7 +843,13 @@ class SupportsPanel(QtWidgets.QDialog):
         self.setMinimumWidth(360)
         self.window = window
         self.counts = {}                                            # region -> nodes, after a preview
-        layout = QtWidgets.QVBoxLayout(self)
+        outer = QtWidgets.QVBoxLayout(self)                         # pages, one at a time: the list first,
+        outer.setContentsMargins(0, 0, 0, 0)                        # then any form opened from it on top
+        self.stack = QtWidgets.QStackedWidget()
+        outer.addWidget(self.stack)
+        home = QtWidgets.QWidget()
+        self.stack.addWidget(home)
+        layout = QtWidgets.QVBoxLayout(home)
 
         top = QtWidgets.QHBoxLayout()
         add = QtWidgets.QPushButton("Add")
@@ -721,6 +879,7 @@ class SupportsPanel(QtWidgets.QDialog):
             self.bcs.horizontalHeader().setSectionResizeMode(
                 c, QtWidgets.QHeaderView.Stretch if c == 2 else QtWidgets.QHeaderView.ResizeToContents)
         self.bcs.doubleClicked.connect(lambda _: self.edit_bc())
+        self.bcs.itemSelectionChanged.connect(self.show_selected_bc)
         self.bcs.setMinimumHeight(120)
         self.empty = QtWidgets.QLabel("Nothing yet. Use Add to put a support or load on the part.")
         self.empty.setStyleSheet(GREY)
@@ -759,6 +918,7 @@ class SupportsPanel(QtWidgets.QDialog):
             self.regions.horizontalHeader().setSectionResizeMode(
                 c, QtWidgets.QHeaderView.Stretch if c == 1 else QtWidgets.QHeaderView.ResizeToContents)
         self.regions.doubleClicked.connect(lambda _: self.edit_region())
+        self.regions.itemSelectionChanged.connect(self.show_selected_place)
         self.regions.setMinimumHeight(120)
         places_layout.addWidget(self.regions, stretch=1)
         places_layout.addLayout(self._buttons((("Add", self.add_region), ("Delete", self.delete_region))))
@@ -774,6 +934,37 @@ class SupportsPanel(QtWidgets.QDialog):
         layout.addLayout(report_row)
         layout.addStretch()                                         # an empty list: everything stays on top
         self.refresh()
+
+    # ------------------------------------------------------------------ pages
+    def open_page(self, dialog, on_ok):
+        """dialog as a page of this strip, in front of the page before it, the 3D view free to use;
+        OK or Cancel goes back one page, OK first calls on_ok(dialog)."""
+        page = QtWidgets.QWidget()
+        box = QtWidgets.QVBoxLayout(page)
+        title = QtWidgets.QLabel(f"<b>{dialog.windowTitle()}</b>")
+        page.mouse = QtWidgets.QLabel(MOUSE_HINT)                   # the point under the mouse, while here
+        page.mouse.setStyleSheet(GREY)
+        dialog.setWindowFlags(QtCore.Qt.Widget)
+        for widget in (title, dialog, page.mouse):
+            box.addWidget(widget)
+        box.setStretch(1, 1)
+        self.stack.addWidget(page)
+        self.stack.setCurrentWidget(page)
+        dialog.show()
+
+        def finished(result):
+            if result:
+                on_ok(dialog)
+            self.stack.removeWidget(page)
+            page.deleteLater()
+        dialog.finished.connect(finished)
+        return dialog
+
+    def show_mouse(self, text):
+        """The point under the mouse, on the page in front (the list has the status bar for it)."""
+        page = self.stack.currentWidget()
+        if hasattr(page, "mouse"):
+            page.mouse.setText(f"Mouse on the part: {text}" if text else MOUSE_HINT)
 
     @staticmethod
     def _buttons(spec):
@@ -802,7 +993,7 @@ class SupportsPanel(QtWidgets.QDialog):
             self.regions.setItem(r, 1, item)
             keep = QtWidgets.QCheckBox()
             keep.setChecked(name in p.keep_solid_names)
-            keep.setToolTip("Keep this region solid: the optimization does not remove it")
+            keep.setToolTip("Keep this place solid: the optimization does not remove it")
             keep.toggled.connect(lambda on, n=name: self.set_keep_solid(n, on))
             cell = QtWidgets.QWidget()
             centred = QtWidgets.QHBoxLayout(cell)
@@ -833,18 +1024,16 @@ class SupportsPanel(QtWidgets.QDialog):
 
     # ------------------------------------------------------------------ regions
     def add_region(self):
-        dialog = RegionDialog(self, self.project, preview=self.preview_one)
-        if dialog.exec_():
+        def ok(dialog):
             self.project.add_selection(dialog.name.text().strip(), dialog.selection())
             self.after_change()
-        return dialog
+        return self.open_page(RegionDialog(self, self.project, preview=self.preview_one), ok)
 
     def edit_region(self, name=None):
         name = name or self._region()
         if name is None:
             return None
-        dialog = RegionDialog(self, self.project, name, preview=self.preview_one)
-        if dialog.exec_():
+        def ok(dialog):
             new = dialog.name.text().strip()
             selection = dialog.selection()
             if new != name:
@@ -852,30 +1041,25 @@ class SupportsPanel(QtWidgets.QDialog):
             if repr(selection) != repr(self.project.selections[new]):
                 self.project.selections[new] = selection
             self.after_change()
-        return dialog
+        return self.open_page(RegionDialog(self, self.project, name, preview=self.preview_one), ok)
 
     def rename_region(self):
         name = self._region()
         if name is None:
             return
-        new, ok = QtWidgets.QInputDialog.getText(self, "Rename region", "New name", text=name)
+        new, ok = QtWidgets.QInputDialog.getText(self, "Rename place", "New name", text=name)
         new = new.strip()
         if ok and new and new != name:
             if not new.isidentifier() or new in self.project.selections:
-                QtWidgets.QMessageBox.warning(self, "Rename region", f"{new!r}: not a free name made of "
+                QtWidgets.QMessageBox.warning(self, "Rename place", f"{new!r}: not a free name made of "
                                                                      f"letters, digits and _")
                 return
             self.rename(name, new)
             self.after_change()
 
     def rename(self, old, new):
-        """The region and everything that names it."""
-        p = self.project
-        p.selections = {new if k == old else k: v for k, v in p.selections.items()}
-        for bc in p.bcs:
-            if bc.get("on") == old:
-                bc["on"] = new
-        p.keep_solid_names = [new if n == old else n for n in p.keep_solid_names]
+        """The place and everything that names it, combined places too."""
+        self.project.rename_selection(old, new)
         if old in self.counts:
             self.counts[new] = self.counts.pop(old)
 
@@ -885,7 +1069,7 @@ class SupportsPanel(QtWidgets.QDialog):
             return False
         users = used_by(self.project, name)
         if users:
-            QtWidgets.QMessageBox.warning(self, "Delete region", f"{name} is used by {', '.join(users)}; "
+            QtWidgets.QMessageBox.warning(self, "Delete place", f"{name} is used by {', '.join(users)}; "
                                                                  f"remove that first.")
             return False
         del self.project.selections[name]
@@ -903,26 +1087,28 @@ class SupportsPanel(QtWidgets.QDialog):
 
     # ------------------------------------------------------------------ supports and loads
     def add_bc(self):
-        dialog = BCDialog(self, self.project, preview=self.preview_one)
-        if dialog.exec_():
+        def ok(dialog):
             for name, selection in dialog.new_regions.items():
                 self.project.add_selection(name, selection)
             self.project.bcs.append(dialog.bc())
             self.after_change()
             self.bcs.selectRow(len(self.project.bcs) - 1)
-        return dialog
+        dialog = BCDialog(self, self.project, preview=self.preview_one)
+        dialog.pages = self.open_page
+        return self.open_page(dialog, ok)
 
     def edit_bc(self, index=None):
         index = self._selected(self.bcs) if index is None else index
         if index is None:
             return None
-        dialog = BCDialog(self, self.project, self.project.bcs[index], preview=self.preview_one)
-        if dialog.exec_():
+        def ok(dialog):
             for name, selection in dialog.new_regions.items():
                 self.project.add_selection(name, selection)
             self.project.bcs[index] = dialog.bc()
             self.after_change()
-        return dialog
+        dialog = BCDialog(self, self.project, self.project.bcs[index], preview=self.preview_one)
+        dialog.pages = self.open_page
+        return self.open_page(dialog, ok)
 
     def delete_bc(self, index=None):
         index = self._selected(self.bcs) if index is None else index
@@ -935,20 +1121,51 @@ class SupportsPanel(QtWidgets.QDialog):
         """The Pick window, in place of this list until its Apply adds the pick to the project."""
         self.window.open_structural_loads_window()
 
+    def show_selected_bc(self):
+        """Only the support or load clicked, on the part."""
+        r = self._selected(self.bcs)
+        if r is not None and r < len(self.project.bcs):
+            from project import BC_KINDS  # type: ignore
+            bc = self.project.bcs[r]
+            colour = SUPPORT_COLOUR if BC_KINDS[bc["kind"]].role == "support" else LOAD_COLOUR
+            self._show_one(bc["on"], colour, r)
+
+    def show_selected_place(self):
+        """Only the place clicked, on the part."""
+        name = self._region()
+        if name is not None:
+            self._show_one(name, OTHER_COLOUR, None)
+
+    def _show_one(self, name, colour, bc_index):
+        try:
+            n = self.window.draw_one(name, colour, bc_index)
+            self.report.setText(f"{name}: {n} nodes" if n else
+                                f"<span style='color:#b00000'>{name} has no nodes on this mesh</span>")
+        except Exception as e:                                      # noqa: BLE001
+            self.report.setText(f"<span style='color:#b00000'>Error: {e}</span>")
+        self.report_info.setVisible(False)
+
     def after_change(self):
+        """The lists again; a preview showing is redone, any other result line goes (it is out of date)."""
         self.refresh()
         if self.window.preview_on:
             self.preview()
+        else:                                                       # a single row shown, or nothing: cleared
+            self.window.clear_preview()
+            self.report.setText("")
+            self.report_info.setVisible(False)
 
     def preview_one(self, selection):
         """A region being edited, on the run's mesh: its node count, drawn in orange. None clears it."""
         if selection is None:
-            self.window.plotter.remove_actor("mmto_region", reset_camera=False)
+            for name in ("mmto_region", "mmto_region_outline"):
+                self.window.plotter.remove_actor(name, reset_camera=False)
             self.window.plotter.render()
             return ""
         mesh = self.window.preview_mesh()
-        nodes = selection.evaluate(mesh, "nodes", self.project.base_dir)
+        nodes = self.project.evaluate(selection, mesh, "nodes")
         self.window.draw_points("mmto_region", np.asarray(mesh.node_xyz)[nodes], OTHER_COLOUR)
+        self.window.draw_outline("mmto_region_outline", selection, OTHER_COLOUR)
         return f"{len(nodes)} nodes on the run's mesh ({mesh.num_elems} elements)."
 
     def preview(self):

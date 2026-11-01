@@ -22,6 +22,8 @@ import shutil
 import sys
 import tempfile
 
+import numpy as np
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -411,14 +413,19 @@ def test_region_and_bc_forms():
         assert r.selection().to_dict() == S.rows("xmax", "y", 8).to_dict()
         r.type.setCurrentText("Closest node")
         assert isinstance(r.inputs["boundary"], QtWidgets.QCheckBox)
-        r.type.setCurrentText("Cylinder")                                    # Length from / to: both or neither
-        r.inputs["center"].setText("0, 0, 0")
-        r.inputs["radius"].setText("2")
+        r.type.setCurrentText("Cylinder")                                    # the ends: both or neither
+        r.inputs["center"].setText("52, 114, 1")
+        r.inputs["radius"].setText("5")
         assert r.selection().along is None
-        r.inputs["along"][0].setText("-3.5")
-        assert r.problems() == ["Length from and Length to: give both, or leave both empty"]
-        r.inputs["along"][1].setText("3")
-        assert r.selection().along == [-3.5, 3.0]
+        assert r.form.labelForField(r._along_rows[0]).text() == "x from"      # axis x: coordinates
+        r.inputs["along"][0].setText("22")
+        assert r.problems() == ["the two ends: give both, or leave both empty"]
+        r.inputs["along"][1].setText("61")
+        assert r.selection().along == [-30.0, 9.0]                            # x 22 to 61, from x = 52
+        assert SP.describe(r.selection()).endswith("x from 22 to 61")
+        r.inputs["axis"].setCurrentText("1, 1, 0")                            # tilted: distances
+        assert r.form.labelForField(r._along_rows[0]).text() == "From (distance)"
+        assert r.selection().along == [22.0, 61.0]
         r.type.setCurrentText("Box")
         assert r.inputs["pad"].currentText() == "Automatic" and r.inputs["pad"].isEditable()
         r.inputs["lo"].setText("0, 38, 0")                                   # a point without brackets
@@ -427,7 +434,7 @@ def test_region_and_bc_forms():
         r.tabs.setCurrentIndex(1)                                             # the form, as a code line
         assert r.code.text() == "box(lo=[0.0, 38.0, 0.0], hi=[2.0, 40.0, 1.0], pad='auto')"
         r.name.setText("clamp")
-        assert r.problems() == ["there is already a region named clamp"]
+        assert r.problems() == ["there is already a place named clamp"]
         for name in NAMES:                                                    # every existing region, on the form
             p = Project.load(os.path.join(PROJECTS, f"{name}.mmto"))
             for k, s in p.selections.items():
@@ -561,8 +568,8 @@ def test_add_flow():
             b.new_shape()
         finally:
             SP.RegionDialog.exec_ = real
-        assert b.on.currentText() == "region1" and "region1" not in w.project.selections   # not yet: on OK
-        assert b.new_regions["region1"].to_dict() == S.face("xmin").to_dict()
+        assert b.on.currentText() == "place1" and "place1" not in w.project.selections   # not yet: on OK
+        assert b.new_regions["place1"].to_dict() == S.face("xmin").to_dict()
         w.project.bcs.clear()
         panel.refresh()
         assert panel.empty.isVisibleTo(panel) and not panel.bcs.isVisibleTo(panel)
@@ -599,13 +606,15 @@ def test_scale():
         w = opened("L-bracket", d)
         assert w.part_extent_text() == "The part spans x 0 to 200, y 0 to 200, z 0 to 1 mm."
         assert w._rulers == []                                                # off by default
+        assert w.extent.text() == "Part: x 0 to 200 \u00b7 y 0 to 200 \u00b7 z 0 to 1 mm"   # always shown
         w.ruler_box.setChecked(True)
-        assert len(w._rulers) == 2                                            # x and y: a 1 mm plate has no z
-        assert w.open_project(w.path) and len(w._rulers) == 2                 # kept on for the next project
+        assert len(w._rulers) == 3                                            # x, y, the origin: a plate has no z
+        assert w.open_project(w.path) and len(w._rulers) == 3                 # kept on for the next project
         w.ruler_box.setChecked(False)
-        assert w._rulers == []
+        assert w._rulers == [] and not [n for n in w.plotter.actors if str(n).startswith("mmto_origin")]
         r = SP.RegionDialog(w.open_supports_and_loads_panel(), w.project)
         assert any(label.text() == w.part_extent_text() for label in r.findChildren(QtWidgets.QLabel))
+    assert G.MMTOWindow.length_format(200) == "%.0f" and G.MMTOWindow.length_format(0.0285) % 0.0164 == "0.016"
 
 
 def test_region_preview_clears():
@@ -634,6 +643,131 @@ def test_region_preview_clears():
         r.show_preview()
         r.reject()                                                            # Cancel: nothing left behind
         assert not on_part()
+
+
+def test_pages():
+    """Forms opened from Supports and loads are pages of its strip, one at a time: Enter by hand, then
+    New place over it; OK goes back one page each time. Combined places follow their parts by name."""
+    import selections as S  # type: ignore
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        w.show()
+        panel = w.open_supports_and_loads_panel()
+        home = panel.stack.currentWidget()
+        b = panel.add_bc()                                                    # a page, not a window
+        assert panel.stack.count() == 2 and b.isVisible() and not home.isVisible()
+        r = b.new_shape()                                                     # New place: a page over it
+        assert panel.stack.count() == 3 and panel.stack.currentWidget().mouse.text().startswith("Hover")
+        panel.show_mouse("x 1   y 2   z 0 mm")
+        assert panel.stack.currentWidget().mouse.text() == "Mouse on the part: x 1   y 2   z 0 mm"
+        r.type.setCurrentText("Face of the part")
+        r.accept()
+        assert panel.stack.count() == 2 and b.on.currentText() == "place1"     # back to the support/load form
+        b.kind.setCurrentText("Fixed support")
+        b.accept()
+        assert panel.stack.count() == 1 and panel.stack.currentWidget() is home
+        assert w.project.bcs[-1] == {"kind": "fixed", "on": "place1", "dofs": "xyz"}
+        assert w.project.selections["place1"].to_dict() == S.face("xmin").to_dict()
+
+        r = panel.add_region()                                                # Combined places: by name, live
+        r.type.setCurrentText("Combined places")
+        r.inputs["a"].setCurrentText("clamp")
+        r.inputs["b"].setCurrentText("corner")
+        r.name.setText("both")
+        r.accept()
+        assert w.project.selections["both"].to_dict() == S.union(S.place("clamp"), S.place("corner")).to_dict()
+        mesh = w.preview_mesh()
+        n = len(w.project.evaluate("both", mesh))
+        w.project.selections["corner"] = S.face("xmax")                       # an edit: the combination follows
+        assert len(w.project.evaluate("both", mesh)) != n
+        panel.rename("clamp", "grip")                                         # a rename: carried through
+        assert S.names_in(w.project.selections["both"]) == ["grip", "corner"]
+        with answers():
+            assert not panel.delete_region("corner")                          # used by both: refused
+        r = panel.edit_region("both")                                         # opens on the form, as made
+        assert r.kind() == "combined" and r.inputs["a"].currentText() == "grip"
+        r.name.setText("grip2")
+        w.project.selections["grip"] = S.union(S.place("grip2"))              # a loop: refused
+        assert any("cannot contain itself" in e for e in r.problems())
+        r.reject()
+        w.project.selections["grip"] = S.face("xmin")
+
+        r = panel.add_region()                                                # Flat cut: optional limits
+        r.type.setCurrentText("Flat cut")
+        r.inputs["value"].setText("12")
+        assert not r.inputs["limits"]["x"][1].isVisibleTo(r)                  # no x limits on a cut across x
+        r.inputs["limits"]["y"][0][0].setText("0")
+        assert any("give both" in e for e in r.problems())
+        r.inputs["limits"]["y"][0][1].setText("40")
+        assert r.selection().to_dict() == S.plane("x", 12, limits={"y": [0, 40]}).to_dict()
+        r.reject()
+
+        panel.report.setText("<span style='color:#b00000'>Error: old</span>")   # a stale line goes
+        w.preview_on = False
+        panel.set_keep_solid("corner", True)
+        assert panel.report.text() == ""
+
+
+def test_keep_solid_on_picked_faces():
+    """Keep solid on a place that picks nodes only (rows, picked faces): the elements touching it."""
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        mesh = w.preview_mesh()
+        nodes = w.project.evaluate("corner", mesh, "nodes")
+        elems = w.project.evaluate("corner", mesh, "elements")                 # rows: nodes only, once an error
+        assert len(elems) and np.isin(np.asarray(mesh.elemArray)[elems], nodes).any(axis=1).all()
+        w.project.keep_solid_names = ["corner", "clamp"]
+        lines, _ = w.draw_supports_and_loads()
+        assert not [line for line in lines if "Error" in line]
+        assert [n for n in w.plotter.actors if str(n).startswith("mmto_keep_")]
+
+
+def test_outline_one_row_measure():
+    """A place's shape is drawn with its nodes; clicking a row shows only that one; Measure gives the
+    distance between two clicks; the mouse lookup never runs while a button is held or one is running."""
+    import selections as S  # type: ignore
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        w.show()
+        mesh = w.preview_mesh()
+        for sel in (S.cylinder([52, 114, 1], "x", 5, along=[-30, 9]), S.box([0, 0, 0], [10, 10, 1]),
+                    S.sphere([10, 10, 0], 3), S.plane("x", 12, limits={"y": [0, 40]}), S.face("xmin"),
+                    S.near_face("ymax", 5.0)):
+            shape = G.place_outline(sel, mesh)
+            assert shape is not None and shape.n_points, sel
+        assert G.place_outline(S.rows("xmax", "y", 8), mesh) is None          # no shape of its own
+        lo, hi = np.array(G.place_outline(S.cylinder([52, 114, 1], "x", 5, along=[-30, 9]), mesh).bounds).reshape(3, 2).T
+        assert abs(lo[0] - 22) < 1e-6 and abs(hi[0] - 61) < 1e-6              # x 22 to 61, as typed
+
+        panel = w.open_supports_and_loads_panel()
+        panel.bcs.selectRow(1)                                                # the force on corner, alone
+        shown = [n for n in w.plotter.actors if str(n).startswith("mmto_")]
+        assert "mmto_corner" in shown and "mmto_arrow1" in shown and "mmto_clamp" not in shown
+        assert panel.report.text() == "corner: 16 nodes"
+        panel.places_header.setChecked(True)
+        panel.regions.selectRow(0)                                            # the place clamp, alone
+        assert "mmto_clamp" in w.plotter.actors and "mmto_corner" not in w.plotter.actors
+
+        class Picker:                                                         # a click on the part
+            def GetCellId(self):
+                return 3
+        w.measure.setChecked(True)
+        assert w.measured.text() == "Measure: click the first point"
+        w.on_left_button_press([0.0, 0.0, 1.0], Picker())
+        w.on_left_button_press([30.0, 40.0, 1.0], Picker())
+        assert w.measured.text().startswith("Distance 50 mm") and "measure_line" in w.plotter.actors
+        assert w.selected_triangles == [] if hasattr(w, "selected_triangles") else True   # no picking meanwhile
+        w.measure.setChecked(False)
+        assert w.measured.text() == "" and "measure_line" not in w.plotter.actors
+
+        calls = []
+        w.show_point_under_mouse = lambda position=None: calls.append(position)
+        w._looking = True
+        w._look_up_mouse()                                                     # one running: skipped
+        w._looking = False
+        w._mouse_at = (5, 5)
+        w._look_up_mouse()
+        assert calls == [(5, 5)]
 
 
 if __name__ == "__main__":

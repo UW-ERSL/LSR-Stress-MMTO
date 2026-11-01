@@ -412,6 +412,31 @@ class Project:
                          "direction": [float(v) for v in direction],
                          "area": area if area == "bbox" else float(area)})
 
+    def evaluate(self, selection, mesh, on="nodes"):
+        """Indices of a selection (or of the selection with that name) on mesh, with every place(name) in
+        it looked up now, so a combination follows later edits of its parts. Elements of a selection that
+        picks only nodes (stl_faces, rows, ...) are the elements touching those nodes."""
+        seen = ()
+        if isinstance(selection, str):
+            seen, selection = (selection,), self.selections[selection]
+        s = S.resolved(selection, self.selections, seen)
+        try:
+            return s.evaluate(mesh, on, self.base_dir)
+        except ValueError as e:
+            if on != "elements" or "nodes only" not in str(e):
+                raise
+        nodes = s.evaluate(mesh, "nodes", self.base_dir)
+        touching = np.isin(np.asarray(mesh.elemArray), nodes).any(axis=1)
+        return np.flatnonzero(touching).astype(int)
+
+    def rename_selection(self, old, new):
+        """The selection and everything that names it: supports and loads, keep solid, other places."""
+        self.selections = {new if k == old else k: S.renamed(v, old, new) for k, v in self.selections.items()}
+        for bc in self.bcs:
+            if bc.get("on") == old:
+                bc["on"] = new
+        self.keep_solid_names = [new if n == old else n for n in self.keep_solid_names]
+
     def keep_solid(self, *names):
         for n in names:
             n = self._on(n, "keep")
@@ -481,6 +506,11 @@ class Project:
         for n in self.keep_solid_names:
             if n not in self.selections:
                 errors.append(f"keep_solid: no selection named {n!r}")
+        for n, sel in self.selections.items():                   # places inside places: known, no loops
+            try:
+                S.resolved(sel, self.selections, (n,))
+            except ValueError as e:
+                errors.append(f"place {n}: {e}")
         if self.database is None:
             errors.append("no material database")
         else:
@@ -760,7 +790,7 @@ class Project:
         if self.keep_support_elements:
             to_params.ElemsToKeep = find_elements_with_fixedDOF(mesh, bc, nDOFPerNode=3)
         if self.keep_solid_names:
-            keep = np.unique(np.concatenate([self.selections[n].evaluate(mesh, "elements", self.base_dir)
+            keep = np.unique(np.concatenate([self.evaluate(n, mesh, "elements")
                                              for n in self.keep_solid_names])).astype(int)
             mesh.nonDesignElems = keep
             to_params.ElemsToKeep = keep if to_params.ElemsToKeep is None else np.union1d(to_params.ElemsToKeep, keep)
@@ -781,7 +811,7 @@ class Project:
 
         def nodes(name, where):
             if name not in nodes_of:
-                nodes_of[name] = self.selections[name].evaluate(mesh, "nodes", self.base_dir)
+                nodes_of[name] = self.evaluate(name, mesh, "nodes")
             if len(nodes_of[name]) == 0:
                 raise ValueError(f"{where}: selection {name!r} has no nodes on this mesh")
             return nodes_of[name]

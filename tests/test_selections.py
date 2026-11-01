@@ -58,8 +58,28 @@ def test_face_plane_near_face():
     plate.elem_size = [1.418, 1.418, 1.0]
     for x in np.linspace(0.0, 14.18, 41):                        # every x in the part: the nearest column
         assert len(S.plane("x", x).evaluate(plate)) >= 121, x
+    assert count(S.plane("x", 3, limits={"y": [2, 4]})) == 3 * 11   # y 2, 3, 4; every z
+    assert S.plane("x", 3).to_dict() == {"type": "plane", "axis": "x", "value": 3.0, "pad": "auto"}
+    assert count(S.box([2, 2, 2], [0, 0, 0])) == 27               # corners in any order
+    for x in np.linspace(0.0, 14.18, 41):                        # a box thinner than an element: a column
+        assert len(S.box([x, 0, 0], [x, 10, 10]).evaluate(plate)) >= 121, x
     assert count(S.near_face("xmin", 2.0), "elements") == 200    # centers 0.5 and 1.5
     assert count(S.near_face("xmax", 2.0), "elements") == 200
+
+
+def test_places_by_name():
+    u = S.union(S.place("a"), S.face("xmax"))
+    assert S.names_in(u) == ["a"]
+    assert np.array_equal(S.resolved(u, {"a": S.face("xmin")}).evaluate(MESH),
+                          S.union(S.face("xmin"), S.face("xmax")).evaluate(MESH))
+    assert S.names_in(S.renamed(u, "a", "b")) == ["b"]
+    for lookup, says in (({"a": S.union(S.place("a"))}, "cannot contain itself"), ({}, "no place named")):
+        try:
+            S.resolved(u, lookup)
+        except ValueError as e:
+            assert says in str(e), e
+        else:
+            raise AssertionError(says)
 
 
 def test_cylinder():

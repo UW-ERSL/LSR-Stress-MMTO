@@ -66,6 +66,58 @@ def in_open_strip(widget):
         return False
 
 
+def place_outline(selection, mesh):
+    """A solid showing a place's shape (drawn as its edges), or None for one with no shape of its own (picked
+    faces, rows, a node, a list of numbers). selection has every place(name) in it resolved."""
+    import pyvista as pv
+    import selections as S  # type: ignore
+    xyz = np.asarray(mesh.node_xyz, dtype=float)
+    lo, hi = xyz.min(axis=0), xyz.max(axis=0)
+    h = 0.5 * np.asarray(mesh.elem_size, dtype=float)
+    kind = selection.TYPE
+    if kind in ("union", "intersect", "difference"):
+        parts = [o for o in (place_outline(s, mesh) for s in selection.parts) if o is not None]
+        return parts[0].merge(parts[1:]) if len(parts) > 1 else (parts[0] if parts else None)
+    if kind == "sphere":
+        return pv.Sphere(radius=S._length(mesh, selection.radius), center=selection.center,
+                         theta_resolution=12, phi_resolution=8)              # a light wire ball
+    if kind == "cylinder":
+        axis = S._axis_vector(selection.axis)
+        c = np.asarray(selection.center, dtype=float)
+        if selection.along is not None:
+            t0, t1 = (S._length(mesh, v) for v in selection.along)
+        else:                                                       # through the whole part
+            corners = np.array([[x, y, z] for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])])
+            t = (corners - c) @ axis
+            t0, t1 = t.min(), t.max()
+        out = None
+        for r in (S._length(mesh, selection.radius), S._length(mesh, selection.inner_radius)):
+            if r > 0:
+                tube = pv.Cylinder(center=c + axis * (t0 + t1) / 2, direction=axis, radius=r, height=t1 - t0,
+                                   resolution=48, capping=False)
+                out = tube if out is None else out.merge(tube)
+        return out
+    a, b = lo - h, hi + h                                           # slabs and boxes, a little proud of the part
+    if kind == "box":
+        a, b = np.asarray(selection.lo, dtype=float), np.asarray(selection.hi, dtype=float)
+        thin = b - a < 2 * h
+        a, b = np.where(thin, a - h, a), np.where(thin, b + h, b)
+    elif kind == "plane":
+        k = S._AXES[selection.axis]
+        a[k], b[k] = selection.value - h[k], selection.value + h[k]
+        for axis, (l, u) in (selection.limits or {}).items():
+            j = S._AXES[axis]
+            a[j], b[j] = l - h[j], u + h[j]
+    elif kind in ("face", "near_face"):
+        k, end = S._side(selection.side)
+        edge = lo[k] if end == "min" else hi[k]
+        depth = S._length(mesh, selection.distance) if kind == "near_face" else h[k]
+        a[k], b[k] = (edge - h[k], edge + depth) if end == "min" else (edge - depth, edge + h[k])
+    else:
+        return None
+    return pv.Box(bounds=(a[0], b[0], a[1], b[1], a[2], b[2]))
+
+
 class PickWindow(StructuralLoadsWindow):
     """Picking supports and loads with the mouse: Selection, Type, the force, Apply. Each Apply goes
     straight into the project (MMTOWindow.adopt_picks), so there is no list of applied loads here, no
@@ -146,15 +198,27 @@ class MMTOWindow(MainWindow):
 
     # ------------------------------------------------------------------ the window
     def create_status_bar(self):
-        """The name on the left; on the right, the point under the mouse and the Ruler tick."""
-        self.statusBar().addWidget(QtWidgets.QLabel(APP))
+        """The part's extent on the left; on the right, the point under the mouse and the Ruler tick."""
+        self.extent = QtWidgets.QLabel(APP)                        # the part's extent, once there is one
+        self.statusBar().addWidget(self.extent)
         self.coords = QtWidgets.QLabel("")
         self.coords.setStyleSheet("color: #666666;")
         self.coords.setMinimumWidth(240)
         self.ruler_box = QtWidgets.QCheckBox("Ruler")
         self.ruler_box.setToolTip("Show scales along the part, in the project's length unit")
         self.ruler_box.toggled.connect(lambda on: self.draw_ruler())
+        self.measure = QtWidgets.QPushButton("Measure")
+        self.measure.setCheckable(True)
+        self.measure.setToolTip("Click two points on the part to see the distance between them; Esc to stop")
+        self.measure.toggled.connect(self._measure_toggled)
+        self.measured = QtWidgets.QLabel("")
+        self._measure_points = []
+        self._measure_esc = QtWidgets.QShortcut(QKeySequence(QtCore.Qt.Key_Escape), self,
+                                                activated=lambda: self.measure.setChecked(False))
+        self._measure_esc.setEnabled(False)                         # Esc stops measuring, and only that
+        self.statusBar().addPermanentWidget(self.measured)
         self.statusBar().addPermanentWidget(self.coords)
+        self.statusBar().addPermanentWidget(self.measure)
         self.statusBar().addPermanentWidget(self.ruler_box)
         self._rulers = []
         self._picker = None
@@ -172,13 +236,23 @@ class MMTOWindow(MainWindow):
         p = np.asarray(self.stl_geom.mesh.vectors, dtype=float).reshape(-1, 3)
         return p.min(axis=0), p.max(axis=0)
 
+    @staticmethod
+    def length_format(size):
+        """printf format for lengths on a part of this size: 200 mm as 200, 0.0285 m as 0.029."""
+        if size >= 20:
+            return "%.0f"
+        if size >= 1:
+            return "%.1f"
+        return f"%.{int(np.ceil(-np.log10(size))) + 1}f" if size > 0 else "%g"
+
     def part_extent_text(self):
         """The part's extent in words, for the region form: x 0 to 200, y 0 to 200, z 0 to 1 mm."""
         b = self.part_bounds()
         if b is None:
             return ""
         lo, hi = b
-        parts = ", ".join(f"{a} {lo[k]:.4g} to {hi[k]:.4g}" for k, a in enumerate("xyz"))
+        f = self.length_format(float(np.max(hi - lo)))
+        parts = ", ".join(f"{a} {f % lo[k]} to {f % hi[k]}" for k, a in enumerate("xyz"))
         return f"The part spans {parts} {self.length_unit()}".rstrip() + "."
 
     def draw_ruler(self):
@@ -186,20 +260,27 @@ class MMTOWindow(MainWindow):
         with the Ruler tick."""
         for actor in self._rulers:
             self.plotter.remove_actor(actor, reset_camera=False)
+        for name in [n for n in self.plotter.actors if str(n).startswith("ruler_origin")]:  # its dot too
+            self.plotter.remove_actor(name, reset_camera=False)
         self._rulers = []
         b = self.part_bounds()
+        self.coords.setText("")                                     # a new part: no old reading
+        self._index_part()
+        self.extent.setText(APP if b is None else
+                            "Part: " + self.part_extent_text()[len("The part spans "):-1].replace(", ", " \u00b7 "))
         if b is not None and self.ruler_box.isChecked():
             lo, hi = b
             size = float(np.max(hi - lo))
-            off = 0.03 * size
-            style = dict(number_labels=5, font_size_factor=0.6, label_size_factor=1.3, tick_length=3,
-                         label_color="#8a8a8a", tick_color="#b5b5b5",
-                         label_format="%.0f" if size >= 20 else "%.3g")
+            off = 0.06 * size
+            style = dict(number_labels=3, font_size_factor=0.6, label_size_factor=1.3, tick_length=3,
+                         tick_label_offset=6, label_color="#8a8a8a", tick_color="#b5b5b5",
+                         label_format=self.length_format(size))
             x0, y0, z1 = lo[0] - off, lo[1] - off, hi[2]
             lines = [([lo[0], y0, z1], [hi[0], y0, z1], False, self.length_unit()),
                      ([x0, hi[1], z1], [x0, lo[1], z1], True, "")]
-            if hi[2] - lo[2] > 0.05 * size:                         # a plate shows no z scale
-                lines.append(([x0, y0, lo[2]], [x0, y0, hi[2]], False, ""))
+            if hi[2] - lo[2] > 0.05 * size:                         # a plate shows no z scale; at the far
+                x1, y1 = hi[0] + off, hi[1] + off                   # corner, clear of x and y when seen head on
+                lines.append(([x1, y1, lo[2]], [x1, y1, hi[2]], False, ""))
             for a, b_, flip, title in lines:
                 actor = self.plotter.add_ruler(a, b_, flip_range=flip, title=title, **style)
                 for prop in (actor.GetLabelTextProperty(), actor.GetTitleTextProperty()):
@@ -208,28 +289,112 @@ class MMTOWindow(MainWindow):
                     prop.ShadowOff()
                 actor.SetPickable(False)
                 self._rulers.append(actor)
+            self._rulers.append(self.plotter.add_point_labels(          # the origin, where 0, 0, 0 is
+                [[0.0, 0.0, 0.0]], ["0"], point_size=9, font_size=11, text_color="#666666",
+                point_color="#666666", shape=None, render_points_as_spheres=True, always_visible=True,
+                pickable=False, name="ruler_origin", reset_camera=False))
         self.plotter.render()
 
     def _track_mouse(self):
-        """The point of the part under the mouse, in the status bar."""
+        """The point of the part under the mouse, in the status bar. A mouse move only notes where the
+        mouse is; the lookup runs at most every 50 ms, never while a button is held (rotating, zooming)
+        and never on top of a lookup still running, so a large part cannot pile them up."""
         import vtk
         try:
             self._picker = vtk.vtkCellPicker()
             self._picker.SetTolerance(0.0005)
-            self.plotter.iren.add_observer("MouseMoveEvent", lambda *_: self.show_point_under_mouse())
+            self._mouse_at, self._looking = None, False
+            self._mouse_timer = QtCore.QTimer(self)
+            self._mouse_timer.setSingleShot(True)
+            self._mouse_timer.timeout.connect(self._look_up_mouse)
+            self.plotter.iren.add_observer("MouseMoveEvent", self._mouse_moved)
         except Exception:                                           # noqa: BLE001  (no 3D view: no readout)
             self._picker = None
 
+    def _mouse_moved(self, *_):
+        self._mouse_at = self.plotter.iren.get_event_position()
+        if not self._mouse_timer.isActive():
+            self._mouse_timer.start(50)
+
+    def _look_up_mouse(self):
+        if self._looking or QtWidgets.QApplication.mouseButtons() != QtCore.Qt.NoButton:
+            return                                                  # rotating: read it when the button is up
+        self._looking = True
+        try:
+            self.show_point_under_mouse(self._mouse_at)
+        finally:
+            self._looking = False
+
+    def _index_part(self):
+        """The lookup searches only the part, through an index of its triangles built once per part."""
+        import vtk
+        if self._picker is None:
+            return
+        self._picker.InitializePickList()
+        self._picker.RemoveAllLocators()
+        n = len(self.stl_geom.mesh.vectors) if getattr(self, "stl_geom", None) else -1
+        for actor in self.plotter.renderer.GetActors():
+            data = actor.GetMapper().GetInput() if actor.GetMapper() else None
+            if data is not None and data.GetNumberOfCells() == n:
+                locator = vtk.vtkStaticCellLocator()
+                locator.SetDataSet(data)
+                locator.BuildLocator()
+                self._picker.AddLocator(locator)
+                self._picker.AddPickList(actor)
+                break
+        self._picker.SetPickFromList(True)
+
     def show_point_under_mouse(self, position=None):
-        if self._picker is None or self.part_bounds() is None:
+        if self._picker is None or self.part_bounds() is None or position is None and self._mouse_at is None:
             self.coords.setText("")
             return
-        x, y = position or self.plotter.iren.get_event_position()
+        x, y = position or self._mouse_at
         if self._picker.Pick(x, y, 0, self.plotter.renderer) and self._picker.GetCellId() >= 0:
             p = self._picker.GetPickPosition()
             self.coords.setText(f"x {p[0]:.4g}   y {p[1]:.4g}   z {p[2]:.4g} {self.length_unit()}")
         else:
             self.coords.setText("")
+        panel = getattr(self, "supports_panel", None)
+        if in_open_strip(panel):                                    # also on the form in front, if any
+            panel.show_mouse(self.coords.text())
+
+    # ------------------------------------------------------------------ measuring
+    def _measure_toggled(self, on):
+        self._measure_esc.setEnabled(on)
+        self._measure_points = []
+        self._draw_measure()
+        self.measured.setText("Measure: click the first point" if on else "")
+
+    def on_left_button_press(self, picked_point, picker=None):
+        """A click on the part: a point to measure while Measure is on, otherwise picking as usual."""
+        if not self.measure.isChecked():
+            return super().on_left_button_press(picked_point, picker)
+        if picker is None or picker.GetCellId() < 0:
+            return
+        if len(self._measure_points) == 2:                          # a third click starts again
+            self._measure_points = []
+        self._measure_points.append(np.asarray(picked_point, dtype=float))
+        self._draw_measure()
+        if len(self._measure_points) == 1:
+            self.measured.setText("Measure: click the second point")
+        else:
+            a, b = self._measure_points
+            d, unit, f = b - a, self.length_unit(), "%.4g"
+            self.measured.setText(f"Distance {f % np.linalg.norm(d)} {unit}  (dx {f % d[0]}, dy {f % d[1]}, "
+                                  f"dz {f % d[2]})")
+
+    def _draw_measure(self):
+        import pyvista as pv
+        for name in [n for n in self.plotter.actors if str(n).startswith("measure_")]:
+            self.plotter.remove_actor(name, reset_camera=False)
+        pts = self._measure_points
+        if pts:
+            self.plotter.add_mesh(pv.PolyData(np.vstack(pts)), color="#222222", point_size=12,
+                                  render_points_as_spheres=True, pickable=False, name="measure_points")
+        if len(pts) == 2:
+            self.plotter.add_mesh(pv.Line(pts[0], pts[1]), color="#222222", line_width=3, pickable=False,
+                                  name="measure_line")
+        self.plotter.render()
 
     def _build_menu(self):
         file_menu = self.menuBar().addMenu("&File")
@@ -570,6 +735,40 @@ class MMTOWindow(MainWindow):
         self.preview_on = False
         self.plotter.render()
 
+    def _arrow(self, i, direction, points, size):
+        import pyvista as pv
+        d = np.asarray(direction, dtype=float) / np.linalg.norm(direction)
+        start = np.asarray(points).mean(axis=0) - 0.15 * size * d
+        self.plotter.add_mesh(pv.Arrow(start, d, scale=0.15 * size), color=LOAD_COLOUR, pickable=False,
+                              name=f"mmto_arrow{i}")
+
+    def draw_outline(self, name, selection, colour):
+        """The place's shape as edges, in colour (place_outline); nothing for a place without one."""
+        import selections as S  # type: ignore
+        self.plotter.remove_actor(name, reset_camera=False)
+        shape = place_outline(S.resolved(selection, self.project.selections), self.preview_mesh())
+        if shape is not None:
+            self.plotter.add_mesh(shape, color=colour, style="wireframe", line_width=2, pickable=False, name=name,
+                                  reset_camera=False)       # edges, not a see-through surface: transparency
+                                                            # can hide the text over the 3D view
+
+    def draw_one(self, name, colour, bc_index=None):
+        """Only one place on the part (a row clicked in Supports and loads): its nodes, its shape, and the
+        arrow of the load at bc_index. Returns its node count."""
+        p, mesh = self.project, self.preview_mesh()
+        self.clear_preview()
+        xyz = np.asarray(mesh.node_xyz, dtype=float)
+        nodes = p.evaluate(name, mesh, "nodes")
+        self.draw_points(f"mmto_{name}", xyz[nodes], colour)
+        self.draw_outline("mmto_outline", p.selections[name], colour)
+        bc = p.bcs[bc_index] if bc_index is not None else None
+        if bc is not None and bc.get("kind") in ("force", "traction") and len(nodes):
+            d = np.asarray(bc.get("total") or bc.get("direction"), dtype=float)
+            if np.linalg.norm(d) > 0:
+                self._arrow(bc_index, d, xyz[nodes], float(np.linalg.norm(np.ptp(xyz, axis=0))))
+        self.plotter.render()
+        return len(nodes)
+
     def draw_supports_and_loads(self):
         """Every region on the run's mesh: supports blue, loads red with an arrow each, other regions
         orange, keep-solid elements grey. Returns (report lines, {region: node count})."""
@@ -584,14 +783,14 @@ class MMTOWindow(MainWindow):
                 role.setdefault(bc["on"], set()).add(BC_KINDS[bc["kind"]].role)
         lines, counts = [], {}
         for name, s in p.selections.items():
-            nodes = s.evaluate(mesh, "nodes", p.base_dir)
+            nodes = p.evaluate(name, mesh, "nodes")
             counts[name] = len(nodes)
             colour = (SUPPORT_COLOUR if "support" in role.get(name, ()) else
                       LOAD_COLOUR if "load" in role.get(name, ()) else OTHER_COLOUR)
             if name in role or name not in p.keep_solid_names:
                 self.draw_points(f"mmto_{name}", xyz[nodes], colour)
             if name in p.keep_solid_names:                         # the kept elements, as grey blocks
-                elems = s.evaluate(mesh, "elements", p.base_dir)
+                elems = p.evaluate(name, mesh, "elements")
                 if len(elems):
                     h = np.asarray(mesh.elem_size, dtype=float)
                     blocks = pv.PolyData(centres[elems]).glyph(
@@ -605,13 +804,10 @@ class MMTOWindow(MainWindow):
             if bc.get("kind") not in ("force", "traction") or bc.get("on") not in p.selections:
                 continue
             d = np.asarray(bc.get("total") or bc.get("direction"), dtype=float)
-            nodes = p.selections[bc["on"]].evaluate(mesh, "nodes", p.base_dir)
+            nodes = p.evaluate(bc["on"], mesh, "nodes")
             if np.linalg.norm(d) == 0 or len(nodes) == 0:
                 continue
-            d = d / np.linalg.norm(d)
-            start = xyz[nodes].mean(axis=0) - 0.15 * size * d
-            self.plotter.add_mesh(pv.Arrow(start, d, scale=0.15 * size), color=LOAD_COLOUR, pickable=False,
-                                  name=f"mmto_arrow{i}")
+            self._arrow(i, d, xyz[nodes], size)
         try:
             bc_obj, _ = p.supports_and_loads(mesh)
             error = p.rigid_body_error(mesh, bc_obj) if p.bcs else None

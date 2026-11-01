@@ -28,7 +28,8 @@ Types (to_dict / from_dict give the JSON form a project file stores):
                                                  distance to the axis in [inner_radius, radius];
                                                  along = (t0, t1) limits (p - center) . axis
     sphere(center, radius)
-    plane(axis, value)                           |p_axis - value| <= pad
+    plane(axis, value, limits=None)              |p_axis - value| <= pad; limits={"y": [lo, hi]}
+                                                 keeps part of the cut
     face(side)                                   the plane at the mesh's extreme, side "xmin" ... "zmax"
     near_face(side, distance)                    within distance of that extreme (strictly)
     nearest(point)                               the single closest node or element
@@ -41,6 +42,8 @@ Types (to_dict / from_dict give the JSON form a project file stores):
     inside_stl(path)                             inside a closed STL surface
     function("file.py:name")                     name(mesh, on) returns the indices
     union(a, b, ...), intersect(a, b, ...), difference(a, b)
+    place("name")                                another selection of the project, by name: a live
+                                                 link, looked up when the project evaluates it
 
 A function selection runs the Python file it names when it is evaluated: open project
 files with function selections only from people you trust.
@@ -88,11 +91,14 @@ def _keep(v):
 
 
 def _pad(mesh, pad, on, axis=None):
-    """pad in model units; "half" is half the smallest element size, or along axis (0, 1, 2) if given."""
+    """pad in model units; "half" is half the smallest element size, or along axis (0, 1, 2) if given,
+    or with axis="each" half the size along each axis (three numbers)."""
     if pad == "auto":
         pad = "half" if on == "nodes" else 0.0
     if pad == "half":
         h = np.asarray(mesh.elem_size, dtype=float)
+        if axis == "each":
+            return 0.5 * h
         return 0.5 * float(np.min(h) if axis is None else h[axis])
     return _length(mesh, pad)
 
@@ -149,14 +155,16 @@ def from_dict(d):
 
 # ----------------------------------------------------------------------------- shapes
 class box(Selection):
-    """Points with lo <= p <= hi."""
+    """Points with lo <= p <= hi; the corners may come in any order. By default pad is half the element
+    size along each axis, so a box thinner than an element still catches the nearest layer."""
     TYPE, fields = "box", ("lo", "hi", "pad")
 
     def __init__(self, lo, hi, pad="auto"):
-        self.lo, self.hi, self.pad = list(map(float, lo)), list(map(float, hi)), pad
+        a, b = np.asarray(lo, dtype=float), np.asarray(hi, dtype=float)
+        self.lo, self.hi, self.pad = np.minimum(a, b).tolist(), np.maximum(a, b).tolist(), pad
 
     def _mask(self, p, mesh, on):
-        t = _pad(mesh, self.pad, on)
+        t = _pad(mesh, self.pad, on, axis="each")
         return np.all((p >= np.array(self.lo) - t) & (p <= np.array(self.hi) + t), axis=1)
 
 
@@ -206,15 +214,34 @@ class sphere(Selection):
 
 
 class plane(Selection):
-    """Points with |p_axis - value| <= pad; by default pad is half the element size along axis."""
-    TYPE, fields = "plane", ("axis", "value", "pad")
+    """Points with |p_axis - value| <= pad; by default pad is half the element size along axis.
+    limits, e.g. {"y": [100, 120]}, keeps only the part of the cut between those values of the
+    other axes (each widened by pad along its own axis)."""
+    TYPE, fields = "plane", ("axis", "value", "pad", "limits")
 
-    def __init__(self, axis, value, pad="auto"):
+    def __init__(self, axis, value, pad="auto", limits=None):
         self.axis, self.value, self.pad = axis, float(value), pad
+        self.limits = None
+        if limits:
+            bad = [a for a in limits if a not in _AXES or a == axis]
+            if bad:
+                raise ValueError(f"limits are for the other axes than {axis!r}, not {bad}")
+            self.limits = {a: sorted(map(float, ab)) for a, ab in limits.items()}
 
     def _mask(self, p, mesh, on):
         k = _AXES[self.axis]
-        return np.abs(p[:, k] - self.value) <= _pad(mesh, self.pad, "nodes", axis=k)
+        mask = np.abs(p[:, k] - self.value) <= _pad(mesh, self.pad, "nodes", axis=k)
+        for a, (lo, hi) in (self.limits or {}).items():
+            j = _AXES[a]
+            t = _pad(mesh, self.pad, "nodes", axis=j)
+            mask &= (p[:, j] >= lo - t) & (p[:, j] <= hi + t)
+        return mask
+
+    def to_dict(self):
+        d = super().to_dict()
+        if d["limits"] is None:                                     # files without limits stay as they were
+            del d["limits"]
+        return d
 
 
 def _side(side):
@@ -448,6 +475,52 @@ class Difference(Union):
     def evaluate(self, mesh, on="nodes", base_dir=None):
         a, b = self.parts
         return np.setdiff1d(a.evaluate(mesh, on, base_dir), b.evaluate(mesh, on, base_dir)).astype(int)
+
+
+class place(Selection):
+    """Another selection of the project, by name. Only a project can evaluate it: Project.evaluate puts
+    the named selection in (resolved) each time, so a combination follows later edits of its parts."""
+    TYPE, fields = "place", ("name",)
+
+    def __init__(self, name):
+        self.name = name
+
+    def evaluate(self, mesh, on="nodes", base_dir=None):
+        raise ValueError(f"place({self.name!r}) is looked up by the project: evaluate it with Project.evaluate")
+
+
+def _walk(d, f):
+    """The JSON form d with f applied to every place in it."""
+    if d.get("type") == "place":
+        return f(d)
+    if "of" in d:
+        return dict(d, of=[_walk(s, f) for s in d["of"]])
+    return d
+
+
+def names_in(selection):
+    """The names of the places a selection refers to."""
+    out = []
+    _walk(selection.to_dict(), lambda d: out.append(d["name"]) or d)
+    return out
+
+
+def resolved(selection, lookup, seen=()):
+    """The selection with every place(name) replaced by lookup[name], itself resolved; ValueError for a
+    name lookup does not have, or a place that refers back to itself."""
+    def put_in(d):
+        name = d["name"]
+        if name in seen:
+            raise ValueError(f"{' -> '.join(seen + (name,))}: a place cannot contain itself")
+        if name not in lookup:
+            raise ValueError(f"there is no place named {name!r}")
+        return resolved(lookup[name], lookup, seen + (name,)).to_dict()
+    return from_dict(_walk(selection.to_dict(), put_in))
+
+
+def renamed(selection, old, new):
+    """The selection with place(old) changed to place(new)."""
+    return from_dict(_walk(selection.to_dict(), lambda d: dict(d, name=new) if d["name"] == old else d))
 
 
 def union(*parts):
