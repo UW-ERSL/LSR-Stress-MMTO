@@ -8,7 +8,7 @@ voxel_surface(run)           3D: whole cells thresholded, then extract_surface
 screenshot(run, path)        3D: off-screen render to PNG
 mesh_for(run)                the run's voxel mesh, rebuilt and cached
 
-Colour comes from the run's saved material_indices. Mesh rebuilding needs PyTO;
+Colour comes from the run's saved material_indices and material_colors. Mesh rebuilding needs PyTO;
 nothing else here does.
 """
 from __future__ import annotations
@@ -92,26 +92,6 @@ def mesh_for(run: Run):
     return mesh
 
 
-def material_colours(n_needed: int, example: str = None) -> list:
-    """Palette as hex strings, at least n_needed long.
-
-    An example with an entry in EXAMPLE_PALETTE uses that; everything else uses
-    materialColors.material_colors.
-    """
-    import matplotlib.colors as mcolors
-    palette = EXAMPLE_PALETTE.get(project_name(example))
-    if palette is None:
-        try:
-            from materialColors import material_colors  # type: ignore
-        except ImportError as e:
-            raise RenderError(
-                "could not import materialColors from 0-Common. Call "
-                f"project_paths.bootstrap() first. Original error: {e}") from e
-        palette = material_colors
-    return [mcolors.to_hex(palette[i % len(palette)])
-            for i in range(max(n_needed, 1))]
-
-
 # --------------------------------------------------------------------------- #
 # 2D
 # --------------------------------------------------------------------------- #
@@ -156,8 +136,7 @@ def draw_panel(ax, run: Run, field: str = "material", *,
 
     if field == "material":
         if colours is None:
-            colours = material_colours(int(run.material_indices.max()) + 1,
-                                       run.example)
+            colours = run.material_colors
         pc = PolyCollection(quads[solid],
                             facecolors=[colours[i] for i in run.material_indices[solid]],
                             **edge_kw)
@@ -194,24 +173,6 @@ MIRROR_AXES = {
     "Airplane bracket": (2,),         # half model, symmetry plane z = 0
     "beam":             (0, 1, 2),    # octant model
 }
-
-# Per-example palettes. materialColors.py carries one active list plus
-# commented alternatives; the L-bracket benchmark uses the three-colour set its
-# material names refer to.
-EXAMPLE_PALETTE = {
-    "L-bracket": ["#FF0000", "#4b00f1", "#23FF24"],
-}
-
-# Databases whose spreadsheet names are internal codes. The paper labels these
-# A, B, C..., and so does everything here.
-LETTER_LABELS = {"Airplane bracket"}
-
-
-def material_labels(names, example=None) -> list:
-    """Display names for the materials: letters where the paper uses letters."""
-    if project_name(example) in LETTER_LABELS:
-        return [chr(ord("A") + i) for i in range(len(names))]
-    return [str(n) for n in names]
 
 
 def _reflect_centroids(c, mat, d, axes):
@@ -273,7 +234,7 @@ def voxel_surface(run: Run, *, mesh=None, mirror: bool = True):
     flat = grid.flatten(order="F")
     img.cell_data["material"] = flat
 
-    colours = material_colours(int(run.material_indices.max()) + 1, run.example)
+    colours = run.material_colors
     rgb = np.full((flat.size, 3), 255, np.uint8)
     for v in np.unique(flat[flat >= 0]):
         rgb[flat == v] = (np.array(mcolors.to_rgb(colours[int(v)])) * 255).astype(np.uint8)

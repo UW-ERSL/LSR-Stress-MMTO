@@ -58,6 +58,7 @@ def _run(to_problem, args):
 
     def post(**kw):
         captured["config"] = kw["run_config"]
+        captured["display"] = (kw["material_colors"], kw["material_labels"])
 
     M.init_run_history, M.run_postprocessing = init, post
     saved = run_io.WRITE_FILES
@@ -141,6 +142,34 @@ def test_record_rebuilds_the_project():
     class FakeRun:
         config = {"arguments_resolved": {"to_problem": rec}}
     assert render._problem(FakeRun()).to_dict() == p.to_dict()
+
+
+def test_record_stores_display():
+    """The run takes its colours and labels from the database; the record stores them. A
+    record written before that takes them from its database's Display sheet."""
+    from databases import default_colours  # type: ignore
+    from utils import records
+    colours, labels = runs()["project"][1]["display"]
+    assert colours == default_colours(6) and labels == list("ABCDEF")     # 6Materials: no Display sheet
+    assert runs()["project"][1]["config"]["materials"]["material_labels"] == labels
+
+    n = 8
+    fields = {"material_indices": np.arange(n) % 3, "x_bin": np.ones(n), "x_cont": np.ones(n),
+              "von_mises": np.zeros(n), "z_elem": np.zeros((n, 2))}
+    with tempfile.TemporaryDirectory() as d:
+        saved = run_io.WRITE_FILES
+        run_io.WRITE_FILES = True
+        try:
+            run_io.save_run_data(d, {}, fields, None, {}, "test", np.zeros((3, 2)), ["#010203", "#040506", "#070809"],
+                                 ["m1", "m2", "m3"], 2, n, 9, material_labels=["one", "two", "three"])
+        finally:
+            run_io.WRITE_FILES = saved
+        run = records.load(os.path.join(d, "run_data.npz"))
+    assert run.material_colors == ["#010203", "#040506", "#070809"] and run.material_labels == ["one", "two", "three"]
+
+    old = records.load(os.path.join(ROOT, "comparison", "reference", "main", "L-bracket", "run_data.npz"))
+    assert old.material_colors == ["#ff0000", "#4b00f1", "#23ff24"], old.material_colors   # BM1's Display sheet
+    assert old.material_labels == old.material_names == ["Mat1_Red", "Mat2_Blue", "Mate3_Green"]
 
 
 def test_old_runs_rebuild():

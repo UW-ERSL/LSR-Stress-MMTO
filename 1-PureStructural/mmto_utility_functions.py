@@ -586,7 +586,7 @@ def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
                        beta_proj, eta_proj, elem_volume, design_domain_volume,
                        apply_density_filter, use_heaviside_projection,
                        binarize_topology, snap_to_real_material, save_dir=None,
-                       run_config=None, example_name=None):
+                       run_config=None, example_name=None, material_labels=None):
     """Reconstruct the optimal fields, evaluate stress/compliance metrics at the
     continuous / binarized / snapped designs, and draw the final plots."""
     import os
@@ -707,6 +707,7 @@ def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
             z_real_points=_zreal,
             material_colors=material_colors,
             material_names=material_names,
+            material_labels=material_labels,
             latent_dim=latentDim,
             num_elems=num_elems,
             num_nodes=int(fe_solver.mesh.num_nodes),

@@ -29,7 +29,7 @@ from enum import Enum
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../0-Common")))
 
-from materialColors import material_colors 
+from databases import material_display
 from PyTOImports import (
     deflation,
     linear_solvers,
@@ -214,6 +214,7 @@ def run_topopt(
 
     matEncoder = MaterialEncoder(vae_params)
     matEncoder.readExcel(to_params.MaterialsExcelFile)
+    material_colors, material_labels = material_display(to_params.MaterialsExcelFile)
 
     if saveNet is None:
         base, _ = os.path.splitext(to_params.MaterialsExcelFile)
@@ -619,7 +620,7 @@ def run_topopt(
         run_args=_run_args, to_params=to_params, vae_params=vae_params,
         beta_schedule=beta_schedule, mesh=mesh_structural, bc=bc_struct,
         mat_encoder=matEncoder, z_real_points=zRealPoints,
-        material_colors=material_colors,
+        material_colors=material_colors, material_labels=material_labels,
         mma_settings={"optimizer": "MMA (mmaWrapper)", "kktTol": MMA_KKT_TOL,
                       "move_limit": MMA_MOVE_LIMIT,
                       "fTolerance": rel_conv_tol, "gTolerance": rel_conv_tol},
@@ -652,6 +653,7 @@ def run_topopt(
         Hs_density=Hs_density,
         zRealPoints=zRealPoints,
         material_colors=material_colors,
+        material_labels=material_labels,
         num_elems=num_elems,
         latentDim=latentDim,
         beta_proj=beta_proj,

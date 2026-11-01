@@ -64,6 +64,8 @@ A database is an .xlsx file: attribute names in row 1, units in row 2, then one 
 | `Yield_Strength` | Yield Strength, Yield | yield strength, the stress at which the material yields | 0 < value | Pa, kPa, MPa, GPa, psi, ksi |
 | `Cost` |  | price per unit mass | 0 <= value | USD/kg, USD/g, USD/t, USD/lb, USD/(lbf*s^2/in) |
 
+An optional sheet `Display` gives each material the colour and the label it is shown with: columns Material, Color (#rrggbb) and Label, one row per material, matched by name. An empty Color is the default colour, an empty Label the material's name. Two materials with the same colour or the same label are an error. The run record stores both.
+
 ## Unit systems
 
 A project declares the units its numbers are in, as the PyTO-AD GUI does (`settings.unit_system` in the project file; `p.units` in code). Nothing is converted: forces, lengths, bounds and the database are used as written. A database column in other units is reported before a run, with what it does to the results. `none` (no unit system) checks nothing.

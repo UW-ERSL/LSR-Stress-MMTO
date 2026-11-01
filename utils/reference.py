@@ -74,6 +74,10 @@ def generate():
     out += [f"| `{a.name}` | {', '.join(a.aliases)} | {a.doc} | {a.range_text()} | "
             f"{'none (may be blank)' if a.measures == 'ratio' else ', '.join(a.units)} |"
             for a in ATTRIBUTES.values()]
+    out += ["", "An optional sheet `Display` gives each material the colour and the label it is shown with: "
+            "columns Material, Color (#rrggbb) and Label, one row per material, matched by name. An empty "
+            "Color is the default colour, an empty Label the material's name. Two materials with the same "
+            "colour or the same label are an error. The run record stores both."]
 
     kinds = ("length", "force", "stress", "density", "mass", "cost per mass")
     out += ["", "## Unit systems", "",

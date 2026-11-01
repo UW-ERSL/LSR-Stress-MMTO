@@ -71,19 +71,19 @@ def summary(run, show=True):
 # the database, its PCA, and how well the network encodes it                   #
 # --------------------------------------------------------------------------- #
 
-def materials(mat_encoder, example=None):
-    """The candidate materials, with the colour each is drawn in.
+def materials(mat_encoder):
+    """The candidate materials, with the colour and label each is shown with (the
+    database's Display sheet).
 
     materialAttributes holds metadata per attribute (column index, unit,
     scaling); the values themselves are the columns of rawData.
     """
     from .display import Table, swatch
-    from .render import material_colours, material_labels
+    from databases import material_display  # type: ignore
 
-    names = material_labels(list(mat_encoder.materialNames), example)
+    colours, names = material_display(mat_encoder.excel_file, list(mat_encoder.materialNames))
     attrs = mat_encoder.materialAttributes
     raw = np.asarray(mat_encoder.rawData, float)
-    colours = material_colours(len(names), example)
 
     headers = ["", "material"]
     for name, meta in attrs.items():

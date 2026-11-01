@@ -162,7 +162,7 @@ def _mesh_summary(mesh):
     return out
 
 
-def _material_summary(mat_encoder, z_real_points, material_colors):
+def _material_summary(mat_encoder, z_real_points, material_colors, material_labels=None):
     out = {}
     try:
         out["material_names"] = list(mat_encoder.materialNames)
@@ -175,6 +175,8 @@ def _material_summary(mat_encoder, z_real_points, material_colors):
         pass
     try:
         out["material_colors"] = list(material_colors)
+        if material_labels is not None:
+            out["material_labels"] = list(material_labels)
     except Exception:
         pass
     try:
@@ -249,7 +251,7 @@ def provenance():
 def build_run_config(example_name, run_args, to_params, vae_params, beta_schedule,
                      mesh, bc, mat_encoder, z_real_points, material_colors,
                      mma_settings=None, runtime_sec=None, iterations=None,
-                     comment="", pnorm_exponent=None):
+                     comment="", pnorm_exponent=None, material_labels=None):
     """Assemble the complete sectioned parameter manifest. Never raises."""
     if pnorm_exponent is None:
         pnorm_exponent = _read_pnorm_exponent()
@@ -286,7 +288,7 @@ def build_run_config(example_name, run_args, to_params, vae_params, beta_schedul
     topopt["pnorm_exponent"] = pnorm_exponent
     cfg["topopt_params"] = topopt
     cfg["vae_params"] = _params_dict(vae_params)
-    cfg["materials"] = _material_summary(mat_encoder, z_real_points, material_colors)
+    cfg["materials"] = _material_summary(mat_encoder, z_real_points, material_colors, material_labels)
     cfg["fea"] = {
         "mesh": _mesh_summary(mesh),
         "loading_and_bc": _loading_bc_summary(mesh, bc),
@@ -337,7 +339,7 @@ def write_run_config_yaml(config, path):
 
 def save_run_data(save_dir, config, fields, vae_state_dict, history,
                   example_name, z_real_points, material_colors, material_names,
-                  latent_dim, num_elems, num_nodes):
+                  latent_dim, num_elems, num_nodes, material_labels=None):
     """Write the record, run_config.yaml, and the pickle if SAVE_PICKLE.
 
     Returns the path of the primary artefact: the .pkl when SAVE_PICKLE is on,
@@ -365,6 +367,7 @@ def save_run_data(save_dir, config, fields, vae_state_dict, history,
         "zRealPoints": np.asarray(z_real_points).astype(float),
         "material_colors": list(material_colors),
         "material_names": list(material_names),
+        "material_labels": list(material_names if material_labels is None else material_labels),
     }
 
     global LAST_RUN
@@ -419,6 +422,8 @@ def _save_record(save_dir, data):
         "z_latent_dim":     np.int64(z.shape[1]),
         "zRealPoints":      np.asarray(data["zRealPoints"]).astype(np.float32),
         "material_names":   np.array([str(s) for s in data["material_names"]]),
+        "material_colors":  np.array([str(s) for s in data["material_colors"]]),
+        "material_labels":  np.array([str(s) for s in data["material_labels"]]),
     }
     for k, v in (data.get("history") or {}).items():
         a = np.asarray(v)

@@ -168,7 +168,7 @@ def designs(runs, out=None, *, size=(1000, 800), view="iso"):
     import matplotlib.pyplot as plt
     from matplotlib.patches import Patch
     from .figures import _panel_image, _save, is_3d
-    from .render import draw_panel, material_colours, material_labels, mesh_for
+    from .render import draw_panel, mesh_for
 
     names = list(runs)
     rs = [runs[n] for n in names]
@@ -189,8 +189,7 @@ def designs(runs, out=None, *, size=(1000, 800), view="iso"):
             draw_panel(ax, r, "material", mesh=mesh)
         ax.set_title(n)
 
-    labels = material_labels(first.material_names, first.example)
-    colours = material_colours(len(labels), first.example)
+    labels, colours = first.material_labels, first.material_colors
     used = sorted(set().union(*[set(r.materials_used().tolist()) for r in rs]))
     handles = [Patch(fc=colours[i], ec="0.3", lw=0.5,
                      label=labels[i] if i < len(labels) else f"material {i}") for i in used]

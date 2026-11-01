@@ -6,7 +6,8 @@ An optimization run, read back for plotting.
 from_payload(d)   a run still in memory, i.e. run_io.LAST_RUN
 load(path)        a run saved to disk with run_io.WRITE_FILES = True
 
-Both return a Run. Nothing here imports torch, pyvista or PyTO.
+Both return a Run. Nothing here imports torch, pyvista or PyTO. A record written before
+runs stored their colours and labels takes them from its database's Display sheet.
 """
 from __future__ import annotations
 
@@ -15,6 +16,8 @@ import os
 from dataclasses import dataclass, field
 
 import numpy as np
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class RecordError(RuntimeError):
@@ -36,6 +39,8 @@ class Run:
     z_elem: np.ndarray             # (n_elems, n_z)  float32, NaN in voids
     z_real: np.ndarray             # (n_mats, n_z)   latent anchors
     material_names: list
+    material_colors: list          # (n_mats,)       #rrggbb, as drawn
+    material_labels: list          # (n_mats,)       as shown in legends and tables
     history: dict = field(repr=False)
 
     @property
@@ -137,7 +142,7 @@ class Run:
 
 
 def _build(path, meta, config, n, mat, solid, x_cont, von_mises, z, z_real,
-           names, history) -> Run:
+           names, history, colours=None, labels=None) -> Run:
     tag = meta.get("descriptor", "?")
     mat = np.asarray(mat).ravel()
     if mat.size != n:
@@ -149,12 +154,38 @@ def _build(path, meta, config, n, mat, solid, x_cont, von_mises, z, z_real,
     if z.ndim != 2 or z.shape[0] != n:
         raise RecordError(f"{tag}: z_elem has shape {z.shape}, "
                           f"expected ({n}, n_latent)")
+    names = [str(s) for s in names]
+    if colours is None or labels is None:
+        colours, labels = _database_display(config, names, max(len(names), np.asarray(z_real).shape[0]))
     return Run(path=path, meta=meta, config=config, n_elems=n,
                material_indices=mat.astype(np.int64), solid=solid,
                x_cont=np.asarray(x_cont).ravel().astype(np.float32),
                von_mises=np.asarray(von_mises).ravel().astype(np.float32),
                z_elem=z, z_real=np.asarray(z_real).astype(np.float32),
-               material_names=[str(s) for s in names], history=history)
+               material_names=names, material_colors=[str(c) for c in colours],
+               material_labels=[str(s) for s in labels], history=history)
+
+
+def _database_display(config, names, n_mats):
+    """Colours and labels for a record written before runs stored them: from the Display
+    sheet of the run's database when it is found and names the same materials, otherwise
+    the default colours and the material names."""
+    import re
+    import sys
+    common = os.path.join(REPO, "0-Common")
+    if common not in sys.path:
+        sys.path.insert(0, common)
+    from databases import DATABASE_DIR, default_colours, material_display  # type: ignore
+    path = str((config.get("topopt_params") or {}).get("MaterialsExcelFile") or "")
+    if path and names:
+        name = re.split(r"[\\/]", path)[-1]
+        for c in (path, os.path.join(REPO, path), os.path.join(REPO, DATABASE_DIR, name)):
+            if os.path.isfile(c):
+                try:
+                    return material_display(c, names)
+                except ValueError:
+                    break
+    return default_colours(n_mats), list(names)
 
 
 def load(path: str) -> Run:
@@ -198,10 +229,13 @@ def load(path: str) -> Run:
 
     names = [str(s) for s in r["material_names"]] if "material_names" in r.files else []
 
+    stored = "material_colors" in r.files and "material_labels" in r.files
     return _build(path, json.loads(str(r["meta_json"])), config, n,
                   r["material_indices"], solid, r["x_cont"], r["von_mises"],
                   z, r["zRealPoints"], names,
-                  {k[2:]: r[k] for k in r.files if k.startswith("h_")})
+                  {k[2:]: r[k] for k in r.files if k.startswith("h_")},
+                  [str(s) for s in r["material_colors"]] if stored else None,
+                  [str(s) for s in r["material_labels"]] if stored else None)
 
 
 def from_payload(payload: dict, descriptor: str = "in-memory") -> Run:
@@ -249,7 +283,8 @@ def from_payload(payload: dict, descriptor: str = "in-memory") -> Run:
 
     return _build("<memory>", meta, cfg, n, f["material_indices"], solid,
                   f["x_cont"], f["von_mises"], z, payload["zRealPoints"],
-                  payload.get("material_names", []), hist)
+                  payload.get("material_names", []), hist,
+                  payload.get("material_colors"), payload.get("material_labels"))
 
 
 def label(run: "Run") -> str:

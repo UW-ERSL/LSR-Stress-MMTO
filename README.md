@@ -109,10 +109,10 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 | `project.py` | a project: saves and loads it, checks it, builds the problem, runs it |
 | `selections.py` | named regions of the mesh that supports, loads and keep-solid regions act on |
 | `pyto_project.py` | meshing, and the supports and loads picked in the PyTO-AD GUI |
-| `databases.py` | the attributes a material database may hold, the check of a database, the VAE settings of each shipped database |
+| `databases.py` | the attributes a material database may hold, the check of a database, the colour and label of each material, the VAE settings of each shipped database |
 | `materialEncoder.py` | reads a material database, trains or loads the VAE |
 | `networks.py` | the VAE network |
-| `materialColors.py` | the colour each material is drawn in |
+| `materialColors.py` | the default colours, for materials the database's Display sheet gives none |
 | `mmto_common.py` | the parameter container shared by the examples |
 | `PyTOImports.py` | imports PyTO-AD: finite element analysis, filters and the MMA optimizer |
 

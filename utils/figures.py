@@ -18,8 +18,7 @@ import numpy as np
 
 from .records import Run
 from .render import (MIRROR_AXES, RenderError, draw_panel, project_name,
-                     material_colours, material_labels, mesh_for, screenshot,
-                     voxel_surface)
+                     mesh_for, screenshot, voxel_surface)
 
 FS_LEGEND = 11
 DPI = 400
@@ -61,8 +60,7 @@ def _save(fig, out, *, dpi=DPI):
 def _legend_beside(ax, run: Run):
     """Material legend to the right of a single panel, clear of the design."""
     from matplotlib.patches import Patch
-    names = material_labels(run.material_names, run.example)
-    colours = material_colours(len(names), run.example)
+    names, colours = run.material_labels, run.material_colors
     used = sorted(run.materials_used().tolist())
 
     available = set((run.config.get("materials") or {})
@@ -193,15 +191,15 @@ def convergence(run: Run, out=None):
     return _save(fig, out)
 
 
-def latent_scatter(run: Run, out=None, *, max_points=20000, labels="letters"):
+def latent_scatter(run: Run, out=None, *, max_points=20000, labels="display"):
     """The converged latent field against the real-material anchors.
 
     Follows materialEncoder.plotLSR: red circles for the optimized elements,
     black stars for the anchors. A 3D axes when the latent space is 3D, a plane
     when it is 2D, and a PCA projection above that.
 
-    labels: "letters" relabels the materials A, B, C..., as plot_latent did;
-    "names" keeps the database names.
+    labels: "display" shows the labels of the database's Display sheet; "names" the
+    database names.
     """
     import matplotlib.pyplot as plt
     _rc()
@@ -213,11 +211,8 @@ def latent_scatter(run: Run, out=None, *, max_points=20000, labels="letters"):
     zr = np.asarray(run.z_real, float)
     n_z = zr.shape[1]
 
-    if labels == "letters":
-        names = material_labels(run.material_names, run.example)
-    else:
-        names = [run.material_names[i] if i < len(run.material_names) else str(i)
-                 for i in range(zr.shape[0])]
+    shown = run.material_labels if labels == "display" else run.material_names
+    names = [shown[i] if i < len(shown) else str(i) for i in range(zr.shape[0])]
     while len(names) < zr.shape[0]:
         names.append(str(len(names)))
 

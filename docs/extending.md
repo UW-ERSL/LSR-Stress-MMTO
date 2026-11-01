@@ -84,6 +84,10 @@ row 2 their units, then one row per material. A project names it by file name wi
 
 The check also gives the latent dimension recommended for the database.
 
+An optional sheet `Display` sets the colour (#rrggbb) and the label each material is shown
+with; the template has one, filled with the default colours. The colours painted in the
+template are the defaults and do not follow edits to the text.
+
 To ship a trained VAE with it, put the `.nt` file beside the `.xlsx` and add the settings it
 was trained with to `DATABASE_VAE` in `0-Common/databases.py`. A database not listed there
 starts from `VAEParams`, with the recommended latent dimension; a project that sets another

@@ -20,8 +20,8 @@ project_paths.bootstrap()
 
 from openpyxl import Workbook, load_workbook  # noqa: E402
 from databases import (ATTRIBUTES, DATABASE_DIR, DATABASE_VAE, VAEParams, attribute_name,  # noqa: E402
-                       check_database, convert_database, database_units, recommended_latent_dim,
-                       unit_ratio, write_template)  # type: ignore
+                       check_database, convert_database, database_units, default_colours,
+                       material_display, recommended_latent_dim, unit_ratio, write_template)  # type: ignore
 
 SHIPPED = os.path.join(ROOT, DATABASE_DIR)
 GOOD = [["Attributes", "Density", "Youngs_Modulus", "Yield_Strength"],
@@ -31,17 +31,21 @@ GOOD = [["Attributes", "Density", "Youngs_Modulus", "Yield_Strength"],
         ["C", 0.8, 70.0, 90.0]]
 
 
-def write(path, rows):
+def write(path, rows, display=None):
     wb = Workbook()
     for r in rows:
         wb.active.append(r)
+    if display is not None:
+        ws = wb.create_sheet("Display")
+        for r in display:
+            ws.append(r)
     wb.save(path)
     return path
 
 
-def errors_of(rows):
+def errors_of(rows, display=None):
     with tempfile.TemporaryDirectory() as d:
-        return check_database(write(os.path.join(d, "db.xlsx"), rows))
+        return check_database(write(os.path.join(d, "db.xlsx"), rows, display))
 
 
 def test_shipped_databases():
@@ -100,11 +104,62 @@ def test_warnings_and_aliases():
     assert attribute_name("Poisson_Ratio") == "Poissons_Ratio" and attribute_name("Colour") == "Colour"
 
 
+def test_display():
+    """The Display sheet: each material's colour and label, matched by name; empty means the
+    default colour and the material's name. Two materials shown the same way are an error."""
+    head = ["Material", "Color", "Label"]
+    with tempfile.TemporaryDirectory() as d:
+        assert material_display(write(os.path.join(d, "a.xlsx"), GOOD)) == (default_colours(3), ["A", "B", "C"])
+        path = write(os.path.join(d, "b.xlsx"), GOOD, [head, ["C", "#00FF00", "steel"], ["A", None, "alu"],
+                                                       ["B", "#123abc", None]])
+        assert material_display(path) == ([default_colours(1)[0], "#123abc", "#00ff00"], ["alu", "B", "steel"])
+    cases = [
+        ([head, ["D", "#ff0000", None]], "sheet Display, A2: D is not a material of the first sheet"),
+        ([head, ["A", "#ff0000", None], ["A", None, "x"]], "A3: A appears twice (also row 2)"),
+        ([head, ["A", "red", None]], "B2 (A): 'red' is not a colour; write it as #rrggbb"),
+        ([head, [None, "#ff0000", None]], "A2: no material name"),
+        ([["Material", "Colour", "Name"]], "C1: 'Name'; row 1 holds Material, Color and Label"),
+        ([head, ["A", "#FF0000", None], ["B", "#ff0000", None]], "A, B have the same colour, #ff0000"),
+        ([head, ["B", default_colours(1)[0], None]], "A, B have the same colour"),                 # A's default
+        ([head, ["A", None, "Steel 1"], ["B", None, "steel1"]], "A, B have the same label, steel1"),
+        ([head, ["A", None, "b"]], "A, B have the same label, b"),                                # B's name
+    ]
+    for display, says in cases:
+        errors, _ = errors_of(GOOD, display)
+        assert any(says in e for e in errors), (says, errors)
+    errors, warnings = errors_of(GOOD, [head, ["A", "#ff0000", None]])
+    assert errors == [] and warnings == ["sheet Display has no row for B, C; these use the default colours"]
+
+    many = [GOOD[0], GOOD[1]] + [[f"M{i}", 1.0 + i, 100.0 + i, 90.0 + i] for i in range(25)]
+    errors, warnings = errors_of(many)
+    assert errors == [] and len(warnings) == 1 and "25 materials and no colours given" in warnings[0], warnings
+    assert len(set(default_colours(200))) == 200 and default_colours(25)[:20] == default_colours(20)
+    with tempfile.TemporaryDirectory() as d:
+        try:
+            material_display(write(os.path.join(d, "c.xlsx"), GOOD, [head, ["A", "red", None]]))
+        except ValueError as e:
+            assert "'red' is not a colour" in str(e)
+        else:
+            raise AssertionError("a bad colour was accepted")
+
+
+def test_shipped_display():
+    """BM1 draws its materials in the colours their names say; the airplane bracket's alloys
+    are labelled A to T, as in the paper."""
+    bm1 = material_display(os.path.join(SHIPPED, "BM1_3Mats_2Attr.xlsx"))
+    assert bm1 == (["#ff0000", "#4b00f1", "#23ff24"], ["Mat1_Red", "Mat2_Blue", "Mate3_Green"]), bm1
+    colours, labels = material_display(os.path.join(SHIPPED, "CustomAlloys20_3D.xlsx"))
+    assert colours == default_colours(20) and labels == [chr(ord("A") + i) for i in range(20)]
+
+
 def test_template():
     with tempfile.TemporaryDirectory() as d:
         path = write_template(os.path.join(d, "t.xlsx"), ["Density", "Youngs_Modulus", "Yield"], n_materials=3)
         wb = load_workbook(path)
-        assert wb.sheetnames == ["Main", "Reference"]
+        assert wb.sheetnames == ["Main", "Display", "Reference"]
+        disp = wb["Display"]
+        assert [c.value for c in disp[2]] == ["Material1", default_colours(1)[0], None]
+        assert disp["B2"].fill.fgColor.rgb.lower().endswith(default_colours(1)[0][1:])
         main = wb["Main"]
         assert [c.value for c in main[1]] == ["Attributes", "Density", "Youngs_Modulus", "Yield_Strength"]
         lists = [v for v in main.data_validations.dataValidation if v.type == "list"]
