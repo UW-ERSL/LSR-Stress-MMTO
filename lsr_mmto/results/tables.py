@@ -22,24 +22,11 @@ def label_of(run):
 
 def summary(run, show=True):
     """One run at a glance: setup, result, constraint utilisation."""
-    names = {"mass_cap": "mass budget", "cost_cap": "cost budget",
-             "r_rho": "r_rho", "r_z": "r_z", "nx": "grid", "n_dof": "target DOF",
-             "material": "material", "P": "P", "fixed_radius": "fixed radius"}
     rows = [("example", run.example), ("run", run.descriptor)]
     units = (run.config or {}).get("units") or {}
     if units.get("system") not in (None, "none"):
         rows.append(("units", f"{units['system']}: {units['length']}, {units['force']}, "
                               f"{units['stress']}, {units['mass']}"))
-    for k, v in run.params.items():
-        if k == "params_from":
-            continue
-        lbl = names.get(k, k.replace("_", " "))
-        if k == "nx":
-            rows.append((lbl, f"{int(v)} x {int(v)}"))
-        elif k in ("mass_cap", "cost_cap"):
-            rows.append((lbl, f"{v:.3g}"))
-        else:
-            rows.append((lbl, f"{v:g}" if isinstance(v, float) else str(v)))
     rows.append(("iterations", str(run.iterations)))     # the starting design is not counted
     rows.append(("elements", f"{run.n_elems}"))
     rows.append(("solid elements",

@@ -56,7 +56,7 @@ def generate():
             "`pad` widens every bound; `\"auto\"` is half an element for nodes and 0 for element centres "
             "(faces and planes always half an element).", "",
             "| type | fields | selects |", "|---|---|---|"]
-    for name, cls in sorted((n, c) for n, c in S._TYPES.items() if n == c.TYPE):   # not old names (place)
+    for name, cls in sorted(S._TYPES.items()):
         fields = "parts" if cls in (S.Union, S.Intersect, S.Difference) else ", ".join(cls.fields)
         doc = " ".join((cls.__doc__ or "").split()).replace("|", "\\|")
         out.append(f"| `{name}` | {fields} | {doc} |")

@@ -5,8 +5,7 @@ An optimization run, read back for plotting.
 
 load(path)        a run saved to disk, as a Run.
 
-Nothing here imports torch, pyvista or PyTO. A record written before runs stored their
-colours and labels takes them from its database's Display sheet.
+Nothing here imports torch, pyvista or PyTO.
 """
 from __future__ import annotations
 
@@ -16,7 +15,6 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 class RecordError(RuntimeError):
@@ -49,10 +47,6 @@ class Run:
     @property
     def descriptor(self) -> str:
         return self.meta.get("descriptor", "?")
-
-    @property
-    def params(self) -> dict:
-        return self.meta.get("params", {})
 
     @property
     def n_latent(self) -> int:
@@ -150,7 +144,7 @@ class Run:
 
 
 def _build(path, meta, config, n, mat, solid, x_cont, von_mises, z, z_real,
-           names, history, colours=None, labels=None) -> Run:
+           names, history, colours, labels) -> Run:
     tag = meta.get("descriptor", "?")
     mat = np.asarray(mat).ravel()
     if mat.size != n:
@@ -163,8 +157,6 @@ def _build(path, meta, config, n, mat, solid, x_cont, von_mises, z, z_real,
         raise RecordError(f"{tag}: z_elem has shape {z.shape}, "
                           f"expected ({n}, n_latent)")
     names = [str(s) for s in names]
-    if colours is None or labels is None:
-        colours, labels = _database_display(config, names, max(len(names), np.asarray(z_real).shape[0]))
     return Run(path=path, meta=meta, config=config, n_elems=n,
                material_indices=mat.astype(np.int64), solid=solid,
                x_cont=np.asarray(x_cont).ravel().astype(np.float32),
@@ -172,24 +164,6 @@ def _build(path, meta, config, n, mat, solid, x_cont, von_mises, z, z_real,
                z_elem=z, z_real=np.asarray(z_real).astype(np.float32),
                material_names=names, material_colors=[str(c) for c in colours],
                material_labels=[str(s) for s in labels], history=history)
-
-
-def _database_display(config, names, n_mats):
-    """Colours and labels for a record written before runs stored them: from the Display
-    sheet of the run's database when it is found and names the same materials, otherwise
-    the default colours and the material names."""
-    import re
-    from lsr_mmto.materials.databases import DATABASE_DIR, default_colours, material_display
-    path = str((config.get("topopt_params") or {}).get("MaterialsExcelFile") or "")
-    if path and names:
-        name = re.split(r"[\\/]", path)[-1]
-        for c in (path, os.path.join(REPO, path), os.path.join(REPO, DATABASE_DIR, name)):
-            if os.path.isfile(c):
-                try:
-                    return material_display(c, names)
-                except ValueError:
-                    break
-    return default_colours(n_mats), list(names)
 
 
 def load(path: str) -> Run:
@@ -204,8 +178,8 @@ def load(path: str) -> Run:
     except Exception as e:
         raise RecordError(f"{path} is not a readable .npz: {e}") from e
 
-    need = {"material_indices", "x_bin_packed", "n_elems", "x_cont",
-            "von_mises", "z_elem_solid", "zRealPoints", "meta_json"}
+    need = {"material_indices", "x_bin_packed", "n_elems", "x_cont", "von_mises", "z_elem_solid",
+            "zRealPoints", "meta_json", "material_names", "material_colors", "material_labels"}
     missing = need - set(r.files)
     if missing:
         raise RecordError(f"{os.path.basename(path)} is missing {sorted(missing)}. "
@@ -226,40 +200,19 @@ def load(path: str) -> Run:
     z[solid] = z_solid
 
     cfg_path = path[:-4] + ".config.json"
-    config = {}
-    if os.path.isfile(cfg_path):
-        with open(cfg_path) as fh:
-            config = json.load(fh)
+    if not os.path.isfile(cfg_path):
+        raise RecordError(f"no {os.path.basename(cfg_path)} beside {os.path.basename(path)}")
+    with open(cfg_path) as fh:
+        config = json.load(fh)
 
-    names = [str(s) for s in r["material_names"]] if "material_names" in r.files else []
-
-    stored = "material_colors" in r.files and "material_labels" in r.files
     return _build(path, json.loads(str(r["meta_json"])), config, n,
                   r["material_indices"], solid, r["x_cont"], r["von_mises"],
-                  z, r["zRealPoints"], names,
+                  z, r["zRealPoints"], [str(s) for s in r["material_names"]],
                   {k[2:]: r[k] for k in r.files if k.startswith("h_")},
-                  [str(s) for s in r["material_colors"]] if stored else None,
-                  [str(s) for s in r["material_labels"]] if stored else None)
+                  [str(s) for s in r["material_colors"]],
+                  [str(s) for s in r["material_labels"]])
 
 
 def label(run: "Run") -> str:
-    """Readable name for a run, e.g. 'U-bracket  P=16, r_rho=3.5'."""
-    g, p = run.meta.get("group") or _group_of(run), run.params
-    if g == "lbracket_bm1":
-        return f"L-bracket  r_rho={p['r_rho']:g}, r_z={p['r_z']:g}"
-    if g == "ubracket_sweep":
-        return f"U-bracket  P={p['P']:g}, r_rho={p['r_rho']:g}"
-    if g == "ubracket_mesh":
-        kind = "mesh control" if p.get("fixed_radius") else "mesh"
-        return f"U-bracket  {kind} {p['nx']} x {p['nx']}"
-    if g == "ubracket_single":
-        return f"U-bracket  single material {p['material']}"
-    if g == "beam_pareto":
-        return f"Beam  mass cap {p['mass_cap']:.1e}".replace("e+0", "e")
-    if g == "bracket":
-        return f"Bracket  mass cap {p['mass_cap']:.1e}".replace("e+0", "e")
+    """Readable name for a run: its project and its folder."""
     return f"{run.example}  {run.descriptor}"
-
-
-def _group_of(run: "Run") -> str:
-    return os.path.basename(os.path.dirname(run.path))

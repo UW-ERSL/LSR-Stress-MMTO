@@ -20,6 +20,13 @@ FAINT = 0.1                                   # elements below this density are 
 WEAKEST = 0.25                                # colour strength of an element just above FAINT
 SOLID_COLOUR = "#9aa5b1"
 PREFIX = "result_"
+# The colour scale of a value view (Density, Stress): the lowest and the highest value at the two
+# ends, under the bar, and the title in the middle under it, at fixed sizes, so the numbers never
+# run into each other or into the title, however large or small the values and whatever the size of
+# the view.
+VALUE_BAR = {"vertical": False, "position_x": 0.3, "position_y": 0.07, "width": 0.4, "height": 0.05,
+             "n_labels": 2, "fmt": "%.3g", "unconstrained_font_size": True, "title_font_size": 16,
+             "label_font_size": 14, "color": "#333333"}
 _MESHES = {}                                  # (STL, dofs, single layer) -> mesh, for saved runs
 
 
@@ -64,11 +71,12 @@ def draw(window, mesh, mask, colours=None, values=None, title=None, clim=None, s
     if values is not None:
         blocks = _blocks(centres, h, {"value": np.asarray(values, dtype=float)[mask]})
         window.design_bars.add(title)
-        return window.plotter.add_mesh(blocks, scalars="value", cmap="viridis", clim=clim,
-                                       scalar_bar_args={"title": title, "vertical": False, "position_x": 0.3,
-                                                        "position_y": 0.04, "width": 0.45, "height": 0.07,
-                                                        "color": "#333333", "fmt": "%.3g"},
-                                       **kwargs)
+        actor = window.plotter.add_mesh(blocks, scalars="value", cmap="viridis", clim=clim,
+                                        scalar_bar_args=VALUE_BAR | {"title": title}, **kwargs)
+        bar = window.plotter.scalar_bars[title]
+        bar.SetTextPositionToPrecedeScalarBar()            # the numbers and the title under the bar
+        bar.SetTextPad(3)
+        return actor
     return window.plotter.add_mesh(_blocks(centres, h, {}), color=SOLID_COLOUR, **kwargs)
 
 
@@ -142,14 +150,13 @@ def mesh_of(window, project):
 
 
 def run_mesh(window, folder, run):
-    """The mesh a saved run was made on, rebuilt from the copy of the project saved with it (the
-    window's own mesh when it is the same one). MeshError when it cannot match the run."""
+    """The mesh a saved run was made on, rebuilt from the project its record keeps (the window's own
+    mesh when it is the same one). MeshError when it cannot match the run."""
     from lsr_mmto.problem.project import Project
-    from lsr_mmto.problem.project_folder import run_project_file
-    path = run_project_file(folder)
-    if path is None:
-        raise MeshError("this run has no copy of its project beside it, so its part is not known")
-    p = Project.load(path)
+    spec = ((run.config or {}).get("arguments_resolved") or {}).get("to_problem")
+    if not isinstance(spec, dict) or "project" not in spec:
+        raise MeshError("this run's record does not hold its project, so its part is not known")
+    p = Project.from_record(spec, folder=os.path.dirname(os.path.dirname(os.path.abspath(folder))))
     if not os.path.isfile(p.stl_path()):
         raise MeshError(f"its part is missing: {p.stl_path()}")
     mesh = mesh_of(window, p)

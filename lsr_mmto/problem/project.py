@@ -957,10 +957,20 @@ class Project:
                 "gui": self._gui}
 
     @classmethod
-    def from_record(cls, record):
-        record = _moved_paths(record)
+    def from_record(cls, record, folder=None):
+        """The project a run record stores. folder: the project's folder now, when it may have been
+        moved since the run (zipped and sent): the part is then looked for at the same place
+        relative to it."""
         data = dict(record.get("gui") or {}, mmto=record["project"], stl_file_path=record["stl_file_path"])
-        return cls._from_data(data, record["base_dir"], record["project"].get("name", "project"))
+        p = cls._from_data(data, record["base_dir"], record["project"].get("name", "project"))
+        if folder is not None and not os.path.isfile(p.stl_path()):
+            try:
+                rel = os.path.relpath(record["stl_file_path"], record["base_dir"])
+            except ValueError:                                  # another drive on Windows
+                return p
+            if os.path.isfile(os.path.join(folder, rel)):
+                p.base_dir, p.stl = os.path.abspath(folder), rel.replace("\\", "/")
+        return p
 
     @classmethod
     def load(cls, path):
@@ -968,7 +978,7 @@ class Project:
         if not path.lower().endswith(".mmto"):
             raise ValueError(f"{path}: not an LSR MMTO project; a project is a .mmto file")
         with open(path) as fh:
-            data = _moved_paths(json.load(fh))
+            data = json.load(fh)
         if "mmto" not in data:
             raise ValueError(f"{path}: no mmto section; it is not an LSR MMTO project")
         return cls._from_data(data, os.path.dirname(path), os.path.splitext(os.path.basename(path))[0])
@@ -993,19 +1003,6 @@ class Project:
         p.settings.update({k: dict(v) for k, v in stored.items() if k not in DEFAULT_SETTINGS})
         p._gui = {k: v for k, v in data.items() if k not in ("mmto", "stl_file_path")}
         return p
-
-
-# Projects and runs saved before the repository was laid out as the package lsr_mmto name the
-# shipped part files under 0-Common/Models; they are in data/models now.
-_OLD_FOLDERS = (("0-Common/Models/", "data/models/"), ("0-Common\\\\Models\\\\", "data\\\\models\\\\"))
-
-
-def _moved_paths(record):
-    """A project file's data or a run record, with the part paths of the old layout pointed at data/models."""
-    text = json.dumps(record)
-    for old, new in _OLD_FOLDERS:
-        text = text.replace(old, new)
-    return json.loads(text)
 
 
 # ---------------------------------------------------------------------- running
@@ -1043,14 +1040,7 @@ def _prepared(project):
 
 
 def run(project, save_dir=None, **run_options):
-    """Optimize the project with _run_topopt; a copy of the project goes into save_dir with the results."""
-    from lsr_mmto.optimize import save as run_save
+    """Optimize the project with _run_topopt. The run's record keeps the project as it was run
+    (Project.from_record rebuilds it)."""
     from lsr_mmto.optimize.run import _run_topopt
-    snapshot = _prepared(project)
-    args = _run_arguments(snapshot, save_dir, **run_options)
-    if run_save.WRITE_FILES:
-        os.makedirs(args["save_dir"], exist_ok=True)
-        path = os.path.abspath(os.path.join(args["save_dir"], f"{project.name}.mmto"))
-        with open(path, "w") as fh:
-            json.dump(snapshot._file_data(path), fh, indent=2)
-    return _run_topopt(**args)
+    return _run_topopt(**_run_arguments(_prepared(project), save_dir, **run_options))

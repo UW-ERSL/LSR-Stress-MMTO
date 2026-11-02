@@ -131,6 +131,28 @@ def _files(folder):
     return sorted(out)
 
 
+def test_a_save_brings_in_the_files_regions_name():
+    """A region that names a file of its own (the airplane bracket's collar, inside_stl) has the file
+    copied into part/ with the part, and points at the copy, so the saved folder runs on its own."""
+    from lsr_mmto.problem import selections as S
+    p = Project.load(os.path.join(PROJECTS, "Airplane bracket.mmto"))
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "Plane", "Plane.mmto")
+        p.save(path)
+        q = Project.load(path)
+        found = []
+
+        def walk(s):
+            for part in getattr(s, "parts", ()):
+                walk(part)
+            if isinstance(s, S.inside_stl):
+                found.append(s.path)
+        for s in q.selections.values():
+            walk(s)
+        assert found == ["part/AirplaneBracket_NonDesign.stl"], found
+        assert os.path.isfile(os.path.join(d, "Plane", found[0]))
+
+
 def test_a_script_save_makes_the_same_folder():
     """Saving from a script copies the part and the database with its network into the project's folder,
     exactly as the window does at File > New and when a database is chosen; a second save copies

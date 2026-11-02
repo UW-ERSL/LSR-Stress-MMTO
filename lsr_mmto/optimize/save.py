@@ -440,7 +440,6 @@ def _save_record(save_dir, data):
         "constraints": tp.get("Constraints"),
         "vae_net":     os.path.basename(
                            str(tp.get("MaterialsExcelFile", ""))).replace(".xlsx", ".nt"),
-        "params":      {},
     }, default=str))
 
     base = os.path.join(save_dir, "run_data")

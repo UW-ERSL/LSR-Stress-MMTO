@@ -17,8 +17,7 @@ import os
 import numpy as np
 
 from .records import Run
-from .render import (MIRROR_AXES, RenderError, draw_panel, project_name,
-                     mesh_for, screenshot, voxel_surface)
+from .render import MIRROR_AXES, RenderError, draw_panel, mesh_for, screenshot, voxel_surface
 
 FS_LEGEND = 11
 DPI = 400
@@ -170,7 +169,7 @@ def convergence(run: Run, out=None):
     axL.set_xlabel("Iteration")
     axL.set_ylabel(obj_label, color=C_OBJ)
     axL.tick_params(axis="y", colors=C_OBJ)
-    axL.set_xlim(1, J.size)
+    axL.set_xlim(1, max(J.size, 2))                # a 1-iteration run still gets an axis
     axL.grid(True, color="#cccccc", lw=0.5, alpha=0.6)
     axL.set_axisbelow(True)
 
@@ -336,7 +335,7 @@ def latent_scatter(run: Run, out=None, *, max_points=20000, labels="display"):
 
 def is_3d(run: Run) -> bool:
     """True for the examples rendered as voxels rather than 2D panels."""
-    return project_name(run.example) in MIRROR_AXES
+    return run.example in MIRROR_AXES
 
 
 def design(run: Run, out=None, *, field="material", size=(1200, 950),

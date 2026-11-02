@@ -29,22 +29,6 @@ class RenderError(RuntimeError):
 _MESH_CACHE: dict = {}
 
 
-REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-# Runs made before the examples became project files carry these names.
-OLD_NAMES = {
-    "LBracketTopLoad_Stress_BM1": "L-bracket",
-    "UBracket_Stress_FF":         "U-bracket",
-    "Beam_Liao_Pareto_FF":        "beam",
-    "AirplaneBracket_Stress":     "Airplane bracket",
-}
-
-
-def project_name(example):
-    """The project name of an example, for runs made under its old name too."""
-    return OLD_NAMES.get(example, example)
-
-
 def _problem(run: Run):
     """The Project a run was made from."""
     try:
@@ -54,12 +38,10 @@ def _problem(run: Run):
             "could not import project, which needs PyTO-AD. Check that PyTO-AD is cloned beside "
             f"this repository. Original error: {e}") from e
     spec = ((run.config or {}).get("arguments_resolved") or {}).get("to_problem")
-    if isinstance(spec, dict) and "project" in spec:
-        return Project.from_record(spec)
-    path = os.path.join(REPO, "projects", f"{project_name(run.example)}.mmto")
-    if not os.path.isfile(path):
-        raise RenderError(f"{run.descriptor}: no project file for example {run.example!r} ({path})")
-    return Project.load(path)
+    if not isinstance(spec, dict) or "project" not in spec:
+        raise RenderError(f"{run.descriptor}: the record does not hold its project")
+    folder = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(run.path))))
+    return Project.from_record(spec, folder=folder)        # the project's folder, if moved since
 
 
 def mesh_for(run: Run):
@@ -206,7 +188,7 @@ def voxel_surface(run: Run, *, mesh=None, mirror: bool = True):
 
     solid = run.solid
     n_half = int(solid.sum())
-    axes = MIRROR_AXES.get(project_name(run.example), ()) if mirror else ()
+    axes = MIRROR_AXES.get(run.example, ()) if mirror else ()
     C, M = _reflect_centroids(centers[solid], run.material_indices[solid],
                               (dx, dy, dz), axes)
 

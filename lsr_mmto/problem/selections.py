@@ -43,8 +43,7 @@ Types (to_dict / from_dict give the JSON form a project file stores):
     function("file.py:name")                     name(mesh, on) returns the indices
     union(a, b, ...), intersect(a, b, ...), difference(a, b)
     selection("name")                            another selection of the project, by name: a live
-                                                 link, looked up when the project evaluates it (files
-                                                 written before call it place, which still reads)
+                                                 link, looked up when the project evaluates it
 
 A function selection runs the Python file it names when it is evaluated: open project
 files with function selections only from people you trust.
@@ -490,9 +489,7 @@ class selection(Selection):
         raise ValueError(f"selection({self.name!r}) is looked up by the project: evaluate it with Project.evaluate")
 
 
-place = selection                       # its name before; files written then say "place" (read as selection)
-_TYPES["place"] = selection
-LINKS = ("selection", "place")          # the JSON types that name another selection
+LINKS = ("selection",)                  # the JSON types that name another selection
 
 
 def _walk(d, f):

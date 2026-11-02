@@ -72,7 +72,7 @@ def check(project, n_x=3, n_z=3, steps=(1e-3, 1e-4, 1e-5), seed=0):
 
     def values(z):
         Jz, cz = model.evaluate(z, beta, eta, use_heaviside=heaviside)
-        return float(Jz), (float(cz[0]) if cz else np.nan)
+        return float(Jz.detach()), (float(cz[0].detach()) if cz else np.nan)
 
     # variables with a sizeable gradient, so the comparison is not lost in noise
     pick_x = rng.choice(np.argsort(-np.abs(gJ[:n]))[:200], n_x, replace=False)
@@ -101,4 +101,4 @@ def check(project, n_x=3, n_z=3, steps=(1e-3, 1e-4, 1e-5), seed=0):
     from lsr_mmto.results.display import Table
     return Table(rows, headers=headers,
                  title="Gradient check: central differences against autodiff",
-                 note=f"random design, beta = {beta:g}; J = {float(J):.6g}")
+                 note=f"random design, beta = {beta:g}; J = {float(J.detach()):.6g}")

@@ -9,7 +9,8 @@ every result made from it can be shown and run again:
       Bracket study_setup.py              the project as a Python script
       part/bracket.STL                    the part, copied in
       materials/steels.xlsx, steels.nt    the database and its trained network, copied in
-      results/2026-11-01_16-04-41/        one folder per run
+      results/2026-11-01_16-04-41/        one folder per run: run_data.npz, run_data.config.json
+                                          (with the project as it was run) and run_config.yaml
 
 The window and a script keep a project the same way. File > New makes the folder; every save
 (Project.save, from the window or from a script) copies into the project's folder what the
@@ -129,17 +130,38 @@ def bring_in_database(project):
 
 def pack(project, folder):
     """Everything the project uses copied into folder, which becomes the project's folder: the
-    STL into part/, the database and its network into materials/. Results stay where they are."""
+    STL, and any file a region names, into part/, the database and its network into materials/.
+    Results stay where they are."""
     folder = os.path.abspath(folder)
     os.makedirs(folder, exist_ok=True)
     project.complete_settings()             # a shipped database's network settings, while it is named
     stl = os.path.abspath(project.stl_path())
     xlsx, nt = _database_files(project)
+    old_base = project.base_dir
     project.base_dir = folder
     project.stl = copy_in(stl, folder, PART) if os.path.isfile(stl) else stl
+    for selection in project.selections.values():
+        _bring_in_files(selection, old_base, folder)
     if xlsx is not None:
         _copy_database(project, xlsx, nt, folder)
     return project
+
+
+def _bring_in_files(selection, old_base, folder):
+    """The files a region names (an inside_stl surface, a function selection's .py) copied into part/
+    of folder, and the region pointed at the copies; inside combinations too."""
+    from lsr_mmto.problem import selections as S
+    for part in getattr(selection, "parts", ()):
+        _bring_in_files(part, old_base, folder)
+    if isinstance(selection, S.inside_stl):
+        path = S._resolve(selection.path, old_base)
+        if os.path.isfile(path):
+            selection.path = copy_in(os.path.abspath(path), folder, PART)
+    elif isinstance(selection, S.function):
+        file, name = selection.ref.rsplit(":", 1)
+        path = S._resolve(file, old_base)
+        if os.path.isfile(path):
+            selection.ref = f"{copy_in(os.path.abspath(path), folder, PART)}:{name}"
 
 
 def create(folder, stl):
@@ -222,14 +244,6 @@ def run_facts(folder):
         when = datetime.datetime.fromtimestamp(os.path.getmtime(os.path.join(folder, RUN_FILE))).isoformat(
             timespec="seconds")
     return when.replace("T", " "), iterations, stopped
-
-
-def run_project_file(folder):
-    """The copy of the project that a run saved beside its results, or None."""
-    for name in sorted(os.listdir(folder)):
-        if name.lower().endswith(".mmto"):
-            return os.path.join(folder, name)
-    return None
 
 
 def delete_run(folder):

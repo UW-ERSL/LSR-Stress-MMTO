@@ -80,9 +80,6 @@ def test_selections_by_name():
             assert says in str(e), e
         else:
             raise AssertionError(says)
-    old = {"type": "union", "of": [{"type": "place", "name": "a"}, {"type": "face", "side": "xmax", "pad": "auto"}]}
-    assert S.from_dict(old).to_dict()["of"][0] == {"type": "selection", "name": "a"}  # files from before read,
-    assert S.names_in(S.from_dict(old)) == ["a"]                                    # and are written anew
 
 
 def test_cylinder():

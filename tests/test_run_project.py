@@ -3,9 +3,8 @@ test_run_project.py
 ===================
 Running a Project: its settings cover every setting of _run_topopt; the run record keeps
 the settings as they were given, says when a setting was switched off during the run, and
-stores the project so it can be rebuilt. Runs made before the examples became project
-files are rebuilt from the project files. A run from a script goes to the project folder's
-results, as one from the window does.
+stores the project so it can be rebuilt. A run from a script goes to the project folder's
+results, as one from the window does, and its folder holds exactly the run's three files.
 
 One 4-iteration run of a coarse U-bracket, under a minute.
 
@@ -164,13 +163,12 @@ def test_record_rebuilds_the_project():
     from lsr_mmto.results import render
 
     class FakeRun:
-        config = {"arguments_resolved": {"to_problem": rec}}
+        config, path = {"arguments_resolved": {"to_problem": rec}}, os.path.join(ROOT, "nowhere", "run_data.npz")
     assert render._problem(FakeRun()).to_dict() == p.to_dict()
 
 
 def test_record_stores_display():
-    """The run takes its colours and labels from the database; the record stores them. A
-    record written before that takes them from its database's Display sheet."""
+    """The run takes its colours and labels from the database; the record stores them."""
     from lsr_mmto.materials.databases import default_colours
     from lsr_mmto.results import records
     colours, labels = runs()["project"][1]["display"]
@@ -191,16 +189,16 @@ def test_record_stores_display():
         run = records.load(os.path.join(d, "run_data.npz"))
     assert run.material_colors == ["#010203", "#040506", "#070809"] and run.material_labels == ["one", "two", "three"]
 
-    old = records.load(os.path.join(ROOT, "tests", "data", "record_before_display", "run_data.npz"))   # an L-bracket run
-    assert old.material_colors == ["#ff0000", "#4b00f1", "#23ff24"], old.material_colors   # BM1's Display sheet
-    assert old.material_labels == old.material_names == ["Mat1_Red", "Mat2_Blue", "Mate3_Green"]
-
 
 def test_script_run_lands_in_the_project_results():
     """run(p) from a script, with no folder given, writes the run where the window does: results/<date and
-    time> in the project's folder, listed by the window's Results; nothing goes to the current folder."""
+    time> in the project's folder, listed by the window's Results; nothing goes to the current folder.
+    The run's folder holds its three files and no copy of the project; moved with its project folder
+    (zipped and sent), the run still finds its part."""
+    import shutil
     from lsr_mmto import run
     from lsr_mmto.problem import project_folder as F
+    from lsr_mmto.results import records, render
     p = ubracket_project()
     p.settings["common"]["maxIterations"] = 1
     here = os.getcwd()
@@ -217,6 +215,11 @@ def test_script_run_lands_in_the_project_results():
         listed = F.runs(p)
         assert len(listed) == 1 and os.path.dirname(listed[0]) == os.path.join(d, "ub", "results"), listed
         assert len(os.path.basename(listed[0])) == 19 and os.listdir(elsewhere) == []
+        assert sorted(os.listdir(listed[0])) == ["run_config.yaml", "run_data.config.json", "run_data.npz"]
+        moved = shutil.move(os.path.join(d, "ub"), os.path.join(d, "sent"))
+        rec = records.load(os.path.join(moved, "results", os.path.basename(listed[0]), "run_data"))
+        part = render._problem(rec).stl_path()
+        assert os.path.isfile(part) and part.startswith(moved), part
 
 
 def test_vae_training_guards():
@@ -319,17 +322,6 @@ def test_shipped_networks_are_usable():
             enc.readExcel(xlsx)
             enc.loadAutoencoderFromFile(xlsx[:-5] + ".nt")
         assert enc.largestEncodingErrorPercent() < limit / 2, name
-
-
-def test_old_runs_rebuild():
-    """A run made under an old example name finds its project."""
-    from lsr_mmto.results import render
-
-    class Old:
-        config, example, descriptor = {}, "UBracket_Stress_FF", "old run"
-    assert render._problem(Old()).name == "U-bracket"
-    assert render.project_name("AirplaneBracket_Stress") == "Airplane bracket"
-    assert render.MIRROR_AXES[render.project_name("Beam_Liao_Pareto_FF")] == (0, 1, 2)
 
 
 def test_training_stop():

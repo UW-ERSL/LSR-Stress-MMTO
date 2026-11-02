@@ -952,7 +952,7 @@ def test_run():
         assert _wait(lambda: not r.optimization_running), "the run did not finish"
         assert r.status.text().startswith("Run finished after 3 iterations"), r.status.text()
         assert os.path.isfile(os.path.join(r.save_dir, "run_data.npz"))
-        assert os.path.isfile(os.path.join(r.save_dir, "L-bracket.mmto"))     # what ran, beside it
+        assert sorted(os.listdir(r.save_dir)) == ["run_config.yaml", "run_data.config.json", "run_data.npz"]
         from lsr_mmto.results import records
         rec = records.load(os.path.join(r.save_dir, "run_data"))             # each element's material is the
         z, zr = rec.z_solid(), np.asarray(rec.z_real)                         # real one nearest its latent point
