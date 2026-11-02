@@ -2,8 +2,9 @@
 # code that reproduces the paper's figures from them
 paper/
 
-# outputs, regenerated on demand
+# outputs, regenerated on demand (lsr_mmto/results is code, not output)
 results/
+!lsr_mmto/results/
 runs/
 figs/
 

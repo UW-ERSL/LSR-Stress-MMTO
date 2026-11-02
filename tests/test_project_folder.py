@@ -18,15 +18,12 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from utils import project_paths  # noqa: E402
 
-project_paths.bootstrap()
-
-import project_folder as F  # noqa: E402  # type: ignore
-from project import Project  # noqa: E402  # type: ignore
+from lsr_mmto.problem import project_folder as F  # noqa: E402
+from lsr_mmto.problem.project import Project  # noqa: E402
 
 PROJECTS = os.path.join(ROOT, "projects")
-STL = os.path.join(ROOT, "0-Common", "Models", "LBracket_BM1", "LBracket_BM1.STL")
+STL = os.path.join(ROOT, "data", "models", "LBracket_BM1", "LBracket_BM1.STL")
 
 
 def _scratch():

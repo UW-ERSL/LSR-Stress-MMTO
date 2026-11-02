@@ -1,0 +1,115 @@
+"""
+make_reference.py
+=================
+Writes docs/project_reference.md from the code: the project file's sections, the
+selection types, the boundary-condition kinds, the quantities and the settings.
+
+    python docs/make_reference.py        (from the repository folder)
+
+The page is generated, not edited by hand; tests/test_reference.py fails when the
+page in the repository differs from what the code generates.
+"""
+import os
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PAGE = os.path.join(ROOT, "docs", "project_reference.md")
+
+SECTIONS = [
+    ("schema_version", "version of the project format"),
+    ("name, comment", "the project's name (also the run's name) and a description"),
+    ("physics", "\"structural\" for now"),
+    ("mesh", "n_dof (degrees of freedom asked for) and single_layer (one element through the thickness)"),
+    ("selections", "named regions of the mesh, see Selection types"),
+    ("bcs", "boundary conditions, each on a named selection, see Boundary conditions"),
+    ("keep_solid", "names of element selections kept solid"),
+    ("keep_support_elements", "also keep solid the elements touching fixed dofs"),
+    ("database", "a database name in data/databases, or a path to an .xlsx"),
+    ("formulation", "objective and constraints, see Quantities"),
+    ("settings", "common, advanced and vae, see Settings"),
+]
+
+
+def _value(v):
+    return "None" if v is None else repr(v) if isinstance(v, str) else str(v)
+
+
+def generate():
+    sys.path.insert(0, ROOT)
+    from lsr_mmto.problem import selections as S
+    from lsr_mmto.physics.structural import QUANTITIES
+    from lsr_mmto.problem.project import BC_KINDS, DEFAULT_SETTINGS, SETTING_DOCS, VAE_PARAMS
+    from lsr_mmto.materials.databases import ATTRIBUTES, UNIT_SYSTEMS
+
+    out = ["# Project reference", "",
+           "Generated from the code by `python docs/make_reference.py`; do not edit by hand.", "",
+           "A project is an LSR MMTO project file (.mmto): the layout of a PyTO-AD project file, with an "
+           "`mmto` section, which holds the whole "
+           "problem. Supports and loads picked in the PyTO-AD GUI become selections (`gui_support1`, "
+           "`gui_load1`, ...) and boundary conditions of the mmto section when the project is loaded, "
+           "and are removed from the GUI's own section; the rest of what the GUI saved is kept.", "",
+           "## The mmto section", "", "| key | holds |", "|---|---|"]
+    out += [f"| `{k}` | {v} |" for k, v in SECTIONS]
+
+    out += ["", "## Selection types", "",
+            "Lengths are numbers in model units, or `\"<k>h\"` for k times the largest element size. "
+            "`pad` widens every bound; `\"auto\"` is half an element for nodes and 0 for element centres "
+            "(faces and planes always half an element).", "",
+            "| type | fields | selects |", "|---|---|---|"]
+    for name, cls in sorted((n, c) for n, c in S._TYPES.items() if n == c.TYPE):   # not old names (place)
+        fields = "parts" if cls in (S.Union, S.Intersect, S.Difference) else ", ".join(cls.fields)
+        doc = " ".join((cls.__doc__ or "").split()).replace("|", "\\|")
+        out.append(f"| `{name}` | {fields} | {doc} |")
+
+    out += ["", "## Boundary conditions", "", "| kind | means |", "|---|---|"]
+    out += [f"| `{k}` | {v.doc} |" for k, v in BC_KINDS.items()]
+
+    out += ["", "## Material database attributes", "",
+            "A database is an .xlsx file: attribute names in row 1, units in row 2, then one row per "
+            "material with its name in column A. Every column must be one of these attributes (or one "
+            "of its other names); the Materials panel of the app shows the errors and warnings of a file.", "",
+            "| attribute | other names | meaning | allowed range | units |", "|---|---|---|---|---|"]
+    out += [f"| `{a.name}` | {', '.join(a.aliases)} | {a.doc} | {a.range_text()} | "
+            f"{'none (may be blank)' if a.measures == 'ratio' else ', '.join(a.units)} |"
+            for a in ATTRIBUTES.values()]
+    out += ["", "An optional sheet `Display` gives each material the colour and the label it is shown with: "
+            "columns Material, Color (#rrggbb) and Label, one row per material, matched by name. An empty "
+            "Color is the default colour, an empty Label the material's name. Two materials with the same "
+            "colour or the same label are an error. The run record stores both."]
+
+    kinds = ("length", "force", "stress", "density", "mass", "cost per mass")
+    out += ["", "## Unit systems", "",
+            "A project declares the units its numbers are in, as the PyTO-AD GUI does (`settings.unit_system` "
+            "in the project file; `p.units` in code). Nothing is converted: forces, lengths, bounds and the "
+            "database are used as written. A database column in other units is reported before a run, with "
+            "what it does to the results. `none` (no unit system) checks nothing.", "",
+            "| system | " + " | ".join(kinds) + " |", "|---|" + "---|" * len(kinds)]
+    out += [f"| `{k}` | " + " | ".join(v[q] for q in kinds) + " |" for k, v in UNIT_SYSTEMS.items()]
+
+    out += ["", "## Quantities", "",
+            "An objective or a constraint is one quantity, e.g. `Mass()` or "
+            "`MaterialVolumeFraction(2, tau=0.5)`. A constraint is value / bound - 1 <= 0.", "",
+            "| name | objective | constraint | needs columns | value |", "|---|---|---|---|---|"]
+    for q in QUANTITIES:
+        out.append(f"| `{q.name}` | {'yes' if q.objective else ''} | {'yes' if q.constraint else ''} | "
+                   f"{', '.join(q.needs)} | {q.doc} |")
+
+    out += ["", "## Settings", "",
+            "Every setting of `run_topopt`, under its own name. A new project starts from these values "
+            "(the settings of the paper's examples); a file missing some is completed from them, and "
+            "the run says which. The VAE's own settings start from the database's known values.", ""]
+    for section in ("common", "advanced", "vae"):
+        out += [f"### {section}", "", "| setting | default | meaning |", "|---|---|---|"]
+        for k, v in DEFAULT_SETTINGS[section].items():
+            out.append(f"| `{k}` | {_value(v)} | {SETTING_DOCS[k]} |")
+        if section == "vae":
+            out += [f"| `{k}` | from the database | {SETTING_DOCS[k]} |" for k in VAE_PARAMS]
+        out.append("")
+    return "\n".join(out)
+
+
+if __name__ == "__main__":
+    os.makedirs(os.path.dirname(PAGE), exist_ok=True)
+    with open(PAGE, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(generate())
+    print(f"wrote {PAGE}")

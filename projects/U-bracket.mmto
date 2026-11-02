@@ -1,5 +1,5 @@
 {
-  "stl_file_path": "../0-Common/Models/UBracket/UBracket.STL",
+  "stl_file_path": "../data/models/UBracket/UBracket.STL",
   "mmto": {
     "schema_version": 1,
     "name": "U-bracket",

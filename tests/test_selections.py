@@ -15,8 +15,8 @@ import tempfile
 import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(ROOT, "0-Common"))
-import selections as S  # noqa: E402
+sys.path.insert(0, ROOT)
+from lsr_mmto.problem import selections as S  # noqa: E402
 
 
 class GridMesh:

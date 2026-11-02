@@ -99,7 +99,7 @@ def place_outline(selection, mesh):
     """A solid showing a selection's shape (drawn as its edges), or None for one with no shape of its own (picked
     faces, rows, a node, a list of numbers). selection has every selection(name) in it resolved."""
     import pyvista as pv
-    import selections as S  # type: ignore
+    from lsr_mmto.problem import selections as S
     xyz = np.asarray(mesh.node_xyz, dtype=float)
     lo, hi = xyz.min(axis=0), xyz.max(axis=0)
     h = 0.5 * np.asarray(mesh.elem_size, dtype=float)
@@ -278,7 +278,7 @@ class ProjectFolderDialog(QtWidgets.QDialog):
         self.where.setText(f"The project folder: {self.folder()}" if self.name.text().strip() else "")
 
     def problems(self):
-        from project_folder import folder_problem, name_problem  # type: ignore
+        from lsr_mmto.problem.project_folder import folder_problem, name_problem
         out = []
         bad_name = name_problem(self.name.text())                   # before joining: on Windows "a:b" joined
         if bad_name:                                                # to a folder is a path on drive A:
@@ -650,7 +650,7 @@ class MMTOWindow(MainWindow):
     def _location(self):
         """Where a new project folder goes by default: beside the project open now (in its own folder),
         or else the Documents folder."""
-        from project_folder import has_own_folder  # type: ignore
+        from lsr_mmto.problem.project_folder import has_own_folder
         if self.project is not None and self.path and not self.template:
             here = os.path.dirname(self.path)
             return os.path.dirname(here) if has_own_folder(self.project) else here
@@ -659,7 +659,7 @@ class MMTOWindow(MainWindow):
 
     def own_folder(self):
         """True when the project open is saved in a project folder of its own (not an example)."""
-        from project_folder import has_own_folder  # type: ignore
+        from lsr_mmto.problem.project_folder import has_own_folder
         return self.project is not None and self.path is not None and not self.template and \
             has_own_folder(self.project)
 
@@ -676,7 +676,7 @@ class MMTOWindow(MainWindow):
         """A project in a new folder of its own, every setting at its default: the folder is made, the STL
         copied into it and the project saved there. With no folder given, a dialog asks for the name,
         the location and the STL."""
-        import project_folder  # type: ignore
+        from lsr_mmto.problem import project_folder
         if self.run_going() or not self._ask_to_save():
             return False
         if folder is None or stl is None:
@@ -693,7 +693,7 @@ class MMTOWindow(MainWindow):
         return True
 
     def open_project(self, path=None):
-        from project import Project  # type: ignore
+        from lsr_mmto.problem.project import Project
         if self.run_going() or not self._ask_to_save():
             return False
         if path is None:
@@ -726,7 +726,7 @@ class MMTOWindow(MainWindow):
         """Save as a new project: with no path, a dialog asks for a name and a location and makes the
         project folder there. Everything the project uses (the STL, the database and its network) is
         copied into the folder, and the project takes the new name. Results stay with the old project."""
-        import project_folder  # type: ignore
+        from lsr_mmto.problem import project_folder
         if self.project is None:
             return False
         if path is None:
@@ -942,7 +942,7 @@ class MMTOWindow(MainWindow):
     def apply_panel(self, panel):
         lines = panel.apply(self.project)
         if lines and isinstance(panel, MaterialsPanel) and self.own_folder():
-            from project_folder import bring_in_database  # type: ignore
+            from lsr_mmto.problem.project_folder import bring_in_database
             try:
                 copied = bring_in_database(self.project)
             except OSError as e:
@@ -1100,7 +1100,7 @@ class MMTOWindow(MainWindow):
 
     def preview_mesh(self):
         """The mesh a run of the project uses, built once and kept until the STL or the dofs change."""
-        from pyto_project import make_mesh  # type: ignore
+        from lsr_mmto.problem.mesh import make_mesh
         p = self.project
         key = (os.path.abspath(p.stl_path()), p.n_dof, p.single_layer)
         if key != self._mesh_key:
@@ -1249,7 +1249,7 @@ class MMTOWindow(MainWindow):
     def draw_outline(self, name, selection, colour):
         """The selection's shape as edges, always in OUTLINE_COLOUR, apart from every colour the nodes use
         (place_outline); nothing for a place without one. colour is the nodes', kept for the call."""
-        import selections as S  # type: ignore
+        from lsr_mmto.problem import selections as S
         self.plotter.remove_actor(name, reset_camera=False)
         shape = place_outline(S.resolved(selection, self.project.selections), self.preview_mesh())
         if shape is not None:
@@ -1278,7 +1278,7 @@ class MMTOWindow(MainWindow):
         """Every region on the run's mesh: supports blue, loads red with an arrow each, other regions
         orange, keep-solid elements grey. Returns (report lines, {region: node count})."""
         import pyvista as pv
-        from project import BC_KINDS  # type: ignore
+        from lsr_mmto.problem.project import BC_KINDS
         p, mesh = self.project, self.preview_mesh()
         self.clear_preview()
         xyz, centres = np.asarray(mesh.node_xyz, dtype=float), np.asarray(mesh.elem_centers, dtype=float)
@@ -1350,7 +1350,7 @@ class MMTOWindow(MainWindow):
         if after and after != before:
             self.project.stl = os.path.abspath(after)
             if self.own_folder():                                   # the new part goes into the project folder
-                from project_folder import PART, copy_in  # type: ignore
+                from lsr_mmto.problem.project_folder import PART, copy_in
                 self.project.stl = copy_in(self.project.stl, self.project.base_dir, PART)
             self._design = None                                     # a design of the old part no longer fits
             self.view = "setup"

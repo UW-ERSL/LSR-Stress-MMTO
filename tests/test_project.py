@@ -16,15 +16,12 @@ import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from utils import project_paths  # noqa: E402
 
-project_paths.bootstrap()
+from lsr_mmto.problem import selections as S  # noqa: E402
+from lsr_mmto.problem.project import Project, to_params_form  # noqa: E402
+from lsr_mmto.pyto_ad import TO_QOI  # noqa: E402
 
-import selections as S  # noqa: E402  # type: ignore
-from project import Project, to_params_form  # noqa: E402  # type: ignore
-from PyTOImports import TO_QOI  # noqa: E402  # type: ignore
-
-UBRACKET = os.path.join(ROOT, "0-Common", "Models", "UBracket")
+UBRACKET = os.path.join(ROOT, "data", "models", "UBracket")
 N_DOF = 3000
 
 
@@ -160,7 +157,7 @@ def test_free_rigid_body_motion_is_refused():
 
 def test_build_gui_project_matches_problem_from_pyto():
     """A project made in the PyTO-AD GUI gives exactly the boundary conditions it gave before."""
-    from pyto_project import problem_from_pyto  # type: ignore
+    from lsr_mmto.problem.mesh import problem_from_pyto
     path = os.path.join(UBRACKET, "UBracket.pyto")
     mesh0, _, bc0, _ = problem_from_pyto(path, nDOFDesired=N_DOF, single_layer=True)
     p = Project.load(path)
@@ -238,8 +235,8 @@ def test_gui_picks_become_the_project():
 
 def test_gui_picks_of_every_kind_match_the_gui():
     """Faces, picked nodes and boxes, alone and together, in both GUI layouts: the same
-    fixed dofs and force vector as the GUI's own rules (pyto_project.gui_bcs_on_mesh)."""
-    from pyto_project import gui_bcs_on_mesh, make_mesh, read_project  # type: ignore
+    fixed dofs and force vector as the GUI's own rules (mesh.gui_bcs_on_mesh)."""
+    from lsr_mmto.problem.mesh import gui_bcs_on_mesh, make_mesh, read_project
     box = json.load(open(os.path.join(UBRACKET, "UBracket.pyto")))["structuralBC"]["point_supports"][0]["regions"]
     new = {"fixed_faces_indices": [0, 1, 2], "fixed_faces_z_indices": [5],
            "load_faces_indices": [[8, 9]], "load_forces": [[0.0, -2.0, 0.0]],
@@ -293,7 +290,7 @@ def test_gui_sections_survive_a_save():
 
 def test_schema_upgrades():
     """A file of an older schema is brought up to date on loading; a newer one is refused."""
-    import project as P  # type: ignore
+    from lsr_mmto.problem import project as P
     with tempfile.TemporaryDirectory() as d:
         p = coded_ubracket()
         path = os.path.join(d, "u.mmto")
@@ -325,7 +322,7 @@ def test_schema_upgrades():
 
 def test_bc_kinds():
     """Every kind of boundary condition is a support or a load, and is documented."""
-    from project import BC_KINDS  # type: ignore
+    from lsr_mmto.problem.project import BC_KINDS
     for name, kind in BC_KINDS.items():
         assert kind.role in ("support", "load") and kind.doc, name
 

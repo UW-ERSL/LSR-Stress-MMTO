@@ -86,7 +86,7 @@ def latent_side_by_side(runs, max_points=20000):
     elements sit compares directly."""
     import numpy as np
     from matplotlib.figure import Figure
-    from utils import figures  # type: ignore
+    from lsr_mmto.results import figures
     names, rs = list(runs), list(runs.values())
     shared = same_network(*rs)
     dims = {np.asarray(r.z_real).shape[1] for r in rs}
@@ -126,7 +126,7 @@ class CompareWindow(QtWidgets.QDialog):
 
     def __init__(self, parent, runs, on_close):
         from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
-        from utils import compare  # type: ignore
+        from lsr_mmto.results import compare
         super().__init__(parent)
         self.setWindowFlags(QtCore.Qt.Window)
         names = list(runs)
@@ -237,7 +237,7 @@ class ResultsWindow(QtWidgets.QDialog):
     # ------------------------------------------------------------------ the list
     def refresh(self):
         """The list again: this project's runs, newest first, then the other results opened."""
-        from project_folder import is_run, run_facts, runs  # type: ignore
+        from lsr_mmto.problem.project_folder import is_run, run_facts, runs
         keep = self.current
         self.others = [f for f in self.others if is_run(f)]
         self.list.blockSignals(True)
@@ -297,7 +297,7 @@ class ResultsWindow(QtWidgets.QDialog):
         return self.add_other(folder)
 
     def add_other(self, folder):
-        from project_folder import is_run  # type: ignore
+        from lsr_mmto.problem.project_folder import is_run
         if not is_run(folder):
             QtWidgets.QMessageBox.warning(self, "Open other results", f"{folder} holds no run: a run's folder "
                                                                       f"holds run_data.npz.")
@@ -311,7 +311,7 @@ class ResultsWindow(QtWidgets.QDialog):
 
     # ------------------------------------------------------------------ one run
     def record(self, folder):
-        from utils import records  # type: ignore
+        from lsr_mmto.results import records
         if folder not in self.records:
             self.records[folder] = records.load(os.path.join(folder, "run_data"))
         return self.records[folder]
@@ -363,7 +363,7 @@ class ResultsWindow(QtWidgets.QDialog):
 
     # ------------------------------------------------------------------ STL
     def export_stl(self):
-        """The run shown, as smooth STL files in its folder (utils/stl_export.py), in the background."""
+        """The run shown, as smooth STL files in its folder (lsr_mmto/results/stl_export.py), in the background."""
         import threading
         if self.current is None or self.current in self.others or self.exporting:
             return False
@@ -377,7 +377,7 @@ class ResultsWindow(QtWidgets.QDialog):
         self.status.setText("Exporting STL: smoothing the design and building the surfaces...")
 
         def work():
-            from utils import stl_export  # type: ignore
+            from lsr_mmto.results import stl_export
             try:
                 self.exported.emit(folder, stl_export.export(run, mesh, folder), "")
             except Exception as e:                                  # noqa: BLE001
@@ -477,7 +477,7 @@ class ResultsWindow(QtWidgets.QDialog):
         super().closeEvent(event)
 
     def _name(self, folder):
-        from project_folder import run_facts  # type: ignore
+        from lsr_mmto.problem.project_folder import run_facts
         when = run_facts(folder)[0]
         return (OTHER + when) if folder in self.others else when
 

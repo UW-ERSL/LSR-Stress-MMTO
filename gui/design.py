@@ -132,7 +132,7 @@ class MeshError(RuntimeError):
 
 def mesh_of(window, project):
     """The mesh a run of project uses: the window's own when it is the same one, else built once."""
-    from pyto_project import make_mesh  # type: ignore
+    from lsr_mmto.problem.mesh import make_mesh
     key = (os.path.abspath(project.stl_path()), project.n_dof, project.single_layer)
     if key == getattr(window, "_mesh_key", None) and window._mesh is not None:
         return window._mesh
@@ -144,8 +144,8 @@ def mesh_of(window, project):
 def run_mesh(window, folder, run):
     """The mesh a saved run was made on, rebuilt from the copy of the project saved with it (the
     window's own mesh when it is the same one). MeshError when it cannot match the run."""
-    from project import Project  # type: ignore
-    from project_folder import run_project_file  # type: ignore
+    from lsr_mmto.problem.project import Project
+    from lsr_mmto.problem.project_folder import run_project_file
     path = run_project_file(folder)
     if path is None:
         raise MeshError("this run has no copy of its project beside it, so its part is not known")

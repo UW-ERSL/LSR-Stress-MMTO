@@ -47,7 +47,7 @@ EPOCH = re.compile(r"^(?:\[(?:STD|SAM)\] )?Epoch (\d+):")   # what the network's
 
 def results_folder(project):
     """The folder for the next run's results (project_folder.new_run_folder)."""
-    from project_folder import new_run_folder  # type: ignore
+    from lsr_mmto.problem.project_folder import new_run_folder
     return new_run_folder(project)
 
 
@@ -62,7 +62,7 @@ def open_folder(path):
 
 def ask_delete_run(parent, folder):
     """A run's folder deleted after a yes; True when it was."""
-    from project_folder import delete_run, run_facts  # type: ignore
+    from lsr_mmto.problem.project_folder import delete_run, run_facts
     when = run_facts(folder)[0]
     answer = QtWidgets.QMessageBox.question(
         parent, "Delete this run", f"Delete the run of {when}? Its folder, with everything in it, is removed. "
@@ -81,7 +81,7 @@ def ask_delete_run(parent, folder):
 def result_tabs(tabs, run, keep=0):
     """Convergence, Latent space and Summary tabs of a saved run, after the first keep tabs."""
     from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
-    from utils import figures, tables  # type: ignore
+    from lsr_mmto.results import figures, tables
     while tabs.count() > keep:
         tabs.removeTab(keep)
     for title, make in (("Convergence", lambda: figures.convergence(run)),
@@ -252,8 +252,8 @@ class RunWindow(StructuralTopOptWindow):
 
     def _run_optimization(self, plan, fe_solver, spec):
         """In the worker thread (PyTO-AD's run_optimization sends what is printed to the log)."""
-        from materialEncoder import NetworkRunCancelled, TrainingStopped  # type: ignore
-        from project import run  # type: ignore
+        from lsr_mmto.materials.encoder import NetworkRunCancelled, TrainingStopped
+        from lsr_mmto.problem.project import run
         success, error = False, ""
         self.stopped_training, self.network_cancelled = False, False
         try:
@@ -362,7 +362,7 @@ class RunWindow(StructuralTopOptWindow):
     # ------------------------------------------------------------------ the live latent space
     def _start_live_latent(self):
         """A run starts: the last run's result tabs go, and the live latent space comes in beside Progress."""
-        from databases import material_display  # type: ignore
+        from lsr_mmto.materials.databases import material_display
         while self.tabs.count() > 2:
             self.tabs.removeTab(2)
         self.latent_order, self.latent_pca, self.latent_limits, self.latent_pending = None, None, None, None
@@ -396,7 +396,7 @@ class RunWindow(StructuralTopOptWindow):
         Above three latent dimensions the projection is fitted once, on the real materials, and the axes
         only ever widen, so the picture does not jump; a 3D view keeps the angle it was turned to, and
         is not redrawn while the mouse is turning it."""
-        from utils import figures  # type: ignore
+        from lsr_mmto.results import figures
         if self.tabs.indexOf(self.latent_canvas) < 0:
             return
         if self.latent_dragging:
@@ -426,7 +426,7 @@ class RunWindow(StructuralTopOptWindow):
         self.latent_canvas.draw_idle()
 
     def _material_colours(self):
-        from databases import material_display  # type: ignore
+        from lsr_mmto.materials.databases import material_display
         try:
             colours, _ = material_display(self.project.database_paths()[0])
             return [c or "#808080" for c in colours]
@@ -443,7 +443,7 @@ class RunWindow(StructuralTopOptWindow):
         w = self.window
         cancelled = getattr(self, "network_cancelled", False)
         if getattr(self, "stopped_training", False) or cancelled:   # nothing to keep: no design
-            from project_folder import is_run  # type: ignore
+            from lsr_mmto.problem.project_folder import is_run
             if self.save_dir and os.path.isdir(self.save_dir) and not is_run(self.save_dir):
                 import shutil
                 shutil.rmtree(self.save_dir, ignore_errors=True)
@@ -475,7 +475,7 @@ class RunWindow(StructuralTopOptWindow):
 
     def show_results(self, save_dir):
         """The final design on the part, and tabs for the convergence, the latent space, the summary."""
-        from utils import records  # type: ignore
+        from lsr_mmto.results import records
         try:
             run = records.load(os.path.join(save_dir, "run_data"))
         except Exception as e:                                      # noqa: BLE001

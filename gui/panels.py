@@ -101,7 +101,7 @@ def ok_cancel(dialog, layout):
 
 
 def _database_errors(project):
-    from databases import check_database  # type: ignore
+    from lsr_mmto.materials.databases import check_database
     xlsx, _ = project.database_paths()
     return check_database(xlsx)[0]
 
@@ -145,7 +145,7 @@ class MaterialsPanel(QtWidgets.QDialog):
     settings to the new one's (its trained values, or the recommended latent dimension)."""
 
     def __init__(self, parent, project):
-        from databases import DATABASE_VAE  # type: ignore
+        from lsr_mmto.materials.databases import DATABASE_VAE
         super().__init__(parent)
         self.setWindowTitle("Materials")
         self.resize(820, 520)
@@ -191,7 +191,7 @@ class MaterialsPanel(QtWidgets.QDialog):
             self._refresh()
 
     def _browse(self):
-        from databases import DATABASE_DIR  # type: ignore
+        from lsr_mmto.materials.databases import DATABASE_DIR
         from .pyto_ad import FILE_DIALOG_OPTIONS
         path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Material database", DATABASE_DIR,
                                                         "Excel files (*.xlsx)", options=FILE_DIALOG_OPTIONS)
@@ -225,7 +225,7 @@ class MaterialsPanel(QtWidgets.QDialog):
     def edit_database(self):
         """The database in the editor: one of the project's own is changed in place; one that comes with
         LSR MMTO is saved as a copy in the project's folder, which the project then uses."""
-        from databases import in_shipped_folder  # type: ignore
+        from lsr_mmto.materials.databases import in_shipped_folder
         from .database_editor import DatabaseEditor
         xlsx, error = database_choice(self.project)
         if error:
@@ -251,7 +251,7 @@ class MaterialsPanel(QtWidgets.QDialog):
 
     def set_database(self, path):
         """A database by its file: a shipped one by name, any other by its path relative to the project."""
-        from databases import DATABASE_DIR, DATABASE_VAE  # type: ignore
+        from lsr_mmto.materials.databases import DATABASE_DIR, DATABASE_VAE
         stem = os.path.splitext(os.path.basename(path))[0]
         if stem in DATABASE_VAE and os.path.samefile(os.path.dirname(os.path.abspath(path)),
                                                      os.path.abspath(DATABASE_DIR)):
@@ -277,7 +277,7 @@ class MaterialsPanel(QtWidgets.QDialog):
 
     def _refresh(self):
         """Read the database again: the table, the check, the recommended latent dimension."""
-        from databases import check_database, database_table, latent_dim_breakdown, material_display  # type: ignore
+        from lsr_mmto.materials.databases import check_database, database_table, latent_dim_breakdown, material_display
         self.table.clear()
         self.table.setRowCount(0)
         self.table.setColumnCount(0)
@@ -295,7 +295,7 @@ class MaterialsPanel(QtWidgets.QDialog):
             lines.append(f"The table could not be read: {e}")
             self.report.setText("\n".join(lines))
             return
-        from databases import SHOWN  # type: ignore
+        from lsr_mmto.materials.databases import SHOWN
         heads = ["Label", "Material"] + [SHOWN.get(a, a) + ("" if u is None else f" [{u}]")
                                          for a, u in zip(attributes, units)]
         self.table.setColumnCount(len(heads))
@@ -322,7 +322,7 @@ class MaterialsPanel(QtWidgets.QDialog):
 
     def apply(self, project):
         """The database, and on a change the VAE settings of the new one. Returns lines saying what changed."""
-        from project import VAE_PARAMS  # type: ignore
+        from lsr_mmto.problem.project import VAE_PARAMS
         if self.project.database == self.original:
             return []
         q = self.project.copy()
@@ -357,7 +357,7 @@ QUANTITY_HELP = {
 
 def bound_unit(name, units):
     """The unit a bound on the quantity is in, in the project's unit system ('' when none declared)."""
-    from databases import UNIT_SYSTEMS  # type: ignore
+    from lsr_mmto.materials.databases import UNIT_SYSTEMS
     if name in ("VolumeFraction", "MaterialVolumeFraction"):
         return "fraction of the design domain"
     if name == "FailureFactorPNorm":
@@ -371,7 +371,7 @@ def bound_unit(name, units):
 
 def database_columns(project):
     """The database's columns, the materials' labels and colours; None for each it cannot read."""
-    from databases import check_database, database_attributes, material_display  # type: ignore
+    from lsr_mmto.materials.databases import check_database, database_attributes, material_display
     xlsx, error = database_choice(project)
     if error or check_database(xlsx)[0]:
         return None, None, None
@@ -384,7 +384,7 @@ class FormulationPanel(QtWidgets.QDialog):
     cannot give is greyed out with the reason."""
 
     def __init__(self, parent, project):
-        from AutodiffPureStructural import QUANTITIES  # type: ignore
+        from lsr_mmto.physics.structural import QUANTITIES
         super().__init__(parent)
         self.setWindowTitle("Formulation")
         self.resize(760, 420)
@@ -428,8 +428,8 @@ class FormulationPanel(QtWidgets.QDialog):
 
     def _stored_tau(self):
         """The tau of the project's material volume fraction constraints (the first, if they differ)."""
-        from AutodiffPureStructural import DEFAULT_TAU  # type: ignore
-        from project import parse_expression  # type: ignore
+        from lsr_mmto.physics.structural import DEFAULT_TAU
+        from lsr_mmto.problem.project import parse_expression
         for c in self.original.get("constraints", []):
             try:
                 name, _, kwargs = parse_expression(c.get("expression"))
@@ -472,7 +472,7 @@ class FormulationPanel(QtWidgets.QDialog):
         return combo
 
     def _set_quantity(self, combo, expression):
-        from project import parse_expression  # type: ignore
+        from lsr_mmto.problem.project import parse_expression
         if not expression:
             combo.setCurrentIndex(-1)
             return
@@ -484,7 +484,7 @@ class FormulationPanel(QtWidgets.QDialog):
 
     def add_row(self, constraint):
         """A constraint row: quantity, material (MaterialVolumeFraction only), <=, bound, unit."""
-        from project import parse_expression  # type: ignore
+        from lsr_mmto.problem.project import parse_expression
         row = QtWidgets.QHBoxLayout()
         widgets = {"quantity": self._quantity_combo("constraint"), "material": QtWidgets.QComboBox(),
                    "bound": NumberEdit(0.0), "unit": QtWidgets.QLabel(),
@@ -586,7 +586,7 @@ class FormulationPanel(QtWidgets.QDialog):
 
     @staticmethod
     def _same_expression(a, b):
-        from project import parse_expression  # type: ignore
+        from lsr_mmto.problem.project import parse_expression
         try:
             return parse_expression(a) == parse_expression(b)
         except ValueError:
@@ -602,7 +602,7 @@ class FormulationPanel(QtWidgets.QDialog):
 
 def formulation_lines(f, project):
     """The formulation in words, for the message panel: Minimize Stress (p-norm); Mass <= 0.4 t; ..."""
-    from project import parse_expression  # type: ignore
+    from lsr_mmto.problem.project import parse_expression
     _, labels, _ = database_columns(project)
 
     def words(expression):
@@ -744,7 +744,7 @@ def shown_setting(key, value):
 
 def setting_choices():
     """The settings with a fixed list of values."""
-    from MainPureStructural import BetaScheduleScheme, Z0InitMethod  # type: ignore
+    from lsr_mmto.optimize.run import BetaScheduleScheme, Z0InitMethod
     return {"beta_schedule_scheme": list(BetaScheduleScheme.__members__),
             "z0_init_method": list(Z0InitMethod.__members__)}
 
@@ -936,8 +936,8 @@ class SettingsPanel(QtWidgets.QDialog):
     def _vae_sync(self, toggled):
         """With a trained network in use, the VAE settings are its own and greyed out: a shipped
         network's from DATABASE_VAE, another's latent dimension and width read from the file."""
-        from databases import DATABASE_VAE  # type: ignore
-        from project import network_shape  # type: ignore
+        from lsr_mmto.materials.databases import DATABASE_VAE
+        from lsr_mmto.problem.project import network_shape
         use = self.rows[("vae", "use_pretrained_vae")][0]
         if not self.database_ok:
             self._vae_refresh()

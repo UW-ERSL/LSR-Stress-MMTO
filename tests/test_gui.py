@@ -30,9 +30,6 @@ if sys.platform.startswith("win"):                         # off-screen Qt on Wi
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from utils import project_paths  # noqa: E402
-
-project_paths.bootstrap()
 
 from PyQt5 import QtCore, QtGui, QtWidgets  # noqa: E402
 
@@ -48,7 +45,7 @@ def _quiet(kind, context, message):
 QtCore.qInstallMessageHandler(_quiet)
 
 from gui import main_window as G  # noqa: E402
-from project import Project  # noqa: E402  # type: ignore
+from lsr_mmto.problem.project import Project  # noqa: E402
 
 PROJECTS = os.path.join(ROOT, "projects")
 NAMES = ("Airplane bracket", "L-bracket", "U-bracket", "beam", "rectangular beam")
@@ -110,7 +107,7 @@ def test_open_and_save_unchanged():
 
 def test_only_mmto_projects_open():
     w = G.MMTOWindow()
-    pyto = os.path.join(ROOT, "0-Common", "Models", "UBracket", "UBracket.pyto")
+    pyto = os.path.join(ROOT, "data", "models", "UBracket", "UBracket.pyto")
     with answers(), scratch() as d:
         assert not w.open_project(pyto)
         assert "is not an LSR MMTO project (.mmto)" in G.mmto_file_error(pyto)
@@ -123,7 +120,7 @@ def test_only_mmto_projects_open():
 def test_new_save_load():
     """New makes a project folder with the STL copied in, saved at once; Save As copies everything into
     another folder and takes the new name."""
-    stl = os.path.join(ROOT, "0-Common", "Models", "LBracket_BM1", "LBracket_BM1.STL")
+    stl = os.path.join(ROOT, "data", "models", "LBracket_BM1", "LBracket_BM1.STL")
     w = G.MMTOWindow()
     with scratch() as d:
         folder = os.path.join(d, "Bracket study")
@@ -240,7 +237,7 @@ def test_cancel_changes_nothing():
 
 
 def test_settings_panel_covers_every_setting():
-    from project import DEFAULT_SETTINGS, VAE_PARAMS  # type: ignore
+    from lsr_mmto.problem.project import DEFAULT_SETTINGS, VAE_PARAMS
     keys = panels.all_setting_keys()
     want = {(s, k) for s, v in DEFAULT_SETTINGS.items() for k in v} | {("vae", k) for k in VAE_PARAMS} | \
         {("mesh", "n_dof"), ("mesh", "single_layer")}
@@ -329,7 +326,7 @@ def test_formulation_panel():
 
 
 def test_materials_panel():
-    from databases import DATABASE_DIR  # type: ignore
+    from lsr_mmto.materials.databases import DATABASE_DIR
     with scratch() as d:
         w = opened("L-bracket", d)
         m = panels.MaterialsPanel(w, w.project)
@@ -356,7 +353,7 @@ def test_database_editor():
     the headers, bad cells marked and Save off until none; a block pasted from Excel; always saved in the
     project's folder (no folder to choose); a shipped database saved as a copy; a network set aside when
     the numbers change, kept when only a colour does."""
-    from databases import DATABASE_DIR, check_database, database_table, material_display  # type: ignore
+    from lsr_mmto.materials.databases import DATABASE_DIR, check_database, database_table, material_display
     from gui import database_editor as DE
 
     def editing(m, action, fill):
@@ -474,7 +471,7 @@ def test_error_in_the_app_keeps_it_running():
 def test_vae_tab():
     """With a trained network in use the VAE settings are its own and greyed out; the tab says which
     network the database has and shows the VAE checks as you edit. No "?" button on our panels."""
-    from databases import DATABASE_DIR  # type: ignore
+    from lsr_mmto.materials.databases import DATABASE_DIR
     with scratch() as d:
         w = opened("L-bracket", d)
         s = panels.SettingsPanel(w, w.project)
@@ -531,7 +528,7 @@ def test_code_line():
 
 
 def test_region_and_bc_forms():
-    import selections as S  # type: ignore
+    from lsr_mmto.problem import selections as S
     with scratch() as d:
         w = opened("L-bracket", d)
         r = SP.RegionDialog(w, w.project)
@@ -686,7 +683,7 @@ def test_add_flow():
     """Add offers both ways; an empty list says what to do; New shape makes a selection without leaving the
     dialog; a pick takes the list's place and Apply brings the list back with the new entry selected;
     each warning is said once."""
-    import selections as S  # type: ignore
+    from lsr_mmto.problem import selections as S
     with scratch() as d:
         w = opened("L-bracket", d)
         w.show()
@@ -781,7 +778,7 @@ def test_region_preview_clears():
 def test_pages():
     """Forms opened from Supports and loads are pages of its strip, one at a time: Enter by hand, then
     New selection over it; OK goes back one page each time. Combined selections follow their parts by name."""
-    import selections as S  # type: ignore
+    from lsr_mmto.problem import selections as S
     with scratch() as d:
         w = opened("L-bracket", d)
         w.show()
@@ -858,7 +855,7 @@ def test_keep_solid_on_picked_faces():
 def test_outline_one_row_measure():
     """A selection's shape is drawn with its nodes; clicking a row shows only that one; Measure gives the
     distance between two clicks; the mouse lookup never runs while a button is held or one is running."""
-    import selections as S  # type: ignore
+    from lsr_mmto.problem import selections as S
     with scratch() as d:
         w = opened("L-bracket", d)
         w.show()
@@ -930,7 +927,7 @@ def test_run():
         assert r.status.text().startswith("Run finished after 3 iterations"), r.status.text()
         assert os.path.isfile(os.path.join(r.save_dir, "run_data.npz"))
         assert os.path.isfile(os.path.join(r.save_dir, "L-bracket.mmto"))     # what ran, beside it
-        from utils import records
+        from lsr_mmto.results import records
         rec = records.load(os.path.join(r.save_dir, "run_data"))             # each element's material is the
         z, zr = rec.z_solid(), np.asarray(rec.z_real)                         # real one nearest its latent point
         nearest = np.argmin(((z[:, None, :] - zr[None, :, :]) ** 2).sum(-1), axis=1)
@@ -977,8 +974,8 @@ def test_network_warning_continue_or_cancel():
     optimization the window asks, with each property's error; Cancel leaves no run folder behind,
     Continue runs and keeps the errors with the run."""
     import torch
-    from databases import DATABASE_DIR, DATABASE_VAE, VAEParams  # type: ignore
-    from materialEncoder import MaterialEncoder  # type: ignore
+    from lsr_mmto.materials.databases import DATABASE_DIR, DATABASE_VAE, VAEParams
+    from lsr_mmto.materials.encoder import MaterialEncoder
     asked, saved = [], Box.exec_
 
     def click(choice):
@@ -1035,7 +1032,7 @@ def test_export_and_run_script():
         assert path and os.path.isfile(path) and not w.is_dirty()
         assert any("Script written" in line for line in w.message_text.toPlainText().splitlines())
         code = open(path).read()
-        assert 'REPO = r"' in code and "total=[0.0, -4.0, 0.0]" in code and "n_dof=4000" in code
+        assert "from lsr_mmto import Project" in code and "total=[0.0, -4.0, 0.0]" in code and "n_dof=4000" in code
         with open(path, "w") as fh:
             fh.write(code.replace("total=[0.0, -4.0, 0.0]", "total=[0.0, -8.0, 0.0]"))
         assert w.run_script(path)
@@ -1070,7 +1067,7 @@ def test_latent_views():
     from types import SimpleNamespace
     from gui import results as R
     from gui import run as RN
-    from utils import figures
+    from lsr_mmto.results import figures
     rng = np.random.default_rng(0)
     for n_z in (1, 2, 3, 4):
         zr = rng.normal(size=(6, n_z)) * 2
@@ -1114,7 +1111,7 @@ def test_latent_views():
 def test_snap_copy_outline_colour_new_database():
     """Snap rounds Measure and a copied point; a click on the part with a form open copies the point;
     outlines are magenta whatever the place."""
-    import selections as S  # type: ignore
+    from lsr_mmto.problem import selections as S
 
     class Picker:
         def GetCellId(self):
@@ -1282,7 +1279,7 @@ def test_results_compare_delete():
 def test_load_arrow_outside_the_part():
     """A load's arrow is drawn outside the part whichever way it points: pushing in, its tip on the face;
     pulling away, it starts on the face (it used to sit inside the part, hidden)."""
-    import selections as S  # type: ignore
+    from lsr_mmto.problem import selections as S
     with scratch() as d:
         w = opened("L-bracket", d)
         w.project.n_dof, w.project.single_layer = 3000, True
@@ -1305,7 +1302,7 @@ def test_stop_while_training():
     with scratch() as d:
         w = opened("L-bracket", d)
         w.show()
-        from databases import write_database  # type: ignore
+        from lsr_mmto.materials.databases import write_database
         m = panels.MaterialsPanel(w, w.project)
         path = write_database(os.path.join(d, "fresh.xlsx"), ["Youngs_Modulus", "Poissons_Ratio"], ["Pa", "-"],
                               ["Soft", "Mid", "Stiff"], [None] * 3, ["#ff0000", "#00ff00", "#0000ff"],

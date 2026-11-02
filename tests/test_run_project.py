@@ -20,15 +20,12 @@ import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from utils import project_paths  # noqa: E402
 
-project_paths.bootstrap()
+from lsr_mmto.optimize import run as M  # noqa: E402
+from lsr_mmto.optimize import save as run_save  # noqa: E402
+from lsr_mmto.problem.project import (DEFAULT_SETTINGS, NOT_STORED, Project, run_arguments)  # noqa: E402
 
-import MainPureStructural as M  # noqa: E402  # type: ignore
-import run_io  # noqa: E402  # type: ignore
-from project import (DEFAULT_SETTINGS, NOT_STORED, Project, run_arguments)  # noqa: E402  # type: ignore
-
-UBRACKET_PYTO = os.path.join(ROOT, "0-Common", "Models", "UBracket", "UBracket.pyto")
+UBRACKET_PYTO = os.path.join(ROOT, "data", "models", "UBracket", "UBracket.pyto")
 N_DOF, ITERS, SMOOTHING_OFF = 3000, 4, 2
 
 
@@ -61,13 +58,13 @@ def _run(to_problem, args):
         captured["display"] = (kw["material_colors"], kw["material_labels"])
 
     M.init_run_history, M.run_postprocessing = init, post
-    saved = run_io.WRITE_FILES
-    run_io.WRITE_FILES = False
+    saved = run_save.WRITE_FILES
+    run_save.WRITE_FILES = False
     try:
         M.run_topopt(**dict(args, to_problem=to_problem))
     finally:
         M.init_run_history, M.run_postprocessing = real_init, real_post
-        run_io.WRITE_FILES = saved
+        run_save.WRITE_FILES = saved
     return captured
 
 
@@ -147,7 +144,7 @@ def test_record_has_provenance():
     assert units == {"system": "MKS", "length": "m", "force": "N", "stress": "Pa", "density": "kg/m^3",
                      "mass": "kg", "cost per mass": "USD/kg"}, units       # the U-bracket GUI file says MKS
     with tempfile.TemporaryDirectory() as d:                        # not a git checkout
-        assert run_io.git_state(d)["commit"] == "unknown"
+        assert run_save.git_state(d)["commit"] == "unknown"
 
 
 def test_record_rebuilds_the_project():
@@ -155,7 +152,7 @@ def test_record_rebuilds_the_project():
     rec = json.loads(json.dumps(out["config"]["arguments_resolved"]["to_problem"]))
     q = Project.from_record(rec)
     assert q.to_dict() == p.to_dict()
-    from utils import render
+    from lsr_mmto.results import render
 
     class FakeRun:
         config = {"arguments_resolved": {"to_problem": rec}}
@@ -165,8 +162,8 @@ def test_record_rebuilds_the_project():
 def test_record_stores_display():
     """The run takes its colours and labels from the database; the record stores them. A
     record written before that takes them from its database's Display sheet."""
-    from databases import default_colours  # type: ignore
-    from utils import records
+    from lsr_mmto.materials.databases import default_colours
+    from lsr_mmto.results import records
     colours, labels = runs()["project"][1]["display"]
     assert colours == default_colours(6) and labels == list("ABCDEF")     # 6Materials: no Display sheet
     assert runs()["project"][1]["config"]["materials"]["material_labels"] == labels
@@ -175,17 +172,17 @@ def test_record_stores_display():
     fields = {"material_indices": np.arange(n) % 3, "x_bin": np.ones(n), "x_cont": np.ones(n),
               "von_mises": np.zeros(n), "z_elem": np.zeros((n, 2))}
     with tempfile.TemporaryDirectory() as d:
-        saved = run_io.WRITE_FILES
-        run_io.WRITE_FILES = True
+        saved = run_save.WRITE_FILES
+        run_save.WRITE_FILES = True
         try:
-            run_io.save_run_data(d, {}, fields, None, {}, "test", np.zeros((3, 2)), ["#010203", "#040506", "#070809"],
+            run_save.save_run_data(d, {}, fields, None, {}, "test", np.zeros((3, 2)), ["#010203", "#040506", "#070809"],
                                  ["m1", "m2", "m3"], 2, n, 9, material_labels=["one", "two", "three"])
         finally:
-            run_io.WRITE_FILES = saved
+            run_save.WRITE_FILES = saved
         run = records.load(os.path.join(d, "run_data.npz"))
     assert run.material_colors == ["#010203", "#040506", "#070809"] and run.material_labels == ["one", "two", "three"]
 
-    old = records.load(os.path.join(ROOT, "comparison", "reference", "main", "L-bracket", "run_data.npz"))
+    old = records.load(os.path.join(ROOT, "tests", "data", "record_before_display", "run_data.npz"))   # an L-bracket run
     assert old.material_colors == ["#ff0000", "#4b00f1", "#23ff24"], old.material_colors   # BM1's Display sheet
     assert old.material_labels == old.material_names == ["Mat1_Red", "Mat2_Blue", "Mate3_Green"]
 
@@ -198,7 +195,7 @@ def test_vae_training_guards():
     import contextlib
     import io
     import shutil
-    from databases import DATABASE_DIR  # type: ignore
+    from lsr_mmto.materials.databases import DATABASE_DIR
     p = ubracket_project()                                              # 6Materials_AF_3Attr, shipped
     shipped = os.path.join(ROOT, DATABASE_DIR, "6Materials_AF_3Attr")
     with tempfile.TemporaryDirectory() as d:
@@ -231,7 +228,7 @@ def test_vae_training_guards():
         assert open(os.path.join(d, "ggd.nt"), "rb").read() != old      # the poor one is kept, as trained
 
         p.settings["vae"]["use_pretrained_vae"] = True                  # that poor network, read from its file
-        from materialEncoder import NetworkRunCancelled  # type: ignore
+        from lsr_mmto.materials.encoder import NetworkRunCancelled
         asked = []
         args = run_arguments(p, save_dir=d, verbose=False, on_network_error=lambda w: asked.append(w) and False)
         try:
@@ -255,8 +252,8 @@ def test_network_check_leaves_the_encoder_as_it_was():
     import contextlib
     import io
     import torch
-    from databases import DATABASE_DIR, DATABASE_VAE, VAEParams  # type: ignore
-    from materialEncoder import MaterialEncoder  # type: ignore
+    from lsr_mmto.materials.databases import DATABASE_DIR, DATABASE_VAE, VAEParams
+    from lsr_mmto.materials.encoder import MaterialEncoder
     vae = VAEParams()
     for k, v in DATABASE_VAE["BM1_3Mats_2Attr"].items():
         setattr(vae, k, v)
@@ -277,8 +274,8 @@ def test_shipped_networks_are_usable():
     """Every shipped network reproduces its database well within the default warning limit."""
     import contextlib
     import io
-    from databases import DATABASE_DIR, DATABASE_VAE, VAEParams  # type: ignore
-    from materialEncoder import MaterialEncoder  # type: ignore
+    from lsr_mmto.materials.databases import DATABASE_DIR, DATABASE_VAE, VAEParams
+    from lsr_mmto.materials.encoder import MaterialEncoder
     limit = DEFAULT_SETTINGS["vae"]["network_error_warning"]
     for name, settings in DATABASE_VAE.items():
         vae = VAEParams()
@@ -295,8 +292,8 @@ def test_shipped_networks_are_usable():
 def test_old_runs_rebuild():
     """A run made under an old example name, or from a GUI file before projects, gets
     the same mesh as before."""
-    from utils import render
-    from pyto_project import problem_from_pyto  # type: ignore
+    from lsr_mmto.results import render
+    from lsr_mmto.problem.mesh import problem_from_pyto
 
     class Old:
         config, example, descriptor = {}, "UBracket_Stress_FF", "old run"
@@ -321,8 +318,8 @@ def test_training_stop():
     TrainingStopped and saves no network."""
     import shutil
     import torch
-    from databases import DATABASE_DIR, DATABASE_VAE, VAEParams  # type: ignore
-    from materialEncoder import MaterialEncoder, TrainingStopped  # type: ignore
+    from lsr_mmto.materials.databases import DATABASE_DIR, DATABASE_VAE, VAEParams
+    from lsr_mmto.materials.encoder import MaterialEncoder, TrainingStopped
     with tempfile.TemporaryDirectory() as d:
         xlsx = shutil.copy(os.path.join(ROOT, DATABASE_DIR, "BM1_3Mats_2Attr.xlsx"), d)
 

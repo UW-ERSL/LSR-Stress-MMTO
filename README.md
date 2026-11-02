@@ -60,6 +60,12 @@ conda activate lsr-stress-mmto-ad
 pip install -r requirements.txt
 ```
 
+**Install this repository as the package `lsr_mmto`**, so a script in any folder can import it:
+
+```
+pip install --no-deps -e .
+```
+
 **Register it as a notebook kernel:**
 
 ```
@@ -83,7 +89,7 @@ To use a PyTO-AD you already have instead, it must sit next to this folder and b
 | | `main` | `autodiff` |
 |---|---|---|
 | Solver library | PyTO | PyTO-AD only (PyTO is not used) |
-| Gradients | hand-derived adjoints, `SensitivitiesPureStructural.py` | autograd through the forward pass, `AutodiffPureStructural.py` |
+| Gradients | hand-derived adjoints, `SensitivitiesPureStructural.py` | autograd through the forward pass, `lsr_mmto/physics/structural.py` |
 | Environment | `lsr-stress-mmto` | `lsr-stress-mmto-ad` |
 
 Everything else (examples, material databases, VAEs, optimizer settings, schedules) is the same, so a run on either branch can be compared one to one.
@@ -100,8 +106,10 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 | `projects/` | the four examples as project files: geometry, supports, loads, materials, objective, constraints, settings |
 | `docs/project_reference.md` | everything a project file can hold, generated from the code |
 | `docs/extending.md` | how to add a quantity, a selection type, a boundary condition, a setting, a material attribute or a database |
+| `docs/make_reference.py` | writes `docs/project_reference.md` from the code |
 | `setup_environment.py` | installs everything; see Installation |
 | `requirements.txt` | Python packages the setup installs |
+| `pyproject.toml` | makes this folder installable as the package `lsr_mmto` (`pip install -e .`) |
 
 ### `gui/`
 
@@ -114,32 +122,47 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 | `database_editor.py` | making and changing a material database in the app |
 | `assets/` | the app's icon |
 
-### `0-Common/`
+### `lsr_mmto/`
+
+The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad.py` imports PyTO-AD: finite element analysis, filters and the MMA optimizer.
+
+#### `lsr_mmto/problem/`
 
 | File | Purpose |
 |---|---|
-| `Models/` | geometry of the four design domains, as STL |
-| `project.py` | a project: saves and loads it, checks it, builds the problem, runs it |
+| `project.py` | a project: saves and loads it, checks it, builds the problem, runs it (`run(p)`) |
 | `selections.py` | named regions of the mesh that supports, loads and keep-solid regions act on |
-| `pyto_project.py` | meshing, and the supports and loads picked in the PyTO-AD GUI |
-| `databases.py` | the attributes a material database may hold, the check of a database, the colour and label of each material, the VAE settings of each shipped database |
-| `materialEncoder.py` | reads a material database, trains or loads the VAE |
-| `networks.py` | the VAE network |
-| `materialColors.py` | the default colours, for materials the database's Display sheet gives none |
-| `mmto_common.py` | the parameter container shared by the examples |
-| `PyTOImports.py` | imports PyTO-AD: finite element analysis, filters and the MMA optimizer |
+| `project_folder.py` | keeps everything a project uses in its folder |
+| `mesh.py` | meshing, and the supports and loads picked in the PyTO-AD GUI |
 
-### `1-PureStructural/`
+#### `lsr_mmto/materials/`
 
 | File | Purpose |
 |---|---|
-| `MaterialDataPureStructural/` | material databases (`.xlsx`) and trained VAEs (`.nt`) |
-| `MainPureStructural.py` | the optimization driver |
-| `AutodiffPureStructural.py` | the objective and constraints as differentiable functions; autograd gives their gradients |
-| `mmto_utility_functions.py` | filters, stress and mass diagnostics, run bookkeeping |
-| `run_io.py` | saves a finished run to disk |
+| `databases.py` | the attributes a material database may hold, the check of a database, the colour and label of each material, the VAE settings of each shipped database |
+| `encoder.py` | reads a material database, trains or loads the VAE |
+| `networks.py` | the VAE network |
+| `colors.py` | the default colours, for materials the database's Display sheet gives none |
 
-### `utils/`
+#### `lsr_mmto/physics/`
+
+| File | Purpose |
+|---|---|
+| `structural.py` | the objective and constraints as differentiable functions; autograd gives their gradients |
+| `gradcheck.py` | the autodiff gradient against central finite differences |
+
+#### `lsr_mmto/optimize/`
+
+| File | Purpose |
+|---|---|
+| `run.py` | the optimization loop, `run_topopt`; a project runs it through `run(p)` |
+| `parameters.py` | the parameter container shared by the examples |
+| `filters.py` | the density and material filters |
+| `history.py` | what each iteration records and prints: history, log, stress diagnostics |
+| `final_check.py` | the final design analysed three ways, and the run saved |
+| `save.py` | saves a finished run to disk |
+
+#### `lsr_mmto/results/`
 
 | File | Purpose |
 |---|---|
@@ -147,7 +170,13 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 | `figures.py` | design, latent space, convergence, boundary conditions |
 | `tables.py` | run summary and material database tables |
 | `render.py` | 2D panels and 3D voxel renders |
+| `stl_export.py` | a run's design as STL files |
+| `compare.py` | two runs side by side |
 | `display.py` | tables formatted for the notebook |
-| `project_paths.py` | locates the repository and sets up imports |
-| `reference.py` | writes `docs/project_reference.md` |
-| `database.py` | checks a material database, and writes an empty one to fill in |
+
+### `data/`
+
+| File | Purpose |
+|---|---|
+| `databases/` | material databases (`.xlsx`) and trained VAEs (`.nt`) |
+| `models/` | geometry of the design domains, as STL |

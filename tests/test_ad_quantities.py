@@ -19,12 +19,9 @@ import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from utils import project_paths  # noqa: E402
 
-project_paths.bootstrap()
-
-from PyTOImports import TO_QOI  # noqa: E402  # type: ignore
-from utils.gradcheck import _model_from_setup  # noqa: E402
+from lsr_mmto.pyto_ad import TO_QOI  # noqa: E402
+from lsr_mmto.physics.gradcheck import _model_from_setup  # noqa: E402
 
 try:                                        # about a minute: skipped by  pytest -m "not slow"
     import pytest
@@ -33,7 +30,7 @@ except ImportError:                         # run directly, without pytest
     pass
 
 TOL = 1e-5
-STEPS = (1e-3, 1e-4, 1e-5)                # as utils/gradcheck.py; below 1e-5 round-off in the solve takes over
+STEPS = (1e-3, 1e-4, 1e-5)                # as physics/gradcheck.py; below 1e-5 round-off in the solve takes over
 N_DOF = 3000
 
 # (name, objective, constraint): the objective or the constraint is checked
@@ -58,7 +55,7 @@ def _setup():
     """The U-bracket model at a random design, built once."""
     if _SETUP:
         return _SETUP
-    from project import Project, run_arguments  # type: ignore
+    from lsr_mmto.problem.project import Project, run_arguments
 
     args = run_arguments(Project.load(os.path.join(ROOT, "projects", "U-bracket.mmto")), verbose=False)
     args.update(n_dof_desired=N_DOF, maxIterations=1)
@@ -157,7 +154,7 @@ def test_missing_column_is_named():
 
 def test_registry():
     """Names are unique and every to_params form of an entry finds that entry."""
-    from AutodiffPureStructural import QUANTITIES as REGISTRY, find_quantity  # type: ignore
+    from lsr_mmto.physics.structural import QUANTITIES as REGISTRY, find_quantity
     names = [q.name for q in REGISTRY]
     assert len(names) == len(set(names)), names
     material = {"material_id": 0, "tau": 0.5}

@@ -25,11 +25,8 @@ import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from utils import project_paths  # noqa: E402
 
-project_paths.bootstrap()
-
-from project import Project, run  # noqa: E402  # type: ignore
+from lsr_mmto.problem.project import Project, run  # noqa: E402
 
 STORED = os.path.join(ROOT, "tests", "regression.json")
 ITERATIONS = {"L-bracket": 10, "U-bracket": 5}

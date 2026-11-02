@@ -4,7 +4,7 @@
     "angle_unit": "Degree",
     "unit_system": "mmKS"
   },
-  "stl_file_path": "../0-Common/Models/AirplaneBracket/AirplaneBracket.stl",
+  "stl_file_path": "../data/models/AirplaneBracket/AirplaneBracket.stl",
   "mmto": {
     "schema_version": 1,
     "name": "Airplane bracket",
@@ -74,7 +74,7 @@
       },
       "collar": {
         "type": "inside_stl",
-        "path": "../0-Common/Models/AirplaneBracket/AirplaneBracket_NonDesign.stl"
+        "path": "../data/models/AirplaneBracket/AirplaneBracket_NonDesign.stl"
       }
     },
     "bcs": [

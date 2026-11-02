@@ -1,5 +1,5 @@
 {
-  "stl_file_path": "../0-Common/Models/RectangularBeam/RectangularBeam.STL",
+  "stl_file_path": "../data/models/RectangularBeam/RectangularBeam.STL",
   "mmto": {
     "schema_version": 1,
     "name": "rectangular beam",

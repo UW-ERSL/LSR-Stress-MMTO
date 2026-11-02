@@ -78,8 +78,8 @@ def test_run_record_starts_git_without_a_window():
     """A run looks up the code's git commit for its record: with no console window on Windows (started from
     the shortcut, each git call otherwise flashes a black window up)."""
     import subprocess
-    sys.path.insert(0, os.path.join(ROOT, "1-PureStructural"))
-    import run_io
+    sys.path.insert(0, ROOT)
+    from lsr_mmto.optimize import save as run_save
     seen = []
     real = subprocess.run
 
@@ -88,7 +88,7 @@ def test_run_record_starts_git_without_a_window():
         return real(cmd, **kw)
     subprocess.run = run
     try:
-        run_io.git_state(ROOT)
+        run_save.git_state(ROOT)
     finally:
         subprocess.run = real
     assert seen and all(f == getattr(subprocess, "CREATE_NO_WINDOW", 0) for f in seen)

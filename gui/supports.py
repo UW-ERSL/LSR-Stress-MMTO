@@ -70,7 +70,7 @@ HOW = [("Join: in A or in B", "union"), ("Overlap: in both A and B", "intersect"
 
 def combined_parts(selection):
     """(how, A, B) of a union, intersect or difference of two named selections, or None."""
-    import selections as S  # type: ignore
+    from lsr_mmto.problem import selections as S
     d = selection.to_dict()
     parts = d.get("of", [])
     if d["type"] in dict((v, k) for k, v in HOW) and len(parts) == 2 and all(p["type"] in S.LINKS for p in parts):
@@ -103,7 +103,7 @@ FILES = {"path": "STL files (*.stl *.STL)"}
 def selection_types():
     """{type name: class} of the selection types the GUI offers: all but function, which runs a
     Python file when it is evaluated (scripts can still use it)."""
-    import selections as S  # type: ignore
+    from lsr_mmto.problem import selections as S
     return {k: v for k, v in sorted(S._TYPES.items()) if k != "function"}
 
 
@@ -203,7 +203,7 @@ def type_fields(cls):
 
 def used_by(project, name):
     """What uses the region: its supports and loads, and keep solid."""
-    import selections as S  # type: ignore
+    from lsr_mmto.problem import selections as S
     out = [f"{bc_name(bc['kind'])} {i}" for i, bc in enumerate(project.bcs, 1) if bc.get("on") == name]
     out += [f"combined selection {k}" for k, s in project.selections.items() if name in S.names_in(s)]
     return out + (["keep solid"] if name in project.keep_solid_names else [])
@@ -500,7 +500,7 @@ class RegionDialog(QtWidgets.QDialog):
     def from_form(self):
         kind = self.kind()
         if kind == "combined":
-            import selections as S  # type: ignore
+            from lsr_mmto.problem import selections as S
             how, a, b = (self.inputs["how"].currentData(), self.inputs["a"].currentText(),
                          self.inputs["b"].currentText())
             if a == b:
@@ -572,7 +572,7 @@ class RegionDialog(QtWidgets.QDialog):
         elif name != self.old_name and name in self.project.selections:
             out.append(f"there is already a selection named {name}")
         try:
-            import selections as S  # type: ignore
+            from lsr_mmto.problem import selections as S
             selection = self.selection()
             S.resolved(selection, dict(self.project.selections, **{name: selection}), (name,))
         except ValueError as e:
@@ -649,7 +649,7 @@ def bc_values(bc, units=None):
 
 def bc_value(bc, units=None):
     """A support or load's value, short, for the table: x, y, z / 0, -4, 0 N / 75 MPa."""
-    from project import BC_KINDS  # type: ignore
+    from lsr_mmto.problem.project import BC_KINDS
     fields = {name: measures for name, _, measures, _ in BC_KINDS[bc["kind"]].fields} if bc["kind"] in BC_KINDS \
         else {}
     parts = []
@@ -672,7 +672,7 @@ def _clear_label(page, name):
 
 
 def field_unit(measures, units):
-    from databases import UNIT_SYSTEMS  # type: ignore
+    from lsr_mmto.materials.databases import UNIT_SYSTEMS
     if measures is None or units not in UNIT_SYSTEMS:
         return ""
     s = UNIT_SYSTEMS[units]
@@ -683,7 +683,7 @@ class BCDialog(QtWidgets.QDialog):
     """A support or load: its kind, its region, and the kind's values (BCKind.fields)."""
 
     def __init__(self, parent, project, bc=None, preview=None):
-        from project import BC_KINDS  # type: ignore
+        from lsr_mmto.problem.project import BC_KINDS
         super().__init__(parent)
         self.preview = preview
         self.pages = None                                           # the strip's open_page, when docked
@@ -1144,7 +1144,7 @@ class SupportsPanel(QtWidgets.QDialog):
         """Only the support or load clicked, on the part."""
         r = self._selected(self.bcs)
         if r is not None and r < len(self.project.bcs):
-            from project import BC_KINDS  # type: ignore
+            from lsr_mmto.problem.project import BC_KINDS
             bc = self.project.bcs[r]
             colour = SUPPORT_COLOUR if BC_KINDS[bc["kind"]].role == "support" else LOAD_COLOUR
             self._show_one(bc["on"], colour, r)

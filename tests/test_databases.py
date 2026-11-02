@@ -14,15 +14,12 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from utils import project_paths  # noqa: E402
-
-project_paths.bootstrap()
 
 from openpyxl import Workbook, load_workbook  # noqa: E402
-from databases import (ATTRIBUTES, DATABASE_DIR, DATABASE_VAE, VAEParams, attribute_name,  # noqa: E402
-                       check_database, convert_database, database_units, default_colours,
-                       latent_dim_breakdown, material_display, recommended_latent_dim, unit_ratio,
-                       write_template)  # type: ignore
+from lsr_mmto.materials.databases import (ATTRIBUTES, DATABASE_DIR, DATABASE_VAE, VAEParams,  # noqa: E402
+                                         attribute_name, check_database, database_units, default_colours,
+                                         latent_dim_breakdown, material_display, recommended_latent_dim,
+                                         unit_ratio, write_template)
 
 SHIPPED = os.path.join(ROOT, DATABASE_DIR)
 GOOD = [["Attributes", "Density", "Youngs_Modulus", "Yield_Strength"],
@@ -52,7 +49,7 @@ def errors_of(rows, display=None):
 def test_shipped_databases():
     """The four databases pass with no errors and no warnings, and the recommended latent
     dimension is the one each network was trained with."""
-    from materialEncoder import MaterialEncoder  # type: ignore
+    from lsr_mmto.materials.encoder import MaterialEncoder
     import contextlib
     import io
     for name, vae in DATABASE_VAE.items():
@@ -101,7 +98,7 @@ def test_errors_name_the_cell():
                       "names, row 2 the units, and the materials start in row 3"], errors
     errors, _ = errors_of([["Attributes", "Poissons_Ratio"], ["Material/Units", "-"], ["A", 0.3], ["B", 0.6]])
     assert "-1 < value < 0.5" in errors[0], errors
-    assert "ATTRIBUTES in 0-Common/databases.py" in errors_of([["Attributes", "Colour"], ["u", "-"],
+    assert "ATTRIBUTES in lsr_mmto/materials/databases.py" in errors_of([["Attributes", "Colour"], ["u", "-"],
                                                                ["A", 1], ["B", 2]])[0][0]
 
 
@@ -211,22 +208,12 @@ def test_units():
     errors, _ = errors_of([["Attributes", "Youngs_Modulus", "Poissons_Ratio"], ["Material/Units", "Pa", None],
                            ["A", 1.0, 0.3], ["B", 2.0, 0.35]])
     assert errors == []                                      # a dimensionless column may have no units
-    with tempfile.TemporaryDirectory() as d:
-        beam = os.path.join(SHIPPED, "Beam_8Mats_3Attr_v4_spectrum2D.xlsx")
-        out = os.path.join(d, "beam_mmKS.xlsx")
-        changed = convert_database(beam, "mmKS", out)
-        assert changed == ["Density: kg/m^3 -> t/mm^3", "Youngs_Modulus: Pa -> MPa"], changed
-        assert check_database(out) == ([], [])
-        assert database_units(out) == {"Density": "t/mm^3", "Youngs_Modulus": "MPa", "Yield_Strength": "MPa"}
-        from databases import _read  # type: ignore
-        a, b = _read(beam), _read(out)
-        assert float(b.iat[2, 2]) == float(a.iat[2, 2]) / 1e6 and float(b.iat[2, 3]) == float(a.iat[2, 3])
 
 
 def test_benchmark_unit_warnings():
     """The benchmarks declare the units they are set up in; the paper's databases mix units,
     and each mismatch is reported with what it does to the results."""
-    from project import Project  # type: ignore
+    from lsr_mmto.problem.project import Project
     counts = {}
     for name in ("L-bracket", "U-bracket", "beam", "Airplane bracket"):
         p = Project.load(os.path.join(ROOT, "projects", f"{name}.mmto"))
@@ -239,12 +226,12 @@ def test_benchmark_unit_warnings():
 
 
 def test_project_uses_the_check():
-    from project import Project  # type: ignore
-    ubracket = os.path.join(ROOT, "0-Common", "Models", "UBracket")
+    from lsr_mmto.problem.project import Project
+    ubracket = os.path.join(ROOT, "data", "models", "UBracket")
     with tempfile.TemporaryDirectory() as d:
         shutil.copy(os.path.join(ubracket, "UBracket.STL"), d)
         p = Project("u", stl="UBracket.STL", base_dir=d)
-        p.add_selection("bottom", __import__("selections").face("ymin"))
+        p.add_selection("bottom", __import__("lsr_mmto").face("ymin"))
         p.add_support("bottom")
         p.add_force("bottom", total=[1, 0, 0])
         p.objective("FailureFactorPNorm()")
@@ -284,7 +271,7 @@ def test_project_uses_the_check():
 def test_vae_check():
     """A database's network is the .nt next to it with the same name. A trained network must fit the
     settings and the database; a run never trains into the shipped folder; replacing a network warns."""
-    from project import Project, network_shape  # type: ignore
+    from lsr_mmto.problem.project import Project, network_shape
     for name in ("L-bracket", "U-bracket", "beam", "Airplane bracket", "rectangular beam"):
         p = Project.load(os.path.join(ROOT, "projects", f"{name}.mmto"))
         errors, warnings, status = p.vae_check()

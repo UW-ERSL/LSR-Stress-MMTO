@@ -23,12 +23,9 @@ import torch
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from utils import project_paths  # noqa: E402
 
-project_paths.bootstrap()
-
-import mmto_utility_functions as U  # noqa: E402  # type: ignore
-from project import Project, run  # noqa: E402  # type: ignore
+from lsr_mmto.optimize import final_check as U  # noqa: E402
+from lsr_mmto.problem.project import Project, run  # noqa: E402
 
 N_DOF, ITERATIONS = 3000, 2
 

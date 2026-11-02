@@ -27,7 +27,7 @@ HELP = ("One row per material. Shown as is optional: a shorter name for legends 
 
 def shown(key):
     """A property's name as the user reads it (databases.SHOWN), else its own name."""
-    from databases import SHOWN  # type: ignore
+    from lsr_mmto.materials.databases import SHOWN
     return SHOWN.get(key, key)
 
 
@@ -67,7 +67,7 @@ class DatabaseEditor(QtWidgets.QDialog):
     network_set_aside names the network moved out of the way when the numbers changed."""
 
     def __init__(self, parent, folder, path=None, unit_system=None):
-        from databases import in_shipped_folder  # type: ignore
+        from lsr_mmto.materials.databases import in_shipped_folder
         super().__init__(parent)
         path = None if path is None else os.path.normpath(os.path.abspath(path))   # one kind of slash on Windows
         self.folder, self.path, self.unit_system = folder, path, unit_system
@@ -140,7 +140,7 @@ class DatabaseEditor(QtWidgets.QDialog):
         return name
 
     def _load(self, path):
-        from databases import database_table, material_display  # type: ignore
+        from lsr_mmto.materials.databases import database_table, material_display
         names, attributes, units, values = database_table(path)
         colours, labels = material_display(path)
         self.loaded = (list(attributes), list(units), values.tolist())
@@ -158,12 +158,12 @@ class DatabaseEditor(QtWidgets.QDialog):
 
     # ------------------------------------------------------------------ the table
     def _default_unit(self, key):
-        from databases import ATTRIBUTES, UNIT_SYSTEMS  # type: ignore
+        from lsr_mmto.materials.databases import ATTRIBUTES, UNIT_SYSTEMS
         a = ATTRIBUTES[key]
         return UNIT_SYSTEMS.get(self.unit_system or "", {}).get(a.measures, a.units[0])
 
     def _fill_property_menu(self):
-        from databases import ATTRIBUTES  # type: ignore
+        from lsr_mmto.materials.databases import ATTRIBUTES
         self.add_property_menu.clear()
         missing = [key for key in ATTRIBUTES if key not in self.attributes]
         for key in missing:
@@ -199,7 +199,7 @@ class DatabaseEditor(QtWidgets.QDialog):
     def _columns(self, *_, order=None, units=None):
         """The property columns, in order (by default as they are); a column that stays keeps its numbers
         and unit."""
-        from databases import ATTRIBUTES  # type: ignore
+        from lsr_mmto.materials.databases import ATTRIBUTES
         keep = {}
         for j, key in enumerate(self.attributes):
             combo = self.table.cellWidget(0, 3 + j)
@@ -235,7 +235,7 @@ class DatabaseEditor(QtWidgets.QDialog):
         self.check()
 
     def _new_row(self, colour=None):
-        from databases import default_colours  # type: ignore
+        from lsr_mmto.materials.databases import default_colours
         r = self.table.rowCount()
         self.table.insertRow(r)
         colour = colour or default_colours(r)[r - 1]
@@ -294,7 +294,7 @@ class DatabaseEditor(QtWidgets.QDialog):
 
     def check(self):
         """Every cell checked; a bad one is shaded with the reason on it. Save only with none. The problems."""
-        from databases import ATTRIBUTES  # type: ignore
+        from lsr_mmto.materials.databases import ATTRIBUTES
         if self.table.columnCount() < len(FIXED):
             return ["no columns"]
         names, labels, colours, units, rows = self.contents()
@@ -346,7 +346,7 @@ class DatabaseEditor(QtWidgets.QDialog):
 
     def save(self):
         """Write the database; when its numbers changed, set its trained network aside. The path written."""
-        from databases import write_database  # type: ignore
+        from lsr_mmto.materials.databases import write_database
         names, labels, colours, units, rows = self.contents()
         path = self.target()
         os.makedirs(os.path.dirname(path), exist_ok=True)

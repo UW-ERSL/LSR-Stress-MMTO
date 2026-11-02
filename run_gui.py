@@ -84,8 +84,6 @@ if __name__ == "__main__":
     splash = splash_screen()
     try:
         sys.path.insert(0, ROOT)
-        from utils import project_paths
-        project_paths.bootstrap()
         from gui.main_window import main
     except Exception as e:                                          # noqa: BLE001
         splash.close()

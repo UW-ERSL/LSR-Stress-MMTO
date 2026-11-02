@@ -1,6 +1,6 @@
 # Project reference
 
-Generated from the code by `python utils/reference.py`; do not edit by hand.
+Generated from the code by `python docs/make_reference.py`; do not edit by hand.
 
 A project is an LSR MMTO project file (.mmto): the layout of a PyTO-AD project file, with an `mmto` section, which holds the whole problem. Supports and loads picked in the PyTO-AD GUI become selections (`gui_support1`, `gui_load1`, ...) and boundary conditions of the mmto section when the project is loaded, and are removed from the GUI's own section; the rest of what the GUI saved is kept.
 
@@ -16,7 +16,7 @@ A project is an LSR MMTO project file (.mmto): the layout of a PyTO-AD project f
 | `bcs` | boundary conditions, each on a named selection, see Boundary conditions |
 | `keep_solid` | names of element selections kept solid |
 | `keep_support_elements` | also keep solid the elements touching fixed dofs |
-| `database` | a database name in 1-PureStructural/MaterialDataPureStructural, or a path to an .xlsx |
+| `database` | a database name in data/databases, or a path to an .xlsx |
 | `formulation` | objective and constraints, see Quantities |
 | `settings` | common, advanced and vae, see Settings |
 
@@ -55,7 +55,7 @@ Lengths are numbers in model units, or `"<k>h"` for k times the largest element 
 
 ## Material database attributes
 
-A database is an .xlsx file: attribute names in row 1, units in row 2, then one row per material with its name in column A. Every column must be one of these attributes (or one of its other names); `python utils/database.py check <file>` checks a file.
+A database is an .xlsx file: attribute names in row 1, units in row 2, then one row per material with its name in column A. Every column must be one of these attributes (or one of its other names); the Materials panel of the app shows the errors and warnings of a file.
 
 | attribute | other names | meaning | allowed range | units |
 |---|---|---|---|---|

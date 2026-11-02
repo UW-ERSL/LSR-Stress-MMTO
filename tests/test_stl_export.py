@@ -1,7 +1,7 @@
 """
 test_stl_export.py
 ==================
-The per-material STL export (utils/stl_export.py) on shapes whose answer is known: three slabs
+The per-material STL export (lsr_mmto/results/stl_export.py) on shapes whose answer is known: three slabs
 around a spherical hole, a plate one element thick (as the L-bracket and the U-bracket), a sheet of
 one material one element thick between two others, scattered specks, a round cylinder. Every piece
 is closed, touches no other body at a single point, and the pieces add up exactly to their whole;
@@ -18,11 +18,8 @@ import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from utils import project_paths  # noqa: E402
 
-project_paths.bootstrap()
-
-from utils import stl_export as X  # noqa: E402
+from lsr_mmto.results import stl_export as X  # noqa: E402
 
 
 def _design(labels):

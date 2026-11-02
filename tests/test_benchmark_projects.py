@@ -19,12 +19,9 @@ import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from utils import project_paths  # noqa: E402
 
-project_paths.bootstrap()
-
-from PyTOImports import topopt_material_model  # noqa: E402  # type: ignore
-from project import Project, run_arguments, VAE_PARAMS  # noqa: E402  # type: ignore
+from lsr_mmto.pyto_ad import topopt_material_model  # noqa: E402
+from lsr_mmto.problem.project import Project, run_arguments, VAE_PARAMS  # noqa: E402
 
 PROJECTS = os.path.join(ROOT, "projects")
 DATA = os.path.join(ROOT, "tests", "data", "benchmarks")

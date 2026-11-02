@@ -11,7 +11,8 @@ autodiff branch: gradients come from automatic differentiation through PyTO-AD.
 2. fetches PyTO-AD, the differentiable topology optimization code this branch
    builds on, beside this repository, at a fixed commit,
    with git if it is installed and as a download otherwise
-3. installs requirements.txt into that environment
+3. installs requirements.txt into that environment, and this repository as the package
+   lsr_mmto (pip install -e .), so scripts anywhere can import it
 4. registers the environment as a Jupyter kernel
 5. checks that the solver builds a mesh and a material decoder loads
 6. (Windows) adds LSR MMTO to the Start menu, and to the desktop if you say yes; the one question
@@ -262,6 +263,8 @@ def main():
     if in_env(py, "-m", "pip", "install", "--no-warn-script-location",
               "--progress-bar", "on", "-r", req) != 0:
         fail("dependency install failed; the lines above say which package")
+    if in_env(py, "-m", "pip", "install", "--no-warn-script-location", "--no-deps", "-e", HERE) != 0:
+        fail("could not install this repository as the package lsr_mmto")
 
     # ------------------------------------------------------------------ 4
     step(4, "Jupyter kernel", "a few seconds")
@@ -305,6 +308,7 @@ For the tutorial, open Tutorial.ipynb in your code editor and select the kernel
 
 VERIFY = r'''
 import contextlib, io, os, sys, importlib
+from importlib.metadata import version
 here = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, here)
 
@@ -322,14 +326,11 @@ def check(label, fn):
 import numpy, numba
 print(f"      numpy {numpy.__version__}, numba {numba.__version__}", flush=True)
 
-from utils import project_paths
-root = project_paths.bootstrap()
-check("repository found", lambda: root or (_ for _ in ()).throw(RuntimeError("not found")))
-
+check("LSR MMTO is installed in the environment", lambda: version("lsr_mmto"))
 for m in ("records", "render", "figures", "tables", "display"):
-    check(f"utils.{m} imports", lambda m=m: importlib.import_module(f"utils.{m}"))
-check("PyTO-AD and the projects import", lambda: importlib.import_module("project"))
-check("optimizer driver imports", lambda: importlib.import_module("MainPureStructural"))
+    check(f"lsr_mmto.results.{m} imports", lambda m=m: importlib.import_module(f"lsr_mmto.results.{m}"))
+check("PyTO-AD and the projects import", lambda: importlib.import_module("lsr_mmto.problem.project"))
+check("optimizer driver imports", lambda: importlib.import_module("lsr_mmto.optimize.run"))
 
 def pyto_ad_only():
     import pyto
@@ -342,20 +343,20 @@ def pyto_ad_only():
         raise RuntimeError(f"PyTO (main) modules were imported: {old}")
 check("only PyTO-AD is used (no PyTO main modules loaded)", pyto_ad_only)
 
-LBRACKET = os.path.join("projects", "L-bracket.mmto")
+LBRACKET = os.path.join(here, "projects", "L-bracket.mmto")
 
 def lbracket_mesh():
-    from project import Project
+    from lsr_mmto.problem.project import Project
     mesh = Project.load(LBRACKET).build(verbose=False)[0]
     if int(mesh.num_elems) != 12825:
         raise RuntimeError(f"expected 12825 elements, got {mesh.num_elems}")
 check("the L-bracket meshes to 12,825 elements", lbracket_mesh)
 
 def decoder():
-    from project import Project
-    from materialEncoder import MaterialEncoder
+    from lsr_mmto.problem.project import Project
+    from lsr_mmto.materials.encoder import MaterialEncoder
     vae_params = Project.load(LBRACKET).build(verbose=False)[5]
-    db = "./1-PureStructural/MaterialDataPureStructural/BM1_3Mats_2Attr"
+    db = os.path.join(here, "data", "databases", "BM1_3Mats_2Attr")
     enc = MaterialEncoder(vae_params)
     enc.readExcel(db + ".xlsx")
     enc.loadAutoencoderFromFile(db + ".nt")
