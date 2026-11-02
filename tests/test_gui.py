@@ -93,6 +93,9 @@ def test_what_it_takes_from_pyto_ad():
 
 
 def test_open_and_save_unchanged():
+    """A project opened and saved with no edits is written back unchanged. A copy of an example takes into
+    its folder, at its first save, what it uses (the part, the database and its network), as every save
+    does; from then on it is written back unchanged."""
     w = G.MMTOWindow()
     with scratch() as d:
         for name in NAMES:
@@ -101,8 +104,12 @@ def test_open_and_save_unchanged():
             assert w.open_project(path), name
             assert not w.is_dirty() and w.windowTitle() == f"{name} - LSR MMTO", w.windowTitle()
             assert w.stl_geom is not None, name
-            assert w.save_project()
-            assert open(path).read() == open(original).read(), name               # line endings aside
+            assert w.save_project()                                              # the first save brings them in
+            assert w.project.stl.startswith("part/") and w.project.database.startswith("materials/"), name
+            assert os.path.isfile(w.project.stl_path()) and os.path.isfile(os.path.join(d, w.project.database))
+            first = open(path).read()
+            assert w.open_project(path) and w.save_project()
+            assert open(path).read() == first, name                              # line endings aside
 
 
 def test_only_mmto_projects_open():
@@ -136,6 +143,24 @@ def test_new_save_load():
         assert w.path == os.path.join(d, "new", "new.mmto") and not w.is_dirty() and w.project.name == "new"
         assert os.path.isfile(os.path.join(d, "new", "part", "LBracket_BM1.STL"))
         assert Project.load(w.path).to_dict() == w.project.to_dict()
+
+
+def test_setup_script_follows_window_saves():
+    """File > New writes <name>_setup.py in the project folder; every save in the window writes it again
+    to match the project; a save from a script leaves it alone."""
+    stl = os.path.join(ROOT, "data", "models", "LBracket_BM1", "LBracket_BM1.STL")
+    w = G.MMTOWindow()
+    with scratch() as d:
+        folder = os.path.join(d, "Bracket study")
+        assert w.new_project(stl, folder)
+        script = os.path.join(folder, "Bracket study_setup.py")
+        assert os.path.isfile(script) and f"n_dof={w.project.n_dof}," in open(script).read()
+        w.project.n_dof = 4000
+        assert w.save_project() and "n_dof=4000," in open(script).read()
+        p = Project.load(w.path)
+        p.n_dof = 5000
+        p.save(w.path)                                                        # a script's save
+        assert "n_dof=4000," in open(script).read()
 
 
 def test_unsaved_changes():
@@ -1029,7 +1054,7 @@ def test_export_and_run_script():
         w = opened("L-bracket", d)
         w.project.n_dof = 4000                                                # a change: saved first
         with answers(Box.Save):
-            path = w.export_script(os.path.join(d, "L-bracket_setup.py"))
+            path = w.export_script()
         assert path and os.path.isfile(path) and not w.is_dirty()
         assert any("Script written" in line for line in w.message_text.toPlainText().splitlines())
         code = open(path).read()

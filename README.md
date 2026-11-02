@@ -155,7 +155,7 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad.py`
 
 | File | Purpose |
 |---|---|
-| `run.py` | the optimization loop, `run_topopt`; a project runs it through `run(p)` |
+| `run.py` | the optimization loop; internal, a project runs it only through `run(p)` |
 | `parameters.py` | the parameter container shared by the examples |
 | `filters.py` | the density and material filters |
 | `history.py` | what each iteration records and prints: history, log, stress diagnostics |

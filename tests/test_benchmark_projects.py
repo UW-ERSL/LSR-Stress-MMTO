@@ -21,7 +21,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from lsr_mmto.pyto_ad import topopt_material_model  # noqa: E402
-from lsr_mmto.problem.project import Project, run_arguments, VAE_PARAMS  # noqa: E402
+from lsr_mmto.problem.project import Project, _run_arguments, VAE_PARAMS  # noqa: E402
 
 PROJECTS = os.path.join(ROOT, "projects")
 DATA = os.path.join(ROOT, "tests", "data", "benchmarks")
@@ -64,7 +64,7 @@ def compare_problem(example):
     for f in VAE_PARAMS:
         assert getattr(vae, f) == ref["vae"][f], ("VAE", f)
 
-    args = run_arguments(p, verbose=False)
+    args = _run_arguments(p, verbose=False)
     for k, v in ref["run_settings"].items():
         if k in _PER_RUN:
             continue

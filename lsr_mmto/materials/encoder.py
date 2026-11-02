@@ -24,7 +24,7 @@ class TrainingStopped(Exception):
 
 class NetworkRunCancelled(Exception):
     """The material network reproduces the database less closely than the project's warning limit, and the
-    run was not wanted (run_topopt's on_network_error answered False): nothing was optimized."""
+    run was not wanted (_run_topopt's on_network_error answered False): nothing was optimized."""
 
 
 def network_warning(errors, limit):

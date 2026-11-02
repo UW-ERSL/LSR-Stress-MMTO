@@ -58,7 +58,7 @@ Add a build test to `tests/test_project.py`; `test_script_round_trip` checks `sc
 
 ## A setting
 
-A new argument of `run_topopt` in `lsr_mmto/optimize/run.py` is also added to
+A new argument of `_run_topopt` in `lsr_mmto/optimize/run.py` is also added to
 `DEFAULT_SETTINGS` (in `common` or `advanced`) and `SETTING_DOCS` in `lsr_mmto/problem/project.py`.
 Its default there is the value a new project starts from; files without it are completed
 from it.

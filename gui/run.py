@@ -6,10 +6,10 @@ The Run strip: an optimization of the project, started from the window.
 RunWindow is PyTO-AD's Optimize window (StructuralTopOptWindow): its worker thread, its Qt
 signals, its live plot, its live redraw of the design and its log. What it overrides:
   - what starts a run: the project's own checks, a save, a results folder per run;
-  - what the thread calls: Project.run, that is run_topopt, with progress and should_stop;
+  - what the thread calls: Project.run, that is _run_topopt, with progress and should_stop;
   - how the design is drawn: each element in its nearest material's colour, at a strength that
     follows its density (design.py), as the window's design (Setup and Design views);
-  - Stop: run_topopt is asked to stop before its next iteration and saves what it reached
+  - Stop: _run_topopt is asked to stop before its next iteration and saves what it reached
     (PyTO-AD's Stop only cleared a flag the optimizer never read);
   - the end: the final design on the part, the convergence, latent space and summary, and the
     run's folder: open it, show it in Results, or delete it.
@@ -208,7 +208,7 @@ class RunWindow(StructuralTopOptWindow):
 
     # ------------------------------------------------------------------ start, run, stop
     def start_optimization(self):
-        """The project's checks, a save, then run_topopt in PyTO-AD's worker thread."""
+        """The project's checks, a save, then _run_topopt in PyTO-AD's worker thread."""
         w = self.window
         errors = w.project.validate()
         if errors:
@@ -318,7 +318,7 @@ class RunWindow(StructuralTopOptWindow):
         self.status.setText(f"Training the material network: epoch {epoch:,}{total}")
 
     def stop_optimization(self):
-        """Ask run_topopt to stop before its next iteration; it saves the design reached so far."""
+        """Ask _run_topopt to stop before its next iteration; it saves the design reached so far."""
         if self.optimization_running:
             self.stop_requested = True
             self.stop_button.setEnabled(False)

@@ -22,9 +22,9 @@ file, with the problem in its own "mmto" section. Project.load reads .mmto files
     q.to_script("bracket_setup.py")         # the same project as Python calls, to read or edit
 
 build() returns the mesh, the material, the boundary conditions, the body force and the
-optimization and VAE parameters that run_topopt starts from.
+optimization and VAE parameters that _run_topopt starts from.
 
-Settings: every setting of run_topopt is stored, under run_topopt's own name, in
+Settings: every setting of _run_topopt is stored, under _run_topopt's own name, in
 settings.common, settings.advanced and settings.vae (DEFAULT_SETTINGS below). A new
 project starts from the settings of the paper's examples; a file missing some is
 completed from the same defaults, and the run says which.
@@ -70,7 +70,7 @@ _MARK_FIXED, _MARK_LOAD, _MARK_ROLLER = 1, 2, 3
 # degrees of freedom each support type of the picking tools fixes
 _SUPPORT_DOFS = {"Fixed XYZ": (0, 1, 2), "Fixed X": (0,), "Fixed Y": (1,), "Fixed Z": (2,)}
 
-# Every setting of run_topopt a project stores, under run_topopt's own names, with the value
+# Every setting of _run_topopt a project stores, under _run_topopt's own names, with the value
 # a new project starts from: the settings of the paper's examples.
 # A setting missing from a file is filled from here and reported; a setting not listed here
 # is an error. material_filter_radius None means "the same as relative_filter_radius";
@@ -129,7 +129,7 @@ SETTING_DOCS = {
 }
 # the VAE's own settings, also in settings.vae; they start from the database's known values
 VAE_PARAMS = ("latentDim", "learningRate", "vae_hiddenDim", "maxAttributeErrorPercent", "klFactor", "numEpochs")
-# run_topopt arguments about one run's output or about watching it, not the problem; n_dof_desired
+# _run_topopt arguments about one run's output or about watching it, not the problem; n_dof_desired
 # is mesh.n_dof
 NOT_STORED = ("to_problem", "save_dir", "plot_progress", "plot_bcs", "verbose", "plotter", "progress",
               "should_stop", "on_network_error")
@@ -866,10 +866,14 @@ class Project:
 
     def save(self, path):
         """Write the project, every setting included, with the other sections it was loaded with.
-        Always as .mmto."""
+        Always as .mmto. Its folder becomes the project's folder, as the window keeps it: the part and
+        the database with its network are copied into part/ and materials/ there (project_folder.pack),
+        unless they are in it already."""
+        from lsr_mmto.problem.project_folder import pack
         if not path.lower().endswith(".mmto"):
             raise ValueError(f"{path}: an LSR MMTO project is saved as a .mmto file")
         path = os.path.abspath(path)
+        pack(self, os.path.dirname(path))
         self.complete_settings()
         data = self._file_data(path)
         with open(path, "w") as fh:
@@ -898,6 +902,9 @@ class Project:
                  "",
                  "Run it with File > Run script in LSR MMTO, which opens the project it saves, or from any folder",
                  f"with: python {os.path.basename(path)}       (saves {self.name}.mmto next to it)",
+                 "",
+                 "LSR MMTO writes this file again each time the project is saved in its window, so edits",
+                 "made here are replaced then. Saving from this script does not rewrite it.",
                  '"""',
                  "import os",
                  "",
@@ -1002,9 +1009,12 @@ def _moved_paths(record):
 
 
 # ---------------------------------------------------------------------- running
-def run_arguments(project, save_dir=None, verbose=True, plot_progress=False, plot_bcs=False, plotter=None,
+def _run_arguments(project, save_dir=None, verbose=True, plot_progress=False, plot_bcs=False, plotter=None,
                   progress=None, should_stop=None, on_network_error=None):
-    """The keyword arguments run_topopt gets for this project."""
+    """The keyword arguments _run_topopt gets for this project. Internal: a project runs through run(p).
+    With no save_dir, the results go where the window puts them: results/<date and time> in the
+    project's folder (project_folder.new_run_folder)."""
+    from lsr_mmto.problem.project_folder import new_run_folder
     from lsr_mmto.optimize.run import BetaScheduleScheme, Z0InitMethod
     project.complete_settings()
     args = dict(project.settings["common"], **project.settings["advanced"],
@@ -1014,27 +1024,33 @@ def run_arguments(project, save_dir=None, verbose=True, plot_progress=False, plo
     args["beta_schedule_scheme"] = BetaScheduleScheme[args["beta_schedule_scheme"]]
     args["z0_init_method"] = Z0InitMethod[args["z0_init_method"]]
     args.update(to_problem=project, n_dof_desired=project.n_dof,
-                save_dir=save_dir if save_dir is not None else os.path.join("results", project.name),
+                save_dir=save_dir if save_dir is not None else new_run_folder(project),
                 verbose=verbose, plot_progress=plot_progress, plot_bcs=plot_bcs, plotter=plotter,
                 progress=progress, should_stop=should_stop, on_network_error=on_network_error)
     return args
 
 
-def run(project, save_dir=None, **run_options):
-    """Optimize the project with run_topopt; a copy of the project goes into save_dir with the results."""
-    from lsr_mmto.optimize import save as run_save
-    from lsr_mmto.optimize.run import run_topopt
+def _prepared(project):
+    """The project as a run gets it: its settings completed (saying which came from the defaults),
+    checked, and copied, so that the run records the project as it is now."""
     filled = project.complete_settings()
     if filled:
         print(f"[{project.name}] settings not in the project, taken from the defaults: {', '.join(filled)}")
     errors = project.validate()
     if errors:
         raise ValueError(f"project {project.name!r}:\n  " + "\n  ".join(errors))
-    snapshot = project.copy()                    # the run gets, and records, the project as it is now
-    args = run_arguments(snapshot, save_dir, **run_options)
+    return project.copy()
+
+
+def run(project, save_dir=None, **run_options):
+    """Optimize the project with _run_topopt; a copy of the project goes into save_dir with the results."""
+    from lsr_mmto.optimize import save as run_save
+    from lsr_mmto.optimize.run import _run_topopt
+    snapshot = _prepared(project)
+    args = _run_arguments(snapshot, save_dir, **run_options)
     if run_save.WRITE_FILES:
         os.makedirs(args["save_dir"], exist_ok=True)
         path = os.path.abspath(os.path.join(args["save_dir"], f"{project.name}.mmto"))
         with open(path, "w") as fh:
             json.dump(snapshot._file_data(path), fh, indent=2)
-    return run_topopt(**args)
+    return _run_topopt(**args)

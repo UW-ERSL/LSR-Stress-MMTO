@@ -6,18 +6,26 @@ every result made from it can be shown and run again:
 
     Bracket study/
       Bracket study.mmto
+      Bracket study_setup.py              the project as a Python script
       part/bracket.STL                    the part, copied in
       materials/steels.xlsx, steels.nt    the database and its trained network, copied in
       results/2026-11-01_16-04-41/        one folder per run
 
-The window keeps projects this way: File > New makes the folder, Save As copies everything into
-a new one, and an STL or a database chosen from elsewhere is copied in. A project file can still
-point anywhere, so scripts and projects made before keep working as they are; Save As brings
-such a project into a folder of its own.
+The window and a script keep a project the same way. File > New makes the folder; every save
+(Project.save, from the window or from a script) copies into the project's folder what the
+project uses: the part into part/, the database and its network into materials/. Every run,
+from the window or from run(p), puts its results in results/<date and time>.
+
+The window also writes the setup script, <name>_setup.py, at File > New and again at every save,
+so it always matches the project: edit it in any editor and run it with File > Run script. Edits
+made in it are replaced at the next save in the window. A save from a script leaves the setup
+script alone, so a script never rewrites itself.
 
     create(folder, stl)          a new project in a new folder
-    pack(project, folder)        everything the project uses copied into folder (Save As)
+    pack(project, folder)        everything the project uses copied into folder (every save)
     bring_in_database(project)   the project's database and network copied into its folder
+    setup_script(project)        the path of the project's setup script
+    write_setup_script(project)  the setup script written from the project (the window only)
     new_run_folder(project)      the folder for the next run's results
     runs(project)                the project's runs, newest first
 """
@@ -151,6 +159,17 @@ def create(folder, stl):
     path = os.path.join(folder, f"{name}.mmto")
     p.save(path)
     return p, path
+
+
+def setup_script(project):
+    """<name>_setup.py beside the project file: the project as a Python script."""
+    return os.path.join(project.base_dir, f"{project.name}_setup.py")
+
+
+def write_setup_script(project):
+    """The setup script written from the project as it is (Project.to_script). The window calls this
+    at File > New and at every save; a script's own save does not. Returns its path."""
+    return project.to_script(setup_script(project))
 
 
 # ---------------------------------------------------------------------- results

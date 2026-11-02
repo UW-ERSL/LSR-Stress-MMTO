@@ -3,10 +3,10 @@ gradcheck.py
 ============
 The autodiff gradient against central finite differences.
 
-check(run_args)   sets the problem up as run_topopt(**run_args) does, then, at a
-                  random design, compares the gradient of the objective J and of
-                  the first constraint with central differences on a few design
-                  variables, for several step sizes h
+check(p)          sets the project p up as run(p) does, then, at a random design,
+                  compares the gradient of the objective J and of the first
+                  constraint with central differences on a few design variables,
+                  for several step sizes h
 
 This checks the part autograd differentiates through the solver:
 x, z -> x_phys, E, nu -> u -> J and the constraints. The penalties are left out.
@@ -24,7 +24,7 @@ class _Stop(Exception):
 
 
 def _model_from_setup(run_args):
-    """Run run_topopt's setup and hand back the autodiff model, before MMA starts."""
+    """Run _run_topopt's setup and hand back the autodiff model, before MMA starts."""
     from lsr_mmto.optimize import run as M
     found = {}
 
@@ -40,19 +40,23 @@ def _model_from_setup(run_args):
     saved = M.runMMA
     M.runMMA = intercept
     try:
-        M.run_topopt(**{**run_args, "verbose": False, "plot_progress": False})
+        M._run_topopt(**{**run_args, "verbose": False, "plot_progress": False})
     except _Stop:
         pass
     finally:
         M.runMMA = saved
     if "model" not in found:
-        raise RuntimeError("run_topopt finished without reaching the optimizer")
+        raise RuntimeError("_run_topopt finished without reaching the optimizer")
     return found
 
 
-def check(run_args, n_x=3, n_z=3, steps=(1e-3, 1e-4, 1e-5), seed=0):
-    """Finite differences against autodiff at one random design."""
-    s = _model_from_setup(run_args)
+def check(project, n_x=3, n_z=3, steps=(1e-3, 1e-4, 1e-5), seed=0):
+    """Finite differences against autodiff at one random design of the project."""
+    import tempfile
+    from lsr_mmto.problem.project import _prepared, _run_arguments
+    with tempfile.TemporaryDirectory() as scratch:              # the check makes no results
+        run_args = _run_arguments(_prepared(project), save_dir=scratch, verbose=False)
+        s = _model_from_setup(run_args)
     model, beta, eta, lb, ub = s["model"], s["beta"], s["eta"], s["lb"], s["ub"]
     heaviside = run_args.get("use_heaviside_projection", True)
     n = model.N

@@ -1,10 +1,11 @@
 """
 test_run_project.py
 ===================
-Running a Project: its settings cover every setting of run_topopt; the run record keeps
+Running a Project: its settings cover every setting of _run_topopt; the run record keeps
 the settings as they were given, says when a setting was switched off during the run, and
 stores the project so it can be rebuilt. Runs made before the examples became project
-files are rebuilt from the project files.
+files are rebuilt from the project files. A run from a script goes to the project folder's
+results, as one from the window does.
 
 One 4-iteration run of a coarse U-bracket, under a minute.
 
@@ -23,7 +24,7 @@ sys.path.insert(0, ROOT)
 
 from lsr_mmto.optimize import run as M  # noqa: E402
 from lsr_mmto.optimize import save as run_save  # noqa: E402
-from lsr_mmto.problem.project import (DEFAULT_SETTINGS, NOT_STORED, Project, run_arguments)  # noqa: E402
+from lsr_mmto.problem.project import (DEFAULT_SETTINGS, NOT_STORED, Project, _run_arguments)  # noqa: E402
 
 UBRACKET = os.path.join(ROOT, "projects", "U-bracket.mmto")
 N_DOF, ITERS, SMOOTHING_OFF = 3000, 4, 2
@@ -47,7 +48,7 @@ _RUNS = {}
 
 
 def _run(to_problem, args):
-    """run_topopt with the history and the run record captured; nothing written to disk."""
+    """_run_topopt with the history and the run record captured; nothing written to disk."""
     captured = {}
     real_init, real_post = M.init_run_history, M.run_postprocessing
 
@@ -63,7 +64,7 @@ def _run(to_problem, args):
     saved = run_save.WRITE_FILES
     run_save.WRITE_FILES = False
     try:
-        M.run_topopt(**dict(args, to_problem=to_problem))
+        M._run_topopt(**dict(args, to_problem=to_problem))
     finally:
         M.init_run_history, M.run_postprocessing = real_init, real_post
         run_save.WRITE_FILES = saved
@@ -74,18 +75,18 @@ def runs():
     if not _RUNS:
         p = ubracket_project()
         with tempfile.TemporaryDirectory() as d:
-            args = run_arguments(p, save_dir=d, verbose=False)
+            args = _run_arguments(p, save_dir=d, verbose=False)
             _RUNS["project"] = (p, _run(p, args))
     return _RUNS
 
 
 def test_settings_cover_run_topopt():
-    """Every run_topopt argument is a stored setting, or explicitly not stored. Fails when one is added."""
+    """Every _run_topopt argument is a stored setting, or explicitly not stored. Fails when one is added."""
     stored = set(DEFAULT_SETTINGS["common"]) | set(DEFAULT_SETTINGS["advanced"]) | set(DEFAULT_SETTINGS["vae"])
     covered = stored | set(NOT_STORED) | {"n_dof_desired"}
-    arguments = set(inspect.signature(M.run_topopt).parameters)
+    arguments = set(inspect.signature(M._run_topopt).parameters)
     assert arguments - covered == set(), f"not in the project: {sorted(arguments - covered)}"
-    assert covered - arguments == set(), f"not run_topopt arguments: {sorted(covered - arguments)}"
+    assert covered - arguments == set(), f"not _run_topopt arguments: {sorted(covered - arguments)}"
 
 
 def test_progress_and_stop():
@@ -95,7 +96,7 @@ def test_progress_and_stop():
     p.settings["common"]["maxIterations"] = 20
     seen = []
     with tempfile.TemporaryDirectory() as d:
-        args = run_arguments(p, save_dir=d, verbose=False)
+        args = _run_arguments(p, save_dir=d, verbose=False)
         args.update(progress=seen.append, should_stop=lambda: len(seen) >= 3)
         captured = _run(p, args)
     assert [s["iteration"] for s in seen] == [0, 1, 2]
@@ -195,6 +196,29 @@ def test_record_stores_display():
     assert old.material_labels == old.material_names == ["Mat1_Red", "Mat2_Blue", "Mate3_Green"]
 
 
+def test_script_run_lands_in_the_project_results():
+    """run(p) from a script, with no folder given, writes the run where the window does: results/<date and
+    time> in the project's folder, listed by the window's Results; nothing goes to the current folder."""
+    from lsr_mmto import run
+    from lsr_mmto.problem import project_folder as F
+    p = ubracket_project()
+    p.settings["common"]["maxIterations"] = 1
+    here = os.getcwd()
+    with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as elsewhere:
+        p.save(os.path.join(d, "ub", "ub.mmto"))
+        saved = run_save.WRITE_FILES
+        run_save.WRITE_FILES = True
+        os.chdir(elsewhere)
+        try:
+            run(p, verbose=False)
+        finally:
+            os.chdir(here)
+            run_save.WRITE_FILES = saved
+        listed = F.runs(p)
+        assert len(listed) == 1 and os.path.dirname(listed[0]) == os.path.join(d, "ub", "results"), listed
+        assert len(os.path.basename(listed[0])) == 19 and os.listdir(elsewhere) == []
+
+
 def test_vae_training_guards():
     """Training never writes into the shipped folder; a network being replaced is kept as
     <name>.previous.nt; a network that reproduces the database less closely than the project's
@@ -210,7 +234,7 @@ def test_vae_training_guards():
         p.settings["vae"]["use_pretrained_vae"] = False                 # the project check refuses it
         assert any("save it over the shipped 6Materials_AF_3Attr.nt" in e for e in p.validate())
         p.settings["vae"]["use_pretrained_vae"] = True                  # and so does the run, called directly
-        args = run_arguments(p, save_dir=d, verbose=False)
+        args = _run_arguments(p, save_dir=d, verbose=False)
         args.update(use_pretrained_vae=False, saveNet=os.path.join(ROOT, DATABASE_DIR, "new.nt"))
         try:
             _run(p, args)
@@ -227,7 +251,7 @@ def test_vae_training_guards():
         p.settings["vae"]["numEpochs"] = 3                              # a network that has learned nothing
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            captured = _run(p, run_arguments(p, save_dir=d, verbose=False))
+            captured = _run(p, _run_arguments(p, save_dir=d, verbose=False))
         assert "[WARNING] The material network reproduces the database less closely than the 5% warning " \
                "limit: " in out.getvalue() and "Young's modulus" in out.getvalue(), out.getvalue()[-2000:]
         errors = captured["config"]["network_errors_percent"]
@@ -238,7 +262,7 @@ def test_vae_training_guards():
         p.settings["vae"]["use_pretrained_vae"] = True                  # that poor network, read from its file
         from lsr_mmto.materials.encoder import NetworkRunCancelled
         asked = []
-        args = run_arguments(p, save_dir=d, verbose=False, on_network_error=lambda w: asked.append(w) and False)
+        args = _run_arguments(p, save_dir=d, verbose=False, on_network_error=lambda w: asked.append(w) and False)
         try:
             _run(p, args)
             raise AssertionError("the run went on after on_network_error said no")
@@ -250,7 +274,7 @@ def test_vae_training_guards():
         asked.clear()
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            _run(p, run_arguments(p, save_dir=d, verbose=False, on_network_error=asked.append))
+            _run(p, _run_arguments(p, save_dir=d, verbose=False, on_network_error=asked.append))
         assert asked == [] and "[WARNING] The material network" not in out.getvalue()
 
 

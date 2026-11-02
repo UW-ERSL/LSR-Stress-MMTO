@@ -108,10 +108,10 @@ def update_beta(beta_proj, mmaIterations, beta_schedule):
     return min(beta_proj * beta_schedule["beta_factor"], beta_schedule["beta_max"]), True
 
 class _StopRequested(Exception):
-    """Raised inside the MMA callback when should_stop() says so; run_topopt catches it."""
+    """Raised inside the MMA callback when should_stop() says so; _run_topopt catches it."""
 
 
-def run_topopt(
+def _run_topopt(
     to_problem,
     # ---- per-run sweep overrides (None => use the project's values) ----
     n_dof_desired=None,

@@ -93,7 +93,7 @@ An objective or a constraint is one quantity, e.g. `Mass()` or `MaterialVolumeFr
 
 ## Settings
 
-Every setting of `run_topopt`, under its own name. A new project starts from these values (the settings of the paper's examples); a file missing some is completed from them, and the run says which. The VAE's own settings start from the database's known values.
+Every setting a run takes, under its own name. A new project starts from these values (the settings of the paper's examples); a file missing some is completed from them, and the run says which. The VAE's own settings start from the database's known values.
 
 ### common
 

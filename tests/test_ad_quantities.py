@@ -7,7 +7,7 @@ differences, on a coarse U-bracket (n_dof_desired = 3000, about 12,000 DOF;
 
     python tests/test_ad_quantities.py        (or: python -m pytest tests)
 
-One model is set up, as run_topopt does, and every quantity is checked on it at
+One model is set up, as _run_topopt does, and every quantity is checked on it at
 the same random design. For each quantity, a few density and latent variables
 with a sizeable gradient are perturbed with several step sizes h; the smallest
 relative difference over h must be below TOL.
@@ -55,9 +55,9 @@ def _setup():
     """The U-bracket model at a random design, built once."""
     if _SETUP:
         return _SETUP
-    from lsr_mmto.problem.project import Project, run_arguments
+    from lsr_mmto.problem.project import Project, _run_arguments
 
-    args = run_arguments(Project.load(os.path.join(ROOT, "projects", "U-bracket.mmto")), verbose=False)
+    args = _run_arguments(Project.load(os.path.join(ROOT, "projects", "U-bracket.mmto")), verbose=False)
     args.update(n_dof_desired=N_DOF, maxIterations=1)
     s = _model_from_setup(args)
     model = s["model"]

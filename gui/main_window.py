@@ -3,11 +3,13 @@ main_window.py
 ==============
 The LSR MMTO window. It is PyTO-AD's MainWindow (viewer, sidebar, message panel) holding a
 Project: File > New, Open, Save and Save As work on .mmto files through Project.load and
-Project.save, so a project opened and saved with no edits is written back unchanged.
+Project.save, so a project opened and saved with no edits is written back unchanged (once its
+first save has copied into its folder what it uses).
 
 A project lives in a folder of its own (project_folder.py): File > New makes the folder and
 copies the STL into it, Save As copies everything into a new folder, and a database or an STL
-chosen from elsewhere is copied in. The example projects in projects/ open as templates: Save
+chosen from elsewhere is copied in. Every save also writes the project's setup script,
+<name>_setup.py, again, so it always matches the project. The example projects in projects/ open as templates: Save
 asks for a folder of your own, so the examples never change.
 
 The 3D view shows either the part (the Setup view: supports, loads, previews) or a design (the
@@ -596,7 +598,7 @@ class MMTOWindow(MainWindow):
             action.setShortcut(key)
             action.triggered.connect(lambda _=False, s=slot: s())
         file_menu.addSeparator()
-        file_menu.addAction("&Export as script...").triggered.connect(lambda: self.export_script())
+        file_menu.addAction("&Export as script").triggered.connect(lambda: self.export_script())
         file_menu.addAction("&Run script...").triggered.connect(lambda: self.run_script())
         file_menu.addSeparator()
         file_menu.addAction("E&xit").triggered.connect(self.close)
@@ -686,6 +688,7 @@ class MMTOWindow(MainWindow):
             folder, stl = dialog.folder(), dialog.stl_path()
         try:
             p, path = project_folder.create(folder, stl)
+            project_folder.write_setup_script(p)
         except (OSError, ValueError) as e:
             QtWidgets.QMessageBox.warning(self, "New project", f"The project was not made: {e}")
             return False
@@ -757,9 +760,11 @@ class MMTOWindow(MainWindow):
         return True
 
     # ------------------------------------------------------------------ the project as a Python script
-    def export_script(self, path=None):
-        """The project as a Python script in its folder (Project.to_script), after a save, so that the
-        script matches the file. Edited in any editor, it comes back with Run script."""
+    def export_script(self):
+        """The project's setup script, <name>_setup.py in its folder (project_folder.setup_script), written
+        again from the project after a save, so that it matches the file. Every save writes it too; this
+        says where it is. Edited in any editor, it comes back with Run script."""
+        from lsr_mmto.problem import project_folder
         if self.project is None:
             return None
         if self.path is None or self.template or self.is_dirty():
@@ -768,14 +773,8 @@ class MMTOWindow(MainWindow):
                 QtWidgets.QMessageBox.Save | QtWidgets.QMessageBox.Cancel)
             if answer != QtWidgets.QMessageBox.Save or not self.save_project():
                 return None
-        if path is None:
-            default = os.path.join(self.project.base_dir, f"{self.project.name}_setup.py")
-            path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Export as script", default, SCRIPT_FILTER,
-                                                            options=FILE_DIALOG_OPTIONS)
-            if not path:
-                return None
         try:
-            path = self.project.to_script(path)
+            path = project_folder.write_setup_script(self.project)
         except (OSError, ValueError) as e:
             QtWidgets.QMessageBox.warning(self, "Export as script", f"Not written: {e}")
             return None
@@ -848,6 +847,8 @@ class MMTOWindow(MainWindow):
             self.message_text.append(f"{name} ran: {newest} opened.")
 
     def _write(self, path):
+        """The project saved to path, and its setup script written again to match (the window's saves only)."""
+        from lsr_mmto.problem.project_folder import write_setup_script
         try:
             self.project.save(path)
         except Exception as e:                                      # noqa: BLE001
@@ -855,6 +856,10 @@ class MMTOWindow(MainWindow):
             return False
         self.path, self._saved = os.path.abspath(path), self._state()
         self.message_text.append(f"Saved {self.path}")
+        try:
+            write_setup_script(self.project)
+        except (OSError, ValueError) as e:
+            self.message_text.append(f"The setup script was not written: {e}")
         self._refresh_title()
         return True
 
