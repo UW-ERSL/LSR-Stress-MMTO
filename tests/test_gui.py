@@ -107,8 +107,9 @@ def test_open_and_save_unchanged():
 
 def test_only_mmto_projects_open():
     w = G.MMTOWindow()
-    pyto = os.path.join(ROOT, "data", "models", "UBracket", "UBracket.pyto")
     with answers(), scratch() as d:
+        pyto = os.path.join(d, "u.pyto")                                   # a PyTO-AD project file
+        json.dump({"stl_file_path": "x.STL"}, open(pyto, "w"))
         assert not w.open_project(pyto)
         assert "is not an LSR MMTO project (.mmto)" in G.mmto_file_error(pyto)
         plain = os.path.join(d, "plain.mmto")

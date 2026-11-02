@@ -3,11 +3,10 @@ records.py
 ==========
 An optimization run, read back for plotting.
 
-from_payload(d)   a run still in memory, i.e. save.LAST_RUN
-load(path)        a run saved to disk with save.WRITE_FILES = True
+load(path)        a run saved to disk, as a Run.
 
-Both return a Run. Nothing here imports torch, pyvista or PyTO. A record written before
-runs stored their colours and labels takes them from its database's Display sheet.
+Nothing here imports torch, pyvista or PyTO. A record written before runs stored their
+colours and labels takes them from its database's Display sheet.
 """
 from __future__ import annotations
 
@@ -241,55 +240,6 @@ def load(path: str) -> Run:
                   {k[2:]: r[k] for k in r.files if k.startswith("h_")},
                   [str(s) for s in r["material_colors"]] if stored else None,
                   [str(s) for s in r["material_labels"]] if stored else None)
-
-
-def from_payload(payload: dict, descriptor: str = "in-memory") -> Run:
-    """Build a Run from a run still in memory, i.e. save.LAST_RUN.
-
-    The payload holds z_elem for every element. Voids are masked to NaN here so
-    an in-memory Run behaves the same as a loaded one.
-    """
-    if not isinstance(payload, dict) or "fields" not in payload:
-        raise RecordError(
-            "payload is not a run dict. Expected save.LAST_RUN, which is None "
-            "until a run finishes.")
-
-    f = payload["fields"]
-    need = {"material_indices", "x_bin", "x_cont", "von_mises", "z_elem"}
-    missing = need - set(f)
-    if missing:
-        raise RecordError(f"payload fields missing {sorted(missing)}. "
-                          f"Present: {sorted(f)}")
-
-    n = int(payload["num_elems"])
-    solid = np.asarray(f["x_bin"]).ravel() > 0.5
-    z = np.asarray(f["z_elem"], dtype=np.float32).copy()
-    if z.ndim == 2 and z.shape[0] == n:
-        z[~solid] = np.nan
-
-    cfg = payload.get("config") or {}
-    tp = cfg.get("topopt_params") or {}
-    meta = {
-        "example": str(payload.get("example_name", "?")),
-        "descriptor": descriptor,
-        "iterations": (cfg.get("run") or {}).get("iterations"),
-        "constraints": tp.get("Constraints"),
-        "vae_net": os.path.basename(
-            str(tp.get("MaterialsExcelFile", ""))).replace(".xlsx", ".nt"),
-        "params": {},
-    }
-
-    # history is cast to float32, as the record writer does, so an in-memory Run
-    # and the same run saved and reloaded report identical digits
-    hist = {}
-    for k, v in (payload.get("history") or {}).items():
-        a = np.asarray(v)
-        hist[k] = a.astype(np.float32) if a.dtype.kind in "fiu" else a
-
-    return _build("<memory>", meta, cfg, n, f["material_indices"], solid,
-                  f["x_cont"], f["von_mises"], z, payload["zRealPoints"],
-                  payload.get("material_names", []), hist,
-                  payload.get("material_colors"), payload.get("material_labels"))
 
 
 def label(run: "Run") -> str:

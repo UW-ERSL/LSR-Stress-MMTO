@@ -25,16 +25,18 @@ from lsr_mmto.optimize import run as M  # noqa: E402
 from lsr_mmto.optimize import save as run_save  # noqa: E402
 from lsr_mmto.problem.project import (DEFAULT_SETTINGS, NOT_STORED, Project, run_arguments)  # noqa: E402
 
-UBRACKET_PYTO = os.path.join(ROOT, "data", "models", "UBracket", "UBracket.pyto")
+UBRACKET = os.path.join(ROOT, "projects", "U-bracket.mmto")
 N_DOF, ITERS, SMOOTHING_OFF = 3000, 4, 2
 
 
 def ubracket_project():
-    """The tutorial's custom U-bracket, as a Project."""
-    p = Project.load(UBRACKET_PYTO)
+    """The U-bracket project, coarse and short, in MKS units."""
+    p = Project.load(UBRACKET)
     p.n_dof, p.single_layer = N_DOF, True
+    p.units = "MKS"
     p.database = "6Materials_AF_3Attr"
     p.objective("FailureFactorPNorm()")
+    p.formulation["constraints"] = []
     p.constraint("Mass()", "<=", 0.0035)
     p.settings["common"].update(maxIterations=ITERS, relative_filter_radius=3.5, pnorm_exponent=16)
     p.settings["advanced"]["z_smoothing_disable_after_iter"] = SMOOTHING_OFF
@@ -110,7 +112,13 @@ def test_unknown_and_missing_settings():
     p.settings["common"]["beta_schedule_scheme"] = "FAST"
     errors = "\n".join(p.validate())
     assert "unknown setting 'gama_max'" in errors and "'FAST' is not one of" in errors, errors
-    q = Project.load(UBRACKET_PYTO)                                 # a GUI file: no settings at all
+    with tempfile.TemporaryDirectory() as d:                        # a project file with no settings at all
+        data = json.load(open(UBRACKET))
+        del data["mmto"]["settings"]
+        path = os.path.join(d, "U-bracket.mmto")
+        json.dump(dict(data, stl_file_path=os.path.join(ROOT, "data", "models", "UBracket", "UBracket.STL")),
+                  open(path, "w"))
+        q = Project.load(path)
     q.database = "6Materials_AF_3Attr"
     filled = q.complete_settings()
     assert "advanced.gamma_max" in filled and "vae.latentDim" in filled
@@ -142,7 +150,7 @@ def test_record_has_provenance():
     assert prov["packages"]["numpy"] == np.__version__ and prov["python"]
     units = runs()["project"][1]["config"]["units"]
     assert units == {"system": "MKS", "length": "m", "force": "N", "stress": "Pa", "density": "kg/m^3",
-                     "mass": "kg", "cost per mass": "USD/kg"}, units       # the U-bracket GUI file says MKS
+                     "mass": "kg", "cost per mass": "USD/kg"}, units       # ubracket_project says MKS
     with tempfile.TemporaryDirectory() as d:                        # not a git checkout
         assert run_save.git_state(d)["commit"] == "unknown"
 
@@ -290,26 +298,14 @@ def test_shipped_networks_are_usable():
 
 
 def test_old_runs_rebuild():
-    """A run made under an old example name, or from a GUI file before projects, gets
-    the same mesh as before."""
+    """A run made under an old example name finds its project."""
     from lsr_mmto.results import render
-    from lsr_mmto.problem.mesh import problem_from_pyto
 
     class Old:
         config, example, descriptor = {}, "UBracket_Stress_FF", "old run"
     assert render._problem(Old()).name == "U-bracket"
     assert render.project_name("AirplaneBracket_Stress") == "Airplane bracket"
     assert render.MIRROR_AXES[render.project_name("Beam_Liao_Pareto_FF")] == (0, 1, 2)
-
-    class OldGui:
-        example, descriptor = "custom_UBracket", "old GUI run"
-        config = {"arguments_resolved": {"to_problem": {"pyto": UBRACKET_PYTO, "database": "6Materials_AF_3Attr",
-                                                        "n_dof": N_DOF, "single_layer": True}},
-                  "topopt_params": {"nDOFDesired": N_DOF}}
-    OldGui.n_elems = int(problem_from_pyto(UBRACKET_PYTO, nDOFDesired=N_DOF, single_layer=True)[0].num_elems)
-    render._MESH_CACHE.clear()
-    assert int(render.mesh_for(OldGui()).num_elems) == OldGui.n_elems
-
 
 
 def test_training_stop():

@@ -26,9 +26,8 @@ import numpy as np
 # VAE weights. Off by default.
 SAVE_PICKLE = False
 
-# When False, save_run_data captures the payload in LAST_RUN and writes nothing.
+# For the tests only: False makes save_run_data (and run(p)) write nothing.
 WRITE_FILES = True
-LAST_RUN = None
 
 
 # --------------------------------------------------------------------------- #
@@ -348,8 +347,7 @@ def save_run_data(save_dir, config, fields, vae_state_dict, history,
     """Write the record, run_config.yaml, and the pickle if SAVE_PICKLE.
 
     Returns the path of the primary artefact: the .pkl when SAVE_PICKLE is on,
-    otherwise the .npz. Returns None when WRITE_FILES is False, in which case
-    the payload is left in LAST_RUN.
+    otherwise the .npz. Returns None when WRITE_FILES is False (the tests only).
     """
     if WRITE_FILES:
         os.makedirs(save_dir, exist_ok=True)
@@ -375,8 +373,6 @@ def save_run_data(save_dir, config, fields, vae_state_dict, history,
         "material_labels": list(material_names if material_labels is None else material_labels),
     }
 
-    global LAST_RUN
-    LAST_RUN = data
     if not WRITE_FILES:
         return None
 

@@ -56,10 +56,6 @@ def _problem(run: Run):
     spec = ((run.config or {}).get("arguments_resolved") or {}).get("to_problem")
     if isinstance(spec, dict) and "project" in spec:
         return Project.from_record(spec)
-    if isinstance(spec, dict) and "pyto" in spec:          # made in the GUI, before projects
-        p = Project.load(spec["pyto"])
-        p.n_dof, p.single_layer = int(spec.get("n_dof", 30000)), bool(spec.get("single_layer", False))
-        return p
     path = os.path.join(REPO, "projects", f"{project_name(run.example)}.mmto")
     if not os.path.isfile(path):
         raise RenderError(f"{run.descriptor}: no project file for example {run.example!r} ({path})")

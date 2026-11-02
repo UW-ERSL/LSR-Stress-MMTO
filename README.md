@@ -133,7 +133,7 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad.py`
 | `project.py` | a project: saves and loads it, checks it, builds the problem, runs it (`run(p)`) |
 | `selections.py` | named regions of the mesh that supports, loads and keep-solid regions act on |
 | `project_folder.py` | keeps everything a project uses in its folder |
-| `mesh.py` | meshing, and the supports and loads picked in the PyTO-AD GUI |
+| `mesh.py` | turns the part's STL into the voxel mesh |
 
 #### `lsr_mmto/materials/`
 

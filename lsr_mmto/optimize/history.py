@@ -303,38 +303,6 @@ def init_run_history():
     }
 
 
-def start_run(base="runs", name=None):
-    """Create a timestamped run folder and tee stdout/stderr into run.log.
-
-    Returns the run-folder path (str). The matplotlib autosave hook is enabled
-    later, inside run_postprocessing, so intermediate/live plots are skipped.
-    """
-    import os, sys, datetime
-    stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = os.path.join(base, "run_" + stamp + (("_" + name) if name else ""))
-    os.makedirs(run_dir, exist_ok=True)
-    print(f"[OUTPUT] folder: {os.path.abspath(run_dir)}")
-
-    class _Tee:
-        def __init__(self, *streams):
-            self.streams = streams
-
-        def write(self, d):
-            for s in self.streams:
-                s.write(d); s.flush()
-
-        def flush(self):
-            for s in self.streams:
-                s.flush()
-
-    logf = open(os.path.join(run_dir, "run.log"), "w", encoding="utf-8")
-    sys.stdout = _Tee(sys.__stdout__, logf)
-    sys.stderr = _Tee(sys.__stderr__, logf)
-    return run_dir
-
-
-
-
 def log_design_state(history, iteration, x_phys, z, material_properties, zTorch,
                      matEncoder, num_elems, beta_proj, eta_proj, verbose=True):
     """Record the grey fraction; in verbose mode also print the iteration header,

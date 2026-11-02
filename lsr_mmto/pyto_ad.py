@@ -43,7 +43,6 @@ def check_environment(root):
 check_environment(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../PyTO-AD/src')))
 import pyto.autodiff.material_model as topopt_material_model  # first: PyTO-AD sets torch's default dtype to float64
-from pyto.io import stl_reader
 from pyto.core import hex_mesher, mat_lib
 from pyto.core import bc as bound_cond
 from pyto.topopt import filters as topopt_filters

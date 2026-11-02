@@ -4,9 +4,7 @@ project.py
 One MMTO problem as a project: geometry, named selections, boundary conditions,
 keep-solid regions, material database, objective and constraints, and settings.
 A project is saved as an LSR MMTO project file (.mmto): the layout of a PyTO-AD project
-file, with the problem in its own "mmto" section. Project.load also reads a PyTO-AD project
-file (.pyto); the rest of what the PyTO-AD GUI saved is kept, except its supports and loads,
-which become part of the mmto section (see below).
+file, with the problem in its own "mmto" section. Project.load reads .mmto files only.
 
     from lsr_mmto.problem.project import Project
     from lsr_mmto.problem.selections import face, box
@@ -39,10 +37,10 @@ Boundary conditions (each acts on a named selection, evaluated on the mesh nodes
                    area is a number, or "bbox": the bounding box of the loaded nodes
                    seen along an axis-aligned direction (each side at least half an
                    element). "bbox" is approximate; it is there for the airplane bracket.
-Supports and loads picked in the PyTO-AD GUI (its "structuralBC" section) are turned into
-selections and boundary conditions here when the project is loaded, with the GUI's own rules
-(stl_faces with tol 0.8, nearest boundary node, halfspaces), and the GUI's lists are emptied:
-the mmto section is the whole problem.
+Supports and loads picked on the part in the window (faces, nodes, boxes) become selections
+and boundary conditions of the project as soon as they are applied (adopt_picks), with the
+picking tools' own rules (stl_faces with tol 0.8, nearest boundary node, halfspaces): the mmto
+section is the whole problem.
 
 Forces are used as given, with no unit conversion: they must be in the units of the
 material database.
@@ -69,6 +67,8 @@ SCHEMA_VERSION = 1
 _UPGRADES = {}
 _AXES = {"x": 0, "y": 1, "z": 2}
 _MARK_FIXED, _MARK_LOAD, _MARK_ROLLER = 1, 2, 3
+# degrees of freedom each support type of the picking tools fixes
+_SUPPORT_DOFS = {"Fixed XYZ": (0, 1, 2), "Fixed X": (0,), "Fixed Y": (1,), "Fixed Z": (2,)}
 
 # Every setting of run_topopt a project stores, under run_topopt's own names, with the value
 # a new project starts from: the settings of the paper's examples.
@@ -309,6 +309,25 @@ def to_params_form(text, role, bound=None):
     return (TO_QOI[qoi], opt) if role == "objective" else (TO_QOI[qoi], opt, float(bound))
 
 
+def _supports_and_loads(picks):
+    """Supports as (type, triangles, points, regions) and loads as (triangles, points, regions,
+    force), from the window's constraint_data and force_data lists."""
+    supports, loads = [], []
+    for c in picks.get("constraint_data", []):
+        supports.append((c["type"], c.get("triangles") or [], c.get("points") or [],
+                         c.get("regions") or []))
+    for f in picks.get("force_data", []):
+        if f.get("type", "force_xyz") != "force_xyz":
+            raise NotImplementedError(f"load type {f.get('type')!r} is not supported")
+        loads.append((f.get("triangles") or [], f.get("points") or [], f.get("regions") or [],
+                      [f.get("force_x", 0.0), f.get("force_y", 0.0), f.get("force_z", 0.0)]))
+    for s in supports:
+        if s[0] not in _SUPPORT_DOFS:
+            raise NotImplementedError(f"support type {s[0]!r} is not supported; "
+                                      f"use one of {', '.join(_SUPPORT_DOFS)}")
+    return supports, loads
+
+
 class Project:
     def __init__(self, name, stl, n_dof=30000, single_layer=False, base_dir=None):
         self.name = name
@@ -345,31 +364,11 @@ class Project:
             return self.add_selection(self._free_name(kind), on)
         return on
 
-    def _adopt_gui_picks(self):
-        """Supports and loads picked in the PyTO-AD GUI and stored in the file become selections
-        and boundary conditions of this project; the file's GUI lists are emptied, so the problem
-        is defined in one place."""
-        names = self.adopt_picks(self._gui) if self._gui else []
-        if not names:
-            return []
-        sbc = self._gui.get("structuralBC")
-        if isinstance(sbc, dict):
-            self._gui["structuralBC"] = {k: [] if isinstance(v, list) else
-                                         {kk: 0 for kk in v} if isinstance(v, dict) else v
-                                         for k, v in sbc.items()}
-        for k in ("constraint_data", "force_data"):
-            if k in self._gui:
-                self._gui[k] = []
-        print(f"[{self.name}] the supports and loads picked in the PyTO-AD GUI are now selections "
-              f"{', '.join(names)} of this project")
-        return names
-
     def adopt_picks(self, gui):
-        """Supports and loads picked in the PyTO-AD GUI (a project file's GUI section, or the GUI's
-        constraint_data and force_data lists) as selections and boundary conditions of this project,
-        with the GUI's own rules: faces as stl_faces (tol 0.8), a clicked node as its nearest
-        boundary node, a dragged box as halfspaces. Returns the names of the new selections."""
-        from lsr_mmto.problem.mesh import _SUPPORT_DOFS, _supports_and_loads
+        """Supports and loads picked on the part in the window (its constraint_data and force_data
+        lists) as selections and boundary conditions of this project, with the picking tools' own
+        rules: faces as stl_faces (tol 0.8), a clicked node as its nearest boundary node, a dragged
+        box as halfspaces. Returns the names of the new selections."""
         supports, loads = _supports_and_loads(gui)
         if not supports and not loads:
             return []
@@ -379,7 +378,7 @@ class Project:
             parts += [S.nearest(point, boundary=True) for point in points]
             parts += [S.halfspaces(r["normals"], r["origins"]) for r in regions]
             if not parts:
-                raise ValueError(f"[{self.name}] {what} picked in the PyTO-AD GUI has no faces, "
+                raise ValueError(f"[{self.name}] {what} picked on the part has no faces, "
                                  f"nodes or boxes")
             return parts[0] if len(parts) == 1 else S.union(*parts)
 
@@ -867,7 +866,7 @@ class Project:
 
     def save(self, path):
         """Write the project, every setting included, with the other sections it was loaded with.
-        Always as .mmto: a .pyto file opened and saved in the PyTO-AD GUI would lose its mmto section."""
+        Always as .mmto."""
         if not path.lower().endswith(".mmto"):
             raise ValueError(f"{path}: an LSR MMTO project is saved as a .mmto file")
         path = os.path.abspath(path)
@@ -959,8 +958,12 @@ class Project:
     @classmethod
     def load(cls, path):
         path = os.path.abspath(path)
+        if not path.lower().endswith(".mmto"):
+            raise ValueError(f"{path}: not an LSR MMTO project; a project is a .mmto file")
         with open(path) as fh:
             data = _moved_paths(json.load(fh))
+        if "mmto" not in data:
+            raise ValueError(f"{path}: no mmto section; it is not an LSR MMTO project")
         return cls._from_data(data, os.path.dirname(path), os.path.splitext(os.path.basename(path))[0])
 
     @classmethod
@@ -982,7 +985,6 @@ class Project:
         p.settings = {k: dict(stored.get(k, {})) for k in DEFAULT_SETTINGS}    # missing ones: filled at build
         p.settings.update({k: dict(v) for k, v in stored.items() if k not in DEFAULT_SETTINGS})
         p._gui = {k: v for k, v in data.items() if k not in ("mmto", "stl_file_path")}
-        p._adopt_gui_picks()
         return p
 
 

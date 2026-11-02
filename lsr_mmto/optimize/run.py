@@ -49,7 +49,6 @@ from lsr_mmto.optimize.filters import create_density_and_material_filters
 from lsr_mmto.optimize.history import (
     compute_domain_volume,
     init_run_history,
-    start_run,
     log_design_state,
     record_fea_diagnostics,
     log_objective_and_constraints,
@@ -282,10 +281,7 @@ def run_topopt(
     #     MMTO driver uses the same tested iterative path as single-material.
     #     The adjoint solve in PyTO-AD's differentiable solve reuses fe_solver.solver
     #     and fe_solver.dsolver, so it follows this choice automatically.
-    try:
-        from lsr_mmto.pyto_ad import DIRECT_SOLVER_DOF_CUTOFF
-    except Exception:
-        DIRECT_SOLVER_DOF_CUTOFF = 120000  # dof limit for direct solver; above -> DPCG
+    from lsr_mmto.pyto_ad import DIRECT_SOLVER_DOF_CUTOFF    # dof limit for the direct solver; above it, DPCG
 
     solver = linear_solvers.Solvers.PARDISO
     dsolver = deflation.DeflationSolver()
@@ -713,11 +709,3 @@ def run_topopt(
         example_name=getattr(to_problem, "name", str(to_problem)),
         decode=lambda z: AD.decode(matEncoder, z, use_constant_poissons_ratio, constant_poissons_ratio),
     )
-
-if __name__ == "__main__":
-    # L-bracket benchmark, the r_rho = r_z = 3.5 cell, with the settings in its project file.
-    # Expect Phi_p 2.5377, grey 2.47%, VF 0.1472 / 0.1472 / 0.0993.
-    from lsr_mmto.problem.project import Project, run_arguments
-    save_dir = start_run(name="LBracket_BM1_rel3p5_rz3p5")
-    to_problem = Project.load(os.path.join(os.path.dirname(__file__), "..", "..", "projects", "L-bracket.mmto"))
-    run_topopt(**run_arguments(to_problem, save_dir=save_dir))

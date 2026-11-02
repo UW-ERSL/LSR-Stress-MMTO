@@ -45,9 +45,9 @@ def generate():
            "Generated from the code by `python docs/make_reference.py`; do not edit by hand.", "",
            "A project is an LSR MMTO project file (.mmto): the layout of a PyTO-AD project file, with an "
            "`mmto` section, which holds the whole "
-           "problem. Supports and loads picked in the PyTO-AD GUI become selections (`gui_support1`, "
-           "`gui_load1`, ...) and boundary conditions of the mmto section when the project is loaded, "
-           "and are removed from the GUI's own section; the rest of what the GUI saved is kept.", "",
+           "problem. Supports and loads picked on the part in the window become selections (`gui_support1`, "
+           "`gui_load1`, ...) and boundary conditions of the mmto section as soon as they are applied; "
+           "the rest of what the window saves in the file (its settings) is kept.", "",
            "## The mmto section", "", "| key | holds |", "|---|---|"]
     out += [f"| `{k}` | {v} |" for k, v in SECTIONS]
 

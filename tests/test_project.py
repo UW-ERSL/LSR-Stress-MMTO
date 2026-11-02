@@ -155,22 +155,6 @@ def test_free_rigid_body_motion_is_refused():
         raise AssertionError("an under-supported problem was built")
 
 
-def test_build_gui_project_matches_problem_from_pyto():
-    """A project made in the PyTO-AD GUI gives exactly the boundary conditions it gave before."""
-    from lsr_mmto.problem.mesh import problem_from_pyto
-    path = os.path.join(UBRACKET, "UBracket.pyto")
-    mesh0, _, bc0, _ = problem_from_pyto(path, nDOFDesired=N_DOF, single_layer=True)
-    p = Project.load(path)
-    p.n_dof, p.single_layer = N_DOF, True
-    p.database = "6Materials_AF_3Attr"
-    p.objective("FailureFactorPNorm()")
-    mesh, _, bc, _, _, _ = p.build(verbose=False)
-    assert mesh.num_elems == mesh0.num_elems
-    assert np.array_equal(bc.fixed_dofs, bc0.fixed_dofs)
-    assert np.array_equal(bc.force, bc0.force)
-    assert np.array_equal(bc.dirichlet_values, bc0.dirichlet_values)
-
-
 def test_script_round_trip():
     """Every project in projects/ exported to a script, the script run: the same project."""
     import glob
@@ -194,37 +178,30 @@ def test_script_round_trip():
                 os.remove(script)
 
 
-def _gui_copy(d, structural_bc=None):
-    """A copy of the U-bracket GUI project in d, with other GUI picks when given."""
-    import json
-    import shutil
-    shutil.copy(os.path.join(UBRACKET, "UBracket.STL"), d)
-    data = json.load(open(os.path.join(UBRACKET, "UBracket.pyto")))
-    if structural_bc is not None:
-        data["structuralBC"] = structural_bc
-    path = os.path.join(d, "UBracket.pyto")
-    json.dump(data, open(path, "w"), indent=2)
-    return path
-
-
-def test_gui_picks_become_the_project():
-    """Opening a GUI project turns its picks into selections and bcs; saved and opened
-    again, nothing is converted twice, and the script shows the whole problem."""
+def test_window_picks_become_the_project():
+    """Supports and loads picked on the part in the window (faces, a clicked node, a box) become
+    selections and boundary conditions with the picking tools' own rules: the same fixed dofs and
+    force vector as those rules gave (tests/data/gui_picks). Saved and opened again, the project is
+    the same, and its script shows the whole problem."""
+    ref_dir = os.path.join(ROOT, "tests", "data", "gui_picks")
+    picks = json.load(open(os.path.join(ref_dir, "picks.json")))
+    ref = np.load(os.path.join(ref_dir, "reference.npz"))
     with tempfile.TemporaryDirectory() as d:
-        p = Project.load(_gui_copy(d))
-        assert p.bcs == [{"kind": "fixed", "on": "gui_support1", "dofs": "xyz"},
-                         {"kind": "force", "on": "gui_load1", "total": [-1.0, 0.0, 0.0]}]
-        assert p.selections["gui_support1"].TYPE == "halfspaces"
-        sbc = p._gui["structuralBC"]
-        assert all(v == [] for v in sbc.values() if isinstance(v, list))
-        assert p._gui["settings"] == json.load(open(os.path.join(UBRACKET, "UBracket.pyto")))["settings"]
+        p = Project("u", stl=os.path.join(UBRACKET, "UBracket.STL"), n_dof=N_DOF, single_layer=True, base_dir=d)
+        assert p.adopt_picks(picks) == ["gui_support1", "gui_support2", "gui_load1"]
+        assert p.selections["gui_support2"].TYPE == "halfspaces"
         p.database = "6Materials_AF_3Attr"
-        p.objective("FailureFactorPNorm()")
-        p.save(os.path.join(d, "UBracket.mmto"))
-        q = Project.load(os.path.join(d, "UBracket.mmto"))
+        p.objective("Compliance()")
+        mesh, _, bc, _, _, _ = p.build(verbose=False)
+        assert mesh.num_elems == int(ref["num_elems"])
+        assert np.array_equal(np.sort(bc.fixed_dofs), ref["fixed_dofs"])
+        assert np.array_equal(bc.force, ref["force"])
+        assert not np.any(bc.dirichlet_values)
+        p.save(os.path.join(d, "u.mmto"))
+        q = Project.load(os.path.join(d, "u.mmto"))
         assert q.to_dict() == p.to_dict()
         text = open(q.to_script(os.path.join(d, "u.py"))).read()
-        assert "gui_support1" in text and "halfspaces(" in text
+        assert "gui_support2" in text and "halfspaces(" in text
     try:
         p.to_script(os.path.join(ROOT, "elsewhere.py"))
     except ValueError as e:
@@ -233,59 +210,41 @@ def test_gui_picks_become_the_project():
         raise AssertionError("a script away from the project was accepted")
 
 
-def test_gui_picks_of_every_kind_match_the_gui():
-    """Faces, picked nodes and boxes, alone and together, in both GUI layouts: the same
-    fixed dofs and force vector as the GUI's own rules (mesh.gui_bcs_on_mesh)."""
-    from lsr_mmto.problem.mesh import gui_bcs_on_mesh, make_mesh, read_project
-    box = json.load(open(os.path.join(UBRACKET, "UBracket.pyto")))["structuralBC"]["point_supports"][0]["regions"]
-    new = {"fixed_faces_indices": [0, 1, 2], "fixed_faces_z_indices": [5],
-           "load_faces_indices": [[8, 9]], "load_forces": [[0.0, -2.0, 0.0]],
-           "point_supports": [{"type": "Fixed Y", "points": [[0.5, 0.0, 0.0], [0.6, 0.02, 0.01]],
-                               "regions": box},
-                              {"type": "Fixed XYZ", "points": [], "regions": box}],   # holds it: well posed
-           "point_loads": [{"points": [[0.98, 1.0, 0.0]], "regions": [], "force": [-1.0, 0.0, 0.0]}],
-           "constraint_counts": {"fixed_triangles": 4, "loaded_triangles": 2}}
-    old = {"constraint_data": [{"type": "Fixed X", "triangles": [0, 1], "points": [[0.5, 0.0, 0.0]]},
-                               {"type": "Fixed XYZ", "triangles": [], "points": [], "regions": box}],
-           "force_data": [{"type": "force_xyz", "triangles": [], "points": [], "regions": box,
-                           "force_x": 0.0, "force_y": 3.0, "force_z": 0.0}]}
-    for layout, sbc in (("new", new), ("old", None)):
-        with tempfile.TemporaryDirectory() as d:
-            path = _gui_copy(d, sbc)
-            if layout == "old":
-                data = json.load(open(path))
-                del data["structuralBC"]
-                data.update(old)
-                json.dump(data, open(path, "w"))
-            gui = read_project(path)
-            mesh0 = make_mesh(gui["stl_file_path"], N_DOF, single_layer=True)
-            fixed0, force0 = gui_bcs_on_mesh(gui, mesh0)
-            p = Project.load(path)
-            p.n_dof, p.single_layer = N_DOF, True
-            p.database = "6Materials_AF_3Attr"
-            p.objective("Compliance()")
-            mesh, _, bc, _, _, _ = p.build(verbose=False)
-            assert np.array_equal(np.sort(bc.fixed_dofs), fixed0), layout
-            assert np.array_equal(bc.force, force0), layout
-            assert not np.any(bc.dirichlet_values), layout
+def test_only_mmto_files_load():
+    """A project is a .mmto file with an mmto section; anything else is refused with the reason."""
+    with tempfile.TemporaryDirectory() as d:
+        other = os.path.join(d, "u.pyto")
+        json.dump({"stl_file_path": "UBracket.STL"}, open(other, "w"))
+        try:
+            Project.load(other)
+        except ValueError as e:
+            assert "a project is a .mmto file" in str(e), e
+        else:
+            raise AssertionError("a .pyto file was loaded")
+        plain = os.path.join(d, "plain.mmto")
+        json.dump({"stl_file_path": "UBracket.STL"}, open(plain, "w"))
+        try:
+            Project.load(plain)
+        except ValueError as e:
+            assert "no mmto section" in str(e), e
+        else:
+            raise AssertionError("a .mmto file with no mmto section was loaded")
 
 
 def test_gui_sections_survive_a_save():
-    """Saving from code keeps what the GUI wrote in the same file, except its supports and
-    loads, which are now in the mmto section."""
+    """Saving from code keeps what the window wrote in the same file (its settings section)."""
+    original_path = os.path.join(ROOT, "projects", "L-bracket.mmto")
     with tempfile.TemporaryDirectory() as d:
-        p = Project.load(os.path.join(UBRACKET, "UBracket.pyto"))
-        p.database = "6Materials_AF_3Attr"
-        p.objective("FailureFactorPNorm()")
+        p = Project.load(original_path)
         out = os.path.join(d, "u.mmto")
         p.save(out)
         saved = json.load(open(out))
-        original = json.load(open(os.path.join(UBRACKET, "UBracket.pyto")))
+        original = json.load(open(original_path))
+        assert set(saved) == set(original)
         for k in original:
-            if k not in ("stl_file_path", "structuralBC"):
+            if k not in ("stl_file_path", "mmto"):
                 assert saved[k] == original[k], k
-        assert saved["structuralBC"]["point_supports"] == [] and saved["structuralBC"]["point_loads"] == []
-        assert [bc["on"] for bc in saved["mmto"]["bcs"]] == ["gui_support1", "gui_load1"]
+        assert saved["settings"]["unit_system"] == "mmKS"
 
 
 def test_schema_upgrades():
