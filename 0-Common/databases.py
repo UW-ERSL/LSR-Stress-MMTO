@@ -512,6 +512,29 @@ def convert_database(path, system, out):
 
 
 # ---------------------------------------------------------------------- the Excel template
+def write_database(path, attributes, units, names, labels, colours, values):
+    """A whole database, as the app's editor saves it: the template's layout and Excel checks
+    (write_template), with each material's name, the numbers, each column's unit, and on the Display
+    sheet each material's colour and label (None: shown by its name)."""
+    from openpyxl import load_workbook
+    from openpyxl.styles import PatternFill
+    write_template(path, attributes, len(names))
+    wb = load_workbook(path)
+    main, disp = wb["Main"], wb[DISPLAY_SHEET]
+    for c, unit in enumerate(units, start=2):
+        main.cell(row=2, column=c, value=unit)
+    for r, (name, row) in enumerate(zip(names, values), start=3):
+        main.cell(row=r, column=1, value=name)
+        for c, v in enumerate(row, start=2):
+            main.cell(row=r, column=c, value=float(v))
+    for r, (colour, label) in enumerate(zip(colours, labels), start=2):
+        disp.cell(row=r, column=2, value=colour)
+        disp.cell(row=r, column=2).fill = PatternFill("solid", fgColor=colour[1:])
+        disp.cell(row=r, column=3, value=label or None)
+    wb.save(path)
+    return path
+
+
 def write_template(path, attributes, n_materials=5):
     """An empty database to fill in: the attributes in row 1, a units list under each in
     row 2, numbers only below; a Display sheet with each material's default colour and an

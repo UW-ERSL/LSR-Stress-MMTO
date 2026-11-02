@@ -1362,6 +1362,26 @@ class MMTOWindow(MainWindow):
             self._refresh_title()
 
 
+def install_error_handler(window):
+    """An error inside the app (in what a button or a field does) shown in a message box and written to the
+    log, with the app left running. Without it, PyQt ends the whole app at once and unsaved work is lost."""
+    import traceback
+
+    def handler(kind, value, tb):
+        if issubclass(kind, KeyboardInterrupt):
+            return sys.__excepthook__(kind, value, tb)
+        print("".join(traceback.format_exception(kind, value, tb)), file=sys.stderr, flush=True)
+        try:
+            window.message_text.append(f"Error: {kind.__name__}: {value}")
+            QtWidgets.QMessageBox.critical(
+                window, APP, f"Something went wrong:\n\n{kind.__name__}: {value}\n\nLSR MMTO is still "
+                             f"running. If anything looks wrong, save the project and start the app again.")
+        except Exception:                                           # noqa: BLE001
+            pass
+    sys.excepthook = handler
+    return handler
+
+
 def main(argv=(), splash=None):
     """The window, with argv[0] open if given; splash (run_gui.py's start-up picture) closes when it shows."""
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
@@ -1369,6 +1389,7 @@ def main(argv=(), splash=None):
     from PyQt5.QtGui import QIcon
     app.setWindowIcon(QIcon(ICON))                                 # title bar and taskbar
     window = MMTOWindow()
+    install_error_handler(window)
     window.show()
     if splash is not None:                                          # closed outright: finish() can wait forever
         app.processEvents()

@@ -351,6 +351,126 @@ def test_materials_panel():
         assert w.project.settings["vae"]["latentDim"] == 2 and w.project.validate() == []
 
 
+def test_database_editor():
+    """New database and Edit: one row per material (name, optional shown-as, colour, numbers), the units under
+    the headers, bad cells marked and Save off until none; a block pasted from Excel; always saved in the
+    project's folder (no folder to choose); a shipped database saved as a copy; a network set aside when
+    the numbers change, kept when only a colour does."""
+    from databases import DATABASE_DIR, check_database, database_table, material_display  # type: ignore
+    from gui import database_editor as DE
+
+    def editing(m, action, fill):
+        real = DE.DatabaseEditor.exec_
+        try:
+            DE.DatabaseEditor.exec_ = fill
+            return action()
+        finally:
+            DE.DatabaseEditor.exec_ = real
+
+    def typed(e, rows):
+        for r, row in enumerate(rows, start=1):
+            while e.table.rowCount() <= r:
+                e.add_material()
+            for c, text in enumerate(row):
+                if c != 2:
+                    e.table.item(r, c).setText(text)
+
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        m = panels.MaterialsPanel(w, w.project)
+        with answers():
+            assert m.new_database() is None                                   # not in a folder of its own yet
+        assert w.save_project_as(os.path.join(d, "P", "P.mmto")) and w.own_folder()
+        folder = os.path.join(d, "P", "materials")
+        m = panels.MaterialsPanel(w, w.project)
+        seen = {}
+
+        def new(e):
+            assert e.where.text() == f"Saved in {folder}"
+            assert not [b for b in e.findChildren(QtWidgets.QPushButton) if "Browse" in b.text()]
+            assert [e.table.horizontalHeaderItem(c).text() for c in range(e.table.columnCount())] == \
+                ["Name", "Shown as", "Colour", "Density", "Young's modulus", "Poisson's ratio"]
+            assert [e.table.cellWidget(0, c).currentText() for c in (3, 4, 5)] == ["t/mm^3", "MPa", "-"]
+            assert all(e.table.item(r, 0).text() == "" for r in (1, 2, 3))      # no placeholder names
+            typed(e, [["Steel", "", "", "7.85e-9", "200000", "0.29"], ["Copper", "Cu", "", "8.96e-9", "117000", "0.6"],
+                      ["Aluminum", "", "", "2.7e-9", "68900", "0.33"]])
+            seen["bad"] = e.check()
+            assert not e.save_button.isEnabled() and e.table.item(2, 5).background().color() == DE.BAD
+            e.table.item(2, 5).setText("0.34")
+            e.add_material()                                                    # an empty row to paste into
+            e.table.setCurrentCell(4, 0)
+            e.table.paste("Titanium\t\t\t4.43e-9\t113800\t0.34\nIron\t\t\t7.1e-9\t169000\t0.29")
+            e._set_colour(1, "#123456")
+            seen["good"] = e.check()
+            return 1
+        path = editing(m, m.new_database, new)
+        e = DE.DatabaseEditor(w, folder, unit_system=w.project.units)          # Add / Remove property
+        e._fill_property_menu()
+        assert [a.text() for a in e.add_property_menu.actions()] == ["Yield strength", "Cost"]
+        e.add_property("Cost")
+        assert e.attributes == ["Density", "Youngs_Modulus", "Poissons_Ratio", "Cost"]
+        assert e.table.cellWidget(0, 6).currentText() == "USD/t"
+        e.table.item(1, 6).setText("1000")
+        with answers(Box.No):
+            assert not e.remove_property("Cost")                              # it holds a number: asked
+        with answers(Box.Yes):
+            assert e.remove_property("Cost") and e.attributes == ["Density", "Youngs_Modulus", "Poissons_Ratio"]
+        e.table.setCurrentCell(1, 3)
+        assert e.remove_property() and e.attributes == ["Youngs_Modulus", "Poissons_Ratio"]
+        for key in ("Youngs_Modulus", "Poissons_Ratio"):
+            e.remove_property(key)
+        assert "Add at least one property" in e.check()
+        assert seen["bad"] == ["Copper: Poisson's ratio: -1 < value < 0.5"] and seen["good"] == []
+        assert path == os.path.join(folder, "my_materials.xlsx") and m.project.database == "materials/my_materials.xlsx"
+        assert check_database(path) == ([], [])
+        names, attributes, units, values = database_table(path)
+        assert names == ["Steel", "Copper", "Aluminum", "Titanium", "Iron"] and units == ["t/mm^3", "MPa", "-"]
+        colours, labels = material_display(path)
+        assert colours[0] == "#123456" and labels[:2] == ["Steel", "Cu"]
+
+        network = os.path.splitext(path)[0] + ".nt"
+        open(network, "wb").write(b"trained")
+        editing(m, m.edit_database, lambda e: (e._set_colour(2, "#ff8800"), 1)[1])   # a colour only
+        assert os.path.isfile(network) and material_display(path)[0][1] == "#ff8800"
+
+        def edit(e):
+            assert e.name.isReadOnly() and e.where.text() == path
+            assert e.table.item(2, 1).text() == "Cu" and e.table.item(1, 1).text() == ""
+            e.table.item(1, 4).setText("210000")
+            return 1
+        editing(m, m.edit_database, edit)
+        assert not os.path.exists(network) and open(network[:-3] + ".previous.nt", "rb").read() == b"trained"
+        assert "set aside as my_materials.previous.nt" in m.report.toPlainText()
+        assert database_table(path)[3][0, 1] == 210000
+
+        shipped = os.path.join(ROOT, DATABASE_DIR, "BM1_3Mats_2Attr.xlsx")
+        before = open(shipped, "rb").read()
+        m.set_database(shipped)
+        copy = editing(m, m.edit_database, lambda e: (e.table.item(1, 1).setText("Red"), 1)[1])
+        assert copy == os.path.join(folder, "BM1_3Mats_2Attr copy.xlsx") and open(shipped, "rb").read() == before
+        assert m.project.database == "materials/BM1_3Mats_2Attr copy.xlsx"
+        assert material_display(copy)[1] == ["Red", "Mat2_Blue", "Mate3_Green"]
+
+
+def test_error_in_the_app_keeps_it_running():
+    """An error in what a button does is shown and written to the log; the app keeps running."""
+    shown = []
+    real = Box.critical
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        G.install_error_handler(w)
+        Box.critical = staticmethod(lambda *a, **k: shown.append(a[2]) or Box.Ok)
+        try:
+            QtCore.QTimer.singleShot(0, lambda: 1 / 0)                            # an error inside the app
+            assert _wait(lambda: shown, 10)
+        finally:
+            Box.critical = real
+            sys.excepthook = sys.__excepthook__
+        assert "ZeroDivisionError" in shown[0] and "still running" in shown[0]
+        assert "Error: ZeroDivisionError" in w.message_text.toPlainText()
+        assert w.isEnabled() and w.save_project()                             # still working
+
+
 def test_vae_tab():
     """With a trained network in use the VAE settings are its own and greyed out; the tab says which
     network the database has and shows the VAE checks as you edit. No "?" button on our panels."""
@@ -970,7 +1090,7 @@ def test_latent_views():
 
 def test_snap_copy_outline_colour_new_database():
     """Snap rounds Measure and a copied point; a click on the part with a form open copies the point;
-    outlines are magenta whatever the place; New database writes a template and uses it."""
+    outlines are magenta whatever the place."""
     import selections as S  # type: ignore
 
     class Picker:
@@ -998,29 +1118,6 @@ def test_snap_copy_outline_colour_new_database():
         colour = w.plotter.actors["mmto_outline"].GetProperty().GetColor()
         assert [round(c * 255) for c in colour] == [196, 0, 196]               # magenta, not the red given
 
-        m = panels.MaterialsPanel(w, w.project)
-        real = panels.NewDatabaseDialog.exec_
-        try:
-            def fill(dialog):
-                dialog.name.setText("steels")
-                dialog.ticks["Cost"].setChecked(True)
-                dialog.count.setValue(4)
-                dialog.open_now.setChecked(False)
-                return 1
-            panels.NewDatabaseDialog.exec_ = fill
-            path = m.new_database()
-        finally:
-            panels.NewDatabaseDialog.exec_ = real
-        assert path == os.path.join(d, "steels.xlsx") and os.path.isfile(path)
-        assert m.project.database == "steels.xlsx" and "fill it in Excel" in m.report.toPlainText()
-        from databases import database_attributes  # type: ignore
-        assert database_attributes(path) == ["Density", "Youngs_Modulus", "Poissons_Ratio", "Cost"]
-        n = panels.NewDatabaseDialog(m, d)
-        n.name.setText("steels")
-        assert n.problems() == ["steels.xlsx is already there; choose another name"]
-        from databases import DATABASE_DIR  # type: ignore
-        n.folder.setText(os.path.join(ROOT, DATABASE_DIR))
-        assert any("come with LSR MMTO" in e for e in n.problems())
 
 
 
@@ -1185,29 +1282,12 @@ def test_stop_while_training():
     with scratch() as d:
         w = opened("L-bracket", d)
         w.show()
+        from databases import write_database  # type: ignore
         m = panels.MaterialsPanel(w, w.project)
-        real = panels.NewDatabaseDialog.exec_
-        try:
-            def fill(dialog):
-                dialog.name.setText("fresh")
-                dialog.ticks["Density"].setChecked(False)
-                dialog.count.setValue(3)
-                dialog.open_now.setChecked(False)
-                return 1
-            panels.NewDatabaseDialog.exec_ = fill
-            path = m.new_database()
-        finally:
-            panels.NewDatabaseDialog.exec_ = real
-        wb = openpyxl.load_workbook(path)
-        ws = wb["Main"]
-        heads = [ws.cell(1, c).value for c in range(1, ws.max_column + 1)]
-        for i, (name, E, nu) in enumerate((("Soft", 1e6, 0.30), ("Mid", 2e6, 0.32), ("Stiff", 4e6, 0.35))):
-            ws.cell(3 + i, 1).value = name
-            ws.cell(3 + i, heads.index("Youngs_Modulus") + 1).value = E
-            ws.cell(3 + i, heads.index("Poissons_Ratio") + 1).value = nu
-        ws.cell(2, heads.index("Youngs_Modulus") + 1).value = "Pa"
-        wb.save(path)
-        m._refresh()
+        path = write_database(os.path.join(d, "fresh.xlsx"), ["Youngs_Modulus", "Poissons_Ratio"], ["Pa", "-"],
+                              ["Soft", "Mid", "Stiff"], [None] * 3, ["#ff0000", "#00ff00", "#0000ff"],
+                              [[1e6, 0.30], [2e6, 0.32], [4e6, 0.35]])
+        m.set_database(path)
         w.apply_panel(m)
         w.project.settings["vae"]["numEpochs"] = 200000
         w.project.settings["vae"]["maxAttributeErrorPercent"] = 1e-9          # it would train for minutes

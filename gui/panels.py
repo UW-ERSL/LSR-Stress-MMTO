@@ -162,8 +162,9 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.combo.setCurrentIndex(-1 if project.database is None else self.combo.findText(project.database))
         self.combo.currentTextChanged.connect(self._choose)
         row.addWidget(self.combo, stretch=1)
-        for text, slot in (("New database...", self.new_database), ("Browse...", self._browse),
-                           ("Open in Excel", self._open_in_excel), ("Check again", self._refresh)):
+        for text, slot in (("New database...", self.new_database), ("Edit...", self.edit_database),
+                           ("Browse...", self._browse), ("Open in Excel", self._open_in_excel),
+                           ("Check again", self._refresh)):
             button = QtWidgets.QPushButton(text)
             button.clicked.connect(slot)
             row.addWidget(button)
@@ -197,20 +198,55 @@ class MaterialsPanel(QtWidgets.QDialog):
         if path:
             self.set_database(path)
 
-    def new_database(self):
-        """An empty database to fill in Excel (databases.write_template), then used by this project."""
+    def _own_folder(self, what):
+        """The project's materials folder, or None after saying the project must be saved first."""
         window = self.parent()
-        folder = window.database_folder() if hasattr(window, "database_folder") else self.project.base_dir
-        dialog = NewDatabaseDialog(self, folder)
-        if not dialog.exec_():
+        if hasattr(window, "own_folder") and not window.own_folder():
+            QtWidgets.QMessageBox.information(self, what, "Save the project first (File > Save), so that the "
+                                                          "database can be kept in its folder.")
             return None
-        from databases import write_template  # type: ignore
-        path = dialog.path()
-        write_template(path, dialog.attributes(), dialog.count.value())
+        return window.database_folder() if hasattr(window, "database_folder") else self.project.base_dir
+
+    def new_database(self):
+        """A database made in the editor (database_editor.py), saved in the project's folder and then used
+        by this project."""
+        from .database_editor import DatabaseEditor
+        folder = self._own_folder("New database")
+        if folder is None:
+            return None
+        editor = DatabaseEditor(self, folder, unit_system=self.project.units)
+        if not editor.exec_():
+            return None
+        path = editor.saved_path or editor.save()
         self.set_database(path)
-        self.report.setText(f"{os.path.basename(path)} made: fill it in Excel, save it, then press Check again.")
-        if dialog.open_now.isChecked():
-            self._open_in_excel()
+        self.report.setText(f"{os.path.basename(path)} saved in the project's folder.")
+        return path
+
+    def edit_database(self):
+        """The database in the editor: one of the project's own is changed in place; one that comes with
+        LSR MMTO is saved as a copy in the project's folder, which the project then uses."""
+        from databases import in_shipped_folder  # type: ignore
+        from .database_editor import DatabaseEditor
+        xlsx, error = database_choice(self.project)
+        if error:
+            self.report.setText(error)
+            return None
+        shipped = in_shipped_folder(xlsx)
+        folder = self._own_folder("Database") if shipped else os.path.dirname(os.path.abspath(xlsx))
+        if folder is None:
+            return None
+        editor = DatabaseEditor(self, folder, path=xlsx, unit_system=self.project.units)
+        if not editor.exec_():
+            return None
+        path = editor.saved_path or editor.save()
+        self.set_database(path)
+        self._refresh()
+        note = (f"Saved as {os.path.basename(path)} in the project's folder." if shipped else
+                f"{os.path.basename(path)} saved.")
+        if editor.network_set_aside:
+            note += (f" Its numbers changed, so the network trained on the old ones was set aside as "
+                     f"{os.path.basename(editor.network_set_aside)}; the next run trains a new one.")
+        self.report.setText(note + "\n" + self.report.toPlainText())
         return path
 
     def set_database(self, path):
@@ -259,7 +295,9 @@ class MaterialsPanel(QtWidgets.QDialog):
             lines.append(f"The table could not be read: {e}")
             self.report.setText("\n".join(lines))
             return
-        heads = ["Label", "Material"] + [a if u is None else f"{a} [{u}]" for a, u in zip(attributes, units)]
+        from .database_editor import SHOWN
+        heads = ["Label", "Material"] + [SHOWN.get(a, a) + ("" if u is None else f" [{u}]")
+                                         for a, u in zip(attributes, units)]
         self.table.setColumnCount(len(heads))
         self.table.setHorizontalHeaderLabels(heads)
         self.table.setRowCount(len(names))
@@ -296,86 +334,6 @@ class MaterialsPanel(QtWidgets.QDialog):
         changed = [f"{LABELS.get(k, k)} {before[k]} -> {q.settings['vae'][k]}" for k in before
                    if not same(before[k], q.settings["vae"][k])]
         return [f"Database: {q.database}"] + ([f"VAE settings for it: {', '.join(changed)}"] if changed else [])
-
-
-class NewDatabaseDialog(QtWidgets.QDialog):
-    """Name, folder, properties and number of materials of a new database."""
-    PROPERTIES = [("Density", "Density", True), ("Young's modulus", "Youngs_Modulus", True),
-                  ("Poisson's ratio", "Poissons_Ratio", True), ("Yield strength", "Yield_Strength", False),
-                  ("Cost", "Cost", False)]
-
-    def __init__(self, parent, folder):
-        super().__init__(parent)
-        self.setWindowTitle("New database")
-        layout = QtWidgets.QVBoxLayout(self)
-        form = QtWidgets.QFormLayout()
-        self.name = QtWidgets.QLineEdit("my_materials")
-        self.folder = QtWidgets.QLineEdit(folder)
-        browse = QtWidgets.QPushButton("Browse...")
-        browse.clicked.connect(self._browse)
-        row = QtWidgets.QHBoxLayout()
-        row.addWidget(self.folder, stretch=1)
-        row.addWidget(browse)
-        form.addRow("Name", self.name)
-        form.addRow("Folder", row)
-        ticks = QtWidgets.QVBoxLayout()
-        self.ticks = {}
-        for shown, key, on in self.PROPERTIES:
-            box = QtWidgets.QCheckBox(shown)
-            box.setChecked(on)
-            ticks.addWidget(box)
-            self.ticks[key] = box
-        form.addRow("Properties", ticks)
-        self.count = QtWidgets.QSpinBox()
-        self.count.setRange(2, 200)
-        self.count.setValue(5)
-        form.addRow("Materials", self.count)
-        layout.addLayout(form)
-        self.open_now = QtWidgets.QCheckBox("Open it in Excel now")
-        self.open_now.setChecked(True)
-        layout.addWidget(self.open_now)
-        hint = QtWidgets.QLabel("Each material is one row: its name, then a number for each property, in "
-                                "the units chosen under each property's name.")
-        hint.setStyleSheet(GREY)
-        hint.setWordWrap(True)
-        layout.addWidget(hint)
-        ok_cancel(self, layout)
-
-    def _browse(self):
-        from .pyto_ad import FILE_DIALOG_OPTIONS
-        folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Folder for the database", self.folder.text(),
-                                                            options=FILE_DIALOG_OPTIONS)
-        if folder:
-            self.folder.setText(folder)
-
-    def path(self):
-        return os.path.join(self.folder.text().strip(), self.name.text().strip() + ".xlsx")
-
-    def attributes(self):
-        return [key for key, box in self.ticks.items() if box.isChecked()]
-
-    def problems(self):
-        from databases import in_shipped_folder  # type: ignore
-        out = []
-        name = self.name.text().strip()
-        if not name or any(c in name for c in '\\/:*?"<>|'):
-            out.append("Name: letters, digits, spaces, - and _")
-        if not os.path.isdir(self.folder.text().strip()):
-            out.append("Folder: no such folder")
-        elif in_shipped_folder(self.path()):
-            out.append("Folder: the databases that come with LSR MMTO live there; choose a folder of your own")
-        elif os.path.exists(self.path()):
-            out.append(f"{os.path.basename(self.path())} is already there; choose another name")
-        if not self.attributes():
-            out.append("Properties: tick at least one")
-        return out
-
-    def accept(self):
-        problems = self.problems()
-        if problems:
-            QtWidgets.QMessageBox.warning(self, "New database", "\n".join(problems))
-            return
-        super().accept()
 
 
 # ---------------------------------------------------------------------- Formulation

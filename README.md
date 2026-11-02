@@ -111,6 +111,7 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 | `panels.py` | the Materials, Formulation and Settings panels |
 | `supports.py` | the Supports and loads panel: regions, supports, loads, keep solid, preview |
 | `pyto_ad.py` | everything the GUI takes from the PyTO-AD GUI |
+| `database_editor.py` | making and changing a material database in the app |
 | `assets/` | the app's icon |
 
 ### `0-Common/`
