@@ -198,9 +198,14 @@ def _material_summary(mat_encoder, z_real_points, material_colors, material_labe
 _PACKAGES = ("numpy", "scipy", "torch", "numba", "pyvista", "pandas", "openpyxl", "mmapy", "pypardiso")
 
 
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)   # Windows: no console window flashing up for git,
+                                                         # when the app runs without a console of its own
+
+
 def _git(folder, *args):
     try:
-        out = subprocess.run(["git", "-C", folder, *args], capture_output=True, text=True, timeout=10)
+        out = subprocess.run(["git", "-C", folder, *args], capture_output=True, text=True, timeout=10,
+                             creationflags=NO_WINDOW)
         return out.stdout if out.returncode == 0 else None
     except Exception:
         return None

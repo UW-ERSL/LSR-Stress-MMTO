@@ -250,16 +250,18 @@ class RunWindow(StructuralTopOptWindow):
 
     def _run_optimization(self, plan, fe_solver, spec):
         """In the worker thread (PyTO-AD's run_optimization sends what is printed to the log)."""
-        from materialEncoder import TrainingStopped  # type: ignore
+        from materialEncoder import NetworkNotTrained, TrainingStopped  # type: ignore
         from project import run  # type: ignore
         success, error = False, ""
-        self.stopped_training = False
+        self.stopped_training, self.network_problem = False, None
         try:
             run(self.project, save_dir=self.save_dir, progress=self._progress,
                 should_stop=lambda: self.stop_requested)
             success = True
         except TrainingStopped:                                     # Stop before the first iteration
             self.stopped_training = True
+        except NetworkNotTrained as e:                              # the materials would be wrong: no run
+            self.network_problem = str(e)
         except Exception as e:                                      # noqa: BLE001
             import traceback
             traceback.print_exc()
@@ -419,11 +421,17 @@ class RunWindow(StructuralTopOptWindow):
         self.optimize_button.setEnabled(True)
         self.stop_button.setEnabled(False)
         w = self.window
-        if getattr(self, "stopped_training", False):               # nothing to keep: no network, no design
+        problem = getattr(self, "network_problem", None)
+        if getattr(self, "stopped_training", False) or problem:     # nothing to keep: no network, no design
             from project_folder import is_run  # type: ignore
             if self.save_dir and os.path.isdir(self.save_dir) and not is_run(self.save_dir):
                 import shutil
                 shutil.rmtree(self.save_dir, ignore_errors=True)
+            if problem:
+                text = problem[0].upper() + problem[1:] + "."
+                self.status.setText(f"<span style='color:#b00000'>Not run: {text}</span>")
+                w.message_text.append(f"Run not started: {text}")
+                return
             self.status.setText("Stopped while training the material network. Nothing was saved.")
             w.message_text.append("Run stopped while training the material network; nothing was saved.")
             return

@@ -12,6 +12,8 @@ import warnings
 from databases import attribute_name, normalize, participation_ratio
 
 STOP_CHECK_EVERY = 100            # epochs between two asks of trainAutoencoder's should_stop
+NETWORK_LIMIT = 5.0               # the largest error, in % of an attribute's range, of a network a run may use
+                                  # (the shipped networks are at 0.5 to 2%; a training stuck in a bad minimum, ~30%)
 
 
 class TrainingStopped(Exception):
@@ -20,6 +22,23 @@ class TrainingStopped(Exception):
     def __init__(self, epoch):
         super().__init__(f"the material network's training was stopped at epoch {epoch}; nothing was saved")
         self.epoch = epoch
+
+
+class NetworkNotTrained(Exception):
+    """The material network reproduces the database worse than NETWORK_LIMIT: a run would optimize with wrong
+    materials. trained: it was just trained (and not saved); else it was read from path."""
+
+    def __init__(self, error, limit, path, trained):
+        self.error, self.limit, self.path, self.trained = error, limit, path, trained
+        if trained:
+            text = (f"the material network did not learn the database well enough: its largest error is {error:.1f}% "
+                    f"of an attribute's range, and at most {limit:g}% can be used. It was not saved. Change the "
+                    f"learning rate (for example to 1e-4) or the latent dimension in Settings, then run again")
+        else:
+            text = (f"the material network in {os.path.basename(path)} reproduces the database only to {error:.1f}% "
+                    f"of an attribute's range, and at most {limit:g}% can be used. Untick Use the trained network "
+                    f"in Settings to train it again")
+        super().__init__(text)
 
 
 class MaterialEncoder:
@@ -96,13 +115,14 @@ class MaterialEncoder:
 
 
     def largestEncodingErrorPercent(self):
+        was = self.vaeNet.encoder.isTraining                # put back as found: left on, the encoder samples at random
         self.vaeNet.encoder.isTraining = False
         with torch.no_grad():
             z_real = self.vaeNet.encoder(self.scaledMaterialData)
             decoded = self.vaeNet.decoder(z_real)
             diffMatrix = self.scaledMaterialData - decoded
             largestErrorPercent = 100.0 * torch.max(torch.abs(diffMatrix)).item()
-        self.vaeNet.encoder.isTraining = True
+        self.vaeNet.encoder.isTraining = was
         return largestErrorPercent
 
     def printEncodingErrors(self):
@@ -146,12 +166,15 @@ class MaterialEncoder:
         learningRate,
         maxAttributeErrorPercent=0.0005,
         sharpAwareMinimization=False,
+        accept_below=None,
         sam_rho=0.05,
         Sam_diagnostics=False,
         should_stop=None,
     ):
         # should_stop: optional function, asked every STOP_CHECK_EVERY epochs; True ends the training by
         # raising TrainingStopped, before the network is saved (savedNet is left as it was).
+        # accept_below: when given, a network whose largest error (%) is above it at the end raises
+        # NetworkNotTrained instead of being saved (savedNet is left as it was).
         opt = torch.optim.AdamW(self.vaeNet.parameters(), learningRate)
         convgHistory = {'reconLoss': [], 'klLoss': [], 'loss': []}
         self.vaeNet.encoder.isTraining = True
@@ -244,6 +267,13 @@ class MaterialEncoder:
                         tag, epoch, reconLoss.item(), klLoss.item(), loss.item(), largestErrorPercent))
 
         self.vaeNet.encoder.isTraining = False
+        if accept_below is not None:
+            error = self.largestEncodingErrorPercent()
+            if error > accept_below:
+                raise NetworkNotTrained(error, accept_below, savedNet, trained=True)
+            if error >= maxAttributeErrorPercent:
+                print(f"The network's largest error is {error:.2f}% (asked {maxAttributeErrorPercent:g}%), "
+                      f"under the {accept_below:g}% a run can use.")
         torch.save(self.vaeNet.state_dict(), savedNet)
         self.training_latents = self.vaeNet.encoder(self.scaledMaterialData).cpu()
         return convgHistory

@@ -810,6 +810,11 @@ def test_run():
         assert r.status.text().startswith("Run finished after 3 iterations"), r.status.text()
         assert os.path.isfile(os.path.join(r.save_dir, "run_data.npz"))
         assert os.path.isfile(os.path.join(r.save_dir, "L-bracket.mmto"))     # what ran, beside it
+        from utils import records
+        rec = records.load(os.path.join(r.save_dir, "run_data"))             # each element's material is the
+        z, zr = rec.z_solid(), np.asarray(rec.z_real)                         # real one nearest its latent point
+        nearest = np.argmin(((z[:, None, :] - zr[None, :, :]) ** 2).sum(-1), axis=1)
+        assert np.array_equal(nearest, rec.material_indices[rec.solid])
         assert [r.tabs.tabText(i) for i in range(r.tabs.count())] == ["Progress", "Log", "Convergence",
                                                                       "Latent space", "Summary"]
         assert "result_design" in w.plotter.actors and not w.part_actor().GetVisibility()
@@ -845,6 +850,33 @@ def test_run():
 
         w.project.formulation["objective"] = None                            # a project that cannot run
         assert not r.start_optimization() and "Cannot start" in r.status.text()
+
+
+def test_run_refuses_a_network_that_has_not_learned():
+    """A network that reproduces the database worse than NETWORK_LIMIT: the run says so in red, in plain
+    words, and leaves no run folder behind."""
+    import torch
+    from databases import DATABASE_DIR, DATABASE_VAE, VAEParams  # type: ignore
+    from materialEncoder import MaterialEncoder  # type: ignore
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        xlsx = shutil.copy(os.path.join(ROOT, DATABASE_DIR, "BM1_3Mats_2Attr.xlsx"), d)
+        vae = VAEParams()
+        for k, v in DATABASE_VAE["BM1_3Mats_2Attr"].items():
+            setattr(vae, k, v)
+        enc = MaterialEncoder(vae)
+        enc.readExcel(xlsx)
+        torch.save(enc.vaeNet.state_dict(), xlsx[:-5] + ".nt")             # untrained
+        w.project.database = os.path.basename(xlsx)
+        w.project.n_dof = 3000
+        w.project.settings["vae"].update(use_pretrained_vae=True, latentDim=2, vae_hiddenDim=50)
+        assert w.save_project()
+        r = w.open_run_panel()
+        assert r.start_optimization()
+        assert _wait(lambda: not r.optimization_running)
+        assert "Not run: The material network in BM1_3Mats_2Attr.nt reproduces the database only to" \
+            in r.status.text(), r.status.text()
+        assert not os.path.exists(r.save_dir)
 
 
 def test_export_and_run_script():

@@ -191,8 +191,9 @@ def test_record_stores_display():
 
 
 def test_vae_training_guards():
-    """Training never writes into the shipped folder, and a network being replaced is kept as
-    <name>.previous.nt."""
+    """Training never writes into the shipped folder; a network being replaced is kept as
+    <name>.previous.nt; a network that has not learned the database (NETWORK_LIMIT) is not saved and
+    the run stops before the optimization, and one read from a file is checked the same way."""
     import shutil
     from databases import DATABASE_DIR  # type: ignore
     p = ubracket_project()                                              # 6Materials_AF_3Attr, shipped
@@ -215,13 +216,72 @@ def test_vae_training_guards():
             shutil.copy(shipped + ext, os.path.join(d, "ggd" + ext))
         old = open(os.path.join(d, "ggd.nt"), "rb").read()
         p.database = os.path.join(d, "ggd.xlsx")
-        p.settings["vae"]["numEpochs"] = 3                              # a poor network: MMA may overflow
-        import warnings
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
+        p.settings["vae"]["numEpochs"] = 3                              # a network that has learned nothing
+        from materialEncoder import NETWORK_LIMIT, MaterialEncoder, NetworkNotTrained  # type: ignore
+        try:
             _run(p, run_arguments(p, save_dir=d, verbose=False))
+            raise AssertionError("a run went on with a network that has not learned the database")
+        except NetworkNotTrained as e:
+            assert e.trained and e.error > NETWORK_LIMIT and "did not learn the database" in str(e), e
         assert open(os.path.join(d, "ggd.previous.nt"), "rb").read() == old
-        assert open(os.path.join(d, "ggd.nt"), "rb").read() != old      # the new network
+        assert open(os.path.join(d, "ggd.nt"), "rb").read() == old      # not replaced by the poor one
+
+        import torch
+        from databases import DATABASE_VAE, VAEParams  # type: ignore
+        vae = VAEParams()
+        for k, v in DATABASE_VAE["6Materials_AF_3Attr"].items():
+            setattr(vae, k, v)
+        enc = MaterialEncoder(vae)
+        enc.readExcel(os.path.join(d, "ggd.xlsx"))
+        torch.save(enc.vaeNet.state_dict(), os.path.join(d, "ggd.nt"))  # an untrained network, in the file
+        p.settings["vae"]["use_pretrained_vae"] = True
+        try:
+            _run(p, run_arguments(p, save_dir=d, verbose=False))
+            raise AssertionError("a run went on with a poor network read from its file")
+        except NetworkNotTrained as e:
+            assert not e.trained and "Use the trained network" in str(e), e
+
+
+def test_network_check_leaves_the_encoder_as_it_was():
+    """Checking a network read from its file leaves its encoder giving each material's own latent point
+    (not a random sample around it): the same points every time, each nearest its own material."""
+    import contextlib
+    import io
+    import torch
+    from databases import DATABASE_DIR, DATABASE_VAE, VAEParams  # type: ignore
+    from materialEncoder import MaterialEncoder  # type: ignore
+    vae = VAEParams()
+    for k, v in DATABASE_VAE["BM1_3Mats_2Attr"].items():
+        setattr(vae, k, v)
+    enc = MaterialEncoder(vae)
+    xlsx = os.path.join(ROOT, DATABASE_DIR, "BM1_3Mats_2Attr.xlsx")
+    with contextlib.redirect_stdout(io.StringIO()):
+        enc.readExcel(xlsx)
+        enc.loadAutoencoderFromFile(xlsx[:-5] + ".nt")
+    enc.largestEncodingErrorPercent()
+    assert not enc.vaeNet.encoder.isTraining
+    with torch.no_grad():
+        a, b = enc.vaeNet.encoder(enc.scaledMaterialData), enc.vaeNet.encoder(enc.scaledMaterialData)
+    assert torch.equal(a, b)
+    assert enc.getClosestRealMaterialIndex(a).tolist() == list(range(len(a)))
+
+
+def test_shipped_networks_are_usable():
+    """Every shipped network reproduces its database well within NETWORK_LIMIT."""
+    import contextlib
+    import io
+    from databases import DATABASE_DIR, DATABASE_VAE, VAEParams  # type: ignore
+    from materialEncoder import NETWORK_LIMIT, MaterialEncoder  # type: ignore
+    for name, settings in DATABASE_VAE.items():
+        vae = VAEParams()
+        for k, v in settings.items():
+            setattr(vae, k, v)
+        enc = MaterialEncoder(vae)
+        xlsx = os.path.join(ROOT, DATABASE_DIR, f"{name}.xlsx")
+        with contextlib.redirect_stdout(io.StringIO()):
+            enc.readExcel(xlsx)
+            enc.loadAutoencoderFromFile(xlsx[:-5] + ".nt")
+        assert enc.largestEncodingErrorPercent() < NETWORK_LIMIT / 2, name
 
 
 def test_old_runs_rebuild():

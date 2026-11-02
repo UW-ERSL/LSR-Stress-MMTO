@@ -16,7 +16,7 @@ If you already have conda (Miniforge, Miniconda or Anaconda), skip step 1. If yo
 
 2. **Open the Miniforge Prompt.** Start menu, type `Miniforge Prompt`, open it. With Miniconda or Anaconda it is the `Anaconda Prompt`.
 
-3. **Run the setup.** In that prompt, type `python` and a space, **without pressing Enter**, then drag `setup_environment.py` into the window, and only then press Enter. It takes roughly 10 minutes and ends with `Done.`
+3. **Run the setup.** In that prompt, type `python` and a space, **without pressing Enter**, then drag `setup_environment.py` into the window, and only then press Enter. It first asks one question, whether to put an LSR MMTO icon on the desktop (it always goes in the Start menu), and then runs on its own. It takes roughly 10 minutes and ends with `Done.`
 
    This also downloads [PyTO-AD](https://github.com/UW-ERSL/PyTO-AD), the differentiable topology optimization code this branch builds on (finite element analysis, filters, MMA, automatic differentiation), into a folder next to this one, unless it is already there. It creates its own environment, `lsr-stress-mmto-ad`, so it never touches the one `main` uses.
 
@@ -96,6 +96,7 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 |---|---|
 | `Tutorial.ipynb` | runs one example end to end |
 | `run_gui.py` | starts the LSR MMTO GUI: `python run_gui.py`, or `python run_gui.py projects/beam.mmto` |
+| `make_shortcut.py` | adds LSR MMTO to the Start menu and the desktop (Windows); the setup runs it, and running it again (`python make_shortcut.py`, with the environment active) repairs the shortcuts after the folder moves |
 | `projects/` | the four examples as project files: geometry, supports, loads, materials, objective, constraints, settings |
 | `docs/project_reference.md` | everything a project file can hold, generated from the code |
 | `docs/extending.md` | how to add a quantity, a selection type, a boundary condition, a setting, a material attribute or a database |
@@ -110,6 +111,7 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 | `panels.py` | the Materials, Formulation and Settings panels |
 | `supports.py` | the Supports and loads panel: regions, supports, loads, keep solid, preview |
 | `pyto_ad.py` | everything the GUI takes from the PyTO-AD GUI |
+| `assets/` | the app's icon |
 
 ### `0-Common/`
 

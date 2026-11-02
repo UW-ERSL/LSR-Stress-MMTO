@@ -14,6 +14,8 @@ autodiff branch: gradients come from automatic differentiation through PyTO-AD.
 3. installs requirements.txt into that environment
 4. registers the environment as a Jupyter kernel
 5. checks that the solver builds a mesh and a material decoder loads
+6. (Windows) adds LSR MMTO to the Start menu, and to the desktop if you say yes; the one question
+   is asked before anything is installed, so the rest runs on its own
 
 Safe to run again: each step is skipped if already done.
 
@@ -190,11 +192,26 @@ def download_solver():
     print(f"      downloaded at {SOLVER_COMMIT[:8]}", flush=True)
 
 
+def ask_desktop(read=input):
+    """Whether to put the app's icon on the desktop: asked once, at the start, so that nobody has to watch
+    the install for it. Enter means yes; no answer possible (no keyboard) also means yes."""
+    print("\n" + "=" * 64)
+    print(" LSR MMTO will be added to the Start menu.")
+    try:
+        answer = read(" Also put an LSR MMTO icon on the desktop? [Y/n] ")
+    except EOFError:
+        answer = ""
+    print("=" * 64 + "\n", flush=True)
+    return answer.strip().lower() not in ("n", "no")
+
+
 def main():
+    desktop = ask_desktop() if os.name == "nt" else False
     print(f"repository : {HERE}", flush=True)
     print(f"PyTO-AD    : {SOLVER_PATH}", flush=True)
     print(f"environment: {ENV}", flush=True)
-    print("\nFive steps. Step 3 downloads a few GB and is the slow one.", flush=True)
+    print(f"\n{'Six' if os.name == 'nt' else 'Five'} steps. Step 3 downloads a few GB and is the slow one.",
+          flush=True)
 
     conda = conda_exe()
 
@@ -265,11 +282,23 @@ def main():
     if code != 0:
         fail("the environment is built but something does not import; see above")
 
+    # ------------------------------------------------------------------ 6
+    opened = ""
+    if os.name == "nt":
+        step(6, "Start menu" + (" and desktop" if desktop else ""), "a few seconds")
+        args = [os.path.join(HERE, "make_shortcut.py")] + ([] if desktop else ["--no-desktop"])
+        if in_env(env_python(conda), *args) == 0:
+            opened = ("\nOpen LSR MMTO from the Start menu (type LSR)"
+                      + (" or the desktop icon." if desktop else "."))
+        else:                                       # never a reason to fail the install
+            opened = ("\nThe shortcut could not be made (the reason is above). To open LSR MMTO, run\n"
+                      f"    conda activate {ENV}\n    python run_gui.py\nin this folder.")
+
     print(f"      done in {_fmt(time.time() - _T0[0])}", flush=True)
     print(f"""
 Done.
-
-Open Tutorial.ipynb in your code editor and select the kernel
+{opened}
+For the tutorial, open Tutorial.ipynb in your code editor and select the kernel
 "Python ({ENV})". The README covers running it in a browser instead.
 """)
 

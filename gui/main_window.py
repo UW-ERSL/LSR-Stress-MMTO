@@ -41,6 +41,7 @@ OUTLINE_COLOUR = "#c400c4"                  # selection shapes: magenta, unlike 
 SNAPS = [("Snap: off", 0.0), ("Snap: 0.1", 0.1), ("Snap: 1", 1.0), ("Snap: 5", 5.0), ("Snap: 10", 10.0)]
 PROJECT_FILTER = "LSR MMTO project (*.mmto)"
 SCRIPT_FILTER = "Python script (*.py)"
+ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "lsr_mmto.ico")
 SIDEBAR = ("Units", "Geometry", "Materials", "Supports and loads", "Formulation", "Settings", "Run",
            "Results", "Display Options")
 FOLDER_HELP = ("A project keeps everything it uses in its own folder: the project file, the part (in part), "
@@ -1361,11 +1362,17 @@ class MMTOWindow(MainWindow):
             self._refresh_title()
 
 
-def main(argv=()):
+def main(argv=(), splash=None):
+    """The window, with argv[0] open if given; splash (run_gui.py's start-up picture) closes when it shows."""
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
     app.setStyleSheet("* { font-size: 10pt; }")                    # as PyTO-AD's main()
+    from PyQt5.QtGui import QIcon
+    app.setWindowIcon(QIcon(ICON))                                 # title bar and taskbar
     window = MMTOWindow()
     window.show()
+    if splash is not None:                                          # closed outright: finish() can wait forever
+        app.processEvents()
+        splash.close()
     if argv:
         window.open_project(argv[0])
     return app.exec_()

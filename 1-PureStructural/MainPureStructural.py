@@ -46,7 +46,7 @@ from PyTOImports import (
     increment_SIMP_STRUCTURAL_PENALTY,
     increment_SIMP_THERMAL_PENALTY,
 )
-from materialEncoder import MaterialEncoder 
+from materialEncoder import NETWORK_LIMIT, MaterialEncoder, NetworkNotTrained
 import AutodiffPureStructural as AD
 from mmto_utility_functions import (
     create_density_and_material_filters,
@@ -239,6 +239,9 @@ def run_topopt(
     if use_pretrained_vae and vae_file_exists:
         print(f"Loading pre-trained autoencoder from file: {saveNet}")
         matEncoder.loadAutoencoderFromFile(saveNet)
+        error = matEncoder.largestEncodingErrorPercent()
+        if error > NETWORK_LIMIT:                           # a network that would give wrong materials
+            raise NetworkNotTrained(error, NETWORK_LIMIT, saveNet, trained=False)
     else:
         if in_shipped_folder(saveNet):
             raise ValueError(f"training a new VAE would overwrite the shipped {os.path.basename(saveNet)}; to train "
@@ -256,6 +259,7 @@ def run_topopt(
             vae_params.learningRate,
             vae_params.maxAttributeErrorPercent,
             should_stop=should_stop,            # a stop while training: TrainingStopped, no network saved
+            accept_below=NETWORK_LIMIT,         # not learned well enough: NetworkNotTrained, none saved
         )
         time_end = time.time()
         print(f"Autoencoder training time: {time_end - time_start:.2f} seconds")
