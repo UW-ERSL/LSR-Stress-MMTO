@@ -23,7 +23,8 @@ sys.path.insert(0, ROOT)
 
 from lsr_mmto.optimize import run as M  # noqa: E402
 from lsr_mmto.optimize import save as run_save  # noqa: E402
-from lsr_mmto.problem.project import (DEFAULT_SETTINGS, NOT_STORED, Project, _run_arguments)  # noqa: E402
+from lsr_mmto.problem.project import Project, _run_arguments  # noqa: E402
+from lsr_mmto.problem.settings import DEFAULT_SETTINGS, RUN_KEYS, SETTINGS  # noqa: E402
 
 UBRACKET = os.path.join(ROOT, "projects", "U-bracket.mmto")
 N_DOF, ITERS, SMOOTHING_OFF = 3000, 4, 2
@@ -80,12 +81,18 @@ def runs():
 
 
 def test_settings_cover_run_topopt():
-    """Every _run_topopt argument is a stored setting, or explicitly not stored. Fails when one is added."""
-    stored = set(DEFAULT_SETTINGS["common"]) | set(DEFAULT_SETTINGS["advanced"]) | set(DEFAULT_SETTINGS["vae"])
-    covered = stored | set(NOT_STORED) | {"n_dof_desired"}
-    arguments = set(inspect.signature(M._run_topopt).parameters)
-    assert arguments - covered == set(), f"not in the project: {sorted(arguments - covered)}"
-    assert covered - arguments == set(), f"not _run_topopt arguments: {sorted(covered - arguments)}"
+    """The loop reads each setting as s.<name>: every name it reads is a setting of SETTINGS, the run gets
+    every one, and _run_topopt has no setting of its own (no default that could differ from SETTINGS)."""
+    import re
+    source = inspect.getsource(M._run_topopt)
+    read = set(re.findall(r"(?<![\w.])s\.(\w+)", source)) - {"as_dict"}
+    assert read - set(RUN_KEYS) == set(), f"read but not settings: {sorted(read - set(RUN_KEYS))}"
+    args = _run_arguments(ubracket_project(), save_dir=tempfile.gettempdir(), verbose=False)
+    assert set(args["s"].as_dict()) == set(RUN_KEYS)
+    params = inspect.signature(M._run_topopt).parameters
+    assert set(params) == set(args), sorted(set(params) ^ set(args))
+    assert all(p.default is inspect.Parameter.empty for p in params.values()), "a _run_topopt default"
+    assert {e.key for e in SETTINGS if e.section != "mesh"} >= set(RUN_KEYS)
 
 
 def test_progress_and_stop():
@@ -238,7 +245,7 @@ def test_vae_training_guards():
         assert any("save it over the shipped 6Materials_AF_3Attr.nt" in e for e in p.validate())
         p.settings["vae"]["use_pretrained_vae"] = True                  # and so does the run, called directly
         args = _run_arguments(p, save_dir=d, verbose=False)
-        args.update(use_pretrained_vae=False, saveNet=os.path.join(ROOT, DATABASE_DIR, "new.nt"))
+        args["s"].use_pretrained_vae, args["s"].saveNet = False, os.path.join(ROOT, DATABASE_DIR, "new.nt")
         try:
             _run(p, args)
         except ValueError as e:

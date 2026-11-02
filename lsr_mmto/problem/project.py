@@ -24,10 +24,10 @@ file, with the problem in its own "mmto" section. Project.load reads .mmto files
 build() returns the mesh, the material, the boundary conditions, the body force and the
 optimization and VAE parameters that _run_topopt starts from.
 
-Settings: every setting of _run_topopt is stored, under _run_topopt's own name, in
-settings.common, settings.advanced and settings.vae (DEFAULT_SETTINGS below). A new
-project starts from the settings of the paper's examples; a file missing some is
-completed from the same defaults, and the run says which.
+Settings: every setting is one entry of SETTINGS in problem/settings.py, stored in
+settings.common, settings.advanced and settings.vae. A new project starts from the
+settings of the paper's examples; a file missing some is completed from the same
+defaults, and the run says which.
 
 Boundary conditions (each acts on a named selection, evaluated on the mesh nodes):
     fixed          dofs "x", "y", "z" or any combination, value 0
@@ -60,6 +60,8 @@ from lsr_mmto.problem import selections as S
 from lsr_mmto.materials.databases import (ATTRIBUTES, DATABASE_DIR, DATABASE_VAE, UNIT_SYSTEMS, VAEParams,
                                          check_database, database_attributes, database_units, in_shipped_folder,
                                          recommended_latent_dim, unit_ratio)
+from lsr_mmto.physics import PHYSICS
+from lsr_mmto.problem.settings import BY_KEY, DEFAULT_SETTINGS, MESH_DEFAULTS, VAE_PARAMS, run_settings
 
 SCHEMA_VERSION = 1
 # _UPGRADES[n] turns an mmto section of version n into version n + 1. When the format
@@ -69,71 +71,6 @@ _AXES = {"x": 0, "y": 1, "z": 2}
 _MARK_FIXED, _MARK_LOAD, _MARK_ROLLER = 1, 2, 3
 # degrees of freedom each support type of the picking tools fixes
 _SUPPORT_DOFS = {"Fixed XYZ": (0, 1, 2), "Fixed X": (0,), "Fixed Y": (1,), "Fixed Z": (2,)}
-
-# Every setting of _run_topopt a project stores, under _run_topopt's own names, with the value
-# a new project starts from: the settings of the paper's examples.
-# A setting missing from a file is filled from here and reported; a setting not listed here
-# is an error. material_filter_radius None means "the same as relative_filter_radius";
-# saveNet None means the .nt file next to the database's .xlsx.
-DEFAULT_SETTINGS = {
-    "common": {"maxIterations": 300, "relative_filter_radius": 2.5, "material_filter_radius": None,
-               "pnorm_exponent": 6.0, "beta_schedule_scheme": "PAPER"},
-    "advanced": {"timeLimit": 36000, "rel_conv_tol": 1e-7,
-                 "use_penalization": True, "gamma_init": 1e-3, "gamma_max": 10.0, "gamma_factor": 1.1,
-                 "penalty_start_iter": 0, "distance_penalty_disable_after_iter": 250,
-                 "use_dynamic_gamma_scheduling": True,
-                 "use_z_smoothing": True, "z_smoothing_weight": 1e-4, "z_smoothing_disable_after_iter": 250,
-                 "use_heaviside_projection": True, "eta_proj": 0.5, "use_continuation": False,
-                 "use_constant_poissons_ratio": False, "constant_poissons_ratio": 0.3,
-                 "snap_to_real_material": False, "z0_init_method": "ORIGIN", "binarize_topology": True},
-    "vae": {"use_pretrained_vae": True, "saveNet": None, "network_error_warning": 5.0},
-}
-# one line per setting, for docs/project_reference.md (and later the GUI)
-SETTING_DOCS = {
-    "maxIterations": "largest number of MMA iterations",
-    "relative_filter_radius": "density filter radius, in element sizes",
-    "material_filter_radius": "radius of the latent smoothing neighbourhood, in element sizes; None = relative_filter_radius",
-    "pnorm_exponent": "p of the p-norm that aggregates stress or failure factor",
-    "beta_schedule_scheme": "Heaviside sharpness schedule: beta = 1, then x1.5 every 5 iterations after 50, "
-                            "up to 32 (PAPER) or 16 (PAPER_BM1)",
-    "timeLimit": "wall-clock limit of the optimization, seconds",
-    "rel_conv_tol": "stop when the objective and constraints change by less than this, relatively",
-    "use_penalization": "penalty on the distance from each solid element's latent point to the nearest real material",
-    "gamma_init": "starting weight of that penalty",
-    "gamma_max": "largest weight of that penalty",
-    "gamma_factor": "the weight is multiplied by this each iteration while it ramps up",
-    "penalty_start_iter": "first iteration of the penalty, without dynamic scheduling",
-    "distance_penalty_disable_after_iter": "iteration at which the penalty is switched off, without dynamic scheduling",
-    "use_dynamic_gamma_scheduling": "start the weight's ramp when the objective plateaus, instead of at fixed iterations",
-    "use_z_smoothing": "penalty on latent points that differ from their neighbours' (material flicker)",
-    "z_smoothing_weight": "weight of that penalty",
-    "z_smoothing_disable_after_iter": "iteration at which that penalty is switched off",
-    "use_heaviside_projection": "push the filtered density toward 0 or 1",
-    "eta_proj": "threshold of that projection",
-    "use_continuation": "raise the SIMP penalty by 0.25 every 10 iterations",
-    "use_constant_poissons_ratio": "use constant_poissons_ratio instead of the decoded Poisson's ratio",
-    "constant_poissons_ratio": "the Poisson's ratio used when it is held constant",
-    "snap_to_real_material": "in the reported design, replace each latent point by the nearest real material's",
-    "z0_init_method": "starting latent point: ORIGIN (z = 0), LIGHTEST, HEAVIEST material, or UNIFORM random",
-    "binarize_topology": "in the reported design, round the density to 0 or 1, keeping the volume",
-    "use_pretrained_vae": "load the trained VAE from saveNet if it exists; otherwise train one",
-    "saveNet": "the VAE file; None = the .nt file next to the database's .xlsx",
-    "network_error_warning": "warn before a run when the VAE reproduces a material property worse than this, "
-                             "in % of the property's range",
-    "latentDim": "latent dimension of the VAE",
-    "learningRate": "VAE training learning rate",
-    "vae_hiddenDim": "width of the VAE's hidden layers",
-    "maxAttributeErrorPercent": "VAE training stops once every attribute is reproduced within this percent",
-    "klFactor": "weight of the KL term in VAE training",
-    "numEpochs": "largest number of VAE training epochs",
-}
-# the VAE's own settings, also in settings.vae; they start from the database's known values
-VAE_PARAMS = ("latentDim", "learningRate", "vae_hiddenDim", "maxAttributeErrorPercent", "klFactor", "numEpochs")
-# _run_topopt arguments about one run's output or about watching it, not the problem; n_dof_desired
-# is mesh.n_dof
-NOT_STORED = ("to_problem", "save_dir", "plot_progress", "plot_bcs", "verbose", "plotter", "progress",
-              "should_stop", "on_network_error")
-
 
 def _dofs(dofs):
     if not dofs or any(c not in _AXES for c in dofs) or len(set(dofs)) != len(dofs):
@@ -329,11 +266,12 @@ def _supports_and_loads(picks):
 
 
 class Project:
-    def __init__(self, name, stl, n_dof=30000, single_layer=False, base_dir=None):
+    def __init__(self, name, stl, n_dof=None, single_layer=None, base_dir=None):
         self.name = name
         self.stl = stl                          # as given; relative paths are relative to base_dir
         self.base_dir = os.path.abspath(base_dir or os.getcwd())
-        self.n_dof, self.single_layer = int(n_dof), bool(single_layer)
+        self.n_dof = int(MESH_DEFAULTS["n_dof"] if n_dof is None else n_dof)
+        self.single_layer = bool(MESH_DEFAULTS["single_layer"] if single_layer is None else single_layer)
         self.comment = ""
         self.physics = "structural"
         self.selections = {}                    # name -> Selection
@@ -485,8 +423,8 @@ class Project:
         errors = []
         if not os.path.isfile(self.stl_path()):
             errors.append(f"STL file {self.stl_path()} does not exist")
-        if self.physics != "structural":
-            errors.append(f"physics {self.physics!r}: only 'structural' for now")
+        if self.physics not in PHYSICS:
+            errors.append(f"physics {self.physics!r}: one of {', '.join(PHYSICS)}")
         if self.units != "none" and self.units not in UNIT_SYSTEMS:
             errors.append(f"units {self.units!r}: one of {', '.join(UNIT_SYSTEMS)} or 'none'")
         for i, bc in enumerate(self.bcs, 1):
@@ -520,19 +458,16 @@ class Project:
                 errors += self._missing_columns(database_attributes(xlsx))
                 errors += self.vae_check()[0]
         for section, values in self.settings.items():
-            known = set(DEFAULT_SETTINGS.get(section, {})) | (set(VAE_PARAMS) if section == "vae" else set())
             if section not in DEFAULT_SETTINGS:
                 errors.append(f"settings: unknown section {section!r}")
                 continue
-            for k in values:
-                if k not in known:
+            for k, v in values.items():
+                entry = BY_KEY.get(k)
+                if entry is None or entry.section != section:
                     errors.append(f"settings.{section}: unknown setting {k!r}")
-        from lsr_mmto.optimize.run import BetaScheduleScheme, Z0InitMethod
-        for section, key, enum in (("common", "beta_schedule_scheme", BetaScheduleScheme),
-                                   ("advanced", "z0_init_method", Z0InitMethod)):
-            v = self.settings.get(section, {}).get(key)
-            if v is not None and v not in enum.__members__:
-                errors.append(f"settings.{section}.{key}: {v!r} is not one of {', '.join(enum.__members__)}")
+                elif entry.choices is not None and v is not None and v not in entry.choices.__members__:
+                    errors.append(f"settings.{section}.{k}: {v!r} is not one of "
+                                  f"{', '.join(entry.choices.__members__)}")
         obj = self.formulation.get("objective")
         if not obj:
             errors.append("no objective")
@@ -571,9 +506,9 @@ class Project:
 
     def _missing_columns(self, columns):
         """Columns the physics and the objective and constraints read that the database lacks."""
-        from lsr_mmto.physics.structural import PHYSICS_NEEDS, QUANTITIES
+        from lsr_mmto.physics.structural import QUANTITIES
         out = [f"material database: the {self.physics} model needs a {c} column"
-               for c in PHYSICS_NEEDS.get(self.physics, ()) if c not in columns]
+               for c in (PHYSICS[self.physics].needs if self.physics in PHYSICS else ()) if c not in columns]
         by_name = {q.name: q for q in QUANTITIES}
         f = self.formulation
         for expr in [(f.get("objective") or {}).get("expression")] + \
@@ -988,7 +923,7 @@ class Project:
         m = upgrade(data.get("mmto") or {}, default_name)
         mesh = m.get("mesh", {})
         p = cls(m.get("name") or default_name, data.get("stl_file_path", ""),
-                n_dof=mesh.get("n_dof", 30000), single_layer=mesh.get("single_layer", False),
+                n_dof=mesh.get("n_dof"), single_layer=mesh.get("single_layer"),
                 base_dir=base_dir)
         p.comment, p.physics = m.get("comment", ""), m.get("physics", "structural")
         p.selections = {k: S.from_dict(v) for k, v in m.get("selections", {}).items()}
@@ -1008,23 +943,16 @@ class Project:
 # ---------------------------------------------------------------------- running
 def _run_arguments(project, save_dir=None, verbose=True, plot_progress=False, plot_bcs=False, plotter=None,
                   progress=None, should_stop=None, on_network_error=None):
-    """The keyword arguments _run_topopt gets for this project. Internal: a project runs through run(p).
-    With no save_dir, the results go where the window puts them: results/<date and time> in the
-    project's folder (project_folder.new_run_folder)."""
+    """The keyword arguments _run_topopt gets for this project: its settings as one object s
+    (settings.run_settings), the project, where the results go, and how the run is watched.
+    Internal: a project runs through run(p). With no save_dir, the results go where the window puts
+    them: results/<date and time> in the project's folder (project_folder.new_run_folder)."""
     from lsr_mmto.problem.project_folder import new_run_folder
-    from lsr_mmto.optimize.run import BetaScheduleScheme, Z0InitMethod
     project.complete_settings()
-    args = dict(project.settings["common"], **project.settings["advanced"],
-                use_pretrained_vae=project.settings["vae"]["use_pretrained_vae"],
-                saveNet=project.settings["vae"]["saveNet"],
-                network_error_warning=project.settings["vae"]["network_error_warning"])
-    args["beta_schedule_scheme"] = BetaScheduleScheme[args["beta_schedule_scheme"]]
-    args["z0_init_method"] = Z0InitMethod[args["z0_init_method"]]
-    args.update(to_problem=project, n_dof_desired=project.n_dof,
+    return dict(s=run_settings(project), to_problem=project,
                 save_dir=save_dir if save_dir is not None else new_run_folder(project),
                 verbose=verbose, plot_progress=plot_progress, plot_bcs=plot_bcs, plotter=plotter,
                 progress=progress, should_stop=should_stop, on_network_error=on_network_error)
-    return args
 
 
 def _prepared(project):

@@ -1,0 +1,195 @@
+"""
+settings.py
+===========
+Every setting of a project, each in one entry of SETTINGS: its section, its name, the value a new
+project starts from, the label the app shows, its one help text (the app's (i) and the settings
+page), and the group of the Settings panel it sits in. Everything else is made from this list:
+DEFAULT_SETTINGS, the Settings panel, docs/project_reference.md, and the settings object s the
+optimization reads (s.gamma_factor).
+
+A new setting is one Setting here, plus the line in optimize/run.py that reads s.<name>.
+
+Sections: "mesh" is Project.n_dof and Project.single_layer; "common", "advanced" and "vae" are
+project.settings[section]. A VAE setting whose default is FROM_DATABASE starts from the database's
+known values (databases.DATABASE_VAE), or VAEParams for another database.
+"""
+from enum import Enum
+
+
+class Z0InitMethod(Enum):
+    LIGHTEST = "lightest"
+    HEAVIEST = "heaviest"
+    ORIGIN = "origin"
+    UNIFORM = "uniform"
+
+
+class BetaScheduleScheme(Enum):
+    PAPER = "paper"
+    PAPER_BM1 = "paper_bm1"
+
+
+FROM_DATABASE = "from the database"
+OPTIMIZATION, VAE = "Optimization", "VAE"                 # the Settings panel's two tabs
+
+
+class Setting:
+    """One setting. none_means: what an empty value (None) means, for a setting that may be empty;
+    integer: a whole number; choices: the Enum whose member names are its only values."""
+    __slots__ = ("section", "key", "default", "label", "help", "group", "none_means", "integer", "choices")
+
+    def __init__(self, section, key, default, label, help, group, none_means=None, integer=False, choices=None):
+        self.section, self.key, self.default, self.label, self.help = section, key, default, label, help
+        self.group, self.none_means, self.integer, self.choices = group, none_means, integer, choices
+
+    @property
+    def tab(self):
+        return VAE if self.section == "vae" else OPTIMIZATION
+
+
+_PLATEAU = "Start the ramp when the objective plateaus"
+
+# in the order the Settings panel shows them, group by group
+SETTINGS = [
+    # ---- Main
+    Setting("mesh", "n_dof", 30000, "Mesh dofs",
+            "How fine the mesh is: the number of unknowns it is built for. More is finer, and slower.",
+            "Main", integer=True),
+    Setting("mesh", "single_layer", False, "Single element layer (2D)",
+            "One element through the thickness, for a flat (2D) part.", "Main"),
+    Setting("common", "maxIterations", 300, "Max iterations",
+            "The optimization stops after this many iterations.", "Main", integer=True),
+    Setting("common", "relative_filter_radius", 2.5, "Density filter radius",
+            "The smallest feature the design may have, in element sizes. Larger gives smoother, simpler designs.",
+            "Main"),
+    Setting("common", "material_filter_radius", None, "Latent smoothing radius",
+            "How far material choices are smoothed between neighbouring elements, in element sizes. Ticked: "
+            "the same as the density filter radius.", "Main", none_means="same as density filter"),
+    Setting("common", "pnorm_exponent", 6.0, "p-norm exponent",
+            "How closely the single stress value follows the highest stress in the part. Larger is closer, but "
+            "harder to optimize.", "Main"),
+    Setting("common", "beta_schedule_scheme", "PAPER", "Projection sharpness schedule",
+            "How fast the design is pushed to clear solid and empty: the sharpness starts at 1 and grows 1.5 "
+            "times every 5 iterations after iteration 50, up to 32 (PAPER) or 16 (PAPER_BM1).", "Main",
+            choices=BetaScheduleScheme),
+    # ---- Run length
+    Setting("advanced", "timeLimit", 36000, "Time limit [s]",
+            "The optimization stops after this many seconds.", "Run length", integer=True),
+    Setting("advanced", "rel_conv_tol", 1e-7, "Convergence tolerance",
+            "The optimization stops early once the objective changes by less than this, relatively, between "
+            "iterations, and every constraint is met to within this.", "Run length"),
+    # ---- Projection
+    Setting("advanced", "use_heaviside_projection", True, "Heaviside projection",
+            "Pushes each element towards fully solid or fully empty.", "Projection"),
+    Setting("advanced", "eta_proj", 0.5, "Projection threshold",
+            "The density at which that push splits solid from empty.", "Projection"),
+    # ---- Distance penalty
+    Setting("advanced", "use_penalization", True, "Distance penalty",
+            "Pushes each element's material towards one of the real materials in the database.",
+            "Distance penalty"),
+    Setting("advanced", "gamma_init", 1e-3, "Starting weight", "How strong that push is at the start.",
+            "Distance penalty"),
+    Setting("advanced", "gamma_max", 10.0, "Largest weight", "How strong it can get.", "Distance penalty"),
+    Setting("advanced", "gamma_factor", 1.1, "Weight growth per iteration",
+            "How much stronger it gets each iteration while it ramps up.", "Distance penalty"),
+    Setting("advanced", "penalty_start_iter", 0, "First iteration",
+            f"The iteration it starts at, when {_PLATEAU} is off.", "Distance penalty", integer=True),
+    Setting("advanced", "distance_penalty_disable_after_iter", 250, "Off after iteration",
+            f"The iteration it stops at, when {_PLATEAU} is off.", "Distance penalty", integer=True),
+    Setting("advanced", "use_dynamic_gamma_scheduling", True, _PLATEAU,
+            "Start the push when the design stops improving, instead of at a set iteration.", "Distance penalty"),
+    # ---- Latent smoothing
+    Setting("advanced", "use_z_smoothing", True, "Latent smoothing",
+            "Discourages neighbouring elements from flickering between materials.", "Latent smoothing"),
+    Setting("advanced", "z_smoothing_weight", 1e-4, "Weight", "How strong that smoothing is.", "Latent smoothing"),
+    Setting("advanced", "z_smoothing_disable_after_iter", 250, "Off after iteration",
+            "The iteration it stops at.", "Latent smoothing", integer=True),
+    # ---- Material model
+    Setting("advanced", "use_continuation", False, "SIMP continuation",
+            "Raises the SIMP penalty by 0.25 every 10 iterations during the run.", "Material model"),
+    Setting("advanced", "use_constant_poissons_ratio", False, "Constant Poisson's ratio",
+            "One Poisson's ratio for every material, instead of each material's own.", "Material model"),
+    Setting("advanced", "constant_poissons_ratio", 0.3, "Poisson's ratio value",
+            "The Poisson's ratio used when Constant Poisson's ratio is ticked.", "Material model"),
+    # ---- Start and reported design
+    Setting("advanced", "z0_init_method", "ORIGIN", "Starting latent point",
+            "The material every element starts with: ORIGIN (the middle of the material map), the LIGHTEST or "
+            "HEAVIEST material, or UNIFORM (random).", "Start and reported design", choices=Z0InitMethod),
+    Setting("advanced", "snap_to_real_material", False, "Snap to real materials",
+            "In the final design, give each element the nearest real material.", "Start and reported design"),
+    Setting("advanced", "binarize_topology", True, "Binarize the topology",
+            "In the final design, make each element fully solid or empty, keeping the volume.",
+            "Start and reported design"),
+    # ---- VAE
+    Setting("vae", "use_pretrained_vae", True, "Use the trained network",
+            "Use the network already trained for this database. Unticked, the next run trains a new one.", "VAE"),
+    Setting("vae", "saveNet", None, "VAE file",
+            "The trained network: always the .nt file next to the database, with the same name.", "VAE",
+            none_means="next to the database"),
+    Setting("vae", "network_error_warning", 5.0, "Warn above network error [%]",
+            "Before a run, you are warned if the network reproduces any material property less closely than "
+            "this, in % of the property's range in the database. You can still run.", "VAE"),
+    Setting("vae", "latentDim", FROM_DATABASE, "Latent dimension",
+            "How many numbers describe one material in the material map.", "VAE", integer=True),
+    Setting("vae", "learningRate", FROM_DATABASE, "Learning rate", "The step size of the network's training.",
+            "VAE"),
+    Setting("vae", "vae_hiddenDim", FROM_DATABASE, "Hidden layer width", "The size of the network's inner layers.",
+            "VAE", integer=True),
+    Setting("vae", "maxAttributeErrorPercent", FROM_DATABASE, "Stop at attribute error [%]",
+            "Training stops once the network reproduces every material property within this percent.", "VAE"),
+    Setting("vae", "klFactor", FROM_DATABASE, "KL weight",
+            "How strongly training keeps the material map compact and smooth.", "VAE"),
+    Setting("vae", "numEpochs", FROM_DATABASE, "Max epochs", "Training stops after this many passes at the latest.",
+            "VAE", integer=True),
+]
+# the views made from SETTINGS, kept in step by _make_views
+BY_KEY, DEFAULT_SETTINGS, MESH_DEFAULTS = {}, {}, {}
+VAE_PARAMS = RUN_KEYS = ()
+
+
+def _make_views():
+    """BY_KEY, DEFAULT_SETTINGS, MESH_DEFAULTS, VAE_PARAMS and RUN_KEYS from SETTINGS. The dicts are
+    filled in place, so a module that imported them sees a setting added later (as the tests do)."""
+    global VAE_PARAMS, RUN_KEYS
+    BY_KEY.clear()
+    BY_KEY.update((e.key, e) for e in SETTINGS)
+    for section in ("common", "advanced", "vae"):
+        DEFAULT_SETTINGS.setdefault(section, {}).clear()
+        DEFAULT_SETTINGS[section].update((e.key, e.default) for e in SETTINGS
+                                         if e.section == section and e.default is not FROM_DATABASE)
+    MESH_DEFAULTS.clear()
+    MESH_DEFAULTS.update((e.key, e.default) for e in SETTINGS if e.section == "mesh")
+    VAE_PARAMS = tuple(e.key for e in SETTINGS if e.default is FROM_DATABASE)
+    # what the optimization reads as s.<key>: the stored settings, without the mesh (Project.n_dof is the
+    # mesh built) and the VAE's own settings (they make the network, through VAEParams)
+    RUN_KEYS = tuple(e.key for e in SETTINGS if e.section != "mesh" and e.default is not FROM_DATABASE)
+
+
+_make_views()
+
+
+class RunSettings:
+    """The settings one run gets, read as s.<key>; an unknown name is an error, not None."""
+
+    def __init__(self, values):
+        missing = [k for k in RUN_KEYS if k not in values]
+        unknown = [k for k in values if k not in RUN_KEYS]
+        if missing or unknown:
+            raise ValueError(f"run settings: missing {missing}, unknown {unknown}")
+        self.__dict__.update(values)
+
+    def as_dict(self):
+        return {k: self.__dict__[k] for k in RUN_KEYS}
+
+    def __repr__(self):
+        return f"RunSettings({self.as_dict()!r})"
+
+
+def run_settings(project):
+    """The RunSettings of a project whose settings are complete: each stored value, and for a setting
+    with fixed choices, the Enum member it names."""
+    values = {}
+    for k in RUN_KEYS:
+        s = BY_KEY[k]
+        v = project.settings[s.section][k]
+        values[k] = s.choices[v] if s.choices is not None else v
+    return RunSettings(values)

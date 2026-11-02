@@ -2,7 +2,7 @@
 test_ad_quantities.py
 =====================
 Autodiff gradients of the objectives and constraints against central finite
-differences, on a coarse U-bracket (n_dof_desired = 3000, about 12,000 DOF;
+differences, on a coarse U-bracket (n_dof = 3000, about 12,000 DOF;
 6-material database with Density and Yield_Strength).
 
     python tests/test_ad_quantities.py        (or: python -m pytest tests)
@@ -57,8 +57,10 @@ def _setup():
         return _SETUP
     from lsr_mmto.problem.project import Project, _run_arguments
 
-    args = _run_arguments(Project.load(os.path.join(ROOT, "projects", "U-bracket.mmto")), verbose=False)
-    args.update(n_dof_desired=N_DOF, maxIterations=1)
+    p = Project.load(os.path.join(ROOT, "projects", "U-bracket.mmto"))
+    p.n_dof = N_DOF
+    p.settings["common"]["maxIterations"] = 1
+    args = _run_arguments(p, verbose=False)
     s = _model_from_setup(args)
     model = s["model"]
     n = model.N

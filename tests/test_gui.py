@@ -263,12 +263,13 @@ def test_cancel_changes_nothing():
 
 
 def test_settings_panel_covers_every_setting():
-    from lsr_mmto.problem.project import DEFAULT_SETTINGS, VAE_PARAMS
+    from lsr_mmto.problem import settings
+    from lsr_mmto.problem.settings import DEFAULT_SETTINGS, VAE_PARAMS
     keys = panels.all_setting_keys()
     want = {(s, k) for s, v in DEFAULT_SETTINGS.items() for k in v} | {("vae", k) for k in VAE_PARAMS} | \
         {("mesh", "n_dof"), ("mesh", "single_layer")}
     assert len(keys) == len(set(keys)) and set(keys) == want, set(keys) ^ want
-    assert all(k in panels.LABELS and k in panels.HELP for _, k in keys)
+    assert all(settings.BY_KEY[k].label and settings.BY_KEY[k].help for _, k in keys)
 
 
 def test_settings_panel_edits():

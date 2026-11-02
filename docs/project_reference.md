@@ -77,69 +77,84 @@ A project declares the units its numbers are in, as the PyTO-AD GUI does (`setti
 | `mmKS` | mm | N | MPa | t/mm^3 | t | USD/t |
 | `IPS` | in | lbf | psi | lbf*s^2/in^4 | lbf*s^2/in | USD/(lbf*s^2/in) |
 
+## Physics
+
+The `physics` of a project names the model its optimization uses.
+
+| physics | model | needs columns |
+|---|---|---|
+| `structural` | linear elasticity, small strain | Youngs_Modulus |
+
 ## Quantities
 
 An objective or a constraint is one quantity, e.g. `Mass()` or `MaterialVolumeFraction(2, tau=0.5)`. A constraint is value / bound - 1 <= 0.
 
-| name | objective | constraint | needs columns | value |
-|---|---|---|---|---|
-| `Compliance` | yes | yes |  | F . u |
-| `Mass` | yes | yes | Density | sum of density * x_phys * element volume |
-| `Cost` |  | yes | Density, Cost | sum of density * cost * x_phys * element volume |
-| `StressPNorm` | yes |  |  | p-norm of the relaxed von Mises stress, no 1/N |
-| `FailureFactorPNorm` | yes | yes | Yield_Strength | mean p-norm of von Mises / yield strength, per element |
-| `VolumeFraction` |  | yes |  | mean of x_phys |
-| `MaterialVolumeFraction` |  | yes |  | volume fraction of one database material, softmax weights |
+| name | shown as | objective | constraint | needs columns | value | meaning |
+|---|---|---|---|---|---|---|
+| `Compliance` | Compliance | yes | yes |  | F . u | How much the part gives under the loads. Lower is stiffer. |
+| `Mass` | Mass | yes | yes | Density | sum of density * x_phys * element volume | The mass of the part, from each material's density. |
+| `Cost` | Cost |  | yes | Density, Cost | sum of density * cost * x_phys * element volume | The cost of the part, from each material's density and cost per mass. |
+| `StressPNorm` | Stress (p-norm) | yes |  |  | p-norm of the relaxed von Mises stress, no 1/N | One value close to the highest von Mises stress in the part. |
+| `FailureFactorPNorm` | Failure factor (p-norm) | yes | yes | Yield_Strength | mean p-norm of von Mises / yield strength, per element | One value close to the highest stress / yield strength in the part. Above 1 means some element yields. |
+| `VolumeFraction` | Volume fraction |  | yes |  | mean of x_phys | The share of the design space filled with material, 0 to 1. |
+| `MaterialVolumeFraction` | Material volume fraction |  | yes |  | volume fraction of one database material, softmax weights | The share of the design space filled with one chosen material, 0 to 1. |
 
 ## Settings
 
-Every setting a run takes, under its own name. A new project starts from these values (the settings of the paper's examples); a file missing some is completed from them, and the run says which. The VAE's own settings start from the database's known values.
+Every setting a run takes, under its own name. A new project starts from these values (the settings of the paper's examples); a file missing some is completed from them, and the run says which. The VAE's own settings start from the database's known values. The mesh settings are the file's `mesh` section; the others are `settings.<section>`.
+
+### mesh
+
+| setting | default | meaning |
+|---|---|---|
+| `n_dof` | 30000 | How fine the mesh is: the number of unknowns it is built for. More is finer, and slower. |
+| `single_layer` | False | One element through the thickness, for a flat (2D) part. |
 
 ### common
 
 | setting | default | meaning |
 |---|---|---|
-| `maxIterations` | 300 | largest number of MMA iterations |
-| `relative_filter_radius` | 2.5 | density filter radius, in element sizes |
-| `material_filter_radius` | None | radius of the latent smoothing neighbourhood, in element sizes; None = relative_filter_radius |
-| `pnorm_exponent` | 6.0 | p of the p-norm that aggregates stress or failure factor |
-| `beta_schedule_scheme` | 'PAPER' | Heaviside sharpness schedule: beta = 1, then x1.5 every 5 iterations after 50, up to 32 (PAPER) or 16 (PAPER_BM1) |
+| `maxIterations` | 300 | The optimization stops after this many iterations. |
+| `relative_filter_radius` | 2.5 | The smallest feature the design may have, in element sizes. Larger gives smoother, simpler designs. |
+| `material_filter_radius` | None | How far material choices are smoothed between neighbouring elements, in element sizes. Ticked: the same as the density filter radius. Empty (None): same as density filter. |
+| `pnorm_exponent` | 6.0 | How closely the single stress value follows the highest stress in the part. Larger is closer, but harder to optimize. |
+| `beta_schedule_scheme` | 'PAPER' (one of PAPER, PAPER_BM1) | How fast the design is pushed to clear solid and empty: the sharpness starts at 1 and grows 1.5 times every 5 iterations after iteration 50, up to 32 (PAPER) or 16 (PAPER_BM1). |
 
 ### advanced
 
 | setting | default | meaning |
 |---|---|---|
-| `timeLimit` | 36000 | wall-clock limit of the optimization, seconds |
-| `rel_conv_tol` | 1e-07 | stop when the objective and constraints change by less than this, relatively |
-| `use_penalization` | True | penalty on the distance from each solid element's latent point to the nearest real material |
-| `gamma_init` | 0.001 | starting weight of that penalty |
-| `gamma_max` | 10.0 | largest weight of that penalty |
-| `gamma_factor` | 1.1 | the weight is multiplied by this each iteration while it ramps up |
-| `penalty_start_iter` | 0 | first iteration of the penalty, without dynamic scheduling |
-| `distance_penalty_disable_after_iter` | 250 | iteration at which the penalty is switched off, without dynamic scheduling |
-| `use_dynamic_gamma_scheduling` | True | start the weight's ramp when the objective plateaus, instead of at fixed iterations |
-| `use_z_smoothing` | True | penalty on latent points that differ from their neighbours' (material flicker) |
-| `z_smoothing_weight` | 0.0001 | weight of that penalty |
-| `z_smoothing_disable_after_iter` | 250 | iteration at which that penalty is switched off |
-| `use_heaviside_projection` | True | push the filtered density toward 0 or 1 |
-| `eta_proj` | 0.5 | threshold of that projection |
-| `use_continuation` | False | raise the SIMP penalty by 0.25 every 10 iterations |
-| `use_constant_poissons_ratio` | False | use constant_poissons_ratio instead of the decoded Poisson's ratio |
-| `constant_poissons_ratio` | 0.3 | the Poisson's ratio used when it is held constant |
-| `snap_to_real_material` | False | in the reported design, replace each latent point by the nearest real material's |
-| `z0_init_method` | 'ORIGIN' | starting latent point: ORIGIN (z = 0), LIGHTEST, HEAVIEST material, or UNIFORM random |
-| `binarize_topology` | True | in the reported design, round the density to 0 or 1, keeping the volume |
+| `timeLimit` | 36000 | The optimization stops after this many seconds. |
+| `rel_conv_tol` | 1e-07 | The optimization stops early once the objective changes by less than this, relatively, between iterations, and every constraint is met to within this. |
+| `use_heaviside_projection` | True | Pushes each element towards fully solid or fully empty. |
+| `eta_proj` | 0.5 | The density at which that push splits solid from empty. |
+| `use_penalization` | True | Pushes each element's material towards one of the real materials in the database. |
+| `gamma_init` | 0.001 | How strong that push is at the start. |
+| `gamma_max` | 10.0 | How strong it can get. |
+| `gamma_factor` | 1.1 | How much stronger it gets each iteration while it ramps up. |
+| `penalty_start_iter` | 0 | The iteration it starts at, when Start the ramp when the objective plateaus is off. |
+| `distance_penalty_disable_after_iter` | 250 | The iteration it stops at, when Start the ramp when the objective plateaus is off. |
+| `use_dynamic_gamma_scheduling` | True | Start the push when the design stops improving, instead of at a set iteration. |
+| `use_z_smoothing` | True | Discourages neighbouring elements from flickering between materials. |
+| `z_smoothing_weight` | 0.0001 | How strong that smoothing is. |
+| `z_smoothing_disable_after_iter` | 250 | The iteration it stops at. |
+| `use_continuation` | False | Raises the SIMP penalty by 0.25 every 10 iterations during the run. |
+| `use_constant_poissons_ratio` | False | One Poisson's ratio for every material, instead of each material's own. |
+| `constant_poissons_ratio` | 0.3 | The Poisson's ratio used when Constant Poisson's ratio is ticked. |
+| `z0_init_method` | 'ORIGIN' (one of LIGHTEST, HEAVIEST, ORIGIN, UNIFORM) | The material every element starts with: ORIGIN (the middle of the material map), the LIGHTEST or HEAVIEST material, or UNIFORM (random). |
+| `snap_to_real_material` | False | In the final design, give each element the nearest real material. |
+| `binarize_topology` | True | In the final design, make each element fully solid or empty, keeping the volume. |
 
 ### vae
 
 | setting | default | meaning |
 |---|---|---|
-| `use_pretrained_vae` | True | load the trained VAE from saveNet if it exists; otherwise train one |
-| `saveNet` | None | the VAE file; None = the .nt file next to the database's .xlsx |
-| `network_error_warning` | 5.0 | warn before a run when the VAE reproduces a material property worse than this, in % of the property's range |
-| `latentDim` | from the database | latent dimension of the VAE |
-| `learningRate` | from the database | VAE training learning rate |
-| `vae_hiddenDim` | from the database | width of the VAE's hidden layers |
-| `maxAttributeErrorPercent` | from the database | VAE training stops once every attribute is reproduced within this percent |
-| `klFactor` | from the database | weight of the KL term in VAE training |
-| `numEpochs` | from the database | largest number of VAE training epochs |
+| `use_pretrained_vae` | True | Use the network already trained for this database. Unticked, the next run trains a new one. |
+| `saveNet` | None | The trained network: always the .nt file next to the database, with the same name. Empty (None): next to the database. |
+| `network_error_warning` | 5.0 | Before a run, you are warned if the network reproduces any material property less closely than this, in % of the property's range in the database. You can still run. |
+| `latentDim` | from the database | How many numbers describe one material in the material map. |
+| `learningRate` | from the database | The step size of the network's training. |
+| `vae_hiddenDim` | from the database | The size of the network's inner layers. |
+| `maxAttributeErrorPercent` | from the database | Training stops once the network reproduces every material property within this percent. |
+| `klFactor` | from the database | How strongly training keeps the material map compact and smooth. |
+| `numEpochs` | from the database | Training stops after this many passes at the latest. |

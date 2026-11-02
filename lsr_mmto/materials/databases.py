@@ -87,12 +87,12 @@ class Attribute:
     """One material attribute a database may hold. measures: what it is, one of UNITS
     (stress, density, ratio, ...); its units are those of UNITS[measures], and "ratio"
     means dimensionless (its units cell may be left blank). low, high: the allowed range,
-    each end open unless named in closed."""
+    each end open unless named in closed. shown: its name as a user reads it."""
 
-    def __init__(self, name, measures, doc, low=None, high=None, closed=(), aliases=()):
+    def __init__(self, name, measures, doc, shown, low=None, high=None, closed=(), aliases=()):
         if measures not in UNITS:
             raise ValueError(f"attribute {name}: measures must be one of {', '.join(UNITS)}")
-        self.name, self.measures, self.doc = name, measures, doc
+        self.name, self.measures, self.doc, self.shown = name, measures, doc, shown
         self.low, self.high, self.closed = low, high, tuple(closed)
         self.units, self.aliases = tuple(UNITS[measures]), tuple(aliases)
 
@@ -112,18 +112,17 @@ class Attribute:
 # Every attribute a database may hold. To add one, add an entry; the check and the Excel
 # template follow. A column not listed here is an error.
 ATTRIBUTES = {a.name: a for a in [
-    Attribute("Density", "density", "mass per unit volume", low=0),
-    Attribute("Youngs_Modulus", "stress", "Young's modulus, the stiffness", low=0,
+    Attribute("Density", "density", "mass per unit volume", "Density", low=0),
+    Attribute("Youngs_Modulus", "stress", "Young's modulus, the stiffness", "Young's modulus", low=0,
               aliases=("Youngs Modulus", "Young_Modulus", "E")),
-    Attribute("Poissons_Ratio", "ratio", "Poisson's ratio", low=-1, high=0.5,
+    Attribute("Poissons_Ratio", "ratio", "Poisson's ratio", "Poisson's ratio", low=-1, high=0.5,
               aliases=("Poisson_Ratio", "Poissons Ratio", "nu")),
     Attribute("Yield_Strength", "stress", "yield strength, the stress at which the material yields",
-              low=0, aliases=("Yield Strength", "Yield")),
-    Attribute("Cost", "cost per mass", "price per unit mass", low=0, closed=("low",)),
+              "Yield strength", low=0, aliases=("Yield Strength", "Yield")),
+    Attribute("Cost", "cost per mass", "price per unit mass", "Cost", low=0, closed=("low",)),
 ]}
-# each attribute's name as a user reads it
-SHOWN = {"Density": "Density", "Youngs_Modulus": "Young's modulus", "Poissons_Ratio": "Poisson's ratio",
-         "Yield_Strength": "Yield strength", "Cost": "Cost"}
+# each attribute's name as a user reads it, from its entry
+SHOWN = {a.name: a.shown for a in ATTRIBUTES.values()}
 _BY_ALIAS = {k.lower(): a.name for a in ATTRIBUTES.values() for k in (a.name,) + a.aliases}
 
 

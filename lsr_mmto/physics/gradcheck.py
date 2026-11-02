@@ -32,7 +32,7 @@ def _model_from_setup(run_args):
         cells = dict(zip(fn.__code__.co_freevars, fn.__closure__))
         found["model"] = cells["ad_model"].cell_contents
         found["beta"] = cells["beta_proj"].cell_contents
-        found["eta"] = cells["eta_proj"].cell_contents
+        found["eta"] = cells["s"].cell_contents.eta_proj
         found["lb"] = np.asarray(lb, dtype=float).ravel()
         found["ub"] = np.asarray(ub, dtype=float).ravel()
         raise _Stop
@@ -58,7 +58,7 @@ def check(project, n_x=3, n_z=3, steps=(1e-3, 1e-4, 1e-5), seed=0):
         run_args = _run_arguments(_prepared(project), save_dir=scratch, verbose=False)
         s = _model_from_setup(run_args)
     model, beta, eta, lb, ub = s["model"], s["beta"], s["eta"], s["lb"], s["ub"]
-    heaviside = run_args.get("use_heaviside_projection", True)
+    heaviside = run_args["s"].use_heaviside_projection
     n = model.N
 
     rng = np.random.default_rng(seed)

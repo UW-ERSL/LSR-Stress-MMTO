@@ -131,6 +131,7 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad.py`
 | File | Purpose |
 |---|---|
 | `project.py` | a project: saves and loads it, checks it, builds the problem, runs it (`run(p)`) |
+| `settings.py` | every setting, one entry each: its default, label, help and place in the Settings panel |
 | `selections.py` | named regions of the mesh that supports, loads and keep-solid regions act on |
 | `project_folder.py` | keeps everything a project uses in its folder |
 | `mesh.py` | turns the part's STL into the voxel mesh |
@@ -148,6 +149,7 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad.py`
 
 | File | Purpose |
 |---|---|
+| `__init__.py` | the list of physics a project may name, and the file of each |
 | `structural.py` | the objective and constraints as differentiable functions; autograd gives their gradients |
 | `gradcheck.py` | the autodiff gradient against central finite differences |
 

@@ -38,7 +38,9 @@ def generate():
     sys.path.insert(0, ROOT)
     from lsr_mmto.problem import selections as S
     from lsr_mmto.physics.structural import QUANTITIES
-    from lsr_mmto.problem.project import BC_KINDS, DEFAULT_SETTINGS, SETTING_DOCS, VAE_PARAMS
+    from lsr_mmto.physics import PHYSICS
+    from lsr_mmto.problem.project import BC_KINDS
+    from lsr_mmto.problem.settings import FROM_DATABASE, SETTINGS
     from lsr_mmto.materials.databases import ATTRIBUTES, UNIT_SYSTEMS
 
     out = ["# Project reference", "",
@@ -86,24 +88,33 @@ def generate():
             "| system | " + " | ".join(kinds) + " |", "|---|" + "---|" * len(kinds)]
     out += [f"| `{k}` | " + " | ".join(v[q] for q in kinds) + " |" for k, v in UNIT_SYSTEMS.items()]
 
+    out += ["", "## Physics", "",
+            "The `physics` of a project names the model its optimization uses.", "",
+            "| physics | model | needs columns |", "|---|---|---|"]
+    out += [f"| `{k}` | {v.doc} | {', '.join(v.needs)} |" for k, v in PHYSICS.items()]
+
     out += ["", "## Quantities", "",
             "An objective or a constraint is one quantity, e.g. `Mass()` or "
             "`MaterialVolumeFraction(2, tau=0.5)`. A constraint is value / bound - 1 <= 0.", "",
-            "| name | objective | constraint | needs columns | value |", "|---|---|---|---|---|"]
+            "| name | shown as | objective | constraint | needs columns | value | meaning |",
+            "|---|---|---|---|---|---|---|"]
     for q in QUANTITIES:
-        out.append(f"| `{q.name}` | {'yes' if q.objective else ''} | {'yes' if q.constraint else ''} | "
-                   f"{', '.join(q.needs)} | {q.doc} |")
+        out.append(f"| `{q.name}` | {q.shown} | {'yes' if q.objective else ''} | {'yes' if q.constraint else ''} | "
+                   f"{', '.join(q.needs)} | {q.doc} | {q.help} |")
 
     out += ["", "## Settings", "",
             "Every setting a run takes, under its own name. A new project starts from these values "
             "(the settings of the paper's examples); a file missing some is completed from them, and "
-            "the run says which. The VAE's own settings start from the database's known values.", ""]
-    for section in ("common", "advanced", "vae"):
+            "the run says which. The VAE's own settings start from the database's known values. The "
+            "mesh settings are the file's `mesh` section; the others are `settings.<section>`.", ""]
+    for section in ("mesh", "common", "advanced", "vae"):
         out += [f"### {section}", "", "| setting | default | meaning |", "|---|---|---|"]
-        for k, v in DEFAULT_SETTINGS[section].items():
-            out.append(f"| `{k}` | {_value(v)} | {SETTING_DOCS[k]} |")
-        if section == "vae":
-            out += [f"| `{k}` | from the database | {SETTING_DOCS[k]} |" for k in VAE_PARAMS]
+        for e in (e for e in SETTINGS if e.section == section):
+            default = "from the database" if e.default is FROM_DATABASE else _value(e.default)
+            if e.choices is not None:
+                default += f" (one of {', '.join(e.choices.__members__)})"
+            meaning = e.help + (f" Empty (None): {e.none_means}." if e.none_means else "")
+            out.append(f"| `{e.key}` | {default} | {meaning} |")
         out.append("")
     return "\n".join(out)
 

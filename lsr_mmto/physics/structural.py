@@ -264,16 +264,19 @@ def material_volume_fraction(xb, z, z_real, material_id, tau):
 #   physics      the physics it applies to
 #   needs        material database columns it reads (checked, with a clear error)
 #   fn(m, opt)   the value, a torch scalar; a constraint is fn / limit - 1 <= 0
+#   doc          what fn computes, for the settings page
+#   shown        its name in the app
+#   help         what it is, in plain words: the app's tooltip and the settings page
 STRUCTURAL = "structural"
-PHYSICS_NEEDS = {STRUCTURAL: ("Youngs_Modulus",)}      # database columns every problem of a physics reads
 
 
 class Quantity:
-    __slots__ = ("name", "objective", "constraint", "physics", "needs", "fn", "doc")
+    __slots__ = ("name", "objective", "constraint", "physics", "needs", "fn", "doc", "shown", "help")
 
-    def __init__(self, name, objective, constraint, physics, needs, fn, doc):
+    def __init__(self, name, objective, constraint, physics, needs, fn, doc, shown, help):
         self.name, self.objective, self.constraint = name, objective, constraint
         self.physics, self.needs, self.fn, self.doc = frozenset(physics), tuple(needs), fn, doc
+        self.shown, self.help = shown, help
 
 
 def _option_kind(opt):
@@ -316,20 +319,28 @@ def _material_volume_fraction(m, opt):
 
 QUANTITIES = [
     Quantity("Compliance", ("COMPLIANCE", None), ("COMPLIANCE", None), [STRUCTURAL], [],
-             _compliance, "F . u"),
+             _compliance, "F . u", "Compliance",
+             "How much the part gives under the loads. Lower is stiffer."),
     Quantity("Mass", ("MASS", None), ("MASS", None), [STRUCTURAL], ["Density"],
-             _mass, "sum of density * x_phys * element volume"),
+             _mass, "sum of density * x_phys * element volume", "Mass",
+             "The mass of the part, from each material's density."),
     Quantity("Cost", None, ("COST", None), [STRUCTURAL], ["Density", "Cost"],
-             _cost, "sum of density * cost * x_phys * element volume"),
+             _cost, "sum of density * cost * x_phys * element volume", "Cost",
+             "The cost of the part, from each material's density and cost per mass."),
     Quantity("StressPNorm", ("PNORM_STRESS", None), None, [STRUCTURAL], [],
-             _stress_pnorm, "p-norm of the relaxed von Mises stress, no 1/N"),
+             _stress_pnorm, "p-norm of the relaxed von Mises stress, no 1/N", "Stress (p-norm)",
+             "One value close to the highest von Mises stress in the part."),
     Quantity("FailureFactorPNorm", ("PNORM_STRESS", "FAILURE_FACTOR"), ("STRESS_FAILURE_FACTOR", None),
              [STRUCTURAL], ["Yield_Strength"],
-             _failure_factor_pnorm, "mean p-norm of von Mises / yield strength, per element"),
+             _failure_factor_pnorm, "mean p-norm of von Mises / yield strength, per element", "Failure factor (p-norm)",
+             "One value close to the highest stress / yield strength in the part. Above 1 means some element "
+             "yields."),
     Quantity("VolumeFraction", None, ("VOLUME_FRACTION", None), [STRUCTURAL], [],
-             _volume_fraction, "mean of x_phys"),
+             _volume_fraction, "mean of x_phys", "Volume fraction",
+             "The share of the design space filled with material, 0 to 1."),
     Quantity("MaterialVolumeFraction", None, ("VOLUME_FRACTION", "material"), [STRUCTURAL], [],
-             _material_volume_fraction, "volume fraction of one database material, softmax weights"),
+             _material_volume_fraction, "volume fraction of one database material, softmax weights",
+             "Material volume fraction", "The share of the design space filled with one chosen material, 0 to 1."),
 ]
 _AS_OBJECTIVE = {q.objective: q for q in QUANTITIES if q.objective}
 _AS_CONSTRAINT = {q.constraint: q for q in QUANTITIES if q.constraint}
@@ -421,3 +432,9 @@ class MMTOModelAD:
         (g_x,) = torch.autograd.grad(self.x_phys, self.x, grad_outputs=g_xphys, retain_graph=True)
         g[:self.N] = g_x.detach().numpy()
         return g
+
+
+# ----------------------------------------------------------------------------- what the optimization builds
+# the names physics/__init__.py says every physics file offers
+Solver = MultiMaterialHexFEA
+Model = MMTOModelAD

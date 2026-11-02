@@ -25,8 +25,6 @@ import os
 import shutil
 import sys
 
-from enum import Enum
-
 from lsr_mmto.materials.databases import in_shipped_folder, material_display
 from lsr_mmto.pyto_ad import (
     deflation,
@@ -44,7 +42,8 @@ from lsr_mmto.pyto_ad import (
     increment_SIMP_THERMAL_PENALTY,
 )
 from lsr_mmto.materials.encoder import MaterialEncoder, NetworkRunCancelled, network_warning
-from lsr_mmto.physics import structural as AD
+from lsr_mmto.physics import physics_module
+from lsr_mmto.problem.settings import BetaScheduleScheme, Z0InitMethod
 from lsr_mmto.optimize.filters import create_density_and_material_filters
 from lsr_mmto.optimize.history import (
     compute_domain_volume,
@@ -54,14 +53,6 @@ from lsr_mmto.optimize.history import (
     log_objective_and_constraints,
 )
 from lsr_mmto.optimize.final_check import run_postprocessing
-class Z0InitMethod(Enum):
-    LIGHTEST = "lightest"
-    HEAVIEST = "heaviest"
-    ORIGIN = "origin"
-    UNIFORM = "uniform"
-class BetaScheduleScheme(Enum):
-    PAPER = "paper"
-    PAPER_BM1 = "paper_bm1"
 def get_beta_schedule(scheme: BetaScheduleScheme):
     """Return the Heaviside beta-continuation parameters (PAPER scheme).
 
@@ -111,74 +102,8 @@ class _StopRequested(Exception):
     """Raised inside the MMA callback when should_stop() says so; _run_topopt catches it."""
 
 
-def _run_topopt(
-    to_problem,
-    # ---- per-run sweep overrides (None => use the project's values) ----
-    n_dof_desired=None,
-    relative_filter_radius=None,
-    material_filter_radius=None,
-    pnorm_exponent=None,
-    timeLimit=10 * 60 * 60,
-    saveNet=None,
-    plot_progress=True,
-    verbose=True,
-    save_dir=None,
-    # -------------------------------
-    # VAE parameters
-    # -------------------------------
-    use_pretrained_vae=False,
-    network_error_warning=5.0,  # % of a property's range: a network reproducing the database less closely warns
-    # -------------------------------
-    # Misc. parameters
-    # -------------------------------
-    use_penalization=False,
-    use_continuation=True,
-    use_constant_poissons_ratio: bool = True,
-    constant_poissons_ratio: float = 0.3,
-    snap_to_real_material=True,
-    # -------------------------------
-    # Optimization parameters
-    # -------------------------------    
-    rel_conv_tol=1e-7,
-    maxIterations=200,
-    binarize_topology=True,
-    z0_init_method=Z0InitMethod.ORIGIN,
-    # -------------------------------
-    # Plotting/diagnostic parameters
-    # -------------------------------
-    plot_bcs=False,            # <-- ADD: when True, show loads/BCs once before optimization
-    # -------------------------------
-    # Distance penalty parameters
-    # -------------------------------
-    gamma_init=1e-3,
-    gamma_max=0.05,
-    gamma_factor=1.05,
-    penalty_start_iter=10,
-    distance_penalty_disable_after_iter=100,
-    use_dynamic_gamma_scheduling=False,
-    plotter=None,
-    # -------------------------------
-    # Heaviside projection parameters
-    # -------------------------------
-    use_heaviside_projection=True,
-    eta_proj=0.5,
-    beta_schedule_scheme=BetaScheduleScheme.PAPER,
-    # -------------------------------
-    # z - H z / Hs smoothing penalty
-    # -------------------------------
-    use_z_smoothing=False,
-    z_smoothing_weight=1e-3,
-    z_smoothing_disable_after_iter=50,
-    # -------------------------------
-    # Watching from outside (the GUI): not part of the problem, not recorded
-    # -------------------------------
-    progress=None,             # progress(state) after each iteration: iteration, objective, constraints,
-                               # x_phys, z (per element), z_real (the materials' latent points)
-    should_stop=None,          # should_stop() before each iteration: True ends the run there, and the
-                               # design reached so far is post-processed and saved as usual
-    on_network_error=None,     # on_network_error(warning) when the network is above network_error_warning:
-                               # False ends the run (NetworkRunCancelled); None prints the warning and goes on
-):
+def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, plotter, progress, should_stop,
+                on_network_error):
     """
     DENSITY FILTER + HEAVISIDE PROJECTION (density ONLY):
       x (MMA var) --density filter--> x_filt = (H@x)/Hs --projection--> x_phys = H_{beta,eta}(x_filt)
@@ -189,9 +114,10 @@ def _run_topopt(
     Optional latent smoothing penalty (density-weighted):
       Pz = lambda * sum_ell sum_e x_e * ( z_e^(ell) - ((H z^(ell))/Hs)_e )^2
     """
-    _args_at_start = dict(locals())   # the arguments as given; the run switches some off later
-    for _k in ("progress", "should_stop", "on_network_error"):
-        _args_at_start.pop(_k, None)
+    _args_at_start = dict(s.as_dict(), to_problem=to_problem, save_dir=save_dir, verbose=verbose,
+                          plot_progress=plot_progress, plot_bcs=plot_bcs, plotter=plotter)   # what the run records
+    saveNet = s.saveNet                                     # resolved below: None is the .nt beside the database
+    use_z_smoothing, use_penalization = s.use_z_smoothing, s.use_penalization      # switched off during the run
     from lsr_mmto.optimize import save as _save
     _provenance = _save.provenance()   # the code as it is when the run starts
 
@@ -199,27 +125,13 @@ def _run_topopt(
     if not hasattr(to_problem, "build"):
         raise TypeError(f"to_problem must be a Project, e.g. Project.load('projects/L-bracket.mmto'), "
                         f"not {to_problem!r}; the coded examples are now the project files in projects/")
+    AD = physics_module(to_problem.physics)                 # the solver and model of the project's physics
     problem = to_problem
-    if n_dof_desired is not None and int(n_dof_desired) != problem.n_dof:
-        problem = problem.copy(n_dof=int(n_dof_desired))
     mesh_structural, mat_prop_struct, bc_struct, elem_body_force, to_params, vae_params = problem.build()
-
-    # ---- per-run sweep overrides (None => keep the project's value) ---------
-     # Must be set AFTER the project is built
-    # (which assigns these) and BEFORE the filters are built at line ~285.
-    # NOTE: MaterialFilterRadius=None makes r_z SILENTLY FOLLOW r_rho
-    if relative_filter_radius is not None:
-        to_params.RelativeFilterRadius = relative_filter_radius
-    if material_filter_radius is not None:
-        to_params.MaterialFilterRadius = material_filter_radius
-    if pnorm_exponent is not None:
-        from lsr_mmto.pyto_ad import topopt_material_model
-        topopt_material_model._PNORM_EXPONENT = float(pnorm_exponent)
     print(f"[SWEEP] nDOFDesired={to_params.nDOFDesired}  "
           f"RelativeFilterRadius={to_params.RelativeFilterRadius}  "
           f"MaterialFilterRadius={to_params.MaterialFilterRadius}  "
-          f"P={pnorm_exponent if pnorm_exponent is not None else '(project default)'}")
-    # ------------------------------------------------------------------------
+          f"P={s.pnorm_exponent}")
 
     if to_params.MaterialsExcelFile is None:
         print("Please provide a valid MaterialsExcelFile in to_params.")
@@ -235,7 +147,7 @@ def _run_topopt(
 
     vae_file_exists = os.path.exists(saveNet) and os.path.getsize(saveNet) > 0
 
-    if use_pretrained_vae and vae_file_exists:
+    if s.use_pretrained_vae and vae_file_exists:
         print(f"Loading pre-trained autoencoder from file: {saveNet}")
         matEncoder.loadAutoencoderFromFile(saveNet)
     else:
@@ -260,7 +172,7 @@ def _run_topopt(
         print(f"Autoencoder training time: {time_end - time_start:.2f} seconds")
 
     network_errors = matEncoder.encodingErrorsPercent()     # read or just trained, the network is kept either way
-    warning = network_warning(network_errors, network_error_warning)
+    warning = network_warning(network_errors, s.network_error_warning)
     if warning is not None:
         print(f"[WARNING] {warning[0].upper() + warning[1:]}.")
         if on_network_error is not None and not on_network_error(warning):
@@ -292,7 +204,7 @@ def _run_topopt(
         dsolver.create_deflation_matrix(mesh_structural)
     print("Solver:", solver.name)
 
-    fe_solver_structural = AD.MultiMaterialHexFEA(
+    fe_solver_structural = AD.Solver(
         mesh=mesh_structural,
         mat_prop=mat_prop_struct,
         bc=bc_struct,
@@ -315,9 +227,9 @@ def _run_topopt(
     H_density, Hs_density, H_material, Hs_material = create_density_and_material_filters(
         fe_solver_structural, to_params, createFilters
     )
-    ad_model = AD.MMTOModelAD(
+    ad_model = AD.Model(
         fe_solver_structural, matEncoder, H_density, Hs_density, H_material, Hs_material,
-        zRealPoints_np, to_params, use_constant_poissons_ratio, constant_poissons_ratio, elem_volume,
+        zRealPoints_np, to_params, s.use_constant_poissons_ratio, s.constant_poissons_ratio, elem_volume,
     )
 
 
@@ -346,11 +258,11 @@ def _run_topopt(
     _J_hist = []               # objective history for dynamic-gamma plateau trigger
     _dyn_ramp_started = False   # latches True once the dynamic ramp begins
     _during_run = {}            # iteration at which a setting changed during the run
-    gamma = float(gamma_init)
-    beta_schedule = get_beta_schedule(beta_schedule_scheme)
+    gamma = float(s.gamma_init)
+    beta_schedule = get_beta_schedule(s.beta_schedule_scheme)
     beta_proj = float(beta_schedule["beta_init"])
 
-    if use_continuation:
+    if s.use_continuation:
         initialize_SIMP_STRUCTURAL_PENALTY(1.5)
         initialize_SIMP_THERMAL_PENALTY(1)
     else:
@@ -412,8 +324,8 @@ def _run_topopt(
             raise _StopRequested
         if (
             use_z_smoothing
-            and z_smoothing_disable_after_iter is not None
-            and mmaIterations >= z_smoothing_disable_after_iter
+            and s.z_smoothing_disable_after_iter is not None
+            and mmaIterations >= s.z_smoothing_disable_after_iter
         ):
             use_z_smoothing = False
             _during_run["z_smoothing_off_at_iter"] = int(mmaIterations)
@@ -422,9 +334,9 @@ def _run_topopt(
         # Disable distance-based penalty after specified iteration
         if (
             use_penalization
-            and not use_dynamic_gamma_scheduling
-            and distance_penalty_disable_after_iter is not None
-            and mmaIterations >= distance_penalty_disable_after_iter
+            and not s.use_dynamic_gamma_scheduling
+            and s.distance_penalty_disable_after_iter is not None
+            and mmaIterations >= s.distance_penalty_disable_after_iter
         ):
             use_penalization = False
             _during_run["distance_penalty_off_at_iter"] = int(mmaIterations)
@@ -439,23 +351,23 @@ def _run_topopt(
         # ============== DENSITY FILTER + HEAVISIDE PROJECTION ==========
         x_filt = (H_density @ x) / Hs_density if APPLY_DENSITY_FILTER else x.copy()
 
-        if use_heaviside_projection:
-            x_phys, _ = heaviside_projection(x_filt, beta_proj, eta_proj)
+        if s.use_heaviside_projection:
+            x_phys, _ = heaviside_projection(x_filt, beta_proj, s.eta_proj)
         else:
             x_phys = x_filt
 
         # ============ DECODE + MAIN FEA: one torch tree (AD model) ============
         # zeta -> x_phys, decoded properties -> PyTO-AD solve -> stress -> J, constraints
         to_params.current_major_iter = int(mmaIterations)
-        J_t, cons_t = ad_model.evaluate(zeta, beta_proj, eta_proj,
-                                        use_heaviside=use_heaviside_projection,
+        J_t, cons_t = ad_model.evaluate(zeta, beta_proj, s.eta_proj,
+                                        use_heaviside=s.use_heaviside_projection,
                                         apply_density_filter=APPLY_DENSITY_FILTER)
 
         # the decoded properties for logging and diagnostics: the same numbers, detached
         material_properties = {k: v.detach() for k, v in ad_model.props.items()}
         zTorch = ad_model.z.detach()
         log_design_state(history, mmaIterations, x_phys, z, material_properties,
-                         zTorch, matEncoder, num_elems, beta_proj, eta_proj, verbose=verbose)
+                         zTorch, matEncoder, num_elems, beta_proj, s.eta_proj, verbose=verbose)
 
         fe_solver_structural.mesh.setPseudoDensity(torch.as_tensor(x_phys))   # PyTO-AD's mesh takes torch
         fe_solver_structural.postprocess()
@@ -494,16 +406,16 @@ def _run_topopt(
             # own-initial-value to normalize by (dividing by it would blow up).
             # z_smoothing_weight multiplies the raw roughness directly.
             Pz_t = AD.latent_smoothing(ad_model.x_phys, ad_model.z, ad_model.Hm, ad_model.Hsm)
-            Pzn = float(z_smoothing_weight) * float(Pz_t.detach())
+            Pzn = float(s.z_smoothing_weight) * float(Pz_t.detach())
             obj = obj + Pzn
-            grad_obj_phys += float(z_smoothing_weight) * ad_model.grad_phys(Pz_t)
+            grad_obj_phys += float(s.z_smoothing_weight) * ad_model.grad_phys(Pz_t)
         else:
             Pzn = 0.0
 
         P = 0.0
         Pn = 0.0
 
-        if use_penalization and (use_dynamic_gamma_scheduling or mmaIterations >= int(penalty_start_iter)):
+        if use_penalization and (s.use_dynamic_gamma_scheduling or mmaIterations >= int(s.penalty_start_iter)):
             # RAW penalty (gamma = 1); weighting + normalization applied here
             Dp_t = AD.distance_penalty(ad_model.x_phys, ad_model.z, ad_model.z_real)
             penalty_raw = float(Dp_t.detach())
@@ -519,13 +431,13 @@ def _run_topopt(
             # model), so its x block is zero by construction, as before.
             grad_obj_phys += float(gamma) * ad_model.grad_phys(Dp_t) / Sd0
 
-            if use_dynamic_gamma_scheduling:
+            if s.use_dynamic_gamma_scheduling:
                 _J_hist.append(float(Jn))
                 if not _dyn_ramp_started:
                     _K, _rel_tol, _min_iter = DYN_GAMMA["window"], DYN_GAMMA["rel_tol"], DYN_GAMMA["min_iter"]
-                    _n_ramp = int(np.ceil(np.log(max(gamma_max / gamma_init, 1 + 1e-9))
-                                          / np.log(max(gamma_factor, 1 + 1e-9))))
-                    _deadline = int(maxIterations) - _n_ramp - DYN_GAMMA["end_margin"]
+                    _n_ramp = int(np.ceil(np.log(max(s.gamma_max / s.gamma_init, 1 + 1e-9))
+                                          / np.log(max(s.gamma_factor, 1 + 1e-9))))
+                    _deadline = int(s.maxIterations) - _n_ramp - DYN_GAMMA["end_margin"]
                     _settled = (mmaIterations >= _min_iter and len(_J_hist) > _K and
                                 abs(_J_hist[-1] - _J_hist[-1 - _K])
                                 <= _rel_tol * max(abs(_J_hist[-1 - _K]), 1e-12))
@@ -536,9 +448,9 @@ def _run_topopt(
                             print(f"[DYN-GAMMA] ramp started at iter {mmaIterations} "
                                   f"({'plateau' if _settled else 'deadline'})")
                 if _dyn_ramp_started:
-                    gamma = min(gamma * gamma_factor, gamma_max)
+                    gamma = min(gamma * s.gamma_factor, s.gamma_max)
             else:
-                gamma = min(gamma * gamma_factor, gamma_max)
+                gamma = min(gamma * s.gamma_factor, s.gamma_max)
 
         grad_obj = grad_obj_phys
 
@@ -562,10 +474,10 @@ def _run_topopt(
         # ================ CONTINUATION + BETA UPDATE ==================
         mmaIterations += 1
 
-        if use_continuation and (mmaIterations % 10 == 0):
+        if s.use_continuation and (mmaIterations % 10 == 0):
             increment_SIMP_THERMAL_PENALTY(0.25)
             increment_SIMP_STRUCTURAL_PENALTY(0.25)
-        if use_heaviside_projection:
+        if s.use_heaviside_projection:
             beta_new, beta_updated = update_beta(
                 beta_proj=beta_proj,
                 mmaIterations=mmaIterations,
@@ -574,7 +486,7 @@ def _run_topopt(
             if beta_updated:
                 beta_proj = beta_new
                 if verbose:
-                    print(f"[PROJ] Updated beta -> {beta_proj:.4g} (eta={eta_proj}, scheme={beta_schedule_scheme.value})")
+                    print(f"[PROJ] Updated beta -> {beta_proj:.4g} (eta={s.eta_proj}, scheme={s.beta_schedule_scheme.value})")
         return np.array([[float(obj)]]), grad_obj, cons, grad_cons
 
     initialDensity = 0.5
@@ -588,26 +500,26 @@ def _run_topopt(
     d0 = initialDensity * np.ones(num_elems, dtype=float)
     z0 = np.zeros(latentDim * num_elems, dtype=float)
 
-    if z0_init_method == Z0InitMethod.LIGHTEST:
+    if s.z0_init_method == Z0InitMethod.LIGHTEST:
         zLightest = matEncoder.getLightestMaterial()
         for i in range(latentDim):
             z0[i * num_elems : (i + 1) * num_elems] = zLightest[i]
 
-    elif z0_init_method == Z0InitMethod.HEAVIEST:
+    elif s.z0_init_method == Z0InitMethod.HEAVIEST:
         zHeaviest = matEncoder.getHeaviestMaterial()
         for i in range(latentDim):
             z0[i * num_elems : (i + 1) * num_elems] = zHeaviest[i]
 
-    elif z0_init_method == Z0InitMethod.ORIGIN:
+    elif s.z0_init_method == Z0InitMethod.ORIGIN:
         z0[:] = 0.0
 
-    elif z0_init_method == Z0InitMethod.UNIFORM:
+    elif s.z0_init_method == Z0InitMethod.UNIFORM:
         for i in range(latentDim):
             z0[i * num_elems : (i + 1) * num_elems] = np.random.uniform(
                 -0.5, 0.5, size=num_elems
             )
     else:
-        raise ValueError(f"Unknown z0_init_method: {z0_init_method}")
+        raise ValueError(f"Unknown s.z0_init_method: {s.z0_init_method}")
 
     zeta0 = np.concatenate((d0, z0), axis=0).reshape(-1, 1)
 
@@ -631,12 +543,12 @@ def _run_topopt(
             zeta0.reshape(-1, 1),
             lowerBound,
             upperBound,
-            maxIterations=maxIterations,
-            timeLimitSecs=timeLimit,
+            maxIterations=s.maxIterations,
+            timeLimitSecs=s.timeLimit,
             move_limit=MMA_MOVE_LIMIT,
             kktTol=MMA_KKT_TOL,
-            fTolerance=rel_conv_tol,
-            gTolerance=rel_conv_tol,
+            fTolerance=s.rel_conv_tol,
+            gTolerance=s.rel_conv_tol,
             verbose=False,
         )
         zetaOptimal = np.asarray(optResults[0]).flatten()
@@ -662,7 +574,7 @@ def _run_topopt(
         material_colors=material_colors, material_labels=material_labels,
         mma_settings={"optimizer": "MMA (mmaWrapper)", "kktTol": MMA_KKT_TOL,
                       "move_limit": MMA_MOVE_LIMIT,
-                      "fTolerance": rel_conv_tol, "gTolerance": rel_conv_tol},
+                      "fTolerance": s.rel_conv_tol, "gTolerance": s.rel_conv_tol},
         runtime_sec=(tEnd - tStart), iterations=_iters,
         comment=getattr(to_params, "Comment", ""))
     run_config["during_run"] = dict(_during_run)
@@ -697,15 +609,15 @@ def _run_topopt(
         num_elems=num_elems,
         latentDim=latentDim,
         beta_proj=beta_proj,
-        eta_proj=eta_proj,
+        eta_proj=s.eta_proj,
         elem_volume=elem_volume,
         design_domain_volume=design_domain_volume,
         apply_density_filter=APPLY_DENSITY_FILTER,
-        use_heaviside_projection=use_heaviside_projection,
-        binarize_topology=binarize_topology,
-        snap_to_real_material=snap_to_real_material,
+        use_heaviside_projection=s.use_heaviside_projection,
+        binarize_topology=s.binarize_topology,
+        snap_to_real_material=s.snap_to_real_material,
         save_dir=save_dir,
         run_config=run_config,
         example_name=getattr(to_problem, "name", str(to_problem)),
-        decode=lambda z: AD.decode(matEncoder, z, use_constant_poissons_ratio, constant_poissons_ratio),
+        decode=lambda z: AD.decode(matEncoder, z, s.use_constant_poissons_ratio, s.constant_poissons_ratio),
     )

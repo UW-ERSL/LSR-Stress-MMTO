@@ -13,6 +13,8 @@ import sys
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
+from lsr_mmto.problem.settings import BY_KEY, MESH_DEFAULTS, SETTINGS, VAE_PARAMS as VAE_KEYS
+
 GREY = "color: #666666;"
 
 
@@ -322,16 +324,15 @@ class MaterialsPanel(QtWidgets.QDialog):
 
     def apply(self, project):
         """The database, and on a change the VAE settings of the new one. Returns lines saying what changed."""
-        from lsr_mmto.problem.project import VAE_PARAMS
         if self.project.database == self.original:
             return []
         q = self.project.copy()
         q.settings["vae"] = {"use_pretrained_vae": project.settings["vae"].get("use_pretrained_vae", True)}
         q.complete_settings()
-        before = {k: project.settings["vae"].get(k) for k in VAE_PARAMS + ("saveNet",)}
+        before = {k: project.settings["vae"].get(k) for k in VAE_KEYS + ("saveNet",)}
         project.database = q.database
         project.settings["vae"] = q.settings["vae"]
-        changed = [f"{LABELS.get(k, k)} {before[k]} -> {q.settings['vae'][k]}" for k in before
+        changed = [f"{BY_KEY[k].label} {before[k]} -> {q.settings['vae'][k]}" for k in before
                    if not same(before[k], q.settings["vae"][k])]
         return [f"Database: {q.database}"] + ([f"VAE settings for it: {', '.join(changed)}"] if changed else [])
 
@@ -339,20 +340,6 @@ class MaterialsPanel(QtWidgets.QDialog):
 # ---------------------------------------------------------------------- Formulation
 TAU_DOC = ("How sharply each element counts as its nearest material when a material's volume is measured: "
            "small is sharp, large is blurred. One value for every material volume fraction constraint.")
-# the quantities as the panel shows them, and what each is
-QUANTITY_NAMES = {"Compliance": "Compliance", "Mass": "Mass", "Cost": "Cost", "StressPNorm": "Stress (p-norm)",
-                  "FailureFactorPNorm": "Failure factor (p-norm)", "VolumeFraction": "Volume fraction",
-                  "MaterialVolumeFraction": "Material volume fraction"}
-QUANTITY_HELP = {
-    "Compliance": "How much the part gives under the loads. Lower is stiffer.",
-    "Mass": "The mass of the part, from each material's density.",
-    "Cost": "The cost of the part, from each material's density and cost per mass.",
-    "StressPNorm": "One value close to the highest von Mises stress in the part.",
-    "FailureFactorPNorm": "One value close to the highest stress / yield strength in the part. Above 1 means "
-                          "some element yields.",
-    "VolumeFraction": "The share of the design space filled with material, 0 to 1.",
-    "MaterialVolumeFraction": "The share of the design space filled with one chosen material, 0 to 1.",
-}
 
 
 def bound_unit(name, units):
@@ -458,14 +445,14 @@ class FormulationPanel(QtWidgets.QDialog):
         for name, q in self.quantities.items():
             if (q.objective if role == "objective" else q.constraint) is None:
                 continue
-            item = QtGui.QStandardItem(QUANTITY_NAMES.get(name, name))
+            item = QtGui.QStandardItem(q.shown)
             item.setData(name, QtCore.Qt.UserRole)
             why = self.reason(name)
             if why:
                 item.setEnabled(False)
                 item.setToolTip(f"Not available: {why}")
             else:
-                item.setToolTip(QUANTITY_HELP.get(name, ""))
+                item.setToolTip(q.help)
             model.appendRow(item)
         combo.setModel(model)
         combo.setCurrentIndex(-1)
@@ -610,7 +597,8 @@ def formulation_lines(f, project):
             name, args, _ = parse_expression(expression)
         except ValueError:
             return expression
-        shown = QUANTITY_NAMES.get(name, name)
+        from lsr_mmto.physics.structural import QUANTITIES
+        shown = next((q.shown for q in QUANTITIES if q.name == name), name)
         if name == "MaterialVolumeFraction" and args:
             i = int(args[0])
             shown += f" of {labels[i] if labels and i < len(labels) else f'material {i}'}"
@@ -629,114 +617,28 @@ def formulation_lines(f, project):
 
 
 # ---------------------------------------------------------------------- Settings
-LABELS = {
-    "n_dof": "Mesh dofs", "single_layer": "Single element layer (2D)",
-    "maxIterations": "Max iterations", "relative_filter_radius": "Density filter radius",
-    "material_filter_radius": "Latent smoothing radius", "pnorm_exponent": "p-norm exponent",
-    "beta_schedule_scheme": "Projection sharpness schedule",
-    "timeLimit": "Time limit [s]", "rel_conv_tol": "Convergence tolerance",
-    "use_heaviside_projection": "Heaviside projection", "eta_proj": "Projection threshold",
-    "use_penalization": "Distance penalty", "gamma_init": "Starting weight", "gamma_max": "Largest weight",
-    "gamma_factor": "Weight growth per iteration", "penalty_start_iter": "First iteration",
-    "distance_penalty_disable_after_iter": "Off after iteration",
-    "use_dynamic_gamma_scheduling": "Start the ramp when the objective plateaus",
-    "use_z_smoothing": "Latent smoothing", "z_smoothing_weight": "Weight",
-    "z_smoothing_disable_after_iter": "Off after iteration",
-    "use_continuation": "SIMP continuation", "use_constant_poissons_ratio": "Constant Poisson's ratio",
-    "constant_poissons_ratio": "Poisson's ratio value",
-    "z0_init_method": "Starting latent point", "snap_to_real_material": "Snap to real materials",
-    "binarize_topology": "Binarize the topology",
-    "use_pretrained_vae": "Use the trained network", "saveNet": "VAE file",
-    "network_error_warning": "Warn above network error [%]", "latentDim": "Latent dimension",
-    "learningRate": "Learning rate", "vae_hiddenDim": "Hidden layer width",
-    "maxAttributeErrorPercent": "Stop at attribute error [%]", "klFactor": "KL weight",
-    "numEpochs": "Max epochs",
-}
-# what each setting does, in plain words: shown by its (i)
-HELP = {
-    "n_dof": "How fine the mesh is: the number of unknowns it is built for. More is finer, and slower.",
-    "single_layer": "One element through the thickness, for a flat (2D) part.",
-    "maxIterations": "The optimization stops after this many iterations.",
-    "relative_filter_radius": "The smallest feature the design may have, in element sizes. Larger gives smoother, "
-                              "simpler designs.",
-    "material_filter_radius": "How far material choices are smoothed between neighbouring elements, in element "
-                              "sizes. Ticked: the same as the density filter radius.",
-    "pnorm_exponent": "How closely the single stress value follows the highest stress in the part. Larger is "
-                      "closer, but harder to optimize.",
-    "beta_schedule_scheme": "How fast the design is pushed to clear solid and empty: PAPER sharpens up to 32, "
-                            "PAPER_BM1 up to 16.",
-    "timeLimit": "The optimization stops after this many seconds.",
-    "rel_conv_tol": "The optimization stops early once the design changes by less than this, relatively, "
-                    "between iterations.",
-    "use_heaviside_projection": "Pushes each element towards fully solid or fully empty.",
-    "eta_proj": "The density at which that push splits solid from empty.",
-    "use_penalization": "Pushes each element's material towards one of the real materials in the database.",
-    "gamma_init": "How strong that push is at the start.",
-    "gamma_max": "How strong it can get.",
-    "gamma_factor": "How much stronger it gets each iteration.",
-    "penalty_start_iter": "The iteration it starts at.",
-    "distance_penalty_disable_after_iter": "The iteration it stops at.",
-    "use_dynamic_gamma_scheduling": "Start the push when the design stops improving, instead of at a set "
-                                    "iteration.",
-    "use_z_smoothing": "Discourages neighbouring elements from flickering between materials.",
-    "z_smoothing_weight": "How strong that smoothing is.",
-    "z_smoothing_disable_after_iter": "The iteration it stops at.",
-    "use_continuation": "Raises the SIMP penalty step by step during the run.",
-    "use_constant_poissons_ratio": "One Poisson's ratio for every material, instead of each material's own.",
-    "constant_poissons_ratio": "The Poisson's ratio used when Constant Poisson's ratio is ticked.",
-    "z0_init_method": "The material every element starts with: ORIGIN (the middle of the material map), the "
-                      "LIGHTEST or HEAVIEST material, or UNIFORM (random).",
-    "snap_to_real_material": "In the final design, give each element the nearest real material.",
-    "binarize_topology": "In the final design, make each element fully solid or empty, keeping the volume.",
-    "use_pretrained_vae": "Use the network already trained for this database. Unticked, the next run trains a "
-                          "new one.",
-    "saveNet": "The trained network: always the .nt file next to the database, with the same name.",
-    "network_error_warning": "Before a run, you are warned if the network reproduces any material property "
-                             "less closely than this, in % of the property's range in the database. You can "
-                             "still run.",
-    "latentDim": "How many numbers describe one material in the material map.",
-    "learningRate": "The step size of the network's training.",
-    "vae_hiddenDim": "The size of the network's inner layers.",
-    "maxAttributeErrorPercent": "Training stops once the network reproduces every material property within "
-                                "this percent.",
-    "klFactor": "How strongly training keeps the material map compact and smooth.",
-    "numEpochs": "Training stops after this many passes at the latest.",
-}
-# (tab, group, [(section, key), ...]); section "mesh" is Project.n_dof and Project.single_layer
-LAYOUT = [
-    ("Optimization", "Main", [("mesh", "n_dof"), ("mesh", "single_layer"), ("common", "maxIterations"),
-                              ("common", "relative_filter_radius"), ("common", "material_filter_radius"),
-                              ("common", "pnorm_exponent"), ("common", "beta_schedule_scheme")]),
-    ("Optimization", "Run length", [("advanced", "timeLimit"), ("advanced", "rel_conv_tol")]),
-    ("Optimization", "Projection", [("advanced", "use_heaviside_projection"), ("advanced", "eta_proj")]),
-    ("Optimization", "Distance penalty", [("advanced", k) for k in (
-        "use_penalization", "gamma_init", "gamma_max", "gamma_factor", "penalty_start_iter",
-        "distance_penalty_disable_after_iter", "use_dynamic_gamma_scheduling")]),
-    ("Optimization", "Latent smoothing", [("advanced", k) for k in (
-        "use_z_smoothing", "z_smoothing_weight", "z_smoothing_disable_after_iter")]),
-    ("Optimization", "Material model", [("advanced", k) for k in (
-        "use_continuation", "use_constant_poissons_ratio", "constant_poissons_ratio")]),
-    ("Optimization", "Start and reported design", [("advanced", k) for k in (
-        "z0_init_method", "snap_to_real_material", "binarize_topology")]),
-    ("VAE", "VAE", [("vae", k) for k in ("use_pretrained_vae", "saveNet", "network_error_warning", "latentDim",
-                                         "learningRate", "vae_hiddenDim", "maxAttributeErrorPercent", "klFactor",
-                                         "numEpochs")]),
-]
-# settings that may be None, and what None means
-OPTIONAL = {"material_filter_radius": "same as density filter",
-            "saveNet": "next to the database"}
-VAE_KEYS = ("latentDim", "learningRate", "vae_hiddenDim", "maxAttributeErrorPercent", "klFactor", "numEpochs")
+# every setting's label, help, group, and whether it may be empty, are in its entry of SETTINGS
+# (problem/settings.py): BY_KEY[key]
+def setting_groups():
+    """(tab, group, [(section, key), ...]) in the order of SETTINGS; section "mesh" is Project.n_dof and
+    Project.single_layer."""
+    out = []
+    for e in SETTINGS:
+        if not out or out[-1][:2] != (e.tab, e.group):
+            out.append((e.tab, e.group, []))
+        out[-1][2].append((e.section, e.key))
+    return out
+
+
 VAE_NOTE = ("A database's network is the .nt file next to its .xlsx, with the same name (my_db.xlsx and "
             "my_db.nt). If there is none, the first run trains one. A database that comes with LSR MMTO can't be "
             "retrained: copy its .xlsx to a folder of your own first.")
-INTEGERS = {"n_dof", "maxIterations", "timeLimit", "penalty_start_iter", "distance_penalty_disable_after_iter",
-            "z_smoothing_disable_after_iter", "latentDim", "vae_hiddenDim", "numEpochs"}
 
 
 def shown_setting(key, value):
     """A setting's value in words: on/off, a number, or what an empty one means."""
     if value is None:
-        return OPTIONAL.get(key, "none")
+        return BY_KEY[key].none_means or "none"
     if isinstance(value, bool):
         return "on" if value else "off"
     return format(value, "g") if isinstance(value, (int, float)) else str(value)
@@ -744,9 +646,7 @@ def shown_setting(key, value):
 
 def setting_choices():
     """The settings with a fixed list of values."""
-    from lsr_mmto.optimize.run import BetaScheduleScheme, Z0InitMethod
-    return {"beta_schedule_scheme": list(BetaScheduleScheme.__members__),
-            "z0_init_method": list(Z0InitMethod.__members__)}
+    return {e.key: list(e.choices.__members__) for e in SETTINGS if e.choices is not None}
 
 
 def defaults_for(project):
@@ -756,7 +656,7 @@ def defaults_for(project):
     q.settings = {}
     q.complete_settings()
     out = {s: dict(v) for s, v in q.settings.items()}
-    out["mesh"] = {"n_dof": 30000, "single_layer": False}
+    out["mesh"] = dict(MESH_DEFAULTS)
     return out
 
 
@@ -766,8 +666,8 @@ class SettingRow:
     def __init__(self, key, value, choices):
         self.key = key
         self.none = None
-        if key in OPTIONAL:
-            self.none = QtWidgets.QCheckBox(OPTIONAL[key])
+        if BY_KEY[key].none_means:
+            self.none = QtWidgets.QCheckBox(BY_KEY[key].none_means)
         if key in choices:
             self.widget = QtWidgets.QComboBox()
             self.widget.addItems(choices[key])
@@ -776,7 +676,7 @@ class SettingRow:
         elif isinstance(value, bool) or key in ("single_layer",):
             self.widget = QtWidgets.QCheckBox()
         else:
-            self.widget = NumberEdit(0, integer=key in INTEGERS)
+            self.widget = NumberEdit(0, integer=BY_KEY[key].integer)
         self.set(value)
 
     def set(self, value):
@@ -837,7 +737,7 @@ class SettingsPanel(QtWidgets.QDialog):
         tabs = QtWidgets.QTabWidget()
         layout.addWidget(tabs)
         pages, advanced = {}, None
-        for tab, group, keys in LAYOUT:
+        for tab, group, keys in setting_groups():
             if tab not in pages:
                 scroll = QtWidgets.QScrollArea()
                 scroll.setWidgetResizable(True)
@@ -853,7 +753,7 @@ class SettingsPanel(QtWidgets.QDialog):
             grid.setColumnMinimumWidth(1, 290)
             for r, (section, key) in enumerate(keys):
                 row = SettingRow(key, self.current(section, key), choices)
-                label = QtWidgets.QLabel(LABELS[key])
+                label = QtWidgets.QLabel(BY_KEY[key].label)
                 reset = QtWidgets.QToolButton()                 # shown only on a value other than the default
                 reset.setText("\u21ba")
                 reset.setAutoRaise(True)
@@ -873,7 +773,7 @@ class SettingsPanel(QtWidgets.QDialog):
                 grid.addWidget(label, r, 0)
                 grid.addLayout(editor, r, 1, QtCore.Qt.AlignLeft)
                 grid.addWidget(reset, r, 2)
-                grid.addWidget(Info(HELP.get(key, "")), r, 3)
+                grid.addWidget(Info(BY_KEY[key].help), r, 3)
                 self.rows[(section, key)] = (row, label, reset)
                 row.changed_signal(lambda s=section, k=key: self._mark(s, k))
             if group == "VAE":                                  # the network, its checks, then the settings
@@ -1011,7 +911,7 @@ class SettingsPanel(QtWidgets.QDialog):
         self._mark(section, key)
 
     def problems(self):
-        return [f"{LABELS[k]} is not a number" for (s, k), entry in self.rows.items()
+        return [f"{BY_KEY[k].label} is not a number" for (s, k), entry in self.rows.items()
                 if s != "group" and not entry[0].ok()]
 
     def accept(self):
@@ -1030,18 +930,18 @@ class SettingsPanel(QtWidgets.QDialog):
             new, old = entry[0].get(), self.current(section, key)
             if same(new, old) and (new is None) == (old is None):
                 continue
-            changed.append(f"{LABELS[key]} {shown_setting(key, old)} -> {shown_setting(key, new)}")
+            changed.append(f"{BY_KEY[key].label} {shown_setting(key, old)} -> {shown_setting(key, new)}")
             if section == "mesh":
                 setattr(project, key, int(new) if key == "n_dof" else bool(new))
             else:
                 project.settings.setdefault(section, {})[key] = new
         out = ["Settings: " + ", ".join(changed)] if changed else []
         if self.vae_synced:
-            out.append(f"{', '.join(LABELS[k] for k in dict.fromkeys(self.vae_synced))}: set to the trained "
+            out.append(f"{', '.join(BY_KEY[k].label for k in dict.fromkeys(self.vae_synced))}: set to the trained "
                        f"network's")
         return out
 
 
 def all_setting_keys():
     """(section, key) of every setting the panel shows."""
-    return [sk for _, _, keys in LAYOUT for sk in keys]
+    return [sk for _, _, keys in setting_groups() for sk in keys]
