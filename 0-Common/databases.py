@@ -121,6 +121,9 @@ ATTRIBUTES = {a.name: a for a in [
               low=0, aliases=("Yield Strength", "Yield")),
     Attribute("Cost", "cost per mass", "price per unit mass", low=0, closed=("low",)),
 ]}
+# each attribute's name as a user reads it
+SHOWN = {"Density": "Density", "Youngs_Modulus": "Young's modulus", "Poissons_Ratio": "Poisson's ratio",
+         "Yield_Strength": "Yield strength", "Cost": "Cost"}
 _BY_ALIAS = {k.lower(): a.name for a in ATTRIBUTES.values() for k in (a.name,) + a.aliases}
 
 

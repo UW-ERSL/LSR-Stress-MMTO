@@ -136,6 +136,7 @@ Every setting of `run_topopt`, under its own name. A new project starts from the
 |---|---|---|
 | `use_pretrained_vae` | True | load the trained VAE from saveNet if it exists; otherwise train one |
 | `saveNet` | None | the VAE file; None = the .nt file next to the database's .xlsx |
+| `network_error_warning` | 5.0 | warn before a run when the VAE reproduces a material property worse than this, in % of the property's range |
 | `latentDim` | from the database | latent dimension of the VAE |
 | `learningRate` | from the database | VAE training learning rate |
 | `vae_hiddenDim` | from the database | width of the VAE's hidden layers |

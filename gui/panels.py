@@ -295,7 +295,7 @@ class MaterialsPanel(QtWidgets.QDialog):
             lines.append(f"The table could not be read: {e}")
             self.report.setText("\n".join(lines))
             return
-        from .database_editor import SHOWN
+        from databases import SHOWN  # type: ignore
         heads = ["Label", "Material"] + [SHOWN.get(a, a) + ("" if u is None else f" [{u}]")
                                          for a, u in zip(attributes, units)]
         self.table.setColumnCount(len(heads))
@@ -646,7 +646,8 @@ LABELS = {
     "constant_poissons_ratio": "Poisson's ratio value",
     "z0_init_method": "Starting latent point", "snap_to_real_material": "Snap to real materials",
     "binarize_topology": "Binarize the topology",
-    "use_pretrained_vae": "Use the trained network", "saveNet": "VAE file", "latentDim": "Latent dimension",
+    "use_pretrained_vae": "Use the trained network", "saveNet": "VAE file",
+    "network_error_warning": "Warn above network error [%]", "latentDim": "Latent dimension",
     "learningRate": "Learning rate", "vae_hiddenDim": "Hidden layer width",
     "maxAttributeErrorPercent": "Stop at attribute error [%]", "klFactor": "KL weight",
     "numEpochs": "Max epochs",
@@ -690,6 +691,9 @@ HELP = {
     "use_pretrained_vae": "Use the network already trained for this database. Unticked, the next run trains a "
                           "new one.",
     "saveNet": "The trained network: always the .nt file next to the database, with the same name.",
+    "network_error_warning": "Before a run, you are warned if the network reproduces any material property "
+                             "less closely than this, in % of the property's range in the database. You can "
+                             "still run.",
     "latentDim": "How many numbers describe one material in the material map.",
     "learningRate": "The step size of the network's training.",
     "vae_hiddenDim": "The size of the network's inner layers.",
@@ -714,8 +718,9 @@ LAYOUT = [
         "use_continuation", "use_constant_poissons_ratio", "constant_poissons_ratio")]),
     ("Optimization", "Start and reported design", [("advanced", k) for k in (
         "z0_init_method", "snap_to_real_material", "binarize_topology")]),
-    ("VAE", "VAE", [("vae", k) for k in ("use_pretrained_vae", "saveNet", "latentDim", "learningRate",
-                                         "vae_hiddenDim", "maxAttributeErrorPercent", "klFactor", "numEpochs")]),
+    ("VAE", "VAE", [("vae", k) for k in ("use_pretrained_vae", "saveNet", "network_error_warning", "latentDim",
+                                         "learningRate", "vae_hiddenDim", "maxAttributeErrorPercent", "klFactor",
+                                         "numEpochs")]),
 ]
 # settings that may be None, and what None means
 OPTIONAL = {"material_filter_radius": "same as density filter",

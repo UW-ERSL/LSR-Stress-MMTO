@@ -192,8 +192,11 @@ def test_record_stores_display():
 
 def test_vae_training_guards():
     """Training never writes into the shipped folder; a network being replaced is kept as
-    <name>.previous.nt; a network that has not learned the database (NETWORK_LIMIT) is not saved and
-    the run stops before the optimization, and one read from a file is checked the same way."""
+    <name>.previous.nt; a network that reproduces the database less closely than the project's
+    network_error_warning is kept and the run warns, by property, and goes on (on_network_error,
+    the GUI's question, can end it); the setting moves the limit."""
+    import contextlib
+    import io
     import shutil
     from databases import DATABASE_DIR  # type: ignore
     p = ubracket_project()                                              # 6Materials_AF_3Attr, shipped
@@ -217,29 +220,33 @@ def test_vae_training_guards():
         old = open(os.path.join(d, "ggd.nt"), "rb").read()
         p.database = os.path.join(d, "ggd.xlsx")
         p.settings["vae"]["numEpochs"] = 3                              # a network that has learned nothing
-        from materialEncoder import NETWORK_LIMIT, MaterialEncoder, NetworkNotTrained  # type: ignore
-        try:
-            _run(p, run_arguments(p, save_dir=d, verbose=False))
-            raise AssertionError("a run went on with a network that has not learned the database")
-        except NetworkNotTrained as e:
-            assert e.trained and e.error > NETWORK_LIMIT and "did not learn the database" in str(e), e
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            captured = _run(p, run_arguments(p, save_dir=d, verbose=False))
+        assert "[WARNING] The material network reproduces the database less closely than the 5% warning " \
+               "limit: " in out.getvalue() and "Young's modulus" in out.getvalue(), out.getvalue()[-2000:]
+        errors = captured["config"]["network_errors_percent"]
+        assert set(errors) == {"Density", "Youngs_Modulus", "Yield_Strength"} and max(errors.values()) > 5
         assert open(os.path.join(d, "ggd.previous.nt"), "rb").read() == old
-        assert open(os.path.join(d, "ggd.nt"), "rb").read() == old      # not replaced by the poor one
+        assert open(os.path.join(d, "ggd.nt"), "rb").read() != old      # the poor one is kept, as trained
 
-        import torch
-        from databases import DATABASE_VAE, VAEParams  # type: ignore
-        vae = VAEParams()
-        for k, v in DATABASE_VAE["6Materials_AF_3Attr"].items():
-            setattr(vae, k, v)
-        enc = MaterialEncoder(vae)
-        enc.readExcel(os.path.join(d, "ggd.xlsx"))
-        torch.save(enc.vaeNet.state_dict(), os.path.join(d, "ggd.nt"))  # an untrained network, in the file
-        p.settings["vae"]["use_pretrained_vae"] = True
+        p.settings["vae"]["use_pretrained_vae"] = True                  # that poor network, read from its file
+        from materialEncoder import NetworkRunCancelled  # type: ignore
+        asked = []
+        args = run_arguments(p, save_dir=d, verbose=False, on_network_error=lambda w: asked.append(w) and False)
         try:
-            _run(p, run_arguments(p, save_dir=d, verbose=False))
-            raise AssertionError("a run went on with a poor network read from its file")
-        except NetworkNotTrained as e:
-            assert not e.trained and "Use the trained network" in str(e), e
+            _run(p, args)
+            raise AssertionError("the run went on after on_network_error said no")
+        except NetworkRunCancelled:
+            pass
+        assert len(asked) == 1 and "Yield strength" in asked[0] and "%" in asked[0], asked
+
+        p.settings["vae"]["network_error_warning"] = 1000.0             # the limit is the project's
+        asked.clear()
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            _run(p, run_arguments(p, save_dir=d, verbose=False, on_network_error=asked.append))
+        assert asked == [] and "[WARNING] The material network" not in out.getvalue()
 
 
 def test_network_check_leaves_the_encoder_as_it_was():
@@ -267,11 +274,12 @@ def test_network_check_leaves_the_encoder_as_it_was():
 
 
 def test_shipped_networks_are_usable():
-    """Every shipped network reproduces its database well within NETWORK_LIMIT."""
+    """Every shipped network reproduces its database well within the default warning limit."""
     import contextlib
     import io
     from databases import DATABASE_DIR, DATABASE_VAE, VAEParams  # type: ignore
-    from materialEncoder import NETWORK_LIMIT, MaterialEncoder  # type: ignore
+    from materialEncoder import MaterialEncoder  # type: ignore
+    limit = DEFAULT_SETTINGS["vae"]["network_error_warning"]
     for name, settings in DATABASE_VAE.items():
         vae = VAEParams()
         for k, v in settings.items():
@@ -281,7 +289,7 @@ def test_shipped_networks_are_usable():
         with contextlib.redirect_stdout(io.StringIO()):
             enc.readExcel(xlsx)
             enc.loadAutoencoderFromFile(xlsx[:-5] + ".nt")
-        assert enc.largestEncodingErrorPercent() < NETWORK_LIMIT / 2, name
+        assert enc.largestEncodingErrorPercent() < limit / 2, name
 
 
 def test_old_runs_rebuild():

@@ -14,10 +14,8 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 from .panels import GREY, Info, ok_cancel
 
-# how the properties are shown (any other in the registry is shown by its own name), and those a new
-# database starts with; Add property... lists every property of the registry (databases.ATTRIBUTES)
-SHOWN = {"Density": "Density", "Youngs_Modulus": "Young's modulus", "Poissons_Ratio": "Poisson's ratio",
-         "Yield_Strength": "Yield strength", "Cost": "Cost"}
+# the properties a new database starts with; Add property... lists every property of the registry
+# (databases.ATTRIBUTES)
 STARTING = ["Density", "Youngs_Modulus", "Poissons_Ratio"]
 FIXED = ["Name", "Shown as", "Colour"]                      # the columns before the properties
 BAD = QtGui.QColor("#ffd6d6")
@@ -25,6 +23,12 @@ HELP = ("One row per material. Shown as is optional: a shorter name for legends 
         "shown when it is empty). Click a colour to change it. The row under the headers holds each "
         "property's unit. Add property adds a column; Remove property removes the column you are in. "
         "You can paste a block copied from Excel into the table.")
+
+
+def shown(key):
+    """A property's name as the user reads it (databases.SHOWN), else its own name."""
+    from databases import SHOWN  # type: ignore
+    return SHOWN.get(key, key)
 
 
 class _Table(QtWidgets.QTableWidget):
@@ -163,7 +167,7 @@ class DatabaseEditor(QtWidgets.QDialog):
         self.add_property_menu.clear()
         missing = [key for key in ATTRIBUTES if key not in self.attributes]
         for key in missing:
-            self.add_property_menu.addAction(SHOWN.get(key, key), lambda k=key: self.add_property(k))
+            self.add_property_menu.addAction(shown(key), lambda k=key: self.add_property(k))
         if not missing:
             self.add_property_menu.addAction("Every property is in the table").setEnabled(False)
 
@@ -186,7 +190,7 @@ class DatabaseEditor(QtWidgets.QDialog):
         filled = any(self.table.item(r, 3 + j) and self.table.item(r, 3 + j).text().strip()
                      for r in range(1, self.table.rowCount()))
         if filled and QtWidgets.QMessageBox.question(
-                self, "Remove property", f"Remove {SHOWN.get(key, key)} and its numbers?",
+                self, "Remove property", f"Remove {shown(key)} and its numbers?",
                 QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No) != QtWidgets.QMessageBox.Yes:
             return False
         self._columns(order=[k for k in self.attributes if k != key])
@@ -204,7 +208,7 @@ class DatabaseEditor(QtWidgets.QDialog):
         wanted = list(order) if order is not None else list(self.attributes)
         was = self.table.blockSignals(True)
         self.table.setColumnCount(len(FIXED) + len(wanted))
-        self.table.setHorizontalHeaderLabels(FIXED + [SHOWN.get(k, k) for k in wanted])
+        self.table.setHorizontalHeaderLabels(FIXED + [shown(k) for k in wanted])
         if self.table.rowCount() == 0:
             self.table.setRowCount(1)
         for c in range(len(FIXED)):
@@ -303,9 +307,9 @@ class DatabaseEditor(QtWidgets.QDialog):
                 a, text = ATTRIBUTES[key], rows[r - 1][j]
                 try:
                     value = float(text)
-                    reason = "" if a.in_range(value) else f"{SHOWN.get(key, key)}: {a.range_text()}"
+                    reason = "" if a.in_range(value) else f"{shown(key)}: {a.range_text()}"
                 except ValueError:
-                    reason = f"{SHOWN.get(key, key)}: a number" if text else f"{SHOWN.get(key, key)}: empty"
+                    reason = f"{shown(key)}: a number" if text else f"{shown(key)}: empty"
                 self._mark(r, 3 + j, bool(reason), reason)
                 if reason:
                     out.append(f"{name or 'row ' + str(r)}: {reason}")

@@ -86,7 +86,7 @@ DEFAULT_SETTINGS = {
                  "use_heaviside_projection": True, "eta_proj": 0.5, "use_continuation": False,
                  "use_constant_poissons_ratio": False, "constant_poissons_ratio": 0.3,
                  "snap_to_real_material": False, "z0_init_method": "ORIGIN", "binarize_topology": True},
-    "vae": {"use_pretrained_vae": True, "saveNet": None},
+    "vae": {"use_pretrained_vae": True, "saveNet": None, "network_error_warning": 5.0},
 }
 # one line per setting, for docs/project_reference.md (and later the GUI)
 SETTING_DOCS = {
@@ -118,6 +118,8 @@ SETTING_DOCS = {
     "binarize_topology": "in the reported design, round the density to 0 or 1, keeping the volume",
     "use_pretrained_vae": "load the trained VAE from saveNet if it exists; otherwise train one",
     "saveNet": "the VAE file; None = the .nt file next to the database's .xlsx",
+    "network_error_warning": "warn before a run when the VAE reproduces a material property worse than this, "
+                             "in % of the property's range",
     "latentDim": "latent dimension of the VAE",
     "learningRate": "VAE training learning rate",
     "vae_hiddenDim": "width of the VAE's hidden layers",
@@ -130,7 +132,7 @@ VAE_PARAMS = ("latentDim", "learningRate", "vae_hiddenDim", "maxAttributeErrorPe
 # run_topopt arguments about one run's output or about watching it, not the problem; n_dof_desired
 # is mesh.n_dof
 NOT_STORED = ("to_problem", "save_dir", "plot_progress", "plot_bcs", "verbose", "plotter", "progress",
-              "should_stop")
+              "should_stop", "on_network_error")
 
 
 def _dofs(dofs):
@@ -993,19 +995,20 @@ class Project:
 
 # ---------------------------------------------------------------------- running
 def run_arguments(project, save_dir=None, verbose=True, plot_progress=False, plot_bcs=False, plotter=None,
-                  progress=None, should_stop=None):
+                  progress=None, should_stop=None, on_network_error=None):
     """The keyword arguments run_topopt gets for this project."""
     from MainPureStructural import BetaScheduleScheme, Z0InitMethod                    # type: ignore
     project.complete_settings()
     args = dict(project.settings["common"], **project.settings["advanced"],
                 use_pretrained_vae=project.settings["vae"]["use_pretrained_vae"],
-                saveNet=project.settings["vae"]["saveNet"])
+                saveNet=project.settings["vae"]["saveNet"],
+                network_error_warning=project.settings["vae"]["network_error_warning"])
     args["beta_schedule_scheme"] = BetaScheduleScheme[args["beta_schedule_scheme"]]
     args["z0_init_method"] = Z0InitMethod[args["z0_init_method"]]
     args.update(to_problem=project, n_dof_desired=project.n_dof,
                 save_dir=save_dir if save_dir is not None else os.path.join("results", project.name),
                 verbose=verbose, plot_progress=plot_progress, plot_bcs=plot_bcs, plotter=plotter,
-                progress=progress, should_stop=should_stop)
+                progress=progress, should_stop=should_stop, on_network_error=on_network_error)
     return args
 
 

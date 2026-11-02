@@ -46,7 +46,7 @@ from PyTOImports import (
     increment_SIMP_STRUCTURAL_PENALTY,
     increment_SIMP_THERMAL_PENALTY,
 )
-from materialEncoder import NETWORK_LIMIT, MaterialEncoder, NetworkNotTrained
+from materialEncoder import MaterialEncoder, NetworkRunCancelled, network_warning
 import AutodiffPureStructural as AD
 from mmto_utility_functions import (
     create_density_and_material_filters,
@@ -131,6 +131,7 @@ def run_topopt(
     # VAE parameters
     # -------------------------------
     use_pretrained_vae=False,
+    network_error_warning=5.0,  # % of a property's range: a network reproducing the database less closely warns
     # -------------------------------
     # Misc. parameters
     # -------------------------------
@@ -179,6 +180,8 @@ def run_topopt(
                                # x_phys, z (per element), z_real (the materials' latent points)
     should_stop=None,          # should_stop() before each iteration: True ends the run there, and the
                                # design reached so far is post-processed and saved as usual
+    on_network_error=None,     # on_network_error(warning) when the network is above network_error_warning:
+                               # False ends the run (NetworkRunCancelled); None prints the warning and goes on
 ):
     """
     DENSITY FILTER + HEAVISIDE PROJECTION (density ONLY):
@@ -191,7 +194,7 @@ def run_topopt(
       Pz = lambda * sum_ell sum_e x_e * ( z_e^(ell) - ((H z^(ell))/Hs)_e )^2
     """
     _args_at_start = dict(locals())   # the arguments as given; the run switches some off later
-    for _k in ("progress", "should_stop"):
+    for _k in ("progress", "should_stop", "on_network_error"):
         _args_at_start.pop(_k, None)
     import run_io as _run_io
     _provenance = _run_io.provenance()   # the code as it is when the run starts
@@ -239,9 +242,6 @@ def run_topopt(
     if use_pretrained_vae and vae_file_exists:
         print(f"Loading pre-trained autoencoder from file: {saveNet}")
         matEncoder.loadAutoencoderFromFile(saveNet)
-        error = matEncoder.largestEncodingErrorPercent()
-        if error > NETWORK_LIMIT:                           # a network that would give wrong materials
-            raise NetworkNotTrained(error, NETWORK_LIMIT, saveNet, trained=False)
     else:
         if in_shipped_folder(saveNet):
             raise ValueError(f"training a new VAE would overwrite the shipped {os.path.basename(saveNet)}; to train "
@@ -259,10 +259,16 @@ def run_topopt(
             vae_params.learningRate,
             vae_params.maxAttributeErrorPercent,
             should_stop=should_stop,            # a stop while training: TrainingStopped, no network saved
-            accept_below=NETWORK_LIMIT,         # not learned well enough: NetworkNotTrained, none saved
         )
         time_end = time.time()
         print(f"Autoencoder training time: {time_end - time_start:.2f} seconds")
+
+    network_errors = matEncoder.encodingErrorsPercent()     # read or just trained, the network is kept either way
+    warning = network_warning(network_errors, network_error_warning)
+    if warning is not None:
+        print(f"[WARNING] {warning[0].upper() + warning[1:]}.")
+        if on_network_error is not None and not on_network_error(warning):
+            raise NetworkRunCancelled(warning)
 
     with torch.no_grad():
         matEncoder.training_latents = matEncoder.vaeNet.encoder(
@@ -667,6 +673,7 @@ def run_topopt(
         runtime_sec=(tEnd - tStart), iterations=_iters,
         comment=getattr(to_params, "Comment", ""))
     run_config["during_run"] = dict(_during_run)
+    run_config["network_errors_percent"] = network_errors   # what the run's materials were off by, per property
     run_config["provenance"] = _provenance
     run_config["units"] = to_problem.unit_record()
     from PyTOImports import topopt_material_model  # type: ignore

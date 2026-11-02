@@ -972,12 +972,22 @@ def test_run():
         assert not r.start_optimization() and "Cannot start" in r.status.text()
 
 
-def test_run_refuses_a_network_that_has_not_learned():
-    """A network that reproduces the database worse than NETWORK_LIMIT: the run says so in red, in plain
-    words, and leaves no run folder behind."""
+def test_network_warning_continue_or_cancel():
+    """A network that reproduces the database less closely than the project's warning limit: before the
+    optimization the window asks, with each property's error; Cancel leaves no run folder behind,
+    Continue runs and keeps the errors with the run."""
     import torch
     from databases import DATABASE_DIR, DATABASE_VAE, VAEParams  # type: ignore
     from materialEncoder import MaterialEncoder  # type: ignore
+    asked, saved = [], Box.exec_
+
+    def click(choice):
+        def exec_(box):
+            asked.append(box.text())
+            next(b for b in box.buttons() if b.text().replace("&", "") == choice).click()
+            return 0
+        return exec_
+
     with scratch() as d:
         w = opened("L-bracket", d)
         xlsx = shutil.copy(os.path.join(ROOT, DATABASE_DIR, "BM1_3Mats_2Attr.xlsx"), d)
@@ -992,11 +1002,24 @@ def test_run_refuses_a_network_that_has_not_learned():
         w.project.settings["vae"].update(use_pretrained_vae=True, latentDim=2, vae_hiddenDim=50)
         assert w.save_project()
         r = w.open_run_panel()
-        assert r.start_optimization()
-        assert _wait(lambda: not r.optimization_running)
-        assert "Not run: The material network in BM1_3Mats_2Attr.nt reproduces the database only to" \
-            in r.status.text(), r.status.text()
-        assert not os.path.exists(r.save_dir)
+        try:
+            Box.exec_ = click("Cancel")
+            assert r.start_optimization()
+            assert _wait(lambda: not r.optimization_running)
+            assert len(asked) == 1 and "Young's modulus" in asked[0] and "Run anyway?" in asked[0], asked
+            assert r.status.text().startswith("Not run: cancelled at the material network warning"), \
+                r.status.text()
+            assert not os.path.exists(r.save_dir)
+
+            Box.exec_ = click("Continue")
+            assert r.start_optimization()
+            assert _wait(lambda: len(r.history["objective"]) >= 1)
+            r.stop_optimization()
+            assert _wait(lambda: not r.optimization_running)
+        finally:
+            Box.exec_ = saved
+        assert len(asked) == 2 and r.status.text().startswith("Run stopped"), r.status.text()
+        assert "network_errors_percent" in open(os.path.join(r.save_dir, "run_config.yaml")).read()
 
 
 def test_export_and_run_script():

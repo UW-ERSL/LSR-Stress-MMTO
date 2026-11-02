@@ -132,6 +132,7 @@
       "vae": {
         "use_pretrained_vae": true,
         "saveNet": null,
+        "network_error_warning": 5.0,
         "latentDim": 2,
         "learningRate": 0.0001,
         "vae_hiddenDim": 50,

@@ -125,6 +125,7 @@ def nearest_material(z, z_real):
 class RunWindow(StructuralTopOptWindow):
     """PyTO-AD's Optimize window, running LSR MMTO's optimization (see the module docstring)."""
     latent_update = QtCore.pyqtSignal(object)                  # a frame of the live latent space
+    network_question = QtCore.pyqtSignal(str)                  # the network warning, asked in the window
 
     def __init__(self, window):
         self.window, self.stop_requested, self.save_dir = window, False, None
@@ -136,6 +137,7 @@ class RunWindow(StructuralTopOptWindow):
         self.setWindowTitle("Run")
         self.log_line.connect(self._training_progress, QtCore.Qt.QueuedConnection)
         self.latent_update.connect(self.update_latent_plot, QtCore.Qt.QueuedConnection)
+        self.network_question.connect(self._ask_network, QtCore.Qt.BlockingQueuedConnection)
 
     # ------------------------------------------------------------------ the strip
     def setup_ui(self):
@@ -250,23 +252,41 @@ class RunWindow(StructuralTopOptWindow):
 
     def _run_optimization(self, plan, fe_solver, spec):
         """In the worker thread (PyTO-AD's run_optimization sends what is printed to the log)."""
-        from materialEncoder import NetworkNotTrained, TrainingStopped  # type: ignore
+        from materialEncoder import NetworkRunCancelled, TrainingStopped  # type: ignore
         from project import run  # type: ignore
         success, error = False, ""
-        self.stopped_training, self.network_problem = False, None
+        self.stopped_training, self.network_cancelled = False, False
         try:
             run(self.project, save_dir=self.save_dir, progress=self._progress,
-                should_stop=lambda: self.stop_requested)
+                should_stop=lambda: self.stop_requested, on_network_error=self._network_error)
             success = True
         except TrainingStopped:                                     # Stop before the first iteration
             self.stopped_training = True
-        except NetworkNotTrained as e:                              # the materials would be wrong: no run
-            self.network_problem = str(e)
+        except NetworkRunCancelled:                                 # Cancel on the network warning: no run
+            self.network_cancelled = True
         except Exception as e:                                      # noqa: BLE001
             import traceback
             traceback.print_exc()
             error = str(e)
         self.optimization_done.emit(success, error, self.history, self.save_dir, None)
+
+    def _network_error(self, warning):
+        """In the worker thread: the network warning asked in the window (_ask_network); True to go on."""
+        self.network_question.emit(warning)                        # returns once it is answered
+        return self.network_answer
+
+    @QtCore.pyqtSlot(str)
+    def _ask_network(self, warning):
+        """Continue or Cancel, with the warning; the window's thread."""
+        box = QtWidgets.QMessageBox(QtWidgets.QMessageBox.Warning, "Material network",
+                                    warning[0].upper() + warning[1:] + ".\n\nThe run would use material "
+                                    "properties this far from the database. Run anyway?", parent=self)
+        box.setDetailedText("To train the network again, untick Use the trained network in Settings. "
+                            "The warning limit is Warn above network error [%] in Settings.")
+        go = box.addButton("Continue", QtWidgets.QMessageBox.AcceptRole)
+        box.addButton(QtWidgets.QMessageBox.Cancel)
+        box.exec_()
+        self.network_answer = box.clickedButton() is go
 
     def _progress(self, state):
         """After each iteration (worker thread): the plot always, the design at most every DRAW_EVERY s."""
@@ -421,16 +441,15 @@ class RunWindow(StructuralTopOptWindow):
         self.optimize_button.setEnabled(True)
         self.stop_button.setEnabled(False)
         w = self.window
-        problem = getattr(self, "network_problem", None)
-        if getattr(self, "stopped_training", False) or problem:     # nothing to keep: no network, no design
+        cancelled = getattr(self, "network_cancelled", False)
+        if getattr(self, "stopped_training", False) or cancelled:   # nothing to keep: no design
             from project_folder import is_run  # type: ignore
             if self.save_dir and os.path.isdir(self.save_dir) and not is_run(self.save_dir):
                 import shutil
                 shutil.rmtree(self.save_dir, ignore_errors=True)
-            if problem:
-                text = problem[0].upper() + problem[1:] + "."
-                self.status.setText(f"<span style='color:#b00000'>Not run: {text}</span>")
-                w.message_text.append(f"Run not started: {text}")
+            if cancelled:
+                self.status.setText("Not run: cancelled at the material network warning. No design was made.")
+                w.message_text.append("Run cancelled at the material network warning; no design was made.")
                 return
             self.status.setText("Stopped while training the material network. Nothing was saved.")
             w.message_text.append("Run stopped while training the material network; nothing was saved.")

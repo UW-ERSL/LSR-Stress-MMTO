@@ -9,11 +9,9 @@ import matplotlib.cm as cm
 import os
 import sys
 import warnings
-from databases import attribute_name, normalize, participation_ratio
+from databases import SHOWN, attribute_name, normalize, participation_ratio
 
 STOP_CHECK_EVERY = 100            # epochs between two asks of trainAutoencoder's should_stop
-NETWORK_LIMIT = 5.0               # the largest error, in % of an attribute's range, of a network a run may use
-                                  # (the shipped networks are at 0.5 to 2%; a training stuck in a bad minimum, ~30%)
 
 
 class TrainingStopped(Exception):
@@ -24,21 +22,19 @@ class TrainingStopped(Exception):
         self.epoch = epoch
 
 
-class NetworkNotTrained(Exception):
-    """The material network reproduces the database worse than NETWORK_LIMIT: a run would optimize with wrong
-    materials. trained: it was just trained (and not saved); else it was read from path."""
+class NetworkRunCancelled(Exception):
+    """The material network reproduces the database less closely than the project's warning limit, and the
+    run was not wanted (run_topopt's on_network_error answered False): nothing was optimized."""
 
-    def __init__(self, error, limit, path, trained):
-        self.error, self.limit, self.path, self.trained = error, limit, path, trained
-        if trained:
-            text = (f"the material network did not learn the database well enough: its largest error is {error:.1f}% "
-                    f"of an attribute's range, and at most {limit:g}% can be used. It was not saved. Change the "
-                    f"learning rate (for example to 1e-4) or the latent dimension in Settings, then run again")
-        else:
-            text = (f"the material network in {os.path.basename(path)} reproduces the database only to {error:.1f}% "
-                    f"of an attribute's range, and at most {limit:g}% can be used. Untick Use the trained network "
-                    f"in Settings to train it again")
-        super().__init__(text)
+
+def network_warning(errors, limit):
+    """The warning for a network whose largest error (errors: {attribute: % of its range}) is above limit (%),
+    listing every attribute, largest first; None when it is within the limit."""
+    if not errors or max(errors.values()) <= limit:
+        return None
+    listed = ", ".join(f"{SHOWN.get(k, k)} {v:.1f}%" for k, v in sorted(errors.items(), key=lambda kv: -kv[1]))
+    return (f"the material network reproduces the database less closely than the {limit:g}% warning limit: "
+            f"{listed} (each the largest error over the materials, in % of the property's range)")
 
 
 class MaterialEncoder:
@@ -125,6 +121,15 @@ class MaterialEncoder:
         self.vaeNet.encoder.isTraining = was
         return largestErrorPercent
 
+    def encodingErrorsPercent(self):
+        """{attribute: the largest error over the materials, in % of the attribute's range}."""
+        was = self.vaeNet.encoder.isTraining
+        self.vaeNet.encoder.isTraining = False
+        with torch.no_grad():
+            diff = self.scaledMaterialData - self.vaeNet.decoder(self.vaeNet.encoder(self.scaledMaterialData))
+        self.vaeNet.encoder.isTraining = was
+        return {name: 100.0 * float(diff[:, a["idx"]].abs().max()) for name, a in self.materialAttributes.items()}
+
     def printEncodingErrors(self):
         with torch.no_grad():
             z_real = self.vaeNet.encoder(self.scaledMaterialData)
@@ -166,15 +171,12 @@ class MaterialEncoder:
         learningRate,
         maxAttributeErrorPercent=0.0005,
         sharpAwareMinimization=False,
-        accept_below=None,
         sam_rho=0.05,
         Sam_diagnostics=False,
         should_stop=None,
     ):
         # should_stop: optional function, asked every STOP_CHECK_EVERY epochs; True ends the training by
         # raising TrainingStopped, before the network is saved (savedNet is left as it was).
-        # accept_below: when given, a network whose largest error (%) is above it at the end raises
-        # NetworkNotTrained instead of being saved (savedNet is left as it was).
         opt = torch.optim.AdamW(self.vaeNet.parameters(), learningRate)
         convgHistory = {'reconLoss': [], 'klLoss': [], 'loss': []}
         self.vaeNet.encoder.isTraining = True
@@ -267,13 +269,9 @@ class MaterialEncoder:
                         tag, epoch, reconLoss.item(), klLoss.item(), loss.item(), largestErrorPercent))
 
         self.vaeNet.encoder.isTraining = False
-        if accept_below is not None:
-            error = self.largestEncodingErrorPercent()
-            if error > accept_below:
-                raise NetworkNotTrained(error, accept_below, savedNet, trained=True)
-            if error >= maxAttributeErrorPercent:
-                print(f"The network's largest error is {error:.2f}% (asked {maxAttributeErrorPercent:g}%), "
-                      f"under the {accept_below:g}% a run can use.")
+        error = self.largestEncodingErrorPercent()
+        if error >= maxAttributeErrorPercent:
+            print(f"The network's largest error is {error:.2f}% (asked {maxAttributeErrorPercent:g}%).")
         torch.save(self.vaeNet.state_dict(), savedNet)
         self.training_latents = self.vaeNet.encoder(self.scaledMaterialData).cpu()
         return convgHistory
