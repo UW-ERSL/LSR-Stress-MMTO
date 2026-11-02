@@ -746,11 +746,13 @@ class MMTOWindow(MainWindow):
         except OSError as e:
             QtWidgets.QMessageBox.warning(self, "Save project", f"Not saved: {e}")
             return False
-        old = self.project.name, self.project.base_dir, self.project.stl, self.project.database
         p = self.project
-        p.name, p.base_dir, p.stl, p.database = packed.name, packed.base_dir, packed.stl, packed.database
+        old = p.name, p.base_dir, p.stl, p.database, p.selections
+        # the regions too: pack points a region's own files (an inside_stl surface) at their copies in part/
+        p.name, p.base_dir, p.stl, p.database, p.selections = (packed.name, packed.base_dir, packed.stl,
+                                                              packed.database, packed.selections)
         if not self._write(path):
-            p.name, p.base_dir, p.stl, p.database = old
+            p.name, p.base_dir, p.stl, p.database, p.selections = old
             return False
         if self.template:
             self.template = False

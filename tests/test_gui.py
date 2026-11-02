@@ -145,6 +145,20 @@ def test_new_save_load():
         assert Project.load(w.path).to_dict() == w.project.to_dict()
 
 
+def test_save_as_brings_in_region_files():
+    """Save As of a project whose region names a file of its own (the airplane's collar, inside_stl):
+    the file is copied into part/ of the new folder, and the saved project points at that copy."""
+    w = G.MMTOWindow()
+    with scratch() as d:
+        assert w.open_project(os.path.join(PROJECTS, "Airplane bracket.mmto"))
+        assert w.save_project_as(os.path.join(d, "plane", "plane"))
+        p = Project.load(w.path)
+        files = [s.to_dict().get("path") for s in p.selections.values() if s.to_dict().get("type") == "inside_stl"]
+        assert files and all(os.path.isfile(os.path.join(p.base_dir, f)) for f in files), files
+        assert all(os.path.dirname(os.path.abspath(os.path.join(p.base_dir, f))) == os.path.join(d, "plane", "part")
+                   for f in files)
+
+
 def test_setup_script_follows_window_saves():
     """File > New writes <name>_setup.py in the project folder; every save in the window writes it again
     to match the project; a save from a script leaves it alone."""
