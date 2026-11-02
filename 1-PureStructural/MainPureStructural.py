@@ -707,6 +707,7 @@ def run_topopt(
         save_dir=save_dir,
         run_config=run_config,
         example_name=getattr(to_problem, "name", str(to_problem)),
+        decode=lambda z: AD.decode(matEncoder, z, use_constant_poissons_ratio, constant_poissons_ratio),
     )
 
 if __name__ == "__main__":

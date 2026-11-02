@@ -261,29 +261,22 @@ def eval_stress_compliance_metrics(
     latentDim,
     matEncoder,
     fe_solver_structural,
-    mat_lib,
     MaterialModel,
     elem_volume,
     design_domain_volume,
+    decode,
 ):
+    """The design's compliance, stresses and mass, printed under label. decode(z) gives the
+    per-element (E, nu, properties) the optimization used for latent points z."""
     x_vec = np.asarray(x_vec, dtype=float).flatten()
     z_vec = np.asarray(z_vec, dtype=float).flatten()
 
     zPts = torch.tensor(np.asarray(z_vec, dtype=float).reshape(latentDim, -1).T, dtype=torch.get_default_dtype())
 
+    # E and nu exactly as the optimization had them: the same decode, the same constant-nu setting
     with torch.no_grad():
-        decoded = matEncoder.vaeNet.decoder(zPts)
-        material_properties = matEncoder.getMaterialProperties(decoded)
-        Youngs_Modulus = material_properties["Youngs_Modulus"].detach().cpu().numpy()
-
-    fe_solver_structural.mat_prop = [
-        mat_lib.create_material_with_defaults(
-            name=f"Material_{i+1}",
-            youngs_modulus=float(Youngs_Modulus[i]),
-        )
-        for i in range(len(Youngs_Modulus))
-    ]
-    fe_solver_structural.set_material(fe_solver_structural.mat_prop)
+        E, nu, material_properties = decode(zPts)
+    fe_solver_structural.set_material_fields(E.detach(), nu.detach())
 
     sol_local = fe_solver_structural.solve(x_vec, MaterialModel.SIMP)
     fe_solver_structural.mesh.setPseudoDensity(torch.as_tensor(x_vec))   # PyTO-AD's mesh takes torch
@@ -586,9 +579,14 @@ def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
                        beta_proj, eta_proj, elem_volume, design_domain_volume,
                        apply_density_filter, use_heaviside_projection,
                        binarize_topology, snap_to_real_material, save_dir=None,
-                       run_config=None, example_name=None, material_labels=None):
+                       run_config=None, example_name=None, material_labels=None, decode=None):
     """Reconstruct the optimal fields, evaluate stress/compliance metrics at the
-    continuous / binarized / snapped designs, and draw the final plots."""
+    continuous / binarized / snapped designs, and draw the final plots.
+
+    decode(z) -> (E, nu, properties) is the optimization's own decode, so the final check analyses
+    the design with the same materials (a decoded or constant Poisson's ratio) as the optimization."""
+    if decode is None:
+        raise ValueError("run_postprocessing needs decode: the optimization's E, nu for latent points")
     import os
     if save_dir is not None:
         pass  # plot autosave disabled; figures are drawn by utils/figures.py from the saved record
@@ -614,10 +612,10 @@ def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
         latentDim=latentDim,
         matEncoder=matEncoder,
         fe_solver_structural=fe_solver,
-        mat_lib=mat_lib,
         MaterialModel=MaterialModel,
         elem_volume=elem_volume,
         design_domain_volume=design_domain_volume,
+        decode=decode,
     )
 
     xOptimal = xOptimal_cont.copy()
@@ -634,10 +632,10 @@ def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
         latentDim=latentDim,
         matEncoder=matEncoder,
         fe_solver_structural=fe_solver,
-        mat_lib=mat_lib,
         MaterialModel=MaterialModel,
         elem_volume=elem_volume,
         design_domain_volume=design_domain_volume,
+        decode=decode,
     )
 
     zOptimalPts = torch.tensor(zOptimal, dtype=torch.get_default_dtype())
@@ -652,10 +650,10 @@ def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
         latentDim=latentDim,
         matEncoder=matEncoder,
         fe_solver_structural=fe_solver,
-        mat_lib=mat_lib,
         MaterialModel=MaterialModel,
         elem_volume=elem_volume,
         design_domain_volume=design_domain_volume,
+        decode=decode,
     )
 
     decoded = matEncoder.vaeNet.decoder(zOptimalPts)
