@@ -258,11 +258,7 @@ BC_KINDS = {
 }
 
 
-def _from_repo(path):
-    """path relative to the repository folder, as one types it there."""
-    from utils.project_paths import find_root                               # type: ignore
-    root = find_root(os.path.dirname(path))
-    return os.path.relpath(path, root).replace("\\", "/") if root else os.path.basename(path)
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))     # the repository folder
 
 
 def parse_expression(text):
@@ -899,12 +895,14 @@ class Project:
                         for t in getattr(s, "parts", ())})
         lines = [f'"""{self.name}: rebuilds the project {self.name!r}. Written by Project.to_script.',
                  "",
-                 f"    python {_from_repo(path)}       (from the repository folder; saves {self.name}.mmto next to it)",
+                 "Run it with File > Run script in LSR MMTO, which opens the project it saves, or from any folder",
+                 f"with: python {os.path.basename(path)}       (saves {self.name}.mmto next to it)",
                  '"""',
                  "import os",
                  "import sys",
                  "",
-                 "sys.path.insert(0, os.getcwd())",
+                 f'REPO = r"{REPO}"        # where LSR MMTO is: change this line if it moves',
+                 "sys.path.insert(0, REPO)",
                  "from utils import project_paths",
                  "",
                  "project_paths.bootstrap()",

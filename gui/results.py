@@ -86,42 +86,22 @@ def latent_side_by_side(runs, max_points=20000):
     elements sit compares directly."""
     import numpy as np
     from matplotlib.figure import Figure
+    from utils import figures  # type: ignore
     names, rs = list(runs), list(runs.values())
     shared = same_network(*rs)
-    n_z = np.asarray(rs[0].z_real).shape[1]
-    three_d = n_z == 3 and all(np.asarray(r.z_real).shape[1] == 3 for r in rs)
+    dims = {np.asarray(r.z_real).shape[1] for r in rs}
+    three_d = dims == {3}
     fig = Figure(figsize=(10.0, 5.0))
-    pca = None
-    if shared and n_z > 3:
-        from sklearn.decomposition import PCA
-        pca = PCA(n_components=2).fit(np.asarray(rs[0].z_real, float))
+    pca = figures.latent_projection(rs[0].z_real) if shared else None
     axes = []
     for k, (name, run) in enumerate(zip(names, rs)):
-        z = run.z_solid()
+        zr = np.asarray(run.z_real, float)
+        z = np.asarray(run.z_solid(), float).reshape(-1, zr.shape[1])
         if z.shape[0] > max_points:
             z = z[np.random.default_rng(0).choice(z.shape[0], max_points, replace=False)]
-        zr = np.asarray(run.z_real, float)
-        if zr.shape[1] > 3:
-            from sklearn.decomposition import PCA
-            p = pca or PCA(n_components=2).fit(zr)
-            zr, z = p.transform(zr), p.transform(z)
         labels = list(run.material_labels) + [str(i) for i in range(len(run.material_labels), zr.shape[0])]
-        if three_d:
-            ax = fig.add_subplot(1, 2, k + 1, projection="3d")
-            ax.scatter(z[:, 0], z[:, 1], z[:, 2], c="red", marker="o", s=12, alpha=0.4)
-            ax.scatter(zr[:, 0], zr[:, 1], zr[:, 2], c="black", marker="*", s=160, alpha=0.6)
-            for i in range(zr.shape[0]):
-                ax.text(zr[i, 0] + 0.1, zr[i, 1], zr[i, 2], labels[i], fontsize=9)
-            ax.set_zlabel("$z_3$")
-        else:
-            ax = fig.add_subplot(1, 2, k + 1)
-            ax.scatter(z[:, 0], z[:, 1], c="red", marker="o", s=12, alpha=0.2)
-            ax.scatter(zr[:, 0], zr[:, 1], c="black", marker="*", s=160, alpha=0.5)
-            for i in range(zr.shape[0]):
-                ax.text(zr[i, 0], zr[i, 1] + 0.05, labels[i], fontsize=10, ha="center", va="bottom")
-            ax.grid(True, color="#dddddd", lw=0.5)
-        ax.set_xlabel("$z_1$")
-        ax.set_ylabel("$z_2$")
+        p = pca if shared else figures.latent_projection(zr)
+        ax = figures.latent_axes(fig, z, zr, labels, where=(1, 2, k + 1), pca=p, small=True)
         ax.set_title(name, fontsize=10, color=RUN_COLOURS[k])
         axes.append(ax)
     if shared and not three_d:
@@ -130,7 +110,9 @@ def latent_side_by_side(runs, max_points=20000):
         for a in axes:
             a.set_xlim(lo[0], hi[0])
             a.set_ylim(lo[1], hi[1])
-    note = ("Red circles: the design's elements; black stars: the real materials." if shared else
+    marks = ("Red bars: how many of the design's elements sit at each point" if dims == {1} else
+             "Red circles: the design's elements")
+    note = (f"{marks}; black stars: the real materials." if shared else
             "These runs used different material networks, so their latent spaces are different spaces: "
             "compare where the elements sit relative to the stars in each, not between the two plots.")
     fig.text(0.5, 0.01, note, ha="center", va="bottom", fontsize=9, color="#555555", wrap=True)

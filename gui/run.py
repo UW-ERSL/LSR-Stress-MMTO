@@ -32,11 +32,16 @@ from .panels import Info
 from .pyto_ad import StructuralTopOptWindow
 
 DRAW_EVERY = 1.5                                            # seconds between redraws of the design
+LATENT_POINTS = 5000                                        # the most elements the live latent space draws
 RUN_HELP = ("Start optimizes the project as it is now: it is saved first, and the run keeps its own copy, "
             "so you can go on editing for the next run. Stop ends the run after the iteration under way "
             "and keeps the design reached so far. Each run has its own folder in the project's results "
             "folder.\n\nWhile it runs, each element is drawn in its material's colour, pale while it is "
-            "half solid and full colour once solid; elements that are almost empty are not drawn.")
+            "half solid and full colour once solid; elements that are almost empty are not drawn.\n\n"
+            "The Latent space tab shows where the solid elements' materials are heading: red points for "
+            "the elements, black stars for the real materials. With one latent dimension it counts the "
+            "elements along the line; with more than three it shows a flat view, and its title says for "
+            "how many of the elements that view shows the right nearest material.")
 EPOCH = re.compile(r"^(?:\[(?:STD|SAM)\] )?Epoch (\d+):")   # what the network's training prints
 
 
@@ -100,6 +105,17 @@ def table_view(text):
     return view
 
 
+def latent_frame(state, order):
+    """What the live latent space draws after an iteration (worker thread): the latent points of the
+    solid elements (density 0.5 or more), at most LATENT_POINTS of them taken in the run's fixed random
+    order, so that the same elements stay drawn from one frame to the next."""
+    solid = np.asarray(state["x_phys"]).ravel()[order] >= 0.5
+    pick = order[solid][:LATENT_POINTS]
+    z = np.asarray(state["z"], dtype=float)
+    return {"z": z.reshape(len(z), -1)[pick], "z_real": np.asarray(state["z_real"], dtype=float),
+            "iteration": int(state["iteration"])}
+
+
 def nearest_material(z, z_real):
     """Index of the real material whose latent point is nearest each element's."""
     d = ((np.asarray(z)[:, None, :] - np.asarray(z_real)[None, :, :]) ** 2).sum(axis=2)
@@ -108,14 +124,18 @@ def nearest_material(z, z_real):
 
 class RunWindow(StructuralTopOptWindow):
     """PyTO-AD's Optimize window, running LSR MMTO's optimization (see the module docstring)."""
+    latent_update = QtCore.pyqtSignal(object)                  # a frame of the live latent space
 
     def __init__(self, window):
         self.window, self.stop_requested, self.save_dir = window, False, None
+        self.latent_shown, self.last_latent, self.latent_dragging, self.latent_pending = False, 0.0, False, None
+        self.latent_order = None
         self.started, self.last_draw, self.history = 0.0, 0.0, {"objective": [], "constraints": []}
         self.first_frame, self.optimizing = True, False
         super().__init__(window)
         self.setWindowTitle("Run")
         self.log_line.connect(self._training_progress, QtCore.Qt.QueuedConnection)
+        self.latent_update.connect(self.update_latent_plot, QtCore.Qt.QueuedConnection)
 
     # ------------------------------------------------------------------ the strip
     def setup_ui(self):
@@ -143,6 +163,13 @@ class RunWindow(StructuralTopOptWindow):
         self.history_canvas = FigureCanvasQTAgg(self.history_figure)
         self.history_canvas.setMinimumHeight(200)
         self.tabs.addTab(self.history_canvas, "Progress")
+        self.latent_figure = Figure(figsize=(4, 2.6))              # the live latent space: a tab while a run goes
+        self.latent_canvas = FigureCanvasQTAgg(self.latent_figure)
+        self.latent_canvas.setMinimumHeight(200)
+        self.latent_canvas.mpl_connect("button_press_event", lambda _: setattr(self, "latent_dragging", True))
+        self.latent_canvas.mpl_connect("button_release_event", lambda _: self._latent_released())
+        self.tabs.currentChanged.connect(
+            lambda _: setattr(self, "latent_shown", self.tabs.currentWidget() is self.latent_canvas))
         self.formulation = QtWidgets.QWidget()                     # PyTO-AD sends log lines to formulation.log_view
         self.formulation.log_view = QtWidgets.QPlainTextEdit()
         self.formulation.log_view.setReadOnly(True)
@@ -213,6 +240,7 @@ class RunWindow(StructuralTopOptWindow):
         for widget in self.run_buttons:
             widget.setVisible(False)
         self.formulation.log_view.clear()
+        self._start_live_latent()
         self.status.setText("Starting: building the mesh and the material network...")
         w.message_text.append(f"Run started: results in {self.save_dir}")
         self.optimization_thread = threading.Thread(target=self.run_optimization, args=(None, None, None),
@@ -251,6 +279,11 @@ class RunWindow(StructuralTopOptWindow):
             self.optimization_update.emit(
                 {"x": state["x_phys"], "material": nearest_material(state["z"], state["z_real"])},
                 state["iteration"])
+        if self.latent_shown and now - self.last_latent >= DRAW_EVERY:
+            self.last_latent = now
+            if self.latent_order is None:
+                self.latent_order = np.random.default_rng(0).permutation(np.asarray(state["x_phys"]).size)
+            self.latent_update.emit(latent_frame(state, self.latent_order))
 
     @QtCore.pyqtSlot(str)
     def _training_progress(self, line):
@@ -304,6 +337,72 @@ class RunWindow(StructuralTopOptWindow):
         self.window.set_design(lambda w: design.live(w, mesh, x, material, colours), show=self.first_frame)
         self.first_frame = False
 
+    # ------------------------------------------------------------------ the live latent space
+    def _start_live_latent(self):
+        """A run starts: the last run's result tabs go, and the live latent space comes in beside Progress."""
+        from databases import material_display  # type: ignore
+        while self.tabs.count() > 2:
+            self.tabs.removeTab(2)
+        self.latent_order, self.latent_pca, self.latent_limits, self.latent_pending = None, None, None, None
+        try:
+            self.latent_names = list(material_display(self.project.database_paths()[0])[1])
+        except Exception:                                           # noqa: BLE001
+            self.latent_names = []
+        self.latent_figure.clear()
+        self.latent_figure.text(0.5, 0.5, "The latent space appears with the first iteration.", ha="center",
+                                va="center", color="#555555")
+        self.latent_canvas.draw_idle()
+        if self.tabs.indexOf(self.latent_canvas) < 0:
+            self.tabs.insertTab(1, self.latent_canvas, "Latent space")
+
+    def _end_live_latent(self):
+        """The run is over: the live tab goes (the run's own Latent space tab follows)."""
+        i = self.tabs.indexOf(self.latent_canvas)
+        if i >= 0:
+            self.tabs.removeTab(i)
+        self.latent_shown = False
+
+    def _latent_released(self):
+        self.latent_dragging = False
+        if self.latent_pending is not None:
+            frame, self.latent_pending = self.latent_pending, None
+            self.update_latent_plot(frame)
+
+    @QtCore.pyqtSlot(object)
+    def update_latent_plot(self, frame):
+        """A frame of the live latent space (main thread), drawn as the run's Latent space tab draws it.
+        Above three latent dimensions the projection is fitted once, on the real materials, and the axes
+        only ever widen, so the picture does not jump; a 3D view keeps the angle it was turned to, and
+        is not redrawn while the mouse is turning it."""
+        from utils import figures  # type: ignore
+        if self.tabs.indexOf(self.latent_canvas) < 0:
+            return
+        if self.latent_dragging:
+            self.latent_pending = frame
+            return
+        z, zr = frame["z"], frame["z_real"]
+        if self.latent_pca is None and zr.shape[1] > 3:
+            self.latent_pca = figures.latent_projection(zr)
+        pca = self.latent_pca
+        drawn = np.vstack([pca.transform(z) if pca is not None and len(z) else z.reshape(-1, zr.shape[1])[:, :3],
+                           pca.transform(zr) if pca is not None else zr])
+        lo, hi = drawn.min(axis=0), drawn.max(axis=0)
+        pad = 0.05 * np.maximum(hi - lo, 1e-9)
+        lo, hi = lo - pad, hi + pad
+        if self.latent_limits is not None:
+            lo, hi = np.minimum(lo, self.latent_limits[0]), np.maximum(hi, self.latent_limits[1])
+        self.latent_limits = (lo, hi)
+        old = self.latent_figure.axes
+        view = (old[0].elev, old[0].azim) if old and hasattr(old[0], "elev") else None
+        self.latent_figure.clear()
+        names = self.latent_names + [str(i) for i in range(len(self.latent_names), zr.shape[0])]
+        ax = figures.latent_axes(self.latent_figure, z, zr, names[:zr.shape[0]], pca=pca, small=True,
+                                 limits=list(zip(lo, hi)), view=view)
+        agreement = figures.latent_agreement(pca, z, zr) if pca is not None else None
+        ax.set_title(f"Iteration {frame['iteration']}: " + figures.latent_title(zr.shape[1], agreement), fontsize=9)
+        self.latent_figure.tight_layout()
+        self.latent_canvas.draw_idle()
+
     def _material_colours(self):
         from databases import material_display  # type: ignore
         try:
@@ -316,6 +415,7 @@ class RunWindow(StructuralTopOptWindow):
     @QtCore.pyqtSlot(bool, str, object, object, object)
     def optimization_completed(self, success, error, history, save_dir, _):
         self.optimization_running = False
+        self._end_live_latent()
         self.optimize_button.setEnabled(True)
         self.stop_button.setEnabled(False)
         w = self.window

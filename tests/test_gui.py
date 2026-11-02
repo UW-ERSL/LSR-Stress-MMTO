@@ -829,6 +829,9 @@ def test_run():
         w.project.settings["common"]["maxIterations"] = 50                   # Stop: early, design kept
         assert w.save_project() and r.start_optimization()
         assert r.save_dir != first                                            # a folder per run
+        assert [r.tabs.tabText(i) for i in range(r.tabs.count())] == ["Progress", "Latent space", "Log"]
+        r.tabs.setCurrentWidget(r.latent_canvas)                              # the live latent space
+        assert _wait(lambda: r.latent_figure.axes and r.latent_figure.axes[0].get_title().startswith("Iteration"))
         assert _wait(lambda: len(r.history["objective"]) >= 2)
         with answers():
             assert not w.open_project(w.path)                                 # not while it runs
@@ -837,10 +840,100 @@ def test_run():
         r.stop_optimization()
         assert _wait(lambda: not r.optimization_running)
         assert r.status.text().startswith("Run stopped"), r.status.text()
+        assert r.tabs.indexOf(r.latent_canvas) < 0                            # the run's own tab follows
         assert os.path.isfile(os.path.join(r.save_dir, "run_data.npz"))
 
         w.project.formulation["objective"] = None                            # a project that cannot run
         assert not r.start_optimization() and "Cannot start" in r.status.text()
+
+
+def test_export_and_run_script():
+    """File > Export as script writes the project as Python in its folder, after a save when there are
+    changes; the script edited and run with File > Run script opens the project it saved; a script that
+    fails, or saves nothing, says so and leaves the project as it was; the script runs from any folder."""
+    import subprocess
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        w.project.n_dof = 4000                                                # a change: saved first
+        with answers(Box.Save):
+            path = w.export_script(os.path.join(d, "L-bracket_setup.py"))
+        assert path and os.path.isfile(path) and not w.is_dirty()
+        assert any("Script written" in line for line in w.message_text.toPlainText().splitlines())
+        code = open(path).read()
+        assert 'REPO = r"' in code and "total=[0.0, -4.0, 0.0]" in code and "n_dof=4000" in code
+        with open(path, "w") as fh:
+            fh.write(code.replace("total=[0.0, -4.0, 0.0]", "total=[0.0, -8.0, 0.0]"))
+        assert w.run_script(path)
+        assert _wait(lambda: w.script_process is None, 300)
+        assert w.project.bcs[1]["total"] == [0.0, -8.0, 0.0], w.message_text.toPlainText()[-500:]
+        assert w.path == os.path.join(d, "L-bracket.mmto") and not w.is_dirty()
+
+        for text, said in (("raise ValueError('a mistake in the script')", "stopped with an error"),
+                           ("print('nothing saved')", "saved no project")):
+            bad = os.path.join(d, "other.py")
+            with open(bad, "w") as fh:
+                fh.write(text + "\n")
+            assert w.run_script(bad)
+            assert _wait(lambda: w.script_process is None, 120)
+            log = w.message_text.toPlainText()
+            assert said in log and (said != "stopped with an error" or "a mistake in the script" in log)
+            assert w.project.bcs[1]["total"] == [0.0, -8.0, 0.0]
+
+        elsewhere = tempfile.mkdtemp()                                        # not the repository folder
+        try:
+            done = subprocess.run([sys.executable, path], cwd=elsewhere, capture_output=True, text=True,
+                                  timeout=300)
+            assert done.returncode == 0, done.stderr[-1000:]
+        finally:
+            shutil.rmtree(elsewhere, ignore_errors=True)
+
+
+def test_latent_views():
+    """The latent space in 1, 2, 3 and 4 dimensions: the run's tab, Compare's and the live one draw it;
+    1D as counts along the line with every name readable, 4D through a fixed projection whose title
+    says for how many elements it shows the right nearest material; the live axes only widen."""
+    from types import SimpleNamespace
+    from gui import results as R
+    from gui import run as RN
+    from utils import figures
+    rng = np.random.default_rng(0)
+    for n_z in (1, 2, 3, 4):
+        zr = rng.normal(size=(6, n_z)) * 2
+        z = zr[rng.integers(0, 6, 800)] + rng.normal(size=(800, n_z)) * 0.2
+        run = SimpleNamespace(z_solid=lambda z=z: z, z_real=zr, material_labels=list("ABCDEF"),
+                              material_names=list("ABCDEF"))
+        fig = figures.latent_scatter(run)
+        ax = fig.axes[0]
+        if n_z == 1:
+            assert ax.get_ylabel() == "elements" and sum(p.get_height() for p in ax.patches) == 800
+            assert sorted(t.get_text() for t in ax.texts) == list("ABCDEF")
+            fig.canvas.draw()                                                 # no two names overlap
+            boxes = [t.get_window_extent() for t in ax.texts]
+            assert not any(a.overlaps(b) for i, a in enumerate(boxes) for b in boxes[i + 1:])
+        if n_z == 4:
+            assert "PCA projection from 4D" in ax.get_title() and "% of the elements" in ax.get_title()
+        assert R.latent_side_by_side({"a": run, "b": run}).axes                # Compare draws it too
+        import matplotlib.pyplot as plt
+        plt.close(fig)
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        r = w.open_run_panel()
+        r.project = w.project
+        r._start_live_latent()
+        assert r.tabs.tabText(1) == "Latent space"
+        for n_z in (1, 3, 4):
+            r.latent_pca, r.latent_limits = None, None
+            zr = rng.normal(size=(3, n_z))
+            for it, spread in ((1, 3.0), (2, 0.5)):
+                frame = RN.latent_frame({"x_phys": np.ones(200), "z": zr[rng.integers(0, 3, 200)] * spread,
+                                         "z_real": zr, "iteration": it}, np.arange(200))
+                r.update_latent_plot(frame)
+                if it == 1:
+                    first = [np.array(l) for l in r.latent_limits]
+            assert all((a <= b).all() for a, b in zip(r.latent_limits[0:1], first[0:1]))   # widened only
+            assert r.latent_figure.axes[0].get_title().startswith("Iteration 2")
+        r._end_live_latent()
+        assert r.tabs.indexOf(r.latent_canvas) < 0
 
 
 def test_snap_copy_outline_colour_new_database():

@@ -4,7 +4,7 @@ figures.py
 Figures for one optimization run.
 
 design                the optimized design: a 2D panel or a 3D voxel render
-latent_scatter        the latent field against the real-material anchors
+latent_scatter        the latent field against the real-material anchors (latent_axes draws it)
 convergence           the objective and constraints over the iterations
 boundary_conditions   the loads and supports on the meshed design domain
 
@@ -191,12 +191,112 @@ def convergence(run: Run, out=None):
     return _save(fig, out)
 
 
-def latent_scatter(run: Run, out=None, *, max_points=20000, labels="display"):
-    """The converged latent field against the real-material anchors.
+def latent_projection(z_real):
+    """Above three latent dimensions: a 2D PCA fitted once on the real materials, so that a live view
+    keeps its axes; None at three or fewer."""
+    zr = np.asarray(z_real, float)
+    if zr.ndim < 2 or zr.shape[1] <= 3:
+        return None
+    from sklearn.decomposition import PCA
+    return PCA(n_components=2).fit(zr)
 
-    Follows materialEncoder.plotLSR: red circles for the optimized elements,
-    black stars for the anchors. A 3D axes when the latent space is 3D, a plane
-    when it is 2D, and a PCA projection above that.
+
+def latent_agreement(pca, z, z_real):
+    """The share of the elements whose nearest real material in the 2D view through pca is their nearest
+    in the full latent space: how far the picture can be trusted to show which material each element is
+    heading for. None without elements."""
+    z, zr = np.asarray(z, float).reshape(-1, pca.n_features_in_), np.asarray(z_real, float)
+    if not len(z):
+        return None
+
+    def nearest(a, b):
+        return np.argmin(np.sum((a[:, None, :] - b[None, :, :]) ** 2, axis=2), axis=1)
+
+    return float(np.mean(nearest(z, zr) == nearest(pca.transform(z), pca.transform(zr))))
+
+
+def latent_title(n_latent, agreement=None):
+    if n_latent > 3:
+        return f"latent space, PCA projection from {n_latent}D" + (
+            f"\n(nearest material shown right for {int(100 * agreement)}% of the elements)"
+            if agreement is not None else "")
+    return f"latent space ({n_latent}D)"
+
+
+def _stagger(x, span, rows=3):
+    """A text row for each label along a line so neighbours closer than span/12 do not overlap."""
+    row, last = np.zeros(len(x), int), {}
+    for i in np.argsort(x):
+        r = next((k for k in range(rows) if x[i] - last.get(k, -np.inf) > span / 12), 0)
+        row[i], last[r] = r, x[i]
+    return row
+
+
+def latent_axes(fig, z, zr, names, *, where=111, pca=None, small=False, limits=None, view=None):
+    """The latent field z (one row per element) against the real materials zr, on fig at where.
+
+    1D: a histogram of the elements along z1, the real materials as stars on the axis with a dashed
+    line up the plot and their names above it (staggered when close). 2D: red circles and black
+    stars on the plane. 3D: the same in 3D axes (view = (elev, azim) keeps a rotated view). Above
+    3D: the 2D view through pca (see latent_projection). limits: [(lo, hi)] per drawn axis."""
+    z, zr = np.asarray(z, float), np.asarray(zr, float)
+    if pca is not None:
+        z = pca.transform(z) if len(z) else np.zeros((0, 2))
+        zr = pca.transform(zr)
+    n = zr.shape[1]
+    s_el, s_star = (12, 160) if small else (20, 200)
+    where = where if isinstance(where, tuple) else (where,)
+    if n == 3:
+        ax = fig.add_subplot(*where, projection="3d")
+        ax.scatter(z[:, 0], z[:, 1], z[:, 2], c="red", marker="o", s=s_el, alpha=0.6, label="Optimized materials")
+        ax.scatter(zr[:, 0], zr[:, 1], zr[:, 2], c="black", marker="*", s=s_star, alpha=0.6, label="Real materials")
+        for i, nm in enumerate(names):
+            ax.text(zr[i, 0] + 0.1, zr[i, 1], zr[i, 2], nm, fontsize=10)
+        ax.set_xlabel("$z_1$"); ax.set_ylabel("$z_2$"); ax.set_zlabel("$z_3$")
+        if limits:
+            ax.set_xlim(*limits[0]); ax.set_ylim(*limits[1]); ax.set_zlim(*limits[2])
+        if view is not None:
+            ax.view_init(*view)
+        return ax
+    ax = fig.add_subplot(*where)
+    if n == 1:
+        x = zr[:, 0]
+        lo, hi = limits[0] if limits else (min(x.min(), z[:, 0].min() if len(z) else x.min()),
+                                           max(x.max(), z[:, 0].max() if len(z) else x.max()))
+        pad = 0.08 * (hi - lo or 1.0)
+        lo, hi = (lo, hi) if limits else (lo - pad, hi + pad)
+        if len(z):
+            ax.hist(z[:, 0], bins=np.linspace(lo, hi, 61), color="red", alpha=0.45, label="Optimized materials")
+        top = ax.get_ylim()[1] if len(z) else 1.0
+        ax.set_ylim(0, top * 1.25)
+        for xi in x:
+            ax.axvline(xi, color="black", lw=0.7, ls="--", alpha=0.5, zorder=0)
+        ax.scatter(x, np.zeros_like(x), c="black", marker="*", s=s_star, alpha=0.8, clip_on=False, zorder=3,
+                   label="Real materials")
+        rows = _stagger(x, hi - lo)
+        for i, nm in enumerate(names):
+            ax.text(x[i], 0.97 - 0.07 * rows[i], nm, transform=ax.get_xaxis_transform(), fontsize=10,
+                    ha="center", va="top", bbox=dict(facecolor="white", edgecolor="none", pad=0.5, alpha=0.8))
+        ax.set_xlim(lo, hi)
+        ax.set_xlabel("$z_1$"); ax.set_ylabel("elements")
+        ax.grid(True, axis="x", color="#dddddd", lw=0.5)
+        return ax
+    ax.scatter(z[:, 0], z[:, 1], c="red", marker="o", s=s_el, alpha=0.2, label="Optimized materials")
+    ax.scatter(zr[:, 0], zr[:, 1], c="black", marker="*", s=s_star, alpha=0.4, label="Real materials")
+    for i, nm in enumerate(names):
+        ax.text(zr[i, 0] + 0.1, zr[i, 1], nm, fontsize=10 if small else 12, color="black", ha="center",
+                va="bottom")
+    ax.set_xlabel("$z_1$"); ax.set_ylabel("$z_2$")
+    if limits:
+        ax.set_xlim(*limits[0]); ax.set_ylim(*limits[1])
+    ax.grid(True)
+    return ax
+
+
+def latent_scatter(run: Run, out=None, *, max_points=20000, labels="display"):
+    """The converged latent field against the real-material anchors (latent_axes): red for the
+    optimized elements, black stars for the anchors; a histogram along the line in 1D, a plane in
+    2D, 3D axes in 3D, a PCA projection above that.
 
     labels: "display" shows the labels of the database's Display sheet; "names" the
     database names.
@@ -209,45 +309,22 @@ def latent_scatter(run: Run, out=None, *, max_points=20000, labels="display"):
         sel = np.random.default_rng(0).choice(z.shape[0], max_points, replace=False)
         z = z[sel]
     zr = np.asarray(run.z_real, float)
-    n_z = zr.shape[1]
+    if zr.ndim == 1:
+        zr = zr[:, None]
+    z = np.asarray(z, float).reshape(len(z), zr.shape[1])
 
     shown = run.material_labels if labels == "display" else run.material_names
     names = [shown[i] if i < len(shown) else str(i) for i in range(zr.shape[0])]
-    while len(names) < zr.shape[0]:
-        names.append(str(len(names)))
 
-    if n_z > 3:
-        from sklearn.decomposition import PCA
-        p = PCA(n_components=2).fit(zr)
-        zr, z, n_z = p.transform(zr), p.transform(z), 2
-        title = f"latent space, PCA projection from {run.n_latent}D"
+    pca = latent_projection(zr)
+    agreement = latent_agreement(pca, z, zr) if pca is not None else None
+    fig = plt.figure(figsize=(6.4, 5.4) if zr.shape[1] == 3 else (6.0, 5.0))
+    ax = latent_axes(fig, z, zr, names, pca=pca)
+    ax.set_title(latent_title(zr.shape[1], agreement), fontsize=11)
+    if zr.shape[1] == 1:                                    # below the plot: the names run along its top
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.13), ncol=2, fontsize=9, frameon=False)
     else:
-        title = f"latent space ({n_z}D)"
-
-    if n_z == 3:
-        fig = plt.figure(figsize=(6.4, 5.4))
-        ax = fig.add_subplot(111, projection="3d")
-        ax.scatter(z[:, 0], z[:, 1], z[:, 2], c="red", marker="o", s=20,
-                   alpha=0.6, label="Optimized materials")
-        ax.scatter(zr[:, 0], zr[:, 1], zr[:, 2], c="black", marker="*", s=200,
-                   alpha=0.6, label="Real materials")
-        for i, nm in enumerate(names):
-            ax.text(zr[i, 0] + 0.1, zr[i, 1], zr[i, 2], nm, fontsize=10)
-        ax.set_xlabel("$z_1$"); ax.set_ylabel("$z_2$"); ax.set_zlabel("$z_3$")
-    else:
-        fig, ax = plt.subplots(figsize=(6.0, 5.0))
-        ax.scatter(z[:, 0], z[:, 1], c="red", marker="o", s=20, alpha=0.2,
-                   label="Optimized materials")
-        ax.scatter(zr[:, 0], zr[:, 1], c="black", marker="*", s=200, alpha=0.4,
-                   label="Real materials")
-        for i, nm in enumerate(names):
-            ax.text(zr[i, 0] + 0.1, zr[i, 1], nm, fontsize=12, color="black",
-                    ha="center", va="bottom")
-        ax.set_xlabel("$z_1$"); ax.set_ylabel("$z_2$")
-        ax.grid(True)
-
-    ax.set_title(title, fontsize=11)
-    ax.legend(loc="best", fontsize=9)
+        ax.legend(loc="best", fontsize=9)
     fig.tight_layout()
     return _save(fig, out)
 

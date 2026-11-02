@@ -40,6 +40,7 @@ EXAMPLES = os.path.join(REPO, "projects")   # the example projects: opened as te
 OUTLINE_COLOUR = "#c400c4"                  # selection shapes: magenta, unlike the part, supports, loads
 SNAPS = [("Snap: off", 0.0), ("Snap: 0.1", 0.1), ("Snap: 1", 1.0), ("Snap: 5", 5.0), ("Snap: 10", 10.0)]
 PROJECT_FILTER = "LSR MMTO project (*.mmto)"
+SCRIPT_FILTER = "Python script (*.py)"
 SIDEBAR = ("Units", "Geometry", "Materials", "Supports and loads", "Formulation", "Settings", "Run",
            "Results", "Display Options")
 FOLDER_HELP = ("A project keeps everything it uses in its own folder: the project file, the part (in part), "
@@ -594,6 +595,9 @@ class MMTOWindow(MainWindow):
             action.setShortcut(key)
             action.triggered.connect(lambda _=False, s=slot: s())
         file_menu.addSeparator()
+        file_menu.addAction("&Export as script...").triggered.connect(lambda: self.export_script())
+        file_menu.addAction("&Run script...").triggered.connect(lambda: self.run_script())
+        file_menu.addSeparator()
         file_menu.addAction("E&xit").triggered.connect(self.close)
         help_menu = self.menuBar().addMenu("&Help")
         help_menu.addAction(f"About {APP}").triggered.connect(self._about)
@@ -750,6 +754,97 @@ class MMTOWindow(MainWindow):
             self._refresh_title()
         self.update_part_facts()
         return True
+
+    # ------------------------------------------------------------------ the project as a Python script
+    def export_script(self, path=None):
+        """The project as a Python script in its folder (Project.to_script), after a save, so that the
+        script matches the file. Edited in any editor, it comes back with Run script."""
+        if self.project is None:
+            return None
+        if self.path is None or self.template or self.is_dirty():
+            answer = QtWidgets.QMessageBox.question(
+                self, "Export as script", "The project is saved first, so the script matches the file. Save now?",
+                QtWidgets.QMessageBox.Save | QtWidgets.QMessageBox.Cancel)
+            if answer != QtWidgets.QMessageBox.Save or not self.save_project():
+                return None
+        if path is None:
+            default = os.path.join(self.project.base_dir, f"{self.project.name}_setup.py")
+            path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Export as script", default, SCRIPT_FILTER,
+                                                            options=FILE_DIALOG_OPTIONS)
+            if not path:
+                return None
+        try:
+            path = self.project.to_script(path)
+        except (OSError, ValueError) as e:
+            QtWidgets.QMessageBox.warning(self, "Export as script", f"Not written: {e}")
+            return None
+        self.message_text.append(f"Script written: {path}. Edit it in any editor, then File > Run script.")
+        return path
+
+    def run_script(self, path=None):
+        """A Python script run with this Python, in the background; what it prints goes to the message
+        panel, and the project it saves (the newest .mmto written in its folder while it ran) is opened.
+        Unsaved changes are asked about first, since the script may save over the project file."""
+        if self.run_going() or not self._ask_to_save():
+            return False
+        if getattr(self, "script_process", None) is not None:
+            QtWidgets.QMessageBox.information(self, "Run script", "A script is running; wait for it to finish.")
+            return False
+        if path is None:
+            path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Run script", self._folder(), SCRIPT_FILTER,
+                                                            options=FILE_DIALOG_OPTIONS)
+            if not path:
+                return False
+        import time
+        path = os.path.abspath(path)
+        folder = os.path.dirname(path)
+        process = QtCore.QProcess(self)
+        process.setProcessChannelMode(QtCore.QProcess.MergedChannels)
+        process.setWorkingDirectory(folder)
+        env = QtCore.QProcessEnvironment.systemEnvironment()
+        env.insert("PYTHONIOENCODING", "utf-8")                    # what it prints, read the same on Windows
+        process.setProcessEnvironment(env)
+        self._script_text = ""
+        process.readyReadStandardOutput.connect(lambda: self._script_output(process))
+        started = time.time()
+        process.finished.connect(lambda code, _status: self._script_finished(path, code, started))
+        self.script_process = process
+        self.message_text.append(f"Running {path}...")
+        process.start(sys.executable, ["-u", path])
+        if not process.waitForStarted(10000):
+            self.script_process = None
+            self.message_text.append(f"The script could not be started: {process.errorString()}")
+            return False
+        return True
+
+    def _script_output(self, process, final=False):
+        """What the script printed, a whole line at a time, into the message panel."""
+        self._script_text += bytes(process.readAllStandardOutput()).decode("utf-8", errors="replace")
+        lines = self._script_text.replace("\r\n", "\n").split("\n")
+        self._script_text = "" if final else lines.pop()
+        for line in lines:
+            if line.strip():
+                self.message_text.append(line)
+
+    def _script_finished(self, path, code, started):
+        self._script_output(self.script_process, final=True)
+        self.script_process = None
+        name = os.path.basename(path)
+        if code != 0:
+            self.message_text.append(f"{name} stopped with an error; what it printed is above.")
+            return
+        folder = os.path.dirname(path)
+        saved = [os.path.join(folder, f) for f in os.listdir(folder) if f.lower().endswith(".mmto")]
+        saved = [f for f in saved if os.path.getmtime(f) >= started]
+        if not saved:
+            self.message_text.append(f"{name} ran, but saved no project in its folder (a script ends with "
+                                     f"p.save(...)).")
+            return
+        newest = max(saved, key=os.path.getmtime)
+        if self.project is not None:
+            self._saved = self._state()                             # asked about already: no second question
+        if self.open_project(newest):
+            self.message_text.append(f"{name} ran: {newest} opened.")
 
     def _write(self, path):
         try:
