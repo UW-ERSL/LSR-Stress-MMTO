@@ -106,6 +106,30 @@ def _database_errors(project):
     return check_database(xlsx)[0]
 
 
+def effective_text(d_eff, n_z):
+    """d_eff with enough digits that rounding it up visibly gives n_z (1.004, not 1.00, for 2)."""
+    for digits in (2, 3, 4, 6):
+        text = f"{d_eff:.{digits}f}"
+        if max(1, math.ceil(float(text))) == n_z:
+            return text
+    return f"{d_eff:.6g}"
+
+
+def latent_help(d_eff, n_z, ratios):
+    """Where the recommended latent dimension comes from, in words: the share of the variation in
+    each direction the materials differ in, and the effective dimension counted from them."""
+    lines = ["How the materials differ. With each property scaled to 0 to 1, the ways they differ are split "
+             "into independent directions, largest first:"]
+    total = 0.0
+    for i, r in enumerate(ratios):
+        total += float(r)
+        lines.append(f"    direction {i + 1}: {100 * r:.1f}% of the variation (in all, {100 * total:.1f}%)")
+    lines.append(f"The effective dimension, {effective_text(d_eff, n_z)}, counts how many of these directions "
+                 f"the materials really differ in. The recommended latent dimension is the smallest whole "
+                 f"number at or above it: {n_z}.")
+    return "\n".join(lines)
+
+
 def database_choice(project):
     """(xlsx path or None, error or None) of the project's database."""
     if project.database is None:
@@ -151,7 +175,12 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.report = QtWidgets.QTextEdit()
         self.report.setReadOnly(True)
         self.report.setFixedHeight(64)
-        layout.addWidget(self.report)
+        below = QtWidgets.QHBoxLayout()
+        below.addWidget(self.report, stretch=1)
+        self.latent_info = Info("")                                 # how the latent dimension is recommended
+        self.latent_info.setVisible(False)
+        below.addWidget(self.latent_info, alignment=QtCore.Qt.AlignTop)
+        layout.addLayout(below)
         ok_cancel(self, layout)
         self._refresh()
 
@@ -170,7 +199,9 @@ class MaterialsPanel(QtWidgets.QDialog):
 
     def new_database(self):
         """An empty database to fill in Excel (databases.write_template), then used by this project."""
-        dialog = NewDatabaseDialog(self, self.project.base_dir)
+        window = self.parent()
+        folder = window.database_folder() if hasattr(window, "database_folder") else self.project.base_dir
+        dialog = NewDatabaseDialog(self, folder)
         if not dialog.exec_():
             return None
         from databases import write_template  # type: ignore
@@ -210,10 +241,11 @@ class MaterialsPanel(QtWidgets.QDialog):
 
     def _refresh(self):
         """Read the database again: the table, the check, the recommended latent dimension."""
-        from databases import check_database, database_table, material_display, recommended_latent_dim  # type: ignore
+        from databases import check_database, database_table, latent_dim_breakdown, material_display  # type: ignore
         self.table.clear()
         self.table.setRowCount(0)
         self.table.setColumnCount(0)
+        self.latent_info.setVisible(False)
         xlsx, error = database_choice(self.project)
         if error:
             self.report.setText(error)
@@ -243,9 +275,11 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.table.setColumnHidden(1, list(labels) == list(names))      # Material: only when the labels differ
         self.table.resizeColumnsToContents()
         if not errors:
-            d_eff, n_z = recommended_latent_dim(xlsx)
+            d_eff, n_z, ratios = latent_dim_breakdown(xlsx)
             lines.insert(0, f"{len(names)} materials; latent dimension {n_z} recommended (effective dimension "
-                            f"{d_eff:.2f}).")
+                            f"{effective_text(d_eff, n_z)}).")
+            self.latent_info.setToolTip(latent_help(d_eff, n_z, ratios))
+            self.latent_info.setVisible(True)
         self.report.setText("\n".join(lines))
 
     def apply(self, project):

@@ -5,6 +5,15 @@ The LSR MMTO window. It is PyTO-AD's MainWindow (viewer, sidebar, message panel)
 Project: File > New, Open, Save and Save As work on .mmto files through Project.load and
 Project.save, so a project opened and saved with no edits is written back unchanged.
 
+A project lives in a folder of its own (project_folder.py): File > New makes the folder and
+copies the STL into it, Save As copies everything into a new folder, and a database or an STL
+chosen from elsewhere is copied in. The example projects in projects/ open as templates: Save
+asks for a folder of your own, so the examples never change.
+
+The 3D view shows either the part (the Setup view: supports, loads, previews) or a design (the
+Design view: a run's result, drawn by design.py). Anything about the setup switches to the
+Setup view; the design is kept until the next run, so Show design always brings it back.
+
     python run_gui.py [project.mmto]        (from the repository folder)
 
 The sidebar keeps PyTO-AD's Units, Geometry and Display Options, and adds Materials,
@@ -20,17 +29,22 @@ import numpy as np
 from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtGui import QKeySequence
 
-from .panels import FormulationPanel, MaterialsPanel, SettingsPanel
+from .panels import GREY, FormulationPanel, Info, MaterialsPanel, SettingsPanel, ok_cancel
 from .supports import KEEP_COLOUR, LOAD_COLOUR, OTHER_COLOUR, SUPPORT_COLOUR, SupportsPanel, bc_name, bc_value
 from .pyto_ad import (FILE_DIALOG_OPTIONS, UNIT_SYSTEMS, GeometryWindow, MainWindow, ProjectsWindow,
                       StructuralLoadsWindow, UnitsWindow)
 
 APP = "LSR MMTO"
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+EXAMPLES = os.path.join(REPO, "projects")   # the example projects: opened as templates, never changed
 OUTLINE_COLOUR = "#c400c4"                  # place shapes: magenta, unlike the part, supports, loads, places
 SNAPS = [("Snap: off", 0.0), ("Snap: 0.1", 0.1), ("Snap: 1", 1.0), ("Snap: 5", 5.0), ("Snap: 10", 10.0)]
 PROJECT_FILTER = "LSR MMTO project (*.mmto)"
 SIDEBAR = ("Units", "Geometry", "Materials", "Supports and loads", "Formulation", "Settings", "Run",
-           "Display Options")
+           "Results", "Display Options")
+FOLDER_HELP = ("A project keeps everything it uses in its own folder: the project file, the part (in part), "
+               "the material database and its trained network (in materials), and the results of every run "
+               "(in results). Zip the folder to send the whole project.")
 PANELS = {"Materials": MaterialsPanel, "Formulation": FormulationPanel, "Settings": SettingsPanel}
 
 
@@ -191,6 +205,100 @@ def triangle_selections(project):
     return [name for name, s in project.selections.items() if has(s.to_dict())]
 
 
+def is_example(path):
+    """True for one of the example projects that come with LSR MMTO (projects/)."""
+    return path is not None and os.path.normcase(os.path.dirname(os.path.abspath(path))) == \
+        os.path.normcase(os.path.abspath(EXAMPLES))
+
+
+class ProjectFolderDialog(QtWidgets.QDialog):
+    """Name and location of a new project folder, and for a new project its part (STL)."""
+
+    def __init__(self, parent, title, location, name="", stl=None):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.resize(560, 0)
+        layout = QtWidgets.QVBoxLayout(self)
+        form = QtWidgets.QFormLayout()
+        self.name = QtWidgets.QLineEdit(name)
+        self.location = QtWidgets.QLineEdit(location)
+        form.addRow("Name", self.name)
+        form.addRow("Location", self._with_browse(self.location, self._browse_location))
+        self.stl = None
+        if stl is not None:
+            self.stl = QtWidgets.QLineEdit(stl)
+            form.addRow("Part (STL)", self._with_browse(self.stl, self._browse_stl))
+        layout.addLayout(form)
+        row = QtWidgets.QHBoxLayout()
+        self.where = QtWidgets.QLabel("")
+        self.where.setStyleSheet(GREY)
+        self.where.setWordWrap(True)
+        row.addWidget(self.where, stretch=1)
+        row.addWidget(Info(FOLDER_HELP))
+        layout.addLayout(row)
+        for edit in (self.name, self.location):
+            edit.textChanged.connect(self._show_where)
+        self._show_where()
+        ok_cancel(self, layout)
+
+    @staticmethod
+    def _with_browse(edit, slot):
+        box = QtWidgets.QWidget()
+        row = QtWidgets.QHBoxLayout(box)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(edit, stretch=1)
+        button = QtWidgets.QPushButton("Browse...")
+        button.clicked.connect(slot)
+        row.addWidget(button)
+        return box
+
+    def _browse_location(self):
+        folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Location", self.location.text(),
+                                                            options=FILE_DIALOG_OPTIONS)
+        if folder:
+            self.location.setText(folder)
+
+    def _browse_stl(self):
+        stl, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Part (STL)", self.location.text(),
+                                                       "STL Files (*.stl *.STL)", options=FILE_DIALOG_OPTIONS)
+        if stl:
+            self.stl.setText(stl)
+            if not self.name.text().strip():
+                self.name.setText(os.path.splitext(os.path.basename(stl))[0])
+
+    def folder(self):
+        return os.path.join(self.location.text().strip(), self.name.text().strip())
+
+    def stl_path(self):
+        return self.stl.text().strip() if self.stl is not None else None
+
+    def _show_where(self):
+        self.where.setText(f"The project folder: {self.folder()}" if self.name.text().strip() else "")
+
+    def problems(self):
+        from project_folder import folder_problem, name_problem  # type: ignore
+        out = []
+        bad_name = name_problem(self.name.text())                   # before joining: on Windows "a:b" joined
+        if bad_name:                                                # to a folder is a path on drive A:
+            out.append(f"Name: {bad_name}")
+        if not os.path.isdir(self.location.text().strip()):
+            out.append("Location: no such folder")
+        elif not bad_name:
+            problem = folder_problem(self.folder())
+            if problem:
+                out.append(f"Name: {problem}")
+        if self.stl is not None and not os.path.isfile(self.stl_path()):
+            out.append("Part (STL): choose the STL file")
+        return out
+
+    def accept(self):
+        problems = self.problems()
+        if problems:
+            QtWidgets.QMessageBox.warning(self, self.windowTitle(), "\n".join(problems))
+            return
+        super().accept()
+
+
 class MMTOWindow(MainWindow):
     """PyTO-AD's MainWindow with a Project, a File menu, and the sidebar of SIDEBAR: PyTO-AD's
     buttons where it has them, ours (PANELS) for the rest."""
@@ -198,11 +306,15 @@ class MMTOWindow(MainWindow):
     BUTTON_CONFIG = [next((c for c in MainWindow.BUTTON_CONFIG if c["name"] == name),
                           {"name": name, "icon": "arrow", "always_enabled": True,
                            "handler": f"open_{name.lower().replace(' ', '_')}_panel"}) for name in SIDEBAR]
+    template = False                        # an example project: Save asks for a folder of one's own
+    view = "setup"                          # what the 3D view shows: "setup" (the part) or "design"
+    _design = None                          # draws the design kept for the Design view, or None
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.project, self.path, self._saved = None, None, None
         self._mesh, self._mesh_key, self.preview_on = None, None, False
+        self.design_bars, self._view_buttons = set(), []            # colour scales of the design; Show buttons
         self._said = set()                                          # errors and warnings already shown
         self.message_text.setText(f"{APP}. File > New starts a project from an STL; File > Open opens a "
                                   f".mmto project.")
@@ -211,9 +323,13 @@ class MMTOWindow(MainWindow):
 
     # ------------------------------------------------------------------ the window
     def create_status_bar(self):
-        """The part's extent on the left; on the right, the point under the mouse and the Ruler tick."""
+        """The part's extent on the left, with its facts behind an (i); on the right, the point under the
+        mouse and the Ruler tick."""
         self.extent = QtWidgets.QLabel(APP)                        # the part's extent, once there is one
         self.statusBar().addWidget(self.extent)
+        self.facts = Info("")                                       # the part, its volume and size, the database
+        self.facts.setVisible(False)
+        self.statusBar().addWidget(self.facts)
         self.coords = QtWidgets.QLabel("")
         self.coords.setStyleSheet("color: #666666;")
         self.coords.setMinimumWidth(240)
@@ -274,6 +390,35 @@ class MMTOWindow(MainWindow):
         parts = ", ".join(f"{a} {f % lo[k]} to {f % hi[k]}" for k, a in enumerate("xyz"))
         return f"The part spans {parts} {self.length_unit()}".rstrip() + "."
 
+    def part_facts(self):
+        """The part's facts, shown behind the (i) beside its extent."""
+        b = self.part_bounds()
+        if b is None or self.project is None:
+            return ""
+        unit = self.length_unit()
+        size = b[1] - b[0]
+        f = self.length_format(float(np.max(size)))
+        lines = [f"Part: {os.path.basename(self.project.stl_path())}"]
+        try:
+            volume = self.stl_geom.compute_mass_properties()[1]
+            lines.append(f"Volume: {volume:.4g} {unit}³".rstrip())
+        except Exception:                                           # noqa: BLE001
+            pass
+        lines.append("Size: " + " × ".join(f % v for v in size) + f" {unit}".rstrip())
+        lines.append(f"Material database: {self.project.database or 'none chosen yet'}")
+        return "\n".join(lines)
+
+    def update_part_facts(self):
+        text = self.part_facts()
+        self.facts.setToolTip(text)
+        self.facts.setVisible(bool(text))
+
+    def update_geometry_info_text(self):
+        """In place of PyTO-AD's text over the 3D view (model, volume, length, material): the part's facts
+        go behind the (i) in the status bar, clear of the view."""
+        self.plotter.remove_actor("geometry_info", reset_camera=False)
+        self.update_part_facts()
+
     def draw_ruler(self):
         """Scales along the part's lowest x and y edges (and z, when the part has thickness), on or off
         with the Ruler tick."""
@@ -287,6 +432,7 @@ class MMTOWindow(MainWindow):
         self._index_part()
         self.extent.setText(APP if b is None else
                             "Part: " + self.part_extent_text()[len("The part spans "):-1].replace(", ", " \u00b7 "))
+        self.update_part_facts()
         if b is not None and self.ruler_box.isChecked():
             lo, hi = b
             size = float(np.max(hi - lo))
@@ -471,7 +617,8 @@ class MMTOWindow(MainWindow):
             self.setWindowTitle(APP)
             return
         name = os.path.splitext(os.path.basename(self.path))[0] if self.path else self.project.name
-        self.setWindowTitle(f"{name}{'*' if self.is_dirty() else ''} - {APP}")
+        example = " (example)" if self.template else ""
+        self.setWindowTitle(f"{name}{example}{'*' if self.is_dirty() else ''} - {APP}")
 
     def _ask_to_save(self):
         """False when the user cancels. Asks only when there are unsaved changes."""
@@ -495,6 +642,22 @@ class MMTOWindow(MainWindow):
     def _folder(self):
         return os.path.dirname(self.path) if self.path else os.getcwd()
 
+    def _location(self):
+        """Where a new project folder goes by default: beside the project open now (in its own folder),
+        or else the Documents folder."""
+        from project_folder import has_own_folder  # type: ignore
+        if self.project is not None and self.path and not self.template:
+            here = os.path.dirname(self.path)
+            return os.path.dirname(here) if has_own_folder(self.project) else here
+        documents = os.path.join(os.path.expanduser("~"), "Documents")
+        return documents if os.path.isdir(documents) else os.path.expanduser("~")
+
+    def own_folder(self):
+        """True when the project open is saved in a project folder of its own (not an example)."""
+        from project_folder import has_own_folder  # type: ignore
+        return self.project is not None and self.path is not None and not self.template and \
+            has_own_folder(self.project)
+
     def run_going(self):
         """True, after saying so, when a run is going: no other project, no closing, until it stops."""
         run = getattr(self, "run_window", None)
@@ -504,20 +667,24 @@ class MMTOWindow(MainWindow):
             return True
         return False
 
-    def new_project(self, stl=None):
-        """A project on an STL, every setting at its default; not saved until Save."""
-        from project import Project  # type: ignore
+    def new_project(self, stl=None, folder=None):
+        """A project in a new folder of its own, every setting at its default: the folder is made, the STL
+        copied into it and the project saved there. With no folder given, a dialog asks for the name,
+        the location and the STL."""
+        import project_folder  # type: ignore
         if self.run_going() or not self._ask_to_save():
             return False
-        if stl is None:
-            stl, _ = QtWidgets.QFileDialog.getOpenFileName(self, "New project: choose the STL", self._folder(),
-                                                           "STL Files (*.stl *.STL)", options=FILE_DIALOG_OPTIONS)
-            if not stl:
+        if folder is None or stl is None:
+            dialog = ProjectFolderDialog(self, "New project", self._location(), stl=stl or "")
+            if not dialog.exec_():
                 return False
-        stl = os.path.abspath(stl)
-        p = Project(os.path.splitext(os.path.basename(stl))[0], stl=stl, base_dir=os.path.dirname(stl))
-        p.complete_settings()
-        self._show(p, None)
+            folder, stl = dialog.folder(), dialog.stl_path()
+        try:
+            p, path = project_folder.create(folder, stl)
+        except (OSError, ValueError) as e:
+            QtWidgets.QMessageBox.warning(self, "New project", f"The project was not made: {e}")
+            return False
+        self._show(p, path)
         return True
 
     def open_project(self, path=None):
@@ -543,24 +710,46 @@ class MMTOWindow(MainWindow):
         return True
 
     def save_project(self):
+        """Save in place; a project never saved, or an example, is saved as a new project (Save As)."""
         if self.project is None:
             return False
-        if self.path is None:
+        if self.path is None or self.template:
             return self.save_project_as()
         return self._write(self.path)
 
     def save_project_as(self, path=None):
+        """Save as a new project: with no path, a dialog asks for a name and a location and makes the
+        project folder there. Everything the project uses (the STL, the database and its network) is
+        copied into the folder, and the project takes the new name. Results stay with the old project."""
+        import project_folder  # type: ignore
         if self.project is None:
             return False
         if path is None:
-            default = self.path or os.path.join(self._folder(), f"{self.project.name}.mmto")
-            path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save project", default, PROJECT_FILTER,
-                                                            options=FILE_DIALOG_OPTIONS)
-            if not path:
+            dialog = ProjectFolderDialog(self, "Save as a new project", self._location(),
+                                         name=self.project.name if self.template else f"{self.project.name} copy")
+            if not dialog.exec_():
                 return False
+            path = os.path.join(dialog.folder(), f"{os.path.basename(dialog.folder())}.mmto")
         if not path.lower().endswith(".mmto"):
             path += ".mmto"
-        return self._write(path)
+        packed = self.project.copy(name=os.path.splitext(os.path.basename(path))[0])
+        try:
+            project_folder.pack(packed, os.path.dirname(os.path.abspath(path)))
+        except OSError as e:
+            QtWidgets.QMessageBox.warning(self, "Save project", f"Not saved: {e}")
+            return False
+        old = self.project.name, self.project.base_dir, self.project.stl, self.project.database
+        p = self.project
+        p.name, p.base_dir, p.stl, p.database = packed.name, packed.base_dir, packed.stl, packed.database
+        if not self._write(path):
+            p.name, p.base_dir, p.stl, p.database = old
+            return False
+        if self.template:
+            self.template = False
+            self.message_text.append("Saved as a project of your own; the example is unchanged.")
+            self._refresh_title()
+        self.update_part_facts()
+        return True
 
     def _write(self, path):
         try:
@@ -575,8 +764,8 @@ class MMTOWindow(MainWindow):
 
     def _show(self, project, path):
         """Make project the one in the window: PyTO-AD's state reset, units synced, the STL drawn."""
-        for attr in ("supports_panel", "structural_loads_window", "run_window"):  # windows on the previous project
-            w = getattr(self, attr, None)
+        for attr in ("supports_panel", "structural_loads_window", "run_window", "results_window"):
+            w = getattr(self, attr, None)                           # windows on the previous project
             if w is not None:
                 try:
                     w.close()
@@ -584,6 +773,9 @@ class MMTOWindow(MainWindow):
                     pass
         self.preview_on = False
         self.project, self.path = project, path
+        self.template = is_example(path)
+        self._design, self.view, self._shown_wide = None, "setup", False    # the previous project's design goes
+        self.design_bars.clear()
         self._saved = self._state() if path else None
         filled = project.complete_settings()                        # a file missing settings: filled, unsaved
         self.init_state()                                           # PyTO-AD's own fresh state
@@ -595,11 +787,16 @@ class MMTOWindow(MainWindow):
             loader = ProjectsWindow(self)                           # its load_geometry draws the STL, picking on
             loader.load_geometry(project.stl_path())
             loader.deleteLater()
-        else:
+            self.plotter.remove_actor("geometry_info", reset_camera=False)    # its text over the view: the
+        else:                                                                # facts are behind the (i)
             self.plotter.clear_actors()
         self.draw_ruler()
+        self._view_changed()
         self.message_text.clear()                                   # the loader's own lines go too
         self.message_text.append(f"Project {project.name}" + (f": {path}" if path else " (not saved yet)"))
+        if self.template:
+            self.message_text.append("This is an example. Save makes a copy in a project folder of your own; the "
+                                     "example itself stays as it is.")
         if not os.path.isfile(project.stl_path()):
             self.message_text.append(f"STL not found: {project.stl_path()}")
         if filled:
@@ -648,11 +845,29 @@ class MMTOWindow(MainWindow):
 
     def apply_panel(self, panel):
         lines = panel.apply(self.project)
+        if lines and isinstance(panel, MaterialsPanel) and self.own_folder():
+            from project_folder import bring_in_database  # type: ignore
+            try:
+                copied = bring_in_database(self.project)
+            except OSError as e:
+                copied, lines = None, lines + [f"The database could not be copied into the project: {e}"]
+            if copied:
+                lines.append(f"Copied into the project folder: {copied}, with its trained network if it has one")
+        self.update_part_facts()
         for line in lines:
             self.message_text.append(line)
         if lines:
             self._say_checks()
         self._refresh_title()
+
+    def database_folder(self):
+        """Where New database... writes by default: the project's materials folder; for an example,
+        not beside it (the examples never change)."""
+        if self.own_folder():
+            folder = os.path.join(self.project.base_dir, "materials")
+            os.makedirs(folder, exist_ok=True)
+            return folder
+        return self._location() if self.template else self.project.base_dir
 
     def open_materials_panel(self):
         return self.open_panel("Materials")
@@ -668,6 +883,7 @@ class MMTOWindow(MainWindow):
         if self.project is None:
             QtWidgets.QMessageBox.information(self, APP, "Start a project first: File > New or File > Open.")
             return None
+        self.show_setup_view()
         if not self._raise_if_open("supports_panel"):
             self.supports_panel = SupportsPanel(self)
             Strip(self.supports_panel, self, "supports_panel")
@@ -681,15 +897,37 @@ class MMTOWindow(MainWindow):
         if not self._raise_if_open("run_window"):
             from .run import RunWindow
             self.run_window = RunWindow(self)
-            strip = Strip(self.run_window, self, "run_window")
-            panel = getattr(self, "supports_panel", None)
-            if in_open_strip(panel):
-                self.tabifyDockWidget(panel.parentWidget(), strip)
-            strip.raise_()
+            self._dock_beside(Strip(self.run_window, self, "run_window"))
         return self.run_window
+
+    def open_results_panel(self, folder=None):
+        """The Results strip: this project's runs, each shown on the part and in tabs; folder, a run
+        to show at once."""
+        if self.project is None:
+            QtWidgets.QMessageBox.information(self, APP, "Start a project first: File > New or File > Open.")
+            return None
+        if not self._raise_if_open("results_window"):
+            from .results import ResultsWindow
+            self.results_window = ResultsWindow(self)
+            self._dock_beside(Strip(self.results_window, self, "results_window"))
+        else:
+            self.results_window.refresh()
+        if folder is not None:
+            self.results_window.select(folder)
+        return self.results_window
+
+    def _dock_beside(self, strip):
+        """A new strip as a tab beside the strips already open, in front."""
+        for attr in ("supports_panel", "run_window", "results_window"):
+            other = getattr(self, attr, None)
+            if other is not strip.widget() and in_open_strip(other):
+                self.tabifyDockWidget(other.parentWidget(), strip)
+                break
+        strip.raise_()
 
     def open_structural_loads_window(self):
         """The Pick window, docked (in place of MainWindow.open_structural_loads_window)."""
+        self.show_setup_view()
         if not self._raise_if_open("structural_loads_window"):
             self.structural_loads_window = PickWindow(self)
             strip = Strip(self.structural_loads_window, self, "structural_loads_window")
@@ -795,11 +1033,98 @@ class MMTOWindow(MainWindow):
             self.stl_geom.tri_highlight = [False] * len(self.stl_geom.tri_highlight)
             self.update_highlights()
 
-    def clear_preview(self):
+    def _remove_preview(self):
         for name in [n for n in list(self.plotter.actors) if str(n).startswith("mmto_")]:
             self.plotter.remove_actor(name, reset_camera=False)
         self.preview_on = False
+
+    def clear_preview(self):
+        """The preview drawings gone, back to the Setup view. The design is kept (Show design)."""
+        self._remove_preview()
+        self.show_setup_view(render=False)
         self.plotter.render()
+
+    # ------------------------------------------------------------------ Setup view and Design view
+    def set_design(self, draw, show=True, wide=False):
+        """draw(window) draws a design (design.py); it is kept for the Design view until another is set
+        (the next run) or the project changes. Shown now when show, or when the Design view is on.
+        wide: it reaches beyond the part (two designs side by side), so the view is fitted to it."""
+        self._design, self._wide = draw, wide
+        if show or self.view == "design":
+            self.show_design_view()
+        else:
+            self._view_changed()
+
+    def _remove_design(self):
+        from .design import PREFIX
+        for name in [n for n in list(self.plotter.actors) if str(n).startswith(PREFIX)]:
+            self.plotter.remove_actor(name, reset_camera=False)
+        for title in list(self.design_bars):
+            try:
+                self.plotter.remove_scalar_bar(title, render=False)
+            except (KeyError, ValueError, TypeError):
+                pass
+        self.design_bars.clear()
+
+    def show_design_view(self):
+        """The design in place of the part; previews are cleared. False when there is no design."""
+        if self._design is None:
+            return False
+        self._remove_design()
+        self._remove_preview()
+        part = self.part_actor()
+        if part is not None:
+            part.SetVisibility(False)
+        self.view = "design"
+        try:
+            self._design(self)
+        except Exception as e:                                      # noqa: BLE001
+            self.message_text.append(f"The design could not be drawn: {e}")
+        wide = getattr(self, "_wide", False)
+        if wide or getattr(self, "_shown_wide", False):             # into or out of two designs: fit the view
+            self.plotter.reset_camera()
+        self._shown_wide = wide
+        self._view_changed()
+        self.plotter.render()
+        return True
+
+    def show_setup_view(self, render=True):
+        """The part, for its supports, loads and previews; the design is kept for Show design."""
+        if self.view == "setup":
+            return
+        self._remove_design()
+        part = self.part_actor()
+        if part is not None:
+            part.SetVisibility(True)
+        if getattr(self, "_shown_wide", False):                     # back from two designs: the part fills
+            self.plotter.reset_camera()                             # the view again
+            self._shown_wide = False
+        self.view = "setup"
+        self._view_changed()
+        if render:
+            self.plotter.render()
+
+    def toggle_view(self):
+        if self.view == "design":
+            self.show_setup_view()
+        else:
+            self.show_design_view()
+
+    def view_button(self):
+        """A Show setup / Show design button that follows the view; shown while there is a design."""
+        button = QtWidgets.QPushButton("Show design")
+        button.clicked.connect(self.toggle_view)
+        self._view_buttons.append(button)
+        self._view_changed()
+        return button
+
+    def _view_changed(self):
+        for button in list(self._view_buttons):
+            try:
+                button.setVisible(self._design is not None)
+                button.setText("Show setup" if self.view == "design" else "Show design")
+            except RuntimeError:                                    # its strip was closed
+                self._view_buttons.remove(button)
 
     def _arrow(self, i, direction, points, size):
         import pyvista as pv
@@ -895,6 +1220,7 @@ class MMTOWindow(MainWindow):
         if self.project is None:
             self.new_project()
             return
+        self.show_setup_view()
         names = triangle_selections(self.project)
         if names:
             answer = QtWidgets.QMessageBox.question(
@@ -907,8 +1233,16 @@ class MMTOWindow(MainWindow):
         dialog = GeometryWindow(self)
         dialog.exec_()
         after = self.stl_geom.file_path if self.stl_geom else None
+        self.plotter.remove_actor("geometry_info", reset_camera=False)
         if after and after != before:
             self.project.stl = os.path.abspath(after)
+            if self.own_folder():                                   # the new part goes into the project folder
+                from project_folder import PART, copy_in  # type: ignore
+                self.project.stl = copy_in(self.project.stl, self.project.base_dir, PART)
+            self._design = None                                     # a design of the old part no longer fits
+            self.view = "setup"
+            self._view_changed()
+            self.draw_ruler()
             if names:
                 self.message_text.append(f"Check the selections {', '.join(names)}: they are triangle numbers "
                                          f"of the old STL.")

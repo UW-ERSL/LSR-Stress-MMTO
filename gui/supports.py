@@ -1173,6 +1173,7 @@ class SupportsPanel(QtWidgets.QDialog):
 
     def preview_one(self, selection):
         """A region being edited, on the run's mesh: its node count, drawn in orange. None clears it."""
+        self.window.show_setup_view()
         if selection is None:
             for name in ("mmto_region", "mmto_region_outline"):
                 self.window.plotter.remove_actor(name, reset_camera=False)

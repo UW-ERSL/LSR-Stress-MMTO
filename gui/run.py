@@ -7,15 +7,19 @@ RunWindow is PyTO-AD's Optimize window (StructuralTopOptWindow): its worker thre
 signals, its live plot, its live redraw of the design and its log. What it overrides:
   - what starts a run: the project's own checks, a save, a results folder per run;
   - what the thread calls: Project.run, that is run_topopt, with progress and should_stop;
-  - how the design is drawn: elements by their nearest material's colour, not by density;
+  - how the design is drawn: each element in its nearest material's colour, at a strength that
+    follows its density (design.py), as the window's design (Setup and Design views);
   - Stop: run_topopt is asked to stop before its next iteration and saves what it reached
     (PyTO-AD's Stop only cleared a flag the optimizer never read);
-  - the end: the final design on the part, and the convergence, latent space and summary.
+  - the end: the final design on the part, the convergence, latent space and summary, and the
+    run's folder: open it, show it in Results, or delete it.
+While the material network trains, before the optimization starts, the status line counts
+its epochs from the lines the training prints.
 
 The project can still be edited while a run goes: the run has its own copy, taken at Start.
 """
-import datetime
 import os
+import re
 import subprocess
 import sys
 import time
@@ -23,19 +27,77 @@ import time
 import numpy as np
 from PyQt5 import QtCore, QtWidgets
 
-from .panels import GREY, Info
+from . import design
+from .panels import Info
 from .pyto_ad import StructuralTopOptWindow
 
 DRAW_EVERY = 1.5                                            # seconds between redraws of the design
 RUN_HELP = ("Start optimizes the project as it is now: it is saved first, and the run keeps its own copy, "
             "so you can go on editing for the next run. Stop ends the run after the iteration under way "
-            "and keeps the design reached so far. Each run has its own folder under results.")
+            "and keeps the design reached so far. Each run has its own folder in the project's results "
+            "folder.\n\nWhile it runs, each element is drawn in its material's colour, pale while it is "
+            "half solid and full colour once solid; elements that are almost empty are not drawn.")
+EPOCH = re.compile(r"^(?:\[(?:STD|SAM)\] )?Epoch (\d+):")   # what the network's training prints
 
 
 def results_folder(project):
-    """results/<project name>/<date and time>, next to the project file."""
-    stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    return os.path.join(project.base_dir, "results", project.name, stamp)
+    """The folder for the next run's results (project_folder.new_run_folder)."""
+    from project_folder import new_run_folder  # type: ignore
+    return new_run_folder(project)
+
+
+def open_folder(path):
+    """A folder opened in the file manager."""
+    if path and os.path.isdir(path):
+        if sys.platform.startswith("win"):
+            os.startfile(os.path.abspath(path))                     # noqa: S606
+        else:
+            subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", path])
+
+
+def ask_delete_run(parent, folder):
+    """A run's folder deleted after a yes; True when it was."""
+    from project_folder import delete_run, run_facts  # type: ignore
+    when = run_facts(folder)[0]
+    answer = QtWidgets.QMessageBox.question(
+        parent, "Delete this run", f"Delete the run of {when}? Its folder, with everything in it, is removed. "
+                                   f"This cannot be undone.",
+        QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No, QtWidgets.QMessageBox.No)
+    if answer != QtWidgets.QMessageBox.Yes:
+        return False
+    try:
+        delete_run(folder)
+    except (OSError, ValueError) as e:
+        QtWidgets.QMessageBox.warning(parent, "Delete this run", f"Not deleted: {e}")
+        return False
+    return True
+
+
+def result_tabs(tabs, run, keep=0):
+    """Convergence, Latent space and Summary tabs of a saved run, after the first keep tabs."""
+    from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+    from utils import figures, tables  # type: ignore
+    while tabs.count() > keep:
+        tabs.removeTab(keep)
+    for title, make in (("Convergence", lambda: figures.convergence(run)),
+                        ("Latent space", lambda: figures.latent_scatter(run))):
+        try:
+            tabs.addTab(FigureCanvasQTAgg(make()), title)
+        except Exception as e:                                      # noqa: BLE001
+            tabs.addTab(QtWidgets.QLabel(f"Could not draw: {e}"), title)
+    tabs.addTab(table_view(str(tables.summary(run, show=False))), "Summary")
+
+
+def table_view(text):
+    """A table as text, in a fixed-width font and unwrapped, so its columns line up (scroll to the side)."""
+    from PyQt5 import QtGui
+    view = QtWidgets.QPlainTextEdit(text)
+    view.setReadOnly(True)
+    view.setLineWrapMode(QtWidgets.QPlainTextEdit.NoWrap)
+    font = QtGui.QFont("Consolas")                                 # Windows'; elsewhere the hint finds one
+    font.setStyleHint(QtGui.QFont.TypeWriter)
+    view.setFont(font)
+    return view
 
 
 def nearest_material(z, z_real):
@@ -50,8 +112,10 @@ class RunWindow(StructuralTopOptWindow):
     def __init__(self, window):
         self.window, self.stop_requested, self.save_dir = window, False, None
         self.started, self.last_draw, self.history = 0.0, 0.0, {"objective": [], "constraints": []}
+        self.first_frame, self.optimizing = True, False
         super().__init__(window)
         self.setWindowTitle("Run")
+        self.log_line.connect(self._training_progress, QtCore.Qt.QueuedConnection)
 
     # ------------------------------------------------------------------ the strip
     def setup_ui(self):
@@ -92,12 +156,16 @@ class RunWindow(StructuralTopOptWindow):
         layout.addWidget(self.live_topology_check)
 
         after = QtWidgets.QHBoxLayout()                            # once a run has finished
-        self.view_button = QtWidgets.QPushButton("Show setup")
-        self.view_button.setCheckable(True)
-        self.view_button.toggled.connect(self.show_setup)
+        self.view_button = self.window.view_button()               # Show setup / Show design
+        after.addWidget(self.view_button)
         self.folder_button = QtWidgets.QPushButton("Open results folder")
         self.folder_button.clicked.connect(self.open_folder)
-        for widget in (self.view_button, self.folder_button):
+        self.results_button = QtWidgets.QPushButton("Open in Results")
+        self.results_button.clicked.connect(lambda: self.window.open_results_panel(self.save_dir))
+        self.delete_button = QtWidgets.QPushButton("Delete this run")
+        self.delete_button.clicked.connect(self.delete_run)
+        self.run_buttons = (self.folder_button, self.results_button, self.delete_button)
+        for widget in self.run_buttons:
             widget.setVisible(False)
             after.addWidget(widget)
         after.addStretch()
@@ -117,7 +185,14 @@ class RunWindow(StructuralTopOptWindow):
         if errors:
             self.status.setText("<span style='color:#b00000'>Cannot start:<br>" + "<br>".join(errors) + "</span>")
             return False
-        if w.is_dirty() or w.path is None:
+        if w.template:
+            answer = QtWidgets.QMessageBox.question(
+                self, "Run", "This is an example: it is saved as a project of your own before it runs, so the "
+                             "example stays as it is and the results go in your project's folder. Save now?",
+                QtWidgets.QMessageBox.Save | QtWidgets.QMessageBox.Cancel)
+            if answer != QtWidgets.QMessageBox.Save or not w.save_project():
+                return False
+        elif w.is_dirty() or w.path is None:
             answer = QtWidgets.QMessageBox.question(
                 self, "Run", "The project is saved before a run, so the run matches the file. Save now?",
                 QtWidgets.QMessageBox.Save | QtWidgets.QMessageBox.Cancel)
@@ -128,12 +203,14 @@ class RunWindow(StructuralTopOptWindow):
         self.save_dir = results_folder(self.project)
         self.stop_requested, self.history = False, {"objective": [], "constraints": []}
         self.started, self.last_draw = time.time(), 0.0
+        self.first_frame, self.optimizing = True, False
         self.max_iterations = int(self.project.settings["common"]["maxIterations"])
+        self.epochs = int(self.project.settings["vae"].get("numEpochs") or 0)
         self.colours = self._material_colours()
         self.optimization_running = True
         self.optimize_button.setEnabled(False)
         self.stop_button.setEnabled(True)
-        for widget in (self.view_button, self.folder_button):
+        for widget in self.run_buttons:
             widget.setVisible(False)
         self.formulation.log_view.clear()
         self.status.setText("Starting: building the mesh and the material network...")
@@ -159,6 +236,7 @@ class RunWindow(StructuralTopOptWindow):
 
     def _progress(self, state):
         """After each iteration (worker thread): the plot always, the design at most every DRAW_EVERY s."""
+        self.optimizing = True                                     # training, if any, is over
         self.history["objective"].append(state["objective"])
         self.history["constraints"].append(state["constraints"])
         self.history["iteration"] = state["iteration"]
@@ -169,6 +247,16 @@ class RunWindow(StructuralTopOptWindow):
             self.optimization_update.emit(
                 {"x": state["x_phys"], "material": nearest_material(state["z"], state["z_real"])},
                 state["iteration"])
+
+    @QtCore.pyqtSlot(str)
+    def _training_progress(self, line):
+        """While the material network trains (before the first iteration): its epoch in the status line."""
+        m = EPOCH.match(line)
+        if m is None or self.optimizing or not self.optimization_running or self.stop_requested:
+            return
+        epoch = int(m.group(1))
+        total = f" / {self.epochs:,}" if self.epochs else ""
+        self.status.setText(f"Training the material network: epoch {epoch:,}{total}")
 
     def stop_optimization(self):
         """Ask run_topopt to stop before its next iteration; it saves the design reached so far."""
@@ -203,30 +291,13 @@ class RunWindow(StructuralTopOptWindow):
                                 f"· about {_clock(left)} left")
 
     @QtCore.pyqtSlot(object, int)
-    def update_visualization(self, design, iteration):
-        """The design on the part (main thread): solid elements as blocks in their material's colour."""
-        self.draw_design(np.asarray(design["x"]) > 0.5, design["material"])
-
-    def draw_design(self, solid, material):
-        import pyvista as pv
-        w = self.window
-        mesh = w.preview_mesh()
-        w.clear_preview()
-        part = w.part_actor()
-        if part is not None:
-            part.SetVisibility(False)                              # the design in place of the part
-        centres = np.asarray(mesh.elem_centers, dtype=float)[solid]
-        if len(centres):
-            cloud = pv.PolyData(centres)
-            rgb = np.array([_rgb(self.colours[m % len(self.colours)]) for m in np.asarray(material)[solid]],
-                           dtype=np.uint8)
-            cloud.point_data["rgb"] = rgb
-            h = np.asarray(mesh.elem_size, dtype=float)
-            blocks = cloud.glyph(geom=pv.Cube(x_length=h[0], y_length=h[1], z_length=h[2]), scale=False,
-                                 orient=False)
-            w.plotter.add_mesh(blocks, scalars="rgb", rgb=True, pickable=False, name="mmto_design",
-                               reset_camera=False)
-        w.plotter.render()
+    def update_visualization(self, frame, iteration):
+        """The design so far (main thread), as the window's design: shown at the first frame of a run,
+        later only while the Design view is on (Show setup keeps the part in view)."""
+        mesh = design.mesh_of(self.window, self.project)           # the run's own copy: edits wait
+        x, material, colours = np.asarray(frame["x"]), np.asarray(frame["material"]), self.colours
+        self.window.set_design(lambda w: design.live(w, mesh, x, material, colours), show=self.first_frame)
+        self.first_frame = False
 
     def _material_colours(self):
         from databases import material_display  # type: ignore
@@ -252,50 +323,49 @@ class RunWindow(StructuralTopOptWindow):
         self.status.setText(f"Run {how} after {max(len(history['objective']) - 1, 0)} iterations, "
                             f"{_clock(time.time() - self.started)}.")
         w.message_text.append(f"Run {how}: results in {save_dir}")
-        self.view_button.setVisible(True)
-        self.folder_button.setVisible(True)
+        for widget in self.run_buttons:
+            widget.setVisible(True)
         self.show_results(save_dir)
+        results = getattr(w, "results_window", None)
+        if results is not None:
+            try:
+                results.refresh()                                  # the new run in its list
+            except RuntimeError:
+                pass
 
     def show_results(self, save_dir):
         """The final design on the part, and tabs for the convergence, the latent space, the summary."""
-        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
-        from utils import figures, records, tables  # type: ignore
+        from utils import records  # type: ignore
         try:
             run = records.load(os.path.join(save_dir, "run_data"))
         except Exception as e:                                      # noqa: BLE001
             self.status.setText(self.status.text() + f"<br>The results could not be read: {e}")
             return
-        self.draw_design(np.asarray(run.solid, dtype=bool), np.asarray(run.material_indices))
-        while self.tabs.count() > 2:                               # Progress and Log stay
-            self.tabs.removeTab(2)
-        for title, make in (("Convergence", lambda: figures.convergence(run)),
-                            ("Latent space", lambda: figures.latent_scatter(run))):
-            try:
-                fig = make()
-                self.tabs.addTab(FigureCanvasQTAgg(fig), title)
-            except Exception as e:                                  # noqa: BLE001
-                self.tabs.addTab(QtWidgets.QLabel(f"Could not draw: {e}"), title)
-        summary = QtWidgets.QPlainTextEdit(str(tables.summary(run, show=False)))
-        summary.setReadOnly(True)
-        self.tabs.addTab(summary, "Summary")
-
-    def show_setup(self, on):
-        """Back to the part with its supports and loads, or the design again."""
-        w = self.window
-        self.view_button.setText("Show design" if on else "Show setup")
-        part = w.part_actor()
-        if part is not None:
-            part.SetVisibility(on)
-        if "mmto_design" in w.plotter.actors:
-            w.plotter.actors["mmto_design"].SetVisibility(not on)
-        w.plotter.render()
+        mesh = design.mesh_of(self.window, self.project)
+        if int(mesh.num_elems) == int(run.n_elems):
+            self.window.set_design(lambda w: design.record(w, run, mesh, "Material"))
+        result_tabs(self.tabs, run, keep=2)                        # Progress and Log stay
 
     def open_folder(self):
-        if self.save_dir and os.path.isdir(self.save_dir):
-            if sys.platform.startswith("win"):
-                os.startfile(os.path.abspath(self.save_dir))        # noqa: S606
-            else:
-                subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", self.save_dir])
+        open_folder(self.save_dir)
+
+    def delete_run(self):
+        """The run just made deleted, after a yes; its design goes too."""
+        if self.save_dir and ask_delete_run(self, self.save_dir):
+            self.window.message_text.append(f"Deleted the run {self.save_dir}")
+            for widget in self.run_buttons:
+                widget.setVisible(False)
+            while self.tabs.count() > 2:
+                self.tabs.removeTab(2)
+            self.status.setText("The run was deleted.")
+            self.window.show_setup_view()
+            self.window.set_design(None, show=False)
+            results = getattr(self.window, "results_window", None)
+            if results is not None:
+                try:
+                    results.refresh()
+                except RuntimeError:
+                    pass
 
     def closeEvent(self, event):
         if self.optimization_running:
@@ -313,8 +383,3 @@ def _clock(seconds):
     seconds = int(seconds)
     return f"{seconds // 3600}:{seconds % 3600 // 60:02d}:{seconds % 60:02d}" if seconds >= 3600 else \
         f"{seconds // 60}:{seconds % 60:02d}"
-
-
-def _rgb(colour):
-    colour = colour.lstrip("#")
-    return [int(colour[i:i + 2], 16) for i in (0, 2, 4)]

@@ -25,6 +25,8 @@ import tempfile
 import numpy as np
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+if sys.platform.startswith("win"):                         # off-screen Qt on Windows finds no fonts itself
+    os.environ.setdefault("QT_QPA_FONTDIR", os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts"))
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -81,7 +83,7 @@ def test_what_it_takes_from_pyto_ad():
     from gui import pyto_ad
     assert hasattr(pyto_ad.ProjectsWindow, "load_geometry") and hasattr(pyto_ad.MainWindow, "init_state")
     assert {c["name"] for c in pyto_ad.MainWindow.BUTTON_CONFIG} >= set(G.SIDEBAR) - set(G.PANELS) - \
-        {"Supports and loads", "Run"}
+        {"Supports and loads", "Run", "Results"}
     assert all(hasattr(pyto_ad.MainWindow, m) for m in ("update_LivVar", "_raise_if_open",
                                                          "start_box_node_selection"))
     assert all(hasattr(pyto_ad.StructuralLoadsWindow, m) for m in ("redraw_loads", "refresh_applied_list"))
@@ -119,13 +121,22 @@ def test_only_mmto_projects_open():
 
 
 def test_new_save_load():
+    """New makes a project folder with the STL copied in, saved at once; Save As copies everything into
+    another folder and takes the new name."""
     stl = os.path.join(ROOT, "0-Common", "Models", "LBracket_BM1", "LBracket_BM1.STL")
     w = G.MMTOWindow()
-    assert w.new_project(stl)
-    assert w.is_dirty() and w.windowTitle() == "LBracket_BM1* - LSR MMTO"
     with scratch() as d:
-        assert w.save_project_as(os.path.join(d, "new"))                       # .mmto added
-        assert w.path.endswith("new.mmto") and not w.is_dirty()
+        folder = os.path.join(d, "Bracket study")
+        assert w.new_project(stl, folder)
+        assert w.path == os.path.join(folder, "Bracket study.mmto") and os.path.isfile(w.path)
+        assert not w.is_dirty() and w.windowTitle() == "Bracket study - LSR MMTO"
+        assert w.project.stl == "part/LBracket_BM1.STL" and os.path.isfile(os.path.join(folder, w.project.stl))
+        assert w.own_folder()
+        with answers():
+            assert not w.new_project(stl, folder)                              # not into a folder in use
+        assert w.save_project_as(os.path.join(d, "new", "new"))                # .mmto added
+        assert w.path == os.path.join(d, "new", "new.mmto") and not w.is_dirty() and w.project.name == "new"
+        assert os.path.isfile(os.path.join(d, "new", "part", "LBracket_BM1.STL"))
         assert Project.load(w.path).to_dict() == w.project.to_dict()
 
 
@@ -801,9 +812,18 @@ def test_run():
         assert os.path.isfile(os.path.join(r.save_dir, "L-bracket.mmto"))     # what ran, beside it
         assert [r.tabs.tabText(i) for i in range(r.tabs.count())] == ["Progress", "Log", "Convergence",
                                                                       "Latent space", "Summary"]
-        assert "mmto_design" in w.plotter.actors and not w.part_actor().GetVisibility()
-        r.view_button.setChecked(True)                                        # Show setup
-        assert w.part_actor().GetVisibility() and not w.plotter.actors["mmto_design"].GetVisibility()
+        assert "result_design" in w.plotter.actors and not w.part_actor().GetVisibility()
+        assert w.view == "design" and r.view_button.text() == "Show setup"
+        r.view_button.click()                                                 # Show setup
+        assert w.part_actor().GetVisibility() and "result_design" not in w.plotter.actors
+        assert r.view_button.text() == "Show design"
+        panel = w.open_supports_and_loads_panel()
+        r.view_button.click()                                                 # Show design again
+        assert w.view == "design"
+        panel.preview()                                                       # a setup action: the part
+        assert w.view == "setup" and w.part_actor().GetVisibility()
+        w.clear_preview()                                                     # Clear keeps the design
+        assert w.show_design_view() and "result_design" in w.plotter.actors
         first = r.save_dir
 
         w.project.settings["common"]["maxIterations"] = 50                   # Stop: early, design kept
@@ -877,6 +897,134 @@ def test_snap_copy_outline_colour_new_database():
         n.folder.setText(os.path.join(ROOT, DATABASE_DIR))
         assert any("come with LSR MMTO" in e for e in n.problems())
 
+
+
+def test_examples_open_as_templates():
+    """An example opens as a template: Save asks for a project folder of one's own and copies everything
+    into it, and the example's file never changes. In a project folder, a database chosen (a shipped one
+    too) is copied into materials/, and New database writes there."""
+    original = os.path.join(PROJECTS, "L-bracket.mmto")
+    before = open(original).read()
+    w = G.MMTOWindow()
+    assert w.open_project(original) and w.template and not w.is_dirty()
+    assert w.windowTitle() == "L-bracket (example) - LSR MMTO"
+    real = G.ProjectFolderDialog.exec_
+    with scratch() as d:
+        try:
+            def fill(dialog):
+                assert dialog.stl is None and dialog.name.text() == "L-bracket"       # Save As: no STL asked
+                dialog.location.setText(d)
+                dialog.name.setText("My bracket")
+                return 1
+            G.ProjectFolderDialog.exec_ = fill
+            w.project.settings["common"]["maxIterations"] = 7
+            assert w.save_project()
+        finally:
+            G.ProjectFolderDialog.exec_ = real
+        folder = os.path.join(d, "My bracket")
+        assert w.path == os.path.join(folder, "My bracket.mmto") and not w.template and not w.is_dirty()
+        assert w.windowTitle() == "My bracket - LSR MMTO" and w.own_folder()
+        assert sorted(os.listdir(os.path.join(folder, "materials"))) == ["BM1_3Mats_2Attr.nt",
+                                                                         "BM1_3Mats_2Attr.xlsx"]
+        assert open(original).read() == before                                # the example is untouched
+        assert w.database_folder() == os.path.join(folder, "materials")
+        m = panels.MaterialsPanel(w, w.project)
+        m.combo.setCurrentText("6Materials_AF_3Attr")                         # a shipped one: copied in at OK
+        w.apply_panel(m)
+        assert w.project.database == "materials/6Materials_AF_3Attr.xlsx"
+        assert os.path.isfile(os.path.join(folder, "materials", "6Materials_AF_3Attr.nt"))
+        assert w.project.validate() == [] and "Material database: materials/6Materials_AF_3Attr.xlsx" in \
+            w.facts.toolTip()
+
+
+def test_part_facts_pca_live_colours_training():
+    """The part's facts behind the (i), not over the 3D view; the PCA breakdown behind the Materials
+    panel's (i); the live design by density; the training's epochs in the Run status line."""
+    from gui import design
+    s = design.strength([0.1, 0.55, 1.0])
+    assert np.allclose(s, [0.25, 0.625, 1.0])                                # pale to full colour
+    assert design.faded(np.array([[255.0, 0, 0]] * 3), s).tolist() == [[255, 191, 191], [255, 96, 96],
+                                                                         [255, 0, 0]]
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        assert "geometry_info" not in w.plotter.actors
+        facts = w.facts.toolTip().splitlines()
+        assert facts[0] == "Part: LBracket_BM1.STL" and facts[1].startswith("Volume: ")
+        assert facts[2].startswith("Size: ") and facts[3] == "Material database: BM1_3Mats_2Attr"
+
+        tip = panels.MaterialsPanel(w, w.project).latent_info.toolTip()
+        assert "direction 1: " in tip and "The recommended latent dimension is the smallest whole number" in tip
+
+        w.project.n_dof, w.project.single_layer = 3000, True
+        mesh = w.preview_mesh()
+        n = int(mesh.num_elems)
+        x = np.full(n, 0.5)
+        x[:10] = 0.05                                                         # almost empty: not drawn
+        w.set_design(lambda win: design.live(win, mesh, x, np.zeros(n, dtype=int), ["#ff0000"]))
+        blocks = w.plotter.actors["result_design"].GetMapper().GetInput()
+        assert blocks.n_cells == 6 * (n - 10) and not w.part_actor().GetVisibility()
+
+        r = w.open_run_panel()
+        r.optimization_running, r.optimizing, r.epochs = True, False, 30000
+        try:
+            r._training_progress("[STD] Epoch 5000: reconLoss 1.0e-03, klLoss 2.0e-01, loss 1.0e-03")
+            assert r.status.text() == "Training the material network: epoch 5,000 / 30,000"
+            r.optimizing = True                                               # the optimization has started
+            r._training_progress("[STD] Epoch 10000: reconLoss 1.0e-03")
+            assert r.status.text().endswith("epoch 5,000 / 30,000")
+        finally:
+            r.optimization_running = False
+
+
+def test_results_compare_delete():
+    """Results: the project's runs, newest first; a run shown as each of Material, Density, Stress and
+    Solid; two runs compared side by side; another place's run opened for looking only; Delete, in
+    Results and in the Run strip, removes a run's folder."""
+    from gui import design
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        w.show()
+        w.project.n_dof, w.project.single_layer = 3000, True
+        w.project.settings["common"]["maxIterations"] = 2
+        assert w.save_project_as(os.path.join(d, "P", "P.mmto")) and w.own_folder()
+        r = w.open_run_panel()
+        folders = []
+        for _ in range(2):
+            assert r.start_optimization()
+            assert _wait(lambda: not r.optimization_running), "the run did not finish"
+            assert r.status.text().startswith("Run finished"), r.status.text()
+            folders.append(r.save_dir)
+        assert all(os.path.dirname(f) == os.path.join(d, "P", "results") for f in folders)
+        assert r.results_button.isVisibleTo(r) and r.delete_button.isVisibleTo(r)
+
+        r.results_button.click()                                              # Open in Results
+        res = w.results_window
+        assert res.folders() == folders[::-1] and res.current == folders[1]
+        assert [res.tabs.tabText(i) for i in range(res.tabs.count())] == ["Convergence", "Latent space",
+                                                                          "Summary"]
+        for field in design.FIELDS:
+            res.field.setCurrentText(field)
+            assert "result_design" in w.plotter.actors and w.view == "design", field
+            assert bool(w.design_bars) == (field in ("Density", "Stress")), (field, w.design_bars)
+
+        for i in range(2):
+            res.list.item(i).setCheckState(QtCore.Qt.Checked)
+        assert res.compare_button.isEnabled() and res.compare()
+        assert {"result_design", "result_design_2"} <= set(w.plotter.actors)
+        assert [res.tabs.tabText(i) for i in range(res.tabs.count())] == ["Convergence", "Summary"]
+
+        moved = shutil.copytree(os.path.join(d, "P"), os.path.join(d, "Q"))  # a project zipped and sent
+        other = os.path.join(moved, "results", os.path.basename(folders[0]))
+        assert res.add_other(other) == other and res.current == other
+        assert res.tabs.count() == 3 and not res.delete_button.isEnabled()  # for looking only
+        assert res.select(folders[0])
+        with answers(Box.Yes):
+            res.delete_run()
+        assert not os.path.exists(folders[0]) and res.folders() == [folders[1], other]
+        with answers(Box.Yes):
+            r.delete_run()                                                    # the run the strip just made
+        assert not os.path.exists(folders[1]) and res.folders() == [other]
+        assert w.view == "setup" and w.part_actor().GetVisibility()
 
 if __name__ == "__main__":
     failed = 0

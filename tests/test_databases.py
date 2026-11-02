@@ -21,7 +21,8 @@ project_paths.bootstrap()
 from openpyxl import Workbook, load_workbook  # noqa: E402
 from databases import (ATTRIBUTES, DATABASE_DIR, DATABASE_VAE, VAEParams, attribute_name,  # noqa: E402
                        check_database, convert_database, database_units, default_colours,
-                       material_display, recommended_latent_dim, unit_ratio, write_template)  # type: ignore
+                       latent_dim_breakdown, material_display, recommended_latent_dim, unit_ratio,
+                       write_template)  # type: ignore
 
 SHIPPED = os.path.join(ROOT, DATABASE_DIR)
 GOOD = [["Attributes", "Density", "Youngs_Modulus", "Yield_Strength"],
@@ -166,7 +167,7 @@ def test_template():
         wb = load_workbook(path)
         assert wb.sheetnames == ["Main", "Display", "Reference"]
         disp = wb["Display"]
-        assert [c.value for c in disp[2]] == ["Material1", default_colours(1)[0], None]
+        assert [c.value for c in disp[2]] == ["=Main!A3", default_colours(1)[0], None]     # follows Main
         assert disp["B2"].fill.fgColor.rgb.lower().endswith(default_colours(1)[0][1:])
         main = wb["Main"]
         assert [c.value for c in main[1]] == ["Attributes", "Density", "Youngs_Modulus", "Yield_Strength"]
@@ -182,6 +183,20 @@ def test_template():
                 main.cell(row=r, column=c, value=v)
         wb.save(path)
         assert check_database(path) == ([], [])
+        for r, name in enumerate(["Soft", "Mid", "Stiff"], start=3):        # renamed on Main only: the
+            main.cell(row=r, column=1, value=name)                          # Display sheet follows (a file
+        wb.save(path)                                                       # saved with no formula values)
+        assert check_database(path) == ([], [])
+        assert material_display(path) == (default_colours(3), ["Soft", "Mid", "Stiff"])
+        main.delete_rows(5)                                                 # a material removed on Main:
+        wb.save(path)                                                       # its Display row is skipped
+        assert check_database(path) == ([], []) and material_display(path)[1] == ["Soft", "Mid"]
+        wb["Display"]["A4"] = "=Main!#REF!"                                 # the same, deleted in Excel
+        wb.save(path)
+        assert check_database(path) == ([], []) and material_display(path)[1] == ["Soft", "Mid"]
+        d_eff, n_z, ratios = latent_dim_breakdown(path)
+        assert (d_eff, n_z) == recommended_latent_dim(path) and abs(sum(ratios) - 1.0) < 1e-12
+        assert list(ratios) == sorted(ratios, reverse=True)
         try:
             write_template(os.path.join(d, "u.xlsx"), ["Colour"])
         except ValueError as e:

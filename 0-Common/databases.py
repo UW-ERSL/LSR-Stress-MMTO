@@ -198,13 +198,19 @@ def database_table(path):
 def recommended_latent_dim(path):
     """(d_eff, n_z): the participation ratio of the normalized database, and the latent
     dimension recommended for it, the smallest integer at or above d_eff (at least 1)."""
+    d_eff, n_z, _ = latent_dim_breakdown(path)
+    return d_eff, n_z
+
+
+def latent_dim_breakdown(path):
+    """(d_eff, n_z, ratios): as recommended_latent_dim, with the share of the variation each
+    principal component of the normalized database explains (largest first, summing to 1)."""
     import math
-    import numpy as np
     df = _read(path)
     names = [attribute_name(n) for n in df.iloc[0, 1:].tolist()]
     values = df.iloc[2:, 1:].to_numpy(dtype=float)
-    d_eff = participation_ratio(normalize(values, names)[0])[0]
-    return d_eff, max(1, math.ceil(d_eff))
+    d_eff, _, ratios = participation_ratio(normalize(values, names)[0])
+    return d_eff, max(1, math.ceil(d_eff)), ratios
 
 
 def check_database(path):
@@ -335,6 +341,31 @@ def default_colours(n):
     return out
 
 
+def _linked_names(path, sheet, column):
+    """{row index, as pandas reads the sheet: material name} for the Material cells that are a formula
+    pointing at one cell of a sheet, as the template's =Main!A3. The name is read from that cell, so
+    the Display sheet follows the names on the first sheet whatever program saved the file, also one
+    that stores no value for a formula. A pointer to an empty cell gives ""."""
+    import re
+    import warnings
+    from openpyxl import load_workbook
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Data Validation extension")
+        wb = load_workbook(path, data_only=False)
+    out = {}
+    pointer = re.compile(r"=\s*(?:'([^']+)'|([^'!]+))!\$?([A-Za-z]{1,3})\$?(\d+)\s*")
+    for (cell,) in wb[sheet].iter_rows(min_row=2, min_col=column + 1, max_col=column + 1):
+        if isinstance(cell.value, str) and cell.value.startswith("=") and "#REF!" in cell.value.upper():
+            out[cell.row - 1] = ""                                  # Excel, after its row on Main was deleted
+            continue
+        m = pointer.fullmatch(cell.value) if isinstance(cell.value, str) else None
+        target = None if m is None else (m.group(1) or m.group(2)).strip()
+        if target in wb.sheetnames:
+            value = wb[target][f"{m.group(3).upper()}{m.group(4)}"].value
+            out[cell.row - 1] = "" if value is None else str(value).strip()
+    return out
+
+
 def _display(path, names):
     """(colours, labels, errors, warnings) for the materials named, in that order."""
     import math
@@ -371,8 +402,13 @@ def _display(path, names):
         else:
             index = {n: i for i, n in enumerate(names)}
             seen = {}
+            linked = _linked_names(path, sheet, heads["material"])
             for r in range(1, df.shape[0]):
                 row = {k: df.iat[r, c] for k, c in heads.items()}
+                if r in linked:                                     # =Main!A3: the name there, now
+                    if linked[r] == "":                             # an empty cell: that material is gone
+                        continue
+                    row["material"] = linked[r]
                 if all(blank(v) for v in row.values()):
                     continue
                 m = row["material"]
@@ -518,7 +554,7 @@ def write_template(path, attributes, n_materials=5):
     disp = wb.create_sheet(DISPLAY_SHEET)
     disp.append(["Material", "Color", "Label"])
     for r, colour in enumerate(default_colours(n_materials), start=2):
-        disp.append([f"Material{r - 1}", colour, None])
+        disp.append([f"=Main!A{r + 1}", colour, None])         # follows the name typed on Main
         disp[f"B{r}"].fill = PatternFill("solid", fgColor=colour[1:])  # the default; not updated by edits
     hexa = DataValidation(type="custom", formula1='AND(LEN(B2)=7,LEFT(B2,1)="#",ISNUMBER(HEX2DEC(MID(B2,2,6))))')
     hexa.error = "A colour as #rrggbb, e.g. #ff0000 for red"
