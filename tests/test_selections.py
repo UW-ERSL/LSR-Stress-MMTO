@@ -67,19 +67,22 @@ def test_face_plane_near_face():
     assert count(S.near_face("xmax", 2.0), "elements") == 200
 
 
-def test_places_by_name():
-    u = S.union(S.place("a"), S.face("xmax"))
+def test_selections_by_name():
+    u = S.union(S.selection("a"), S.face("xmax"))
     assert S.names_in(u) == ["a"]
     assert np.array_equal(S.resolved(u, {"a": S.face("xmin")}).evaluate(MESH),
                           S.union(S.face("xmin"), S.face("xmax")).evaluate(MESH))
     assert S.names_in(S.renamed(u, "a", "b")) == ["b"]
-    for lookup, says in (({"a": S.union(S.place("a"))}, "cannot contain itself"), ({}, "no place named")):
+    for lookup, says in (({"a": S.union(S.selection("a"))}, "cannot contain itself"), ({}, "no selection named")):
         try:
             S.resolved(u, lookup)
         except ValueError as e:
             assert says in str(e), e
         else:
             raise AssertionError(says)
+    old = {"type": "union", "of": [{"type": "place", "name": "a"}, {"type": "face", "side": "xmax", "pad": "auto"}]}
+    assert S.from_dict(old).to_dict()["of"][0] == {"type": "selection", "name": "a"}  # files from before read,
+    assert S.names_in(S.from_dict(old)) == ["a"]                                    # and are written anew
 
 
 def test_cylinder():

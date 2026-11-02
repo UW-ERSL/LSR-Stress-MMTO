@@ -447,7 +447,7 @@ def test_region_and_bc_forms():
         r.tabs.setCurrentIndex(1)                                             # the form, as a code line
         assert r.code.text() == "box(lo=[0.0, 38.0, 0.0], hi=[2.0, 40.0, 1.0], pad='auto')"
         r.name.setText("clamp")
-        assert r.problems() == ["there is already a place named clamp"]
+        assert r.problems() == ["there is already a selection named clamp"]
         for name in NAMES:                                                    # every existing region, on the form
             p = Project.load(os.path.join(PROJECTS, f"{name}.mmto"))
             for k, s in p.selections.items():
@@ -563,7 +563,7 @@ def test_docked():
 
 
 def test_add_flow():
-    """Add offers both ways; an empty list says what to do; New shape makes a place without leaving the
+    """Add offers both ways; an empty list says what to do; New shape makes a selection without leaving the
     dialog; a pick takes the list's place and Apply brings the list back with the new entry selected;
     each warning is said once."""
     import selections as S  # type: ignore
@@ -581,8 +581,8 @@ def test_add_flow():
             b.new_shape()
         finally:
             SP.RegionDialog.exec_ = real
-        assert b.on.currentText() == "place1" and "place1" not in w.project.selections   # not yet: on OK
-        assert b.new_regions["place1"].to_dict() == S.face("xmin").to_dict()
+        assert b.on.currentText() == "selection1" and "selection1" not in w.project.selections   # not yet: on OK
+        assert b.new_regions["selection1"].to_dict() == S.face("xmin").to_dict()
         w.project.bcs.clear()
         panel.refresh()
         assert panel.empty.isVisibleTo(panel) and not panel.bcs.isVisibleTo(panel)
@@ -660,7 +660,7 @@ def test_region_preview_clears():
 
 def test_pages():
     """Forms opened from Supports and loads are pages of its strip, one at a time: Enter by hand, then
-    New place over it; OK goes back one page each time. Combined places follow their parts by name."""
+    New selection over it; OK goes back one page each time. Combined selections follow their parts by name."""
     import selections as S  # type: ignore
     with scratch() as d:
         w = opened("L-bracket", d)
@@ -669,26 +669,26 @@ def test_pages():
         home = panel.stack.currentWidget()
         b = panel.add_bc()                                                    # a page, not a window
         assert panel.stack.count() == 2 and b.isVisible() and not home.isVisible()
-        r = b.new_shape()                                                     # New place: a page over it
+        r = b.new_shape()                                                     # New selection: a page over it
         assert panel.stack.count() == 3 and panel.stack.currentWidget().mouse.text().startswith("Hover")
         panel.show_mouse("x 1   y 2   z 0 mm")
         assert panel.stack.currentWidget().mouse.text() == "Mouse on the part: x 1   y 2   z 0 mm"
         r.type.setCurrentText("Face of the part")
         r.accept()
-        assert panel.stack.count() == 2 and b.on.currentText() == "place1"     # back to the support/load form
+        assert panel.stack.count() == 2 and b.on.currentText() == "selection1"     # back to the support/load form
         b.kind.setCurrentText("Fixed support")
         b.accept()
         assert panel.stack.count() == 1 and panel.stack.currentWidget() is home
-        assert w.project.bcs[-1] == {"kind": "fixed", "on": "place1", "dofs": "xyz"}
-        assert w.project.selections["place1"].to_dict() == S.face("xmin").to_dict()
+        assert w.project.bcs[-1] == {"kind": "fixed", "on": "selection1", "dofs": "xyz"}
+        assert w.project.selections["selection1"].to_dict() == S.face("xmin").to_dict()
 
-        r = panel.add_region()                                                # Combined places: by name, live
-        r.type.setCurrentText("Combined places")
+        r = panel.add_region()                                                # Combined selections: by name, live
+        r.type.setCurrentText("Combined selections")
         r.inputs["a"].setCurrentText("clamp")
         r.inputs["b"].setCurrentText("corner")
         r.name.setText("both")
         r.accept()
-        assert w.project.selections["both"].to_dict() == S.union(S.place("clamp"), S.place("corner")).to_dict()
+        assert w.project.selections["both"].to_dict() == S.union(S.selection("clamp"), S.selection("corner")).to_dict()
         mesh = w.preview_mesh()
         n = len(w.project.evaluate("both", mesh))
         w.project.selections["corner"] = S.face("xmax")                       # an edit: the combination follows
@@ -700,7 +700,7 @@ def test_pages():
         r = panel.edit_region("both")                                         # opens on the form, as made
         assert r.kind() == "combined" and r.inputs["a"].currentText() == "grip"
         r.name.setText("grip2")
-        w.project.selections["grip"] = S.union(S.place("grip2"))              # a loop: refused
+        w.project.selections["grip"] = S.union(S.selection("grip2"))              # a loop: refused
         assert any("cannot contain itself" in e for e in r.problems())
         r.reject()
         w.project.selections["grip"] = S.face("xmin")
@@ -722,7 +722,7 @@ def test_pages():
 
 
 def test_keep_solid_on_picked_faces():
-    """Keep solid on a place that picks nodes only (rows, picked faces): the elements touching it."""
+    """Keep solid on a selection that picks nodes only (rows, picked faces): the elements touching it."""
     with scratch() as d:
         w = opened("L-bracket", d)
         mesh = w.preview_mesh()
@@ -736,7 +736,7 @@ def test_keep_solid_on_picked_faces():
 
 
 def test_outline_one_row_measure():
-    """A place's shape is drawn with its nodes; clicking a row shows only that one; Measure gives the
+    """A selection's shape is drawn with its nodes; clicking a row shows only that one; Measure gives the
     distance between two clicks; the mouse lookup never runs while a button is held or one is running."""
     import selections as S  # type: ignore
     with scratch() as d:
@@ -1011,7 +1011,14 @@ def test_results_compare_delete():
             res.list.item(i).setCheckState(QtCore.Qt.Checked)
         assert res.compare_button.isEnabled() and res.compare()
         assert {"result_design", "result_design_2"} <= set(w.plotter.actors)
-        assert [res.tabs.tabText(i) for i in range(res.tabs.count())] == ["Convergence", "Summary"]
+        cw = res.compare_window                                               # a window of its own
+        assert cw.isWindow() and [cw.tabs.tabText(i) for i in range(cw.tabs.count())] == \
+            ["Convergence", "Latent space", "Summary"]
+        assert not any(isinstance(cw.tabs.widget(i), QtWidgets.QLabel) for i in range(cw.tabs.count()))
+        assert "iterations" in cw.tabs.widget(2).toPlainText()
+        cw.close()                                                            # closing it ends the comparison
+        assert res.comparing is None and "result_design_2" not in w.plotter.actors
+        assert res.compare()
 
         moved = shutil.copytree(os.path.join(d, "P"), os.path.join(d, "Q"))  # a project zipped and sent
         other = os.path.join(moved, "results", os.path.basename(folders[0]))
@@ -1025,6 +1032,101 @@ def test_results_compare_delete():
             r.delete_run()                                                    # the run the strip just made
         assert not os.path.exists(folders[1]) and res.folders() == [other]
         assert w.view == "setup" and w.part_actor().GetVisibility()
+
+
+def test_load_arrow_outside_the_part():
+    """A load's arrow is drawn outside the part whichever way it points: pushing in, its tip on the face;
+    pulling away, it starts on the face (it used to sit inside the part, hidden)."""
+    import selections as S  # type: ignore
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        w.project.n_dof, w.project.single_layer = 3000, True
+        w.project.add_selection("right end", S.face("xmax"))
+        x_face = float(np.max(np.asarray(w.preview_mesh().node_xyz)[:, 0]))
+        for fx, outside in ((5.0, lambda b: b[0] >= x_face - 1e-6), (-5.0, lambda b: b[0] >= x_face - 1e-6)):
+            w.project.bcs = [bc for bc in w.project.bcs if bc.get("on") != "right end"]
+            w.project.add_force("right end", total=[fx, 0.0, 0.0])
+            w.draw_supports_and_loads()
+            i = len(w.project.bcs) - 1
+            bounds = w.plotter.actors[f"mmto_arrow{i}"].GetBounds()          # xmin, xmax, ...
+            assert outside(bounds), (fx, bounds, x_face)                       # no part of it inside x < face
+            assert bounds[1] > x_face + 1.0, (fx, bounds)                      # and it reaches out beyond it
+
+
+def test_stop_while_training():
+    """Stop while the material network trains: the run ends there, no network is saved and the run's
+    folder is removed; the status says so."""
+    import openpyxl
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        w.show()
+        m = panels.MaterialsPanel(w, w.project)
+        real = panels.NewDatabaseDialog.exec_
+        try:
+            def fill(dialog):
+                dialog.name.setText("fresh")
+                dialog.ticks["Density"].setChecked(False)
+                dialog.count.setValue(3)
+                dialog.open_now.setChecked(False)
+                return 1
+            panels.NewDatabaseDialog.exec_ = fill
+            path = m.new_database()
+        finally:
+            panels.NewDatabaseDialog.exec_ = real
+        wb = openpyxl.load_workbook(path)
+        ws = wb["Main"]
+        heads = [ws.cell(1, c).value for c in range(1, ws.max_column + 1)]
+        for i, (name, E, nu) in enumerate((("Soft", 1e6, 0.30), ("Mid", 2e6, 0.32), ("Stiff", 4e6, 0.35))):
+            ws.cell(3 + i, 1).value = name
+            ws.cell(3 + i, heads.index("Youngs_Modulus") + 1).value = E
+            ws.cell(3 + i, heads.index("Poissons_Ratio") + 1).value = nu
+        ws.cell(2, heads.index("Youngs_Modulus") + 1).value = "Pa"
+        wb.save(path)
+        m._refresh()
+        w.apply_panel(m)
+        w.project.settings["vae"]["numEpochs"] = 200000
+        w.project.settings["vae"]["maxAttributeErrorPercent"] = 1e-9          # it would train for minutes
+        w.project.n_dof, w.project.single_layer = 3000, True
+        assert w.project.validate() == [], w.project.validate()
+        assert w.save_project()
+        r = w.open_run_panel()
+        assert r.start_optimization()
+        assert _wait(lambda: r.status.text().startswith("Training the material network"), 300), r.status.text()
+        r.stop_optimization()
+        assert _wait(lambda: not r.optimization_running, 120)
+        assert r.status.text() == "Stopped while training the material network. Nothing was saved."
+        assert not os.path.exists(os.path.splitext(path)[0] + ".nt")         # no half-trained network
+        assert not os.path.exists(r.save_dir)                                 # no empty run folder
+
+
+def test_export_stl():
+    """Export STL from Results: design.stl and a file per material used, in the run's folder, all closed;
+    the pieces add up to their whole; they are drawn on the part, and can be pulled apart."""
+    import trimesh
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        w.show()
+        w.project.n_dof, w.project.single_layer = 3000, True
+        w.project.settings["common"]["maxIterations"] = 40                 # converged enough: not grey
+        assert w.save_project_as(os.path.join(d, "P", "P.mmto"))
+        r = w.open_run_panel()
+        assert r.start_optimization() and _wait(lambda: not r.optimization_running)
+        res = w.open_results_panel(r.save_dir)
+        assert res.current == r.save_dir and res.stl_button.isEnabled()
+        assert res.export_stl()
+        assert _wait(lambda: not res.exporting, 300), res.status.text()
+        folder, report = res.smooth
+        assert folder == r.save_dir and not report.whole_error, report.whole_error
+        assert os.path.isfile(os.path.join(folder, "design.stl")) and report.whole_closed
+        assert report.pieces and all(p.closed and os.path.isfile(p.path) for p in report.pieces), report.lines()
+        assert abs(report.sum_off) < 1e-6                                     # no gap, no overlap
+        assert abs(report.whole_volume / report.design_volume - 1) < 0.3      # PyTO-AD's own bound
+        for p in report.pieces:
+            t = trimesh.load(p.path, force="mesh")
+            assert t.is_watertight and t.volume > 0, p.label
+        assert any(str(n).startswith("result_smooth") for n in w.plotter.actors)
+        res.apart.setChecked(True)
+        assert w.view == "design" and any(str(n).startswith("result_smooth") for n in w.plotter.actors)
 
 if __name__ == "__main__":
     failed = 0

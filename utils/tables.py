@@ -40,7 +40,7 @@ def summary(run, show=True):
             rows.append((lbl, f"{v:.3g}"))
         else:
             rows.append((lbl, f"{v:g}" if isinstance(v, float) else str(v)))
-    rows.append(("iterations", str(run.meta.get("iterations", "?"))))
+    rows.append(("iterations", str(run.iterations)))     # the starting design is not counted
     rows.append(("elements", f"{run.n_elems}"))
     rows.append(("solid elements",
                  f"{int(run.solid.sum())}  ({100 * run.solid.mean():.1f}%)"))

@@ -415,7 +415,7 @@ class Project:
                          "area": area if area == "bbox" else float(area)})
 
     def evaluate(self, selection, mesh, on="nodes"):
-        """Indices of a selection (or of the selection with that name) on mesh, with every place(name) in
+        """Indices of a selection (or of the selection with that name) on mesh, with every selection(name) in
         it looked up now, so a combination follows later edits of its parts. Elements of a selection that
         picks only nodes (stl_faces, rows, ...) are the elements touching those nodes."""
         seen = ()
@@ -432,7 +432,7 @@ class Project:
         return np.flatnonzero(touching).astype(int)
 
     def rename_selection(self, old, new):
-        """The selection and everything that names it: supports and loads, keep solid, other places."""
+        """The selection and everything that names it: supports and loads, keep solid, other selections."""
         self.selections = {new if k == old else k: S.renamed(v, old, new) for k, v in self.selections.items()}
         for bc in self.bcs:
             if bc.get("on") == old:
@@ -508,11 +508,11 @@ class Project:
         for n in self.keep_solid_names:
             if n not in self.selections:
                 errors.append(f"keep_solid: no selection named {n!r}")
-        for n, sel in self.selections.items():                   # places inside places: known, no loops
+        for n, sel in self.selections.items():                   # selections inside selections: known, no loops
             try:
                 S.resolved(sel, self.selections, (n,))
             except ValueError as e:
-                errors.append(f"place {n}: {e}")
+                errors.append(f"selection {n}: {e}")
         if self.database is None:
             errors.append("no material database")
         else:

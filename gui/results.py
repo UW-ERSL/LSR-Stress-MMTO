@@ -4,8 +4,9 @@ results.py
 The Results strip: the project's runs, newest first. A run clicked is drawn on the part (the
 window's Design view) as Material, Density, Stress or Solid, with tabs for its convergence,
 its latent space and its summary. Open other results... shows any run folder, also another
-project's, for looking only. Two runs ticked and Compare: their summaries side by side, their
-convergence overlaid and the two designs side by side on the 3D view, each on its own mesh.
+project's, for looking only. Two runs ticked and Compare: a Compare window of its own with their
+convergence overlaid, their latent spaces side by side and their summaries in columns, and the two
+designs side by side on the 3D view, each on its own mesh.
 
 Each run folder holds what showing it needs: the run's record and a copy of the project that
 ran. Nothing here changes the project open in the window.
@@ -24,38 +25,160 @@ RESULTS_HELP = ("Each run of the project is listed here, newest first. Click one
                 "Tick two runs and press Compare to see them side by side. Open other results... shows a run "
                 "from anywhere, another project's too; it changes nothing in your project.")
 OTHER = "Other: "
+STL_HELP = ("Export STL writes two kinds of smooth STL into the run's folder.\n\n"
+            "design.stl is the whole part, for printing in one material. Faces the optimization did not touch keep "
+            "their exact shape from your STL.\n\n"
+            "design_<material>.stl is one file per material the design uses. Together they make up the part, with "
+            "no gaps and no overlaps between them.\n\n"
+            "Smoothing removes the staircase of the elements, but it cannot add detail finer than the mesh: "
+            "features one element across are dropped and square corners round off. For a part to print, run on a "
+            "finer mesh. The check written after each export says whether every file is closed and how its "
+            "volume compares with the design.")
 RUN_COLOURS = ("#2b3a67", "#b2452e")                     # the left run, the right run
 
 
 def convergence_overlaid(runs):
     """Two runs' objective, and each constraint as a fraction of its budget, overlaid: one colour per
-    run, one line style per constraint."""
+    run, one line style per constraint, one legend under both plots (it never covers the curves)."""
     import numpy as np
     from matplotlib.figure import Figure
-    fig = Figure(figsize=(5, 5.2), tight_layout=True)
+    from matplotlib.lines import Line2D
+    fig = Figure(figsize=(8.0, 6.4))
     top, bottom = fig.add_subplot(211), fig.add_subplot(212)
     styles = ("-", "--", ":", "-.")
-    for (name, run), colour in zip(runs.items(), RUN_COLOURS):
-        J = np.asarray(run.history.get("J_phys", []), dtype=float).ravel()
-        top.plot(np.arange(J.size), J, color=colour, lw=1.4, label=name)
+    n_cons = 0
+    for k, ((name, run), colour) in enumerate(zip(runs.items(), RUN_COLOURS)):
+        wide = dict(lw=3.2, zorder=2, alpha=0.75) if k else dict(lw=1.4, zorder=3)   # the second underneath and
+        J = np.asarray(run.history.get("J_phys", []), dtype=float).ravel()          # wider: where the two runs
+        top.plot(np.arange(J.size), J, color=colour, **wide)                        # match, both stay visible
         cons = np.asarray(run.history.get("constraints", []), dtype=float)
         if cons.size:
             cons = cons.reshape(cons.shape[0], -1) + 1.0                    # stored as value/budget - 1
+            n_cons = max(n_cons, cons.shape[1])
             for i in range(cons.shape[1]):
                 bottom.plot(np.arange(cons.shape[0]), cons[:, i], styles[i % len(styles)], color=colour,
-                            lw=1.2, label=f"{name}, constraint {i + 1}")
+                            **(dict(lw=2.8, zorder=2, alpha=0.75) if k else dict(lw=1.2, zorder=3)))
     top.set_ylabel("objective")
     bottom.set_ylabel("constraint / budget")
     bottom.axhline(1.0, color="#999999", lw=0.8, ls="--")
     bottom.set_xlabel("iteration")
     for ax in (top, bottom):
         ax.grid(True, color="#dddddd", lw=0.5)
-        ax.legend(fontsize=7)
+    handles = [Line2D([], [], color=c, lw=w, label=n) for n, c, w in zip(runs, RUN_COLOURS, (1.4, 3.2))]
+    handles += [Line2D([], [], color="#666666", ls=styles[i % len(styles)], lw=1.2, label=f"constraint {i + 1}")
+                for i in range(n_cons)]
+    fig.legend(handles=handles, loc="lower center", ncol=min(len(handles), 5), fontsize=8, frameon=False)
+    fig.tight_layout(rect=(0, 0.08, 1, 1))
     return fig
+
+
+def same_network(run1, run2):
+    """True when two runs used the same material network: their real materials sit at the same latent points."""
+    import numpy as np
+    a, b = np.asarray(run1.z_real, float), np.asarray(run2.z_real, float)
+    return a.shape == b.shape and np.allclose(a, b, rtol=0, atol=1e-9)
+
+
+def latent_side_by_side(runs, max_points=20000):
+    """Each run's latent field against its real materials, side by side, drawn as the single-run latent
+    plot (red circles: the design's elements; black stars: the real materials). With the same network,
+    the two share their axes (and their projection, above three latent dimensions), so where the
+    elements sit compares directly."""
+    import numpy as np
+    from matplotlib.figure import Figure
+    names, rs = list(runs), list(runs.values())
+    shared = same_network(*rs)
+    n_z = np.asarray(rs[0].z_real).shape[1]
+    three_d = n_z == 3 and all(np.asarray(r.z_real).shape[1] == 3 for r in rs)
+    fig = Figure(figsize=(10.0, 5.0))
+    pca = None
+    if shared and n_z > 3:
+        from sklearn.decomposition import PCA
+        pca = PCA(n_components=2).fit(np.asarray(rs[0].z_real, float))
+    axes = []
+    for k, (name, run) in enumerate(zip(names, rs)):
+        z = run.z_solid()
+        if z.shape[0] > max_points:
+            z = z[np.random.default_rng(0).choice(z.shape[0], max_points, replace=False)]
+        zr = np.asarray(run.z_real, float)
+        if zr.shape[1] > 3:
+            from sklearn.decomposition import PCA
+            p = pca or PCA(n_components=2).fit(zr)
+            zr, z = p.transform(zr), p.transform(z)
+        labels = list(run.material_labels) + [str(i) for i in range(len(run.material_labels), zr.shape[0])]
+        if three_d:
+            ax = fig.add_subplot(1, 2, k + 1, projection="3d")
+            ax.scatter(z[:, 0], z[:, 1], z[:, 2], c="red", marker="o", s=12, alpha=0.4)
+            ax.scatter(zr[:, 0], zr[:, 1], zr[:, 2], c="black", marker="*", s=160, alpha=0.6)
+            for i in range(zr.shape[0]):
+                ax.text(zr[i, 0] + 0.1, zr[i, 1], zr[i, 2], labels[i], fontsize=9)
+            ax.set_zlabel("$z_3$")
+        else:
+            ax = fig.add_subplot(1, 2, k + 1)
+            ax.scatter(z[:, 0], z[:, 1], c="red", marker="o", s=12, alpha=0.2)
+            ax.scatter(zr[:, 0], zr[:, 1], c="black", marker="*", s=160, alpha=0.5)
+            for i in range(zr.shape[0]):
+                ax.text(zr[i, 0], zr[i, 1] + 0.05, labels[i], fontsize=10, ha="center", va="bottom")
+            ax.grid(True, color="#dddddd", lw=0.5)
+        ax.set_xlabel("$z_1$")
+        ax.set_ylabel("$z_2$")
+        ax.set_title(name, fontsize=10, color=RUN_COLOURS[k])
+        axes.append(ax)
+    if shared and not three_d:
+        lo = np.min([a.get_xlim()[0] for a in axes]), np.min([a.get_ylim()[0] for a in axes])
+        hi = np.max([a.get_xlim()[1] for a in axes]), np.max([a.get_ylim()[1] for a in axes])
+        for a in axes:
+            a.set_xlim(lo[0], hi[0])
+            a.set_ylim(lo[1], hi[1])
+    note = ("Red circles: the design's elements; black stars: the real materials." if shared else
+            "These runs used different material networks, so their latent spaces are different spaces: "
+            "compare where the elements sit relative to the stars in each, not between the two plots.")
+    fig.text(0.5, 0.01, note, ha="center", va="bottom", fontsize=9, color="#555555", wrap=True)
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    return fig
+
+
+class CompareWindow(QtWidgets.QDialog):
+    """Two runs compared, in a window of its own that can be resized or maximised: convergence overlaid,
+    the latent spaces side by side, the summaries in columns. Closing it ends the comparison."""
+
+    def __init__(self, parent, runs, on_close):
+        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+        from utils import compare  # type: ignore
+        super().__init__(parent)
+        self.setWindowFlags(QtCore.Qt.Window)
+        names = list(runs)
+        self.setWindowTitle(f"Compare: {names[0]} and {names[1]}")
+        self.resize(1100, 760)
+        self.on_close = on_close
+        layout = QtWidgets.QVBoxLayout(self)
+        head = QtWidgets.QLabel(f"<span style='color:{RUN_COLOURS[0]}'><b>{names[0]}</b></span> (left on the part) "
+                                f"and <span style='color:{RUN_COLOURS[1]}'><b>{names[1]}</b></span> (right)")
+        layout.addWidget(head)
+        self.tabs = QtWidgets.QTabWidget()
+        layout.addWidget(self.tabs, stretch=1)
+        for title, make in (("Convergence", lambda: convergence_overlaid(runs)),
+                            ("Latent space", lambda: latent_side_by_side(runs))):
+            try:
+                self.tabs.addTab(FigureCanvasQTAgg(make()), title)
+            except Exception as e:                                  # noqa: BLE001
+                self.tabs.addTab(QtWidgets.QLabel(f"Could not draw: {e}"), title)
+        try:
+            text = str(compare.table(runs))
+        except Exception as e:                                      # noqa: BLE001
+            text = f"Could not compare: {e}"
+        self.tabs.addTab(table_view(text), "Summary")
+
+    def closeEvent(self, event):
+        callback, self.on_close = self.on_close, None
+        if callback is not None:
+            callback()
+        super().closeEvent(event)
 
 
 class ResultsWindow(QtWidgets.QDialog):
     """See the module docstring."""
+    exported = QtCore.pyqtSignal(object, object, str)              # folder, report or None, error
 
     def __init__(self, window):
         super().__init__(window)
@@ -108,14 +231,25 @@ class ResultsWindow(QtWidgets.QDialog):
         layout.addWidget(self.tabs, stretch=1)
 
         after = QtWidgets.QHBoxLayout()
+        self.stl_button = QtWidgets.QPushButton("Export STL...")
+        self.stl_button.setToolTip("Write this run's design as smooth STL files into its folder: the whole part, "
+                                   "and one file per material")
+        self.stl_button.clicked.connect(self.export_stl)
         self.folder_button = QtWidgets.QPushButton("Open folder")
         self.folder_button.clicked.connect(lambda: open_folder(self.current))
         self.delete_button = QtWidgets.QPushButton("Delete this run")
         self.delete_button.clicked.connect(self.delete_run)
-        for widget in (self.folder_button, self.delete_button):
+        for widget in (self.stl_button, self.folder_button, self.delete_button):
             after.addWidget(widget)
         after.addStretch()
+        after.addWidget(Info(STL_HELP))
         layout.addLayout(after)
+        self.apart = QtWidgets.QCheckBox("Pull the material pieces apart")
+        self.apart.setVisible(False)
+        self.apart.toggled.connect(lambda _: self._draw_smooth())
+        layout.addWidget(self.apart)
+        self.exported.connect(self._exported, QtCore.Qt.QueuedConnection)
+        self.smooth, self.exporting = None, False                  # (folder, pieces) last exported
         self.refresh()
 
     # ------------------------------------------------------------------ the list
@@ -166,6 +300,7 @@ class ResultsWindow(QtWidgets.QDialog):
     def _update_buttons(self):
         mine = self.current is not None and self.current not in self.others
         self.delete_button.setEnabled(mine)                         # others are for looking only
+        self.stl_button.setEnabled(mine and not self.exporting)     # it writes into the run's folder
         self.folder_button.setEnabled(self.current is not None)
         self.compare_button.setEnabled(len(self.ticked()) == 2)
 
@@ -216,7 +351,11 @@ class ResultsWindow(QtWidgets.QDialog):
         if item is None:
             return
         folder = item.data(QtCore.Qt.UserRole)
-        self.current, self.comparing = folder, None
+        self.apart.setVisible(False)
+        self.apart.setChecked(False)
+        self.comparing = None                                      # a run clicked: the comparison ends
+        self.end_compare()
+        self.current = folder
         self._update_buttons()
         self.status.setText("")
         loaded = self._loaded(folder)
@@ -240,6 +379,64 @@ class ResultsWindow(QtWidgets.QDialog):
         field = self.field.currentText()
         self.window.set_design(lambda w: design.record(w, run, mesh, field))
 
+    # ------------------------------------------------------------------ STL
+    def export_stl(self):
+        """The run shown, as smooth STL files in its folder (utils/stl_export.py), in the background."""
+        import threading
+        if self.current is None or self.current in self.others or self.exporting:
+            return False
+        loaded = self._loaded(self.current)
+        if loaded is None:
+            return False
+        run, mesh = loaded
+        folder = self.current
+        self.exporting = True
+        self._update_buttons()
+        self.status.setText("Exporting STL: smoothing the design and building the surfaces...")
+
+        def work():
+            from utils import stl_export  # type: ignore
+            try:
+                self.exported.emit(folder, stl_export.export(run, mesh, folder), "")
+            except Exception as e:                                  # noqa: BLE001
+                self.exported.emit(folder, None, str(e))
+        self.export_thread = threading.Thread(target=work, daemon=True)
+        self.export_thread.start()
+        return True
+
+    @QtCore.pyqtSlot(object, object, str)
+    def _exported(self, folder, report, error):
+        self.exporting = False
+        self._update_buttons()
+        if report is None:
+            self.status.setText(f"<span style='color:#b00000'>The STL export failed: {error}</span>")
+            return
+        unit = ((self.records[folder].config or {}).get("units") or {}).get("length", "")
+        lines = report.lines(unit)
+        for line in [f"STL exported to {folder}:"] + lines:
+            self.window.message_text.append(line)
+        good = not report.whole_error and report.whole_closed and all(p.closed for p in report.pieces)
+        self.status.setText(("STL written: design.stl and " f"{len(report.pieces)} material files. " if good else
+                             "<span style='color:#b00000'>STL written, with problems:</span> ")
+                            + "The check is in the message panel.")
+        self.smooth = (folder, report)
+        if folder == self.current:
+            self.apart.setVisible(bool(report.pieces))
+            self._draw_smooth()
+
+    def _draw_smooth(self):
+        """The exported pieces on the part, each in its material's colour (pulled apart when ticked)."""
+        if self.smooth is None or self.smooth[0] != self.current:
+            return
+        folder, report = self.smooth
+        run = self.records[folder]
+        colours = {lab: run.material_colors[i] for i, lab in enumerate(run.material_labels)}
+        pieces = [(p.path, colours.get(p.label, design.SOLID_COLOUR)) for p in report.pieces]
+        if not pieces and report.whole_path:
+            pieces = [(report.whole_path, design.SOLID_COLOUR)]
+        apart = self.apart.isChecked()
+        self.window.set_design(lambda w: design.smooth(w, pieces, apart), wide=apart)
+
     def delete_run(self):
         if self.current is None or self.current in self.others:
             return
@@ -255,9 +452,7 @@ class ResultsWindow(QtWidgets.QDialog):
 
     # ------------------------------------------------------------------ two runs
     def compare(self):
-        """The two runs ticked: summaries side by side, convergence overlaid, designs side by side."""
-        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
-        from utils import compare  # type: ignore
+        """The two runs ticked, in a Compare window of their own; their designs side by side on the part."""
         folders = self.ticked()
         if len(folders) != 2:
             return False
@@ -266,26 +461,38 @@ class ResultsWindow(QtWidgets.QDialog):
             return False
         names = [self._name(f) for f in folders]
         runs = {n: run for n, (run, _) in zip(names, loaded)}
+        self.end_compare()
         self.comparing = list(zip(names, loaded))
-        self.current = None
-        self.list.blockSignals(True)
-        self.list.setCurrentRow(-1)
-        self.list.blockSignals(False)
-        self._update_buttons()
-        self.tabs.clear()
-        try:
-            self.tabs.addTab(FigureCanvasQTAgg(convergence_overlaid(runs)), "Convergence")
-        except Exception as e:                                      # noqa: BLE001
-            self.tabs.addTab(QtWidgets.QLabel(f"Could not draw: {e}"), "Convergence")
-        try:
-            text = str(compare.table(runs))
-        except Exception as e:                                      # noqa: BLE001
-            text = f"Could not compare: {e}"
-        self.tabs.addTab(table_view(text), "Summary")
-        self.status.setText(f"Comparing {names[0]} (left) and {names[1]} (right). Click a run to leave the "
-                            f"comparison.")
+        self.compare_window = CompareWindow(self.window, runs, self._compare_closed)
+        self.compare_window.show()
+        self.status.setText(f"Comparing {names[0]} (left) and {names[1]} (right). Close the Compare window or "
+                            f"click a run to leave the comparison.")
         self._draw_compare()
         return True
+
+    def end_compare(self):
+        """The Compare window closed (it calls _compare_closed)."""
+        w = getattr(self, "compare_window", None)
+        if w is not None:
+            try:
+                w.close()
+            except RuntimeError:
+                pass
+        self.compare_window = None
+
+    def _compare_closed(self):
+        if not self.comparing:
+            return
+        self.comparing, self.compare_window = None, None
+        self.status.setText("")
+        if self.current is not None:
+            self.redraw()
+        else:
+            self.window.show_setup_view()
+
+    def closeEvent(self, event):
+        self.end_compare()
+        super().closeEvent(event)
 
     def _name(self, folder):
         from project_folder import run_facts  # type: ignore

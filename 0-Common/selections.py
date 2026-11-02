@@ -42,8 +42,9 @@ Types (to_dict / from_dict give the JSON form a project file stores):
     inside_stl(path)                             inside a closed STL surface
     function("file.py:name")                     name(mesh, on) returns the indices
     union(a, b, ...), intersect(a, b, ...), difference(a, b)
-    place("name")                                another selection of the project, by name: a live
-                                                 link, looked up when the project evaluates it
+    selection("name")                            another selection of the project, by name: a live
+                                                 link, looked up when the project evaluates it (files
+                                                 written before call it place, which still reads)
 
 A function selection runs the Python file it names when it is evaluated: open project
 files with function selections only from people you trust.
@@ -477,21 +478,26 @@ class Difference(Union):
         return np.setdiff1d(a.evaluate(mesh, on, base_dir), b.evaluate(mesh, on, base_dir)).astype(int)
 
 
-class place(Selection):
+class selection(Selection):
     """Another selection of the project, by name. Only a project can evaluate it: Project.evaluate puts
     the named selection in (resolved) each time, so a combination follows later edits of its parts."""
-    TYPE, fields = "place", ("name",)
+    TYPE, fields = "selection", ("name",)
 
     def __init__(self, name):
         self.name = name
 
     def evaluate(self, mesh, on="nodes", base_dir=None):
-        raise ValueError(f"place({self.name!r}) is looked up by the project: evaluate it with Project.evaluate")
+        raise ValueError(f"selection({self.name!r}) is looked up by the project: evaluate it with Project.evaluate")
+
+
+place = selection                       # its name before; files written then say "place" (read as selection)
+_TYPES["place"] = selection
+LINKS = ("selection", "place")          # the JSON types that name another selection
 
 
 def _walk(d, f):
-    """The JSON form d with f applied to every place in it."""
-    if d.get("type") == "place":
+    """The JSON form d with f applied to every link to another selection in it."""
+    if d.get("type") in LINKS:
         return f(d)
     if "of" in d:
         return dict(d, of=[_walk(s, f) for s in d["of"]])
@@ -499,28 +505,29 @@ def _walk(d, f):
 
 
 def names_in(selection):
-    """The names of the places a selection refers to."""
+    """The names of the other selections a selection refers to."""
     out = []
     _walk(selection.to_dict(), lambda d: out.append(d["name"]) or d)
     return out
 
 
 def resolved(selection, lookup, seen=()):
-    """The selection with every place(name) replaced by lookup[name], itself resolved; ValueError for a
-    name lookup does not have, or a place that refers back to itself."""
+    """The selection with every selection(name) replaced by lookup[name], itself resolved; ValueError for a
+    name lookup does not have, or a selection that refers back to itself."""
     def put_in(d):
         name = d["name"]
         if name in seen:
-            raise ValueError(f"{' -> '.join(seen + (name,))}: a place cannot contain itself")
+            raise ValueError(f"{' -> '.join(seen + (name,))}: a selection cannot contain itself")
         if name not in lookup:
-            raise ValueError(f"there is no place named {name!r}")
+            raise ValueError(f"there is no selection named {name!r}")
         return resolved(lookup[name], lookup, seen + (name,)).to_dict()
     return from_dict(_walk(selection.to_dict(), put_in))
 
 
 def renamed(selection, old, new):
-    """The selection with place(old) changed to place(new)."""
-    return from_dict(_walk(selection.to_dict(), lambda d: dict(d, name=new) if d["name"] == old else d))
+    """The selection with selection(old) changed to selection(new); written as selection, whatever it said."""
+    return from_dict(_walk(selection.to_dict(),
+                           lambda d: dict(d, type="selection", name=new) if d["name"] == old else d))
 
 
 def union(*parts):

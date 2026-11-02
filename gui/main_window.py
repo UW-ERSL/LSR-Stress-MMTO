@@ -37,7 +37,7 @@ from .pyto_ad import (FILE_DIALOG_OPTIONS, UNIT_SYSTEMS, GeometryWindow, MainWin
 APP = "LSR MMTO"
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXAMPLES = os.path.join(REPO, "projects")   # the example projects: opened as templates, never changed
-OUTLINE_COLOUR = "#c400c4"                  # place shapes: magenta, unlike the part, supports, loads, places
+OUTLINE_COLOUR = "#c400c4"                  # selection shapes: magenta, unlike the part, supports, loads
 SNAPS = [("Snap: off", 0.0), ("Snap: 0.1", 0.1), ("Snap: 1", 1.0), ("Snap: 5", 5.0), ("Snap: 10", 10.0)]
 PROJECT_FILTER = "LSR MMTO project (*.mmto)"
 SIDEBAR = ("Units", "Geometry", "Materials", "Supports and loads", "Formulation", "Settings", "Run",
@@ -94,8 +94,8 @@ def in_open_strip(widget):
 
 
 def place_outline(selection, mesh):
-    """A solid showing a place's shape (drawn as its edges), or None for one with no shape of its own (picked
-    faces, rows, a node, a list of numbers). selection has every place(name) in it resolved."""
+    """A solid showing a selection's shape (drawn as its edges), or None for one with no shape of its own (picked
+    faces, rows, a node, a list of numbers). selection has every selection(name) in it resolved."""
     import pyvista as pv
     import selections as S  # type: ignore
     xyz = np.asarray(mesh.node_xyz, dtype=float)
@@ -1127,14 +1127,31 @@ class MMTOWindow(MainWindow):
                 self._view_buttons.remove(button)
 
     def _arrow(self, i, direction, points, size):
+        """A load's arrow, its tip on the load's nodes, coming from outside the part. A load that pulls
+        away from the part would put that arrow inside the part, hidden: it starts on the nodes instead."""
         import pyvista as pv
         d = np.asarray(direction, dtype=float) / np.linalg.norm(direction)
-        start = np.asarray(points).mean(axis=0) - 0.15 * size * d
-        self.plotter.add_mesh(pv.Arrow(start, d, scale=0.15 * size), color=LOAD_COLOUR, pickable=False,
+        at, length = np.asarray(points).mean(axis=0), 0.15 * size
+        start = at - length * d
+        if self._inside_part(at - 0.5 * length * d):                # where the arrow would be: inside the part
+            start = at
+        self.plotter.add_mesh(pv.Arrow(start, d, scale=length), color=LOAD_COLOUR, pickable=False,
                               name=f"mmto_arrow{i}")
 
+    def _inside_part(self, point):
+        """True when point is inside an element of the preview mesh (within half an element's diagonal of
+        an element centre)."""
+        mesh = self._mesh
+        if mesh is None:
+            return False
+        if getattr(self, "_centre_tree", (None,))[0] is not mesh:
+            from scipy.spatial import cKDTree
+            self._centre_tree = (mesh, cKDTree(np.asarray(mesh.elem_centers, dtype=float)))
+        distance, _ = self._centre_tree[1].query(np.asarray(point, dtype=float))
+        return distance <= 0.5 * float(np.linalg.norm(np.asarray(mesh.elem_size, dtype=float)))
+
     def draw_outline(self, name, selection, colour):
-        """The place's shape as edges, always in OUTLINE_COLOUR, apart from every colour the nodes use
+        """The selection's shape as edges, always in OUTLINE_COLOUR, apart from every colour the nodes use
         (place_outline); nothing for a place without one. colour is the nodes', kept for the call."""
         import selections as S  # type: ignore
         self.plotter.remove_actor(name, reset_camera=False)
@@ -1145,7 +1162,7 @@ class MMTOWindow(MainWindow):
                                                             # can hide the text over the 3D view
 
     def draw_one(self, name, colour, bc_index=None):
-        """Only one place on the part (a row clicked in Supports and loads): its nodes, its shape, and the
+        """Only one selection on the part (a row clicked in Supports and loads): its nodes, its shape, and the
         arrow of the load at bc_index. Returns its node count."""
         p, mesh = self.project, self.preview_mesh()
         self.clear_preview()

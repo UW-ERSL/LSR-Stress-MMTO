@@ -74,8 +74,7 @@ def _runtime(run):
 
 
 def _iterations(run):
-    j = np.asarray(run.history.get("J_phys", []), dtype=float).ravel()
-    return int(j.size) if j.size else int(run.meta.get("iterations") or 0)
+    return run.iterations                    # the starting design is not an iteration (records.Run.iterations)
 
 
 def table(runs):

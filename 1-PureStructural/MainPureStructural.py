@@ -255,6 +255,7 @@ def run_topopt(
             saveNet,
             vae_params.learningRate,
             vae_params.maxAttributeErrorPercent,
+            should_stop=should_stop,            # a stop while training: TrainingStopped, no network saved
         )
         time_end = time.time()
         print(f"Autoencoder training time: {time_end - time_start:.2f} seconds")

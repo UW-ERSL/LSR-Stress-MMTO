@@ -246,6 +246,40 @@ def test_old_runs_rebuild():
     assert int(render.mesh_for(OldGui()).num_elems) == OldGui.n_elems
 
 
+
+def test_training_stop():
+    """The material network's training: unchanged when nothing asks it to stop (the same seed gives the
+    same network, to the last bit, with or without a should_stop that says no); asked to stop, it raises
+    TrainingStopped and saves no network."""
+    import shutil
+    import torch
+    from databases import DATABASE_DIR, DATABASE_VAE, VAEParams  # type: ignore
+    from materialEncoder import MaterialEncoder, TrainingStopped  # type: ignore
+    with tempfile.TemporaryDirectory() as d:
+        xlsx = shutil.copy(os.path.join(ROOT, DATABASE_DIR, "BM1_3Mats_2Attr.xlsx"), d)
+
+        def trained(should_stop, name):
+            vae = VAEParams()
+            for k, v in DATABASE_VAE["BM1_3Mats_2Attr"].items():
+                setattr(vae, k, v)
+            torch.manual_seed(0)
+            np.random.seed(0)
+            enc = MaterialEncoder(vae)
+            enc.readExcel(xlsx)
+            path = os.path.join(d, name)
+            enc.trainAutoencoder(400, vae.klFactor, path, vae.learningRate, 1e-9, should_stop=should_stop)
+            return torch.load(path)
+
+        plain, asked = trained(None, "plain.nt"), trained(lambda: False, "asked.nt")
+        assert plain.keys() == asked.keys()
+        assert all(torch.equal(plain[k], asked[k]) for k in plain)              # bit for bit
+        try:
+            trained(lambda: True, "stopped.nt")
+            raise AssertionError("the training did not stop")
+        except TrainingStopped as e:
+            assert e.epoch == 0
+        assert not os.path.exists(os.path.join(d, "stopped.nt"))                # nothing saved
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in [(k, v) for k, v in list(globals().items()) if k.startswith("test_")]:

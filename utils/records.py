@@ -72,6 +72,15 @@ class Run:
         return float(a.reshape(a.shape[0], -1)[-1, col]) if a.ndim > 1 else float(a[-1])
 
     @property
+    def iterations(self) -> int:
+        """Optimizer iterations. The record holds the starting design as well, so a run of 300
+        iterations has 301 designs in its history (main and autodiff alike)."""
+        n = self.meta.get("iterations")
+        if n is None:
+            n = np.asarray(self.history.get("J_phys", [])).size
+        return max(int(n) - 1, 0)
+
+    @property
     def phi_p(self) -> float:
         """p-norm failure factor, penalty-free."""
         return self.last("J_phys")

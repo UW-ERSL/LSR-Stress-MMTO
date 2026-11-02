@@ -113,6 +113,19 @@ def record(window, run, mesh, field="Material", shift=0.0, clim=None, name="desi
     return draw(window, mesh, run.solid, shift=shift, name=name)
 
 
+def smooth(window, pieces, apart=False):
+    """STL files on the part, each in its colour: [(path, colour)]. apart moves each piece away from the
+    middle by a quarter of its distance from it, so each can be seen alone."""
+    import pyvista as pv
+    meshes = [(pv.read(path), colour) for path, colour in pieces]
+    middle = np.mean([m.center for m, _ in meshes], axis=0) if meshes else np.zeros(3)
+    for k, (m, colour) in enumerate(meshes):
+        if apart:
+            m = m.translate(0.25 * (np.asarray(m.center) - middle), inplace=False)
+        window.plotter.add_mesh(m, color=colour, smooth_shading=True, pickable=False, name=f"{PREFIX}smooth_{k}",
+                                reset_camera=False)
+
+
 class MeshError(RuntimeError):
     pass
 

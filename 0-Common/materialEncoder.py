@@ -11,6 +11,17 @@ import sys
 import warnings
 from databases import attribute_name, normalize, participation_ratio
 
+STOP_CHECK_EVERY = 100            # epochs between two asks of trainAutoencoder's should_stop
+
+
+class TrainingStopped(Exception):
+    """The training was asked to stop (trainAutoencoder's should_stop); nothing was saved."""
+
+    def __init__(self, epoch):
+        super().__init__(f"the material network's training was stopped at epoch {epoch}; nothing was saved")
+        self.epoch = epoch
+
+
 class MaterialEncoder:
     def __init__(self, vae_params):
         self.nAttributes = 0
@@ -137,7 +148,10 @@ class MaterialEncoder:
         sharpAwareMinimization=False,
         sam_rho=0.05,
         Sam_diagnostics=False,
+        should_stop=None,
     ):
+        # should_stop: optional function, asked every STOP_CHECK_EVERY epochs; True ends the training by
+        # raising TrainingStopped, before the network is saved (savedNet is left as it was).
         opt = torch.optim.AdamW(self.vaeNet.parameters(), learningRate)
         convgHistory = {'reconLoss': [], 'klLoss': [], 'loss': []}
         self.vaeNet.encoder.isTraining = True
@@ -148,6 +162,8 @@ class MaterialEncoder:
             print(f"[SAM DIAG] Initial rho/||theta||_2 = {sam_rho / max(theta_norm0, 1e-12):.6e}")
 
         for epoch in range(numEpochs):
+            if should_stop is not None and epoch % STOP_CHECK_EVERY == 0 and should_stop():
+                raise TrainingStopped(epoch)
             if not sharpAwareMinimization:
                 opt.zero_grad()
                 reconLoss, klLoss, loss = self._compute_vae_loss(klFactor)
