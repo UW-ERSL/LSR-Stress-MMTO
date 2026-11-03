@@ -525,9 +525,9 @@ class MaterialEncoder:
 
 def _density_column(properties):
     """The column the lightest and heaviest starts compare: the first one that measures density."""
-    from lsr_mmto.materials.databases import ATTRIBUTES
-    for name in properties:
-        if name in ATTRIBUTES and ATTRIBUTES[name].measures == "density":
-            return name
+    from lsr_mmto.materials.databases import density_column
+    name = density_column(properties)
+    if name is not None:
+        return name
     raise ValueError("starting from the lightest or the heaviest material needs a database column that "
                      "measures density")

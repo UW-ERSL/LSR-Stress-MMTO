@@ -111,10 +111,13 @@ class Attribute:
     (whose own scales_with say that), with {times} for how many times too large its numbers are:
     shown in the project's unit warning. log_scaled: the network learns log10 of its values (for a
     column spanning several orders of magnitude). legend_symbol, legend_rank: a symbol for the
-    materials' legend of a design plot ("E"), which shows the attribute of lowest rank the run has."""
+    materials' legend of a design plot ("E"), which shows the attribute of lowest rank the run has.
+    iteration_label, iteration_rank: a short label for the line each iteration prints about the solid
+    elements' materials ("Y"), in the order of rank; an attribute without a label is not printed."""
 
     def __init__(self, name, measures, doc, shown, low=None, high=None, closed=(), aliases=(),
-                 wrong_unit_effect="", log_scaled=False, legend_symbol=None, legend_rank=None):
+                 wrong_unit_effect="", log_scaled=False, legend_symbol=None, legend_rank=None,
+                 iteration_label=None, iteration_rank=None):
         if measures not in UNITS:
             raise ValueError(f"attribute {name}: measures must be one of {', '.join(UNITS)}")
         self.name, self.measures, self.doc, self.shown = name, measures, doc, shown
@@ -122,6 +125,7 @@ class Attribute:
         self.units, self.aliases = tuple(UNITS[measures]), tuple(aliases)
         self.wrong_unit_effect, self.log_scaled = wrong_unit_effect, bool(log_scaled)
         self.legend_symbol, self.legend_rank = legend_symbol, legend_rank
+        self.iteration_label, self.iteration_rank = iteration_label, iteration_rank
 
     def in_range(self, v):
         if self.low is not None and (v < self.low or (v == self.low and "low" not in self.closed)):
@@ -139,7 +143,8 @@ class Attribute:
 # Every attribute a database may hold. To add one, add an entry; the check and the Excel
 # template follow. A column not listed here is an error.
 ATTRIBUTES = {a.name: a for a in [
-    Attribute("Density", "density", "mass per unit volume", "Density", low=0),
+    Attribute("Density", "density", "mass per unit volume", "Density", low=0, iteration_label="rho",
+              iteration_rank=2),
     Attribute("Youngs_Modulus", "stress", "Young's modulus, the stiffness", "Young's modulus", low=0,
               aliases=("Youngs Modulus", "Young_Modulus", "E"),
               wrong_unit_effect="Displacement and compliance come out {times} times too small; stress and "
@@ -149,12 +154,25 @@ ATTRIBUTES = {a.name: a for a in [
               aliases=("Poisson_Ratio", "Poissons Ratio", "nu")),
     Attribute("Yield_Strength", "stress", "yield strength, the stress at which the material yields",
               "Yield strength", low=0, aliases=("Yield Strength", "Yield"),
-              legend_symbol=r"\sigma_Y", legend_rank=1),
+              legend_symbol=r"\sigma_Y", legend_rank=1, iteration_label="Y", iteration_rank=1),
     Attribute("Cost", "cost per mass", "price per unit mass", "Cost", low=0, closed=("low",)),
 ]}
 # each attribute's name as a user reads it, from its entry
 SHOWN = {a.name: a.shown for a in ATTRIBUTES.values()}
 _BY_ALIAS = {k.lower(): a.name for a in ATTRIBUTES.values() for k in (a.name,) + a.aliases}
+
+
+def density_column(names):
+    """The first of names (database columns) whose attribute measures density, the one a mass is made
+    from; None when there is none."""
+    return next((n for n in names if n in ATTRIBUTES and ATTRIBUTES[n].measures == "density"), None)
+
+
+def iteration_columns(names):
+    """(column, its label) of the columns among names that the per-iteration materials line prints, in the
+    order of their iteration_rank."""
+    marked = [ATTRIBUTES[n] for n in names if n in ATTRIBUTES and ATTRIBUTES[n].iteration_label]
+    return [(a.name, a.iteration_label) for a in sorted(marked, key=lambda a: a.iteration_rank)]
 
 
 def attribute_name(name):

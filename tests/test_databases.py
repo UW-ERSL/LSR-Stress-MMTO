@@ -389,3 +389,14 @@ def test_unit_kinds_of_a_physics():
     with pytest.raises(ValueError, match="not one of its units"):
         D._add_unit_kinds(odd)
     assert "heat" not in D.UNITS                                    # nothing of a refused kind is kept
+
+
+def test_columns_found_by_what_they_measure():
+    """The mass of a design is made from the column that measures density, and the per-iteration
+    materials line prints the columns whose attribute has a label there, in their order, whatever
+    the columns are named."""
+    from lsr_mmto.materials.databases import density_column, iteration_columns
+    assert density_column(["Youngs_Modulus", "Density"]) == "Density"
+    assert density_column(["Youngs_Modulus"]) is None
+    assert iteration_columns(["Density", "Youngs_Modulus", "Yield_Strength"]) == [("Yield_Strength", "Y"),
+                                                                                   ("Density", "rho")]
