@@ -626,7 +626,8 @@ class MMTOWindow(MainWindow):
 
     def on_left_button_press(self, picked_point, picker=None):
         """A click on the part, by what is in front: Measure on, a point to measure; the Pick strip open,
-        picking; a form open under Supports and loads, the (snapped) point copied to paste; else picking."""
+        picking; a form open under Supports and loads, the (snapped) point copied to paste. Otherwise a
+        click selects nothing: it is the start of turning the view."""
         panel = getattr(self, "supports_panel", None)
         if not self.measure.isChecked():
             form_open = in_open_strip(panel) and panel.stack.currentIndex() > 0
@@ -636,7 +637,9 @@ class MMTOWindow(MainWindow):
                     QtWidgets.QApplication.clipboard().setText(text)
                     panel.show_copied(text)
                 return None
-            return super().on_left_button_press(picked_point, picker)
+            if in_open_strip(getattr(self, "structural_loads_window", None)):
+                self.pick_faces(picked_point, picker)
+            return None
         if picker is None or picker.GetCellId() < 0:
             return
         if len(self._measure_points) == 2:                          # a third click starts again
@@ -650,6 +653,45 @@ class MMTOWindow(MainWindow):
             d, unit, f = b - a, self.length_unit(), "%.4g"
             self.measured.setText(f"Distance {f % np.linalg.norm(d)} {unit}  (dx {f % d[0]}, dy {f % d[1]}, "
                                   f"dz {f % d[2]})")
+
+    def picked_count(self):
+        """How many triangles are selected in the Pick strip."""
+        geom = getattr(self, "stl_geom", None)
+        return int(np.count_nonzero(geom.tri_highlight)) if geom else 0
+
+    def show_picked_count(self):
+        n = self.picked_count()
+        self.measured.setText(f"{n} triangle{'s' if n != 1 else ''} selected" if n else "")
+
+    def pick_faces(self, picked_point, picker):
+        """A click with the Pick strip open: the face under the mouse is selected (or, in node mode, the
+        nearest node), with the count in the status bar rather than a line in the messages per click."""
+        if getattr(self, "highlight_mode", "coarse") == "node":
+            return super().on_left_button_press(picked_point, picker)
+        if picker is None or not self.stl_geom or picker.GetCellId() < 0:
+            return None
+        actor = picker.GetActor() if hasattr(picker, "GetActor") else None
+        if actor is not None and actor is not self.part_actor():
+            return None                                             # a drawing over the part, not the part
+        cell = picker.GetCellId()
+        if cell in self.constrained_triangles:
+            return None
+        if self.select_triangles(cell)[0] > 0:
+            self.update_highlights()
+        self.show_picked_count()
+        return None
+
+    def on_right_button_press(self, obj, event):
+        """A right click with the Pick strip open clears what is selected in it; otherwise it does nothing."""
+        if not in_open_strip(getattr(self, "structural_loads_window", None)) or not self.stl_geom:
+            return
+        if getattr(self, "selected_points", None) or getattr(self, "selected_regions", None):
+            self.selected_points, self.selected_regions = [], []
+            self.update_point_markers()
+        if self.picked_count():
+            self.stl_geom.tri_highlight = [False] * len(self.stl_geom.tri_highlight)
+            self.update_highlights()
+        self.show_picked_count()
 
     def _draw_measure(self):
         import pyvista as pv
@@ -1210,6 +1252,8 @@ class MMTOWindow(MainWindow):
         if self.stl_geom:
             self.stl_geom.tri_highlight = [False] * len(self.stl_geom.tri_highlight)
             self.update_highlights()
+        if self.measured.text().endswith("selected"):
+            self.measured.setText("")
 
     def _remove_preview(self):
         for name in [n for n in list(self.plotter.actors) if str(n).startswith("mmto_")]:

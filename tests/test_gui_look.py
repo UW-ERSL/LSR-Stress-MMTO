@@ -116,6 +116,34 @@ def test_current_run_panel_keeps_its_width():
     w.close()
 
 
+def test_faces_picked_only_in_the_pick_strip():
+    """A left click on the part selects faces only while the Pick strip is open, and writes no message
+    line; the count is in the status bar. A right click clears them, again only with Pick open."""
+    w = window()
+    part = w.part_actor()
+
+    class Picker:
+        def GetCellId(self):
+            return 3
+
+        def GetActor(self):
+            return part
+    lines = w.message_text.toPlainText()
+    w.on_left_button_press([0.0, 0.0, 1.0], Picker())              # turning the view: nothing selected
+    w.on_right_button_press(None, None)
+    assert w.picked_count() == 0 and w.message_text.toPlainText() == lines
+    w.open_structural_loads_window()
+    settle(0.2)
+    w.on_left_button_press([0.0, 0.0, 1.0], Picker())
+    n = w.picked_count()
+    assert n > 0 and w.measured.text() == f"{n} triangle{'s' if n != 1 else ''} selected"
+    assert w.message_text.toPlainText() == lines
+    w.on_right_button_press(None, None)
+    assert w.picked_count() == 0 and w.measured.text() == ""
+    assert w.message_text.toPlainText() == lines
+    w.close()
+
+
 if __name__ == "__main__":
     for name, f in list(globals().items()):
         if name.startswith("test_"):
