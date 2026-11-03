@@ -26,6 +26,8 @@ MODULE_ENTRIES = {
                "leaving on the model what its quantities read",
     "SUPPORT_AND_LOAD_KINDS": "its kinds of support and load, {name: the arguments of a BCKind}, each naming "
                               "the field it acts on",
+    "NEEDS": "what every project of it must have, as roles of its kinds: ('support', 'load') when a problem "
+             "without a load has no meaning, ('support',) when held values alone make a problem",
     "supports_and_loads_error": "supports_and_loads_error(mesh, bcs): why the supports and loads leave the "
                                 "problem without a solution (the part free to move), or None",
     "QUANTITIES": "its objectives and constraints, each as the arguments of a Quantity",

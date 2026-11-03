@@ -294,10 +294,10 @@ class Project:
             if self.physics in PHYSICS and BC_KINDS[bc["kind"]].field not in PHYSICS[self.physics].FIELDS:
                 errors.append(f"{where}: not a kind of {self.physics} support or load")
         roles = {BC_KINDS[bc["kind"]].role for bc in self.bcs if bc.get("kind") in BC_KINDS}
-        if "support" not in roles:
-            errors.append("no supports")
-        if "load" not in roles:
-            errors.append("no loads")
+        needs = PHYSICS[self.physics].NEEDS if self.physics in PHYSICS else ("support", "load")
+        for role in needs:                                        # the physics says what a problem must have
+            if role not in roles:
+                errors.append(f"no {role}s")
         for n in self.keep_solid_names:
             if n not in self.selections:
                 errors.append(f"keep_solid: no selection named {n!r}")

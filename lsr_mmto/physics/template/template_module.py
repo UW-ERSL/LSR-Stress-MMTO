@@ -50,6 +50,11 @@ FIELDS = {"c": 1}                                                  # FILL
 # refused before the run.
 PROPERTIES = [COEFFICIENT]                                         # FILL
 
+# NEEDS: what every project of this physics must have, as roles of its kinds of support and load;
+# Project.validate refuses a project without them ("no supports", "no loads"). Diffusion held at
+# two values needs no load, so only a support is needed. Structural is ("support", "load").
+NEEDS = ("support",)                                               # FILL
+
 # SETTINGS: settings of this physics only, each the arguments of a Setting (problem/settings.py): its
 # section ("common" shows in Main, "advanced" in Advanced), key (read as m.settings.<key>), default,
 # label and help in the Settings panel, and the group it sits in. May be empty.

@@ -20,6 +20,7 @@ NAME = "structural"
 DOC = "linear elasticity, small strain"
 FIELDS = {"u": 3}                                   # the displacement, three unknowns per node
 PROPERTIES = ["Youngs_Modulus"]                     # Poisson's ratio may be one value for all (SETTINGS)
+NEEDS = ("support", "load")                         # a structural problem with no load has nothing to solve
 
 # the structural settings, as the arguments of a Setting (problem/settings.py)
 SETTINGS = [

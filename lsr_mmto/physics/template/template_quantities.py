@@ -33,8 +33,10 @@ from lsr_mmto.physics.template.template_physics import COEFFICIENT
 # ----------------------------------------------------------------------------- objectives and constraints
 def _diffusion_compliance(m, opt):
     """f . c: large when the sources sit far (in diffusion terms) from where c is held. The diffusion
-    counterpart of structural compliance F . u. m: the iteration's model (see analyse in
-    template_physics.py); opt: the options written in the formula, {} here."""
+    counterpart of structural compliance F . u. It is zero for a problem with no source (held values
+    only), and the loop divides every objective by its first value, so such a problem needs another
+    objective. m: the iteration's model (see analyse in template_physics.py); opt: the options written
+    in the formula, {} here."""
     return torch.dot(m.fe.total_force, m.c)                  # FILL: your quantity, torch only
 
 

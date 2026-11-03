@@ -75,10 +75,9 @@ def test_template_solver_gives_a_straight_line_along_a_bar():
         p.add_selection("left", S.face("xmin"))
         p.add_selection("right", S.face("xmax"))
         p.bcs += [{"kind": "set_value", "on": "left", "value": 0.0},
-                  {"kind": "set_value", "on": "right", "value": 1.0},
-                  {"kind": "source", "on": "right", "total": 1.0}]   # a project needs a load; on held nodes
-                                                                      # it changes nothing
+                  {"kind": "set_value", "on": "right", "value": 1.0}]    # held values only: no load needed
         p.complete_settings()
+        assert p.validate() == []
         mesh, mat_prop, bcs, _, _, _ = p.build(verbose=False)
         fe = TEMPLATE.make_solver(mesh, mat_prop, bcs, linear_solvers.Solvers.PARDISO, None, None)
         fe.set_coefficient(torch.full((mesh.num_elems,), 3.0, dtype=torch.float64))
@@ -122,6 +121,31 @@ def test_template_physics_runs_with_no_core_file_changed():
     from lsr_mmto.formulation import quantities
     assert "DiffusionCompliance" not in {q.name for q in quantities.QUANTITIES}
     assert "template" not in available_physics.PHYSICS
+
+
+def test_a_template_run_with_held_values_only():
+    """The physics says what a project must have (NEEDS): the template needs a support and no load, so a
+    run with two held values and no source goes through; the structural physics still needs a load."""
+    from lsr_mmto.problem import selections as S
+    from lsr_mmto.problem.project import Project, run
+    from lsr_mmto.results import load_results
+    with registered(TEMPLATE):
+        p = _project("held", "UBracket.STL", UBRACKET, 3000)
+        p.add_selection("bottom", S.face("ymin"))
+        p.add_selection("top_right", S.box([0.75, 0.9, -1], [1.0, 1.0, 1]))
+        p.bcs += [{"kind": "set_value", "on": "bottom", "value": 0.0},
+                  {"kind": "set_value", "on": "top_right", "value": 1.0}]
+        p.objective("Mass()")                                       # f . c is zero with no source
+        p.settings["common"]["maxIterations"] = 2
+        assert p.validate() == []
+        with tempfile.TemporaryDirectory() as d:
+            run(p, save_dir=d, verbose=False)
+            r = load_results.load(os.path.join(d, "run_data.npz"))
+        assert np.all(np.isfinite(r.history["objective"]))
+    s = Project("structural", stl="UBracket.STL", n_dof=3000, single_layer=True, base_dir=UBRACKET)
+    s.add_selection("bottom", S.face("ymin"))
+    s.add_support("bottom", dofs="xyz")
+    assert "no loads" in s.validate()
 
 
 def test_the_saved_run_keeps_the_properties_the_physics_reads(monkeypatch):
