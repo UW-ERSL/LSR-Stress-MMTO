@@ -111,6 +111,7 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 | `make_shortcut.py` | adds LSR MMTO to the Start menu and the desktop (Windows); the setup runs it, and running it again (`python make_shortcut.py`, with the environment active) repairs the shortcuts after the folder moves |
 | `projects/` | the four examples as project files: geometry, supports, loads, materials, objective, constraints, settings |
 | `docs/how_the_code_works.md` | how the code is laid out, and what happens in one run |
+| `docs/code_map.md` | the map of the code: what is where, and where a new feature goes |
 | `docs/project_file_reference.md` | everything a project file can hold, generated from the code |
 | `docs/how_to_add_features.md` | how to add a quantity, a selection type, a kind of support or load, a setting, a material attribute, a physics or a database |
 | `CONTRIBUTING.md` | how changes to the code are made and checked |

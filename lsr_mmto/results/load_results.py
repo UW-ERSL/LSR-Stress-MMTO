@@ -145,8 +145,11 @@ class Run:
         return np.unique(self.material_indices[self.solid])
 
     def mass_by_material(self) -> np.ndarray:
-        """Mass per candidate material, length n_mats, zero where unselected."""
-        rho = self.material_property("Density")
+        """Mass per candidate material, length n_mats, zero where unselected, from the column that
+        measures density."""
+        from lsr_mmto.materials.databases import density_column
+        names = list(self.config.get("materials", {}).get("real_material_properties", {}))
+        rho = self.material_property(density_column(names) or "Density")
         w = self.x_cont * self.elem_volume * rho[self.material_indices]
         out = np.zeros(rho.size)
         np.add.at(out, self.material_indices, w)

@@ -370,3 +370,33 @@ if __name__ == "__main__":
             print(f"FAIL {name}: {type(e).__name__}: {e}")
     print("all passed" if not failed else f"{failed} failed")
     sys.exit(1 if failed else 0)
+
+
+def test_unit_kinds_of_a_physics():
+    """A physics' own kinds of quantity (UNIT_KINDS on its front page) are in the unit tables; a kind
+    given differently by two physics, or a unit system's unit that is not one of the kind's units, is
+    refused."""
+    import types
+    import pytest
+    from lsr_mmto.materials import databases as D
+    assert D.UNITS["stress"]["MPa"] == 1e6 and D.UNIT_SYSTEMS["IPS"]["force"] == "lbf"
+    other = types.SimpleNamespace(NAME="other", UNIT_KINDS={"force": {"units": {"N": 1.0}, "MKS": "N",
+                                                                       "mmKS": "N", "IPS": "N"}})
+    with pytest.raises(ValueError, match="differ"):
+        D._add_unit_kinds(other)
+    odd = types.SimpleNamespace(NAME="odd", UNIT_KINDS={"heat": {"units": {"W": 1.0}, "MKS": "W", "mmKS": "mW",
+                                                                  "IPS": "W"}})
+    with pytest.raises(ValueError, match="not one of its units"):
+        D._add_unit_kinds(odd)
+    assert "heat" not in D.UNITS                                    # nothing of a refused kind is kept
+
+
+def test_columns_found_by_what_they_measure():
+    """The mass of a design is made from the column that measures density, and the per-iteration
+    materials line prints the columns whose attribute has a label there, in their order, whatever
+    the columns are named."""
+    from lsr_mmto.materials.databases import density_column, iteration_columns
+    assert density_column(["Youngs_Modulus", "Density"]) == "Density"
+    assert density_column(["Youngs_Modulus"]) is None
+    assert iteration_columns(["Density", "Youngs_Modulus", "Yield_Strength"]) == [("Yield_Strength", "Y"),
+                                                                                   ("Density", "rho")]

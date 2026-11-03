@@ -18,7 +18,10 @@ MODULES = [structural_module]
 MODULE_ENTRIES = {
     "NAME": "the name a project file uses",
     "DOC": "what the physics is, in one line",
-    "FIELDS": "each field it solves for and its unknowns per node, e.g. {'u': 3}",
+    "FIELDS": "each field it solves for and its unknowns per node, e.g. {'u': 3}; the mesh size and the "
+              "supports and loads (one boundary condition per field) are counted from it",
+    "UNIT_KINDS": "the kinds of quantity its values and quantities measure that the core does not have, "
+                  "{kind: {'units': {unit: value in SI}, 'MKS': unit, 'mmKS': unit, 'IPS': unit}}",
     "PROPERTIES": "the material database columns every problem of it reads",
     "make_solver": "make_solver(mesh, mat_prop, bcs, linear_solver, dsolver, elem_body_force): its finite "
                    "element solver; bcs holds one boundary condition per field",

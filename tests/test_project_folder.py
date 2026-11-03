@@ -204,3 +204,31 @@ if __name__ == "__main__":
             print(f"FAIL {name}: {type(e).__name__}: {e}")
     print("all passed" if not failed else f"{failed} failed")
     sys.exit(1 if failed else 0)
+
+
+def test_new_project_has_the_physics_chosen():
+    """New project lists every physics, the first chosen; the project is made with the one chosen."""
+    import shutil
+    import tempfile
+    from lsr_mmto.physics.available_physics import PHYSICS
+    from lsr_mmto.problem import project_folder
+    from lsr_mmto.problem.project import Project
+    stl = os.path.join(ROOT, "data", "models", "UBracket", "UBracket.STL")
+    with tempfile.TemporaryDirectory() as d:
+        p, path = project_folder.create(os.path.join(d, "P"), stl, physics=next(iter(PHYSICS)))
+        assert Project.load(path).physics == next(iter(PHYSICS))
+        q, _ = project_folder.create(os.path.join(d, "Q"), stl)
+        assert q.physics == next(iter(PHYSICS))
+
+
+def test_new_project_dialog_offers_every_physics():
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt5 import QtWidgets
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    from gui import main_window as G
+    from lsr_mmto.physics.available_physics import PHYSICS
+    w = G.MMTOWindow()
+    d = G.ProjectFolderDialog(w, "New project", ROOT, stl="")
+    assert [d.physics.itemData(i) for i in range(d.physics.count())] == list(PHYSICS)
+    assert d.physics_name() == next(iter(PHYSICS)) and d.physics.currentText().startswith("Structural: ")
+    assert G.ProjectFolderDialog(w, "Save As", ROOT).physics_name() is None      # only a new project asks

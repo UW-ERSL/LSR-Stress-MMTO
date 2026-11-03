@@ -52,11 +52,10 @@ DATABASE_VAE = {
 _IN, _LBF, _LB = 0.0254, 4.4482216152605, 0.45359237           # inch in m, pound-force in N, pound in kg
 _SLINCH = _LBF / _IN                                            # lbf s^2/in, the IPS unit of mass, in kg
 
-# what one unit is in SI, for each kind of quantity
+# what one unit is in SI, for each kind of quantity every problem has (the part, its materials);
+# each physics adds the kinds of its own values and quantities (UNIT_KINDS on its front page)
 UNITS = {
     "length": {"m": 1.0, "mm": 1e-3, "in": _IN},
-    "force": {"N": 1.0, "lbf": _LBF},
-    "stress": {"Pa": 1.0, "kPa": 1e3, "MPa": 1e6, "GPa": 1e9, "psi": _LBF / _IN ** 2, "ksi": 1e3 * _LBF / _IN ** 2},
     "density": {"kg/m^3": 1.0, "g/cm^3": 1e3, "t/mm^3": 1e12, "lb/in^3": _LB / _IN ** 3,
                 "lbf*s^2/in^4": _SLINCH / _IN ** 3},
     "mass": {"kg": 1.0, "t": 1e3, "lbf*s^2/in": _SLINCH},
@@ -67,13 +66,33 @@ UNITS = {
 # The unit systems of the PyTO-AD GUI (settings.unit_system in a .mmto file). A project
 # without one is "none": its units are not checked.
 UNIT_SYSTEMS = {
-    "MKS":  {"length": "m", "force": "N", "stress": "Pa", "density": "kg/m^3", "mass": "kg",
-             "cost per mass": "USD/kg"},
-    "mmKS": {"length": "mm", "force": "N", "stress": "MPa", "density": "t/mm^3", "mass": "t",
-             "cost per mass": "USD/t"},
-    "IPS":  {"length": "in", "force": "lbf", "stress": "psi", "density": "lbf*s^2/in^4", "mass": "lbf*s^2/in",
-             "cost per mass": "USD/(lbf*s^2/in)"},
+    "MKS":  {"length": "m", "density": "kg/m^3", "mass": "kg", "cost per mass": "USD/kg"},
+    "mmKS": {"length": "mm", "density": "t/mm^3", "mass": "t", "cost per mass": "USD/t"},
+    "IPS":  {"length": "in", "density": "lbf*s^2/in^4", "mass": "lbf*s^2/in", "cost per mass": "USD/(lbf*s^2/in)"},
 }
+
+
+def _add_unit_kinds(module):
+    """A physics' own kinds of quantity (its UNIT_KINDS: {kind: {"units": {unit: value in SI}, and the
+    kind's unit in each unit system}}) added to UNITS and UNIT_SYSTEMS. A kind another physics gives
+    too must be given the same way."""
+    for kind, spec in module.UNIT_KINDS.items():
+        units = dict(spec["units"])
+        if kind in UNITS and UNITS[kind] != units:
+            raise ValueError(f"physics {module.NAME}: the units of {kind!r} differ from another physics'")
+        for system in UNIT_SYSTEMS:
+            if spec[system] not in units:
+                raise ValueError(f"physics {module.NAME}: {kind!r} in {system} is {spec[system]!r}, "
+                                 f"not one of its units ({', '.join(units)})")
+        UNITS[kind] = units
+        for system, table in UNIT_SYSTEMS.items():
+            table[kind] = spec[system]
+
+
+from lsr_mmto.physics.available_physics import MODULES  # noqa: E402  (the physics give their own kinds)
+
+for _module in MODULES:
+    _add_unit_kinds(_module)
 
 
 def unit_ratio(measures, unit, system):
@@ -92,10 +111,13 @@ class Attribute:
     (whose own scales_with say that), with {times} for how many times too large its numbers are:
     shown in the project's unit warning. log_scaled: the network learns log10 of its values (for a
     column spanning several orders of magnitude). legend_symbol, legend_rank: a symbol for the
-    materials' legend of a design plot ("E"), which shows the attribute of lowest rank the run has."""
+    materials' legend of a design plot ("E"), which shows the attribute of lowest rank the run has.
+    iteration_label, iteration_rank: a short label for the line each iteration prints about the solid
+    elements' materials ("Y"), in the order of rank; an attribute without a label is not printed."""
 
     def __init__(self, name, measures, doc, shown, low=None, high=None, closed=(), aliases=(),
-                 wrong_unit_effect="", log_scaled=False, legend_symbol=None, legend_rank=None):
+                 wrong_unit_effect="", log_scaled=False, legend_symbol=None, legend_rank=None,
+                 iteration_label=None, iteration_rank=None):
         if measures not in UNITS:
             raise ValueError(f"attribute {name}: measures must be one of {', '.join(UNITS)}")
         self.name, self.measures, self.doc, self.shown = name, measures, doc, shown
@@ -103,6 +125,7 @@ class Attribute:
         self.units, self.aliases = tuple(UNITS[measures]), tuple(aliases)
         self.wrong_unit_effect, self.log_scaled = wrong_unit_effect, bool(log_scaled)
         self.legend_symbol, self.legend_rank = legend_symbol, legend_rank
+        self.iteration_label, self.iteration_rank = iteration_label, iteration_rank
 
     def in_range(self, v):
         if self.low is not None and (v < self.low or (v == self.low and "low" not in self.closed)):
@@ -120,7 +143,8 @@ class Attribute:
 # Every attribute a database may hold. To add one, add an entry; the check and the Excel
 # template follow. A column not listed here is an error.
 ATTRIBUTES = {a.name: a for a in [
-    Attribute("Density", "density", "mass per unit volume", "Density", low=0),
+    Attribute("Density", "density", "mass per unit volume", "Density", low=0, iteration_label="rho",
+              iteration_rank=2),
     Attribute("Youngs_Modulus", "stress", "Young's modulus, the stiffness", "Young's modulus", low=0,
               aliases=("Youngs Modulus", "Young_Modulus", "E"),
               wrong_unit_effect="Displacement and compliance come out {times} times too small; stress and "
@@ -130,12 +154,25 @@ ATTRIBUTES = {a.name: a for a in [
               aliases=("Poisson_Ratio", "Poissons Ratio", "nu")),
     Attribute("Yield_Strength", "stress", "yield strength, the stress at which the material yields",
               "Yield strength", low=0, aliases=("Yield Strength", "Yield"),
-              legend_symbol=r"\sigma_Y", legend_rank=1),
+              legend_symbol=r"\sigma_Y", legend_rank=1, iteration_label="Y", iteration_rank=1),
     Attribute("Cost", "cost per mass", "price per unit mass", "Cost", low=0, closed=("low",)),
 ]}
 # each attribute's name as a user reads it, from its entry
 SHOWN = {a.name: a.shown for a in ATTRIBUTES.values()}
 _BY_ALIAS = {k.lower(): a.name for a in ATTRIBUTES.values() for k in (a.name,) + a.aliases}
+
+
+def density_column(names):
+    """The first of names (database columns) whose attribute measures density, the one a mass is made
+    from; None when there is none."""
+    return next((n for n in names if n in ATTRIBUTES and ATTRIBUTES[n].measures == "density"), None)
+
+
+def iteration_columns(names):
+    """(column, its label) of the columns among names that the per-iteration materials line prints, in the
+    order of their iteration_rank."""
+    marked = [ATTRIBUTES[n] for n in names if n in ATTRIBUTES and ATTRIBUTES[n].iteration_label]
+    return [(a.name, a.iteration_label) for a in sorted(marked, key=lambda a: a.iteration_rank)]
 
 
 def attribute_name(name):

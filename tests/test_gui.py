@@ -1365,7 +1365,9 @@ def test_results_compare_delete():
         assert res.folders() == folders[::-1] and res.current == folders[1]
         assert [res.tabs.tabText(i) for i in range(res.tabs.count())] == ["Convergence", "Latent space",
                                                                           "Summary"]
-        for field in draw_design.FIELDS:
+        shown = [res.field.itemText(i) for i in range(res.field.count())]
+        assert shown == ["Material", "Density", "Stress", "Solid"], shown     # the views a structural run saved
+        for field in shown:
             res.field.setCurrentText(field)
             assert "result_design" in w.plotter.actors and w.view == "design", field
             assert bool(w.design_bars) == (field in ("Density", "Stress")), (field, w.design_bars)
@@ -1487,3 +1489,16 @@ if __name__ == "__main__":
             print(f"FAIL {name}: {type(e).__name__}: {e}")
     print("all passed" if not failed else f"{failed} failed")
     sys.exit(1 if failed else 0)
+
+
+def test_show_list_is_the_runs_own():
+    """The Results panel's Show list holds the views the shown runs saved, so a run of another physics
+    shows its own results and never another physics' Stress."""
+    import types
+    from gui import draw_design
+    structural = types.SimpleNamespace(result_info={"von_mises": {"view": "Stress"}})
+    other = types.SimpleNamespace(result_info={"mean_value": {"view": "Value"}})
+    assert draw_design.views(structural) == ("Material", "Density", "Stress", "Solid")
+    assert draw_design.views(other) == ("Material", "Density", "Value", "Solid")
+    assert draw_design.views(structural, other) == ("Material", "Density", "Stress", "Value", "Solid")
+    assert draw_design.views() == ("Material", "Density", "Solid")

@@ -40,7 +40,7 @@ def compute_mass_from_x_and_z(
     Returns
     -------
     mass : float | None
-        None if 'Density' is not present in the decoded material properties.
+        None if no decoded column measures density.
     """
     x_density = np.asarray(x_density, dtype=float).reshape(-1)
 
@@ -53,10 +53,12 @@ def compute_mass_from_x_and_z(
         decoded = matEncoder.vaeNet.decoder(zPts)
         material_properties = matEncoder.getMaterialProperties(decoded)
 
-    if "Density" not in material_properties:
+    from lsr_mmto.materials.databases import density_column
+    column = density_column(material_properties)
+    if column is None:
         return None
 
-    rho_e = material_properties["Density"].detach().cpu().numpy().astype(float)
+    rho_e = material_properties[column].detach().cpu().numpy().astype(float)
     mass = float(np.sum(x_density * rho_e) * elem_volume)
     return mass
 
@@ -93,10 +95,9 @@ def log_design_state(history, iteration, x_phys, z, material_properties, zTorch,
     """Record the grey fraction; in verbose mode also print the iteration header,
     grey %, and the [MAT] active-material statistics.
 
-    Yield_Strength / Density are only present when the active material database
-    decodes those attributes. When absent (e.g. a 2-attribute E/nu database such
-    as BM1_3Mats_2Attr) the corresponding stats are skipped instead of raising
-    KeyError; the material-count breakdown is unaffected and still printed."""
+    The [MAT] line gives min/mean/max over the solid elements of each decoded column whose
+    attribute has an iteration_label (materials/databases.py: Yield strength, Density), in the order
+    of their rank; a database without them prints only the material counts."""
     grey_elements = np.sum((x_phys > 0.1) & (x_phys < 0.9))
     fraction_grey = grey_elements / num_elems
     history["grey"].append(float(fraction_grey))
@@ -119,22 +120,11 @@ def log_design_state(history, iteration, x_phys, z, material_properties, zTorch,
     midx = matEncoder.getClosestRealMaterialIndex(zTorch).cpu().numpy()
     counts = np.bincount(midx[act], minlength=len(matEncoder.materialNames))
 
-    # _property_to_numpy returns None when the key is absent (no .detach() on a
-    # missing key) -> matches the existing guard style used everywhere else.
-    Y = _property_to_numpy(material_properties, "Yield_Strength")
-    rho = _property_to_numpy(material_properties, "Density")
-
+    from lsr_mmto.materials.databases import iteration_columns
     parts = []
-    if Y is not None:
-        parts.append(
-            f"Y_active min/mean/max="
-            f"{Y[act].min():.3g}/{Y[act].mean():.3g}/{Y[act].max():.3g}"
-        )
-    if rho is not None:
-        parts.append(
-            f"rho_active min/mean/max="
-            f"{rho[act].min():.3g}/{rho[act].mean():.3g}/{rho[act].max():.3g}"
-        )
+    for column, label in iteration_columns(material_properties):
+        v = _property_to_numpy(material_properties, column)
+        parts.append(f"{label}_active min/mean/max={v[act].min():.3g}/{v[act].mean():.3g}/{v[act].max():.3g}")
     parts.append(f"counts={counts.tolist()}")
     print("[MAT] " + " | ".join(parts))
 

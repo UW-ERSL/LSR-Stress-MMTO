@@ -15,14 +15,13 @@ import os
 
 import numpy as np
 
-def _views():
-    """The ways a finished run can be shown: Material, Density, one per result of every physics (Stress), Solid."""
-    from lsr_mmto.physics.available_physics import MODULES
-    shown = [r["view"] for m in MODULES for r in m.RESULT_FIELDS.values()]
+def views(*runs):
+    """The ways finished runs can be shown: Material, Density, one per result the runs saved (Stress for a
+    structural run, from the run's own physics), Solid."""
+    shown = [info["view"] for run in runs for info in run.result_info.values()]
     return ("Material", "Density", *dict.fromkeys(shown), "Solid")
 
 
-FIELDS = _views()
 FAINT = 0.1                                   # elements below this density are empty: not drawn
 WEAKEST = 0.25                                # colour strength of an element just above FAINT
 SOLID_COLOUR = "#9aa5b1"

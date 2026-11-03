@@ -23,6 +23,16 @@ FIELDS = {"u": 3}                                   # the displacement, three un
 PROPERTIES = ["Youngs_Modulus"]                     # Poisson's ratio may be one value for all (SETTINGS)
 NEEDS = ("support", "load")                         # a structural problem with no load has nothing to solve
 
+# the kinds of quantity of its own values and quantities (forces, stresses), with their units' values in SI
+# and each unit system's unit; the core has length, density, mass and cost per mass already
+_IN, _LBF = 0.0254, 4.4482216152605                 # inch in m, pound-force in N
+UNIT_KINDS = {
+    "force": {"units": {"N": 1.0, "lbf": _LBF}, "MKS": "N", "mmKS": "N", "IPS": "lbf"},
+    "stress": {"units": {"Pa": 1.0, "kPa": 1e3, "MPa": 1e6, "GPa": 1e9, "psi": _LBF / _IN ** 2,
+                         "ksi": 1e3 * _LBF / _IN ** 2},
+               "MKS": "Pa", "mmKS": "MPa", "IPS": "psi"},
+}
+
 # the structural settings, as the arguments of a Setting (problem/settings.py)
 SETTINGS = [
     dict(section="common", key="pnorm_exponent", default=6.0, label="p-norm exponent",

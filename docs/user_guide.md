@@ -75,7 +75,7 @@ An **Error** stops a run from starting until it is put right. A **Warning** lets
 
 ## 3. File menu
 
-- **New...** makes a new project. Give it a **Name**, a **Location** and the **Part (STL)**. LSR MMTO makes a folder of that name at that location, copies the STL into it and saves the project there. Every setting starts at its usual value.
+- **New...** makes a new project. Give it a **Name**, a **Location**, the **Part (STL)** and the **Physics** (Structural is the one there is today). LSR MMTO makes a folder of that name at that location, copies the STL into it and saves the project there. Every setting starts at its usual value.
 - **Open...** opens a project, a file ending in .mmto. Only LSR MMTO projects open here.
 - **Save** saves the project in its file. A project never saved, or an example, is saved with Save As instead.
 - **Save As...** saves the project as a new one, in a new folder, with everything it uses copied in. The new project takes the new name; the runs made so far stay with the old one.

@@ -1,7 +1,8 @@
 # Contributing
 
 How changes to LSR MMTO are made. `docs/how_the_code_works.md` describes the code and
-`docs/how_to_add_features.md` where each kind of addition goes.
+`docs/how_to_add_features.md` where each kind of addition goes. `docs/code_map.md` is the map: the code
+as nested trees, and a decision tree that leads from what you want to add to its file and its test.
 
 ## Where a change goes
 

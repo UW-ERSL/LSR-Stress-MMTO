@@ -195,7 +195,7 @@ class ResultsWindow(QtWidgets.QDialog):
         show = QtWidgets.QHBoxLayout()
         show.addWidget(QtWidgets.QLabel("Show"))
         self.field = QtWidgets.QComboBox()
-        self.field.addItems(draw_design.FIELDS)
+        self.field.addItems(draw_design.views())
         self.field.currentTextChanged.connect(lambda _: self.redraw())
         show.addWidget(self.field)
         show.addStretch()
@@ -336,7 +336,21 @@ class ResultsWindow(QtWidgets.QDialog):
             return
         run, _ = loaded
         result_tabs(self.tabs, run)
+        self._set_views(run)
         self.redraw()
+
+    def _set_views(self, *runs):
+        """The Show list for the runs shown: the views their own physics saved; the choice kept when it is
+        still there, Material otherwise."""
+        items = draw_design.views(*runs)
+        if [self.field.itemText(i) for i in range(self.field.count())] == list(items):
+            return
+        choice = self.field.currentText()
+        self.field.blockSignals(True)
+        self.field.clear()
+        self.field.addItems(items)
+        self.field.setCurrentText(choice if choice in items else "Material")
+        self.field.blockSignals(False)
 
     def redraw(self):
         """The run shown (or the two compared) drawn again with the Show choice."""
@@ -402,6 +416,7 @@ class ResultsWindow(QtWidgets.QDialog):
         runs = {n: run for n, (run, _) in zip(names, loaded)}
         self.end_compare()
         self.comparing = list(zip(names, loaded))
+        self._set_views(*(run for run, _ in loaded))
         self.compare_window = CompareWindow(self.window, runs, self._compare_closed)
         self.compare_window.show()
         self.status.setText(f"Comparing {names[0]} (left) and {names[1]} (right). Close the Compare window or "
