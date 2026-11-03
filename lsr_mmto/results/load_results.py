@@ -32,7 +32,8 @@ class Run:
     material_indices: np.ndarray   # (n_elems,)      int
     solid: np.ndarray              # (n_elems,)      bool, binarized topology
     x_cont: np.ndarray             # (n_elems,)      float32
-    von_mises: np.ndarray          # (n_elems,)      float32
+    results: dict                  # name -> (n_elems,) float32, the physics' results (von_mises)
+    result_info: dict              # name -> {view, title, measures}
     z_elem: np.ndarray             # (n_elems, n_z)  float32, NaN in voids
     z_real: np.ndarray             # (n_mats, n_z)   latent anchors
     material_names: list
@@ -156,7 +157,7 @@ class Run:
         return self.z_elem[self.solid]
 
 
-def _build(path, meta, config, n, mat, solid, x_cont, von_mises, z, z_real,
+def _build(path, meta, config, n, mat, solid, x_cont, results, z, z_real,
            names, history, colours, labels) -> Run:
     tag = meta.get("descriptor", "?")
     mat = np.asarray(mat).ravel()
@@ -173,7 +174,8 @@ def _build(path, meta, config, n, mat, solid, x_cont, von_mises, z, z_real,
     return Run(path=path, meta=meta, config=config, n_elems=n,
                material_indices=mat.astype(np.int64), solid=solid,
                x_cont=np.asarray(x_cont).ravel().astype(np.float32),
-               von_mises=np.asarray(von_mises).ravel().astype(np.float32),
+               results={k: np.asarray(v).ravel().astype(np.float32) for k, v in results.items()},
+               result_info=dict(meta.get("results") or {}),
                z_elem=z, z_real=np.asarray(z_real).astype(np.float32),
                material_names=names, material_colors=[str(c) for c in colours],
                material_labels=[str(s) for s in labels], history=history)
@@ -191,7 +193,10 @@ def load(path: str) -> Run:
     except Exception as e:
         raise RecordError(f"{path} is not a readable .npz: {e}") from e
 
-    need = {"material_indices", "x_bin_packed", "n_elems", "x_cont", "von_mises", "z_elem_solid",
+    if "schema_version" not in r.files or int(r["schema_version"]) != 2:
+        raise RecordError(f"{os.path.basename(path)} was saved by an earlier version of LSR MMTO; run the "
+                          f"project again to see it here")
+    need = {"material_indices", "x_bin_packed", "n_elems", "x_cont", "z_elem_solid",
             "zRealPoints", "meta_json", "material_names", "material_colors", "material_labels"}
     missing = need - set(r.files)
     if missing:
@@ -219,7 +224,8 @@ def load(path: str) -> Run:
         config = json.load(fh)
 
     return _build(path, json.loads(str(r["meta_json"])), config, n,
-                  r["material_indices"], solid, r["x_cont"], r["von_mises"],
+                  r["material_indices"], solid, r["x_cont"],
+                  {k[2:]: r[k] for k in r.files if k.startswith("r_")},
                   z, r["zRealPoints"], [str(s) for s in r["material_names"]],
                   {k[2:]: r[k] for k in r.files if k.startswith("h_")},
                   [str(s) for s in r["material_colors"]],

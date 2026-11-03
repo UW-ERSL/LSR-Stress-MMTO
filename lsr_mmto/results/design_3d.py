@@ -92,8 +92,9 @@ def draw_panel(ax, run: Run, field: str = "material", *,
                cmap: str = "viridis", vmin=None, vmax=None, colours=None):
     """Draw one run as raw element quads.
 
-    field: material | topology | stress   solid elements only
-           density                        every element, shaded by x_cont
+    field: material | topology    solid elements only
+           a result's name         solid elements only, e.g. von_mises (run.results)
+           density                 every element, shaded by x_cont
 
     Returns the PolyCollection so a caller can attach a colourbar.
     """
@@ -119,8 +120,8 @@ def draw_panel(ax, run: Run, field: str = "material", *,
                             **edge_kw)
     elif field == "topology":
         pc = PolyCollection(quads[solid], facecolors="#4a4a4a", **edge_kw)
-    elif field == "stress":
-        vals = run.von_mises[solid]
+    elif field in run.results:
+        vals = run.results[field][solid]
         pc = PolyCollection(quads[solid], array=vals, cmap=cmap, **edge_kw)
         pc.set_clim(vmin if vmin is not None else float(vals.min()),
                     vmax if vmax is not None else float(vals.max()))
@@ -128,8 +129,8 @@ def draw_panel(ax, run: Run, field: str = "material", *,
         pc = PolyCollection(quads, array=run.x_cont, cmap="Greys", **edge_kw)
         pc.set_clim(0.0, 1.0)
     else:
-        raise RenderError(f"unknown field {field!r}; expected material, "
-                          "topology, stress or density")
+        raise RenderError(f"unknown field {field!r}; expected material, topology, density or one of the "
+                          f"run's results ({', '.join(run.results)})")
 
     ax.add_collection(pc)
     c = np.asarray(mesh.elem_centers, float)

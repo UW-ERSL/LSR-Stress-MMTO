@@ -184,13 +184,15 @@ def test_record_stores_display():
 
     n = 8
     fields = {"material_indices": np.arange(n) % 3, "x_bin": np.ones(n), "x_cont": np.ones(n),
-              "von_mises": np.zeros(n), "z_elem": np.zeros((n, 2))}
+              "z_elem": np.zeros((n, 2))}
     with tempfile.TemporaryDirectory() as d:
         saved = run_save.WRITE_FILES
         run_save.WRITE_FILES = True
         try:
             run_save.save_run_data(d, {}, fields, None, {}, "test", np.zeros((3, 2)), ["#010203", "#040506", "#070809"],
-                                 ["m1", "m2", "m3"], 2, n, 9, material_labels=["one", "two", "three"])
+                                 ["m1", "m2", "m3"], 2, n, 9, material_labels=["one", "two", "three"],
+                                 results={"von_mises": dict(view="Stress", title="von Mises stress", measures="stress",
+                                                            value=np.zeros(n))})
         finally:
             run_save.WRITE_FILES = saved
         run = load_results.load(os.path.join(d, "run_data.npz"))

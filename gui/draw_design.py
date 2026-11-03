@@ -4,7 +4,7 @@ draw_design.py
 An optimized design on the 3D view: one block per element, drawn in place of the part.
 
     live(window, mesh, x, material, colours)    while a run goes: density and material
-    record(window, run, mesh, field, ...)       a finished run: Material, Density, Stress or Solid
+    record(window, run, mesh, field, ...)       a finished run: Material, Density, a result (Stress) or Solid
     run_mesh(window, folder, run)               the mesh a saved run was made on
 
 Every actor drawn here is named "result_...", so clearing a preview (actors named "mmto_...")
@@ -15,12 +15,19 @@ import os
 
 import numpy as np
 
-FIELDS = ("Material", "Density", "Stress", "Solid")
+def _views():
+    """The ways a finished run can be shown: Material, Density, one per result of every physics (Stress), Solid."""
+    from lsr_mmto.physics.available_physics import MODULES
+    shown = [r["view"] for m in MODULES for r in m.RESULT_FIELDS.values()]
+    return ("Material", "Density", *dict.fromkeys(shown), "Solid")
+
+
+FIELDS = _views()
 FAINT = 0.1                                   # elements below this density are empty: not drawn
 WEAKEST = 0.25                                # colour strength of an element just above FAINT
 SOLID_COLOUR = "#9aa5b1"
 PREFIX = "result_"
-# The colour scale of a value view (Density, Stress): the lowest and the highest value at the two
+# The colour scale of a value view (Density, a result): the lowest and the highest value at the two
 # ends, under the bar, and the title in the middle under it, at fixed sizes, so the numbers never
 # run into each other or into the title, however large or small the values and whatever the size of
 # the view.
@@ -89,25 +96,34 @@ def live(window, mesh, x, material, colours):
     return draw(window, mesh, x >= FAINT, colours=per_element)
 
 
-def stress_title(run):
+def result_of(run, field):
+    """The name of the run's result shown by the view field (von_mises for Stress), or None."""
+    return next((name for name, info in run.result_info.items() if info.get("view") == field), None)
+
+
+def result_title(run, name):
+    """The colour scale's title of a result, with its unit: von Mises stress [MPa]."""
+    info = run.result_info[name]
     units = (run.config or {}).get("units") or {}
-    return f"von Mises stress [{units['stress']}]" if units.get("stress") else "von Mises stress"
+    unit = units.get(info.get("measures"))
+    return f"{info['title']} [{unit}]" if unit else info["title"]
 
 
 def field_range(runs, field):
     """One colour scale for several runs drawn together, so their colours compare."""
     if field == "Density":
         return (0.0, 1.0)
-    if field == "Stress":
-        top = max((float(np.max(r.von_mises[r.solid])) for r in runs if r.solid.any()), default=1.0)
-        return (0.0, top if top > 0 else 1.0)
-    return None
+    shown = [r for r in runs if result_of(r, field) is not None]
+    if not shown:
+        return None
+    top = max((float(np.max(r.results[result_of(r, field)][r.solid])) for r in shown if r.solid.any()), default=1.0)
+    return (0.0, top if top > 0 else 1.0)
 
 
 def record(window, run, mesh, field="Material", shift=0.0, clim=None, name="design"):
     """A finished run, drawn as field: Material (its solid elements in their material's colour),
-    Density (every element at FAINT or more, on a scale), Stress (von Mises on its solid
-    elements, on a scale) or Solid (its solid elements, one colour)."""
+    Density (every element at FAINT or more, on a scale), a result's view (Stress: von Mises on its
+    solid elements, on a scale) or Solid (its solid elements, one colour)."""
     if field == "Material":
         table = np.array([rgb(c) for c in run.material_colors]).astype(np.uint8)
         return draw(window, mesh, run.solid, colours=table[np.asarray(run.material_indices) % len(table)],
@@ -115,9 +131,10 @@ def record(window, run, mesh, field="Material", shift=0.0, clim=None, name="desi
     if field == "Density":
         return draw(window, mesh, np.asarray(run.x_cont) >= FAINT, values=run.x_cont, title="Density",
                     clim=clim or (0.0, 1.0), shift=shift, name=name)
-    if field == "Stress":
-        return draw(window, mesh, run.solid, values=run.von_mises, title=stress_title(run),
-                    clim=clim or field_range([run], "Stress"), shift=shift, name=name)
+    result = result_of(run, field)
+    if result is not None:
+        return draw(window, mesh, run.solid, values=run.results[result], title=result_title(run, result),
+                    clim=clim or field_range([run], field), shift=shift, name=name)
     return draw(window, mesh, run.solid, shift=shift, name=name)
 
 

@@ -325,7 +325,7 @@ def design(run: Run, out=None, *, field="material", size=(1200, 950),
 
     2D examples get a matplotlib panel; 3D examples get a mirrored voxel render
     placed on an axes, so both return a figure and display the same way.
-    field applies to the 2D path only: material | topology | stress | density.
+    field applies to the 2D path only: material | topology | density | a result's name (von_mises).
     """
     import matplotlib.pyplot as plt
     _rc()
@@ -346,9 +346,9 @@ def design(run: Run, out=None, *, field="material", size=(1200, 950),
 
     fig, ax = plt.subplots(figsize=(6.6, 5.0))
     pc = draw_panel(ax, run, field, mesh=mesh_for(run))
-    if field in ("stress", "density"):
+    if field == "density" or field in run.results:
         cb = fig.colorbar(pc, ax=ax, shrink=0.8, pad=0.02)
-        cb.set_label("von Mises stress" if field == "stress" else "density")
+        cb.set_label(run.result_info[field]["title"] if field in run.results else "density")
     elif field == "material":
         _legend_beside(ax, run)
     fig.tight_layout()

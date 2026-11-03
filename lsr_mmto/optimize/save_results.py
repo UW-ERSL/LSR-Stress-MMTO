@@ -341,10 +341,14 @@ def write_run_config_yaml(config, path):
             _emit(f, body, 1)
 
 
+SCHEMA_VERSION = 2          # 2: the physics' per-element results by name (results), not a von_mises field
+
+
 def save_run_data(save_dir, config, fields, vae_state_dict, history,
                   example_name, z_real_points, material_colors, material_names,
-                  latent_dim, num_elems, num_nodes, material_labels=None):
-    """Write the record, run_config.yaml, and the pickle if SAVE_PICKLE.
+                  latent_dim, num_elems, num_nodes, material_labels=None, results=None):
+    """Write the record, run_config.yaml, and the pickle if SAVE_PICKLE. results: the physics'
+    per-element results, {name: dict(view, title, measures, value)} with value the array.
 
     Returns the path of the primary artefact: the .pkl when SAVE_PICKLE is on,
     otherwise the .npz. Returns None when WRITE_FILES is False (the tests only).
@@ -358,13 +362,15 @@ def save_run_data(save_dir, config, fields, vae_state_dict, history,
     except Exception:
         sd = vae_state_dict
     data = {
-        "schema_version": 1,
+        "schema_version": SCHEMA_VERSION,
         "config": config,
         "example_name": str(example_name),
         "latentDim": int(latent_dim),
         "num_elems": int(num_elems),
         "num_nodes": int(num_nodes),
         "fields": {k: np.asarray(v) for k, v in fields.items()},
+        "results": {name: np.asarray(r["value"]) for name, r in (results or {}).items()},
+        "result_info": {name: {k: r[k] for k in ("view", "title", "measures")} for name, r in (results or {}).items()},
         "vae_state_dict": sd,
         "history": history,
         "zRealPoints": np.asarray(z_real_points).astype(float),
@@ -397,11 +403,12 @@ def _save_record(save_dir, data):
     x_bin is stored bitpacked; z_elem is stored for solid elements only.
     results/load_results.py undoes both. zeta, youngs_modulus and vae_state_dict
     are not stored; they are recoverable from z_elem and the .nt named in meta.
+    Each of the physics' results is stored as r_<name>, described in meta's results.
     """
     f = data["fields"]
     n = int(data["num_elems"])
 
-    missing = {"material_indices", "x_bin", "x_cont", "von_mises", "z_elem"} - set(f)
+    missing = {"material_indices", "x_bin", "x_cont", "z_elem"} - set(f)
     if missing:
         raise KeyError(
             f"[save] cannot write record: fields is missing {sorted(missing)}. "
@@ -418,14 +425,16 @@ def _save_record(save_dir, data):
         "x_bin_packed":     np.packbits(x_bin),
         "n_elems":          np.int64(n),
         "x_cont":           np.asarray(f["x_cont"]).ravel().astype(np.float32),
-        "von_mises":        np.asarray(f["von_mises"]).ravel().astype(np.float32),
         "z_elem_solid":     z[x_bin].astype(np.float32),
         "z_latent_dim":     np.int64(z.shape[1]),
         "zRealPoints":      np.asarray(data["zRealPoints"]).astype(np.float32),
         "material_names":   np.array([str(s) for s in data["material_names"]]),
         "material_colors":  np.array([str(s) for s in data["material_colors"]]),
         "material_labels":  np.array([str(s) for s in data["material_labels"]]),
+        "schema_version":   np.int64(data["schema_version"]),
     }
+    for name, a in data["results"].items():
+        rec["r_" + name] = np.asarray(a).ravel().astype(np.float32)
     for k, v in (data.get("history") or {}).items():
         a = np.asarray(v)
         if a.dtype.kind in "fiu":
@@ -440,6 +449,7 @@ def _save_record(save_dir, data):
         "constraints": tp.get("Constraints"),
         "vae_net":     os.path.basename(
                            str(tp.get("MaterialsExcelFile", ""))).replace(".xlsx", ".nt"),
+        "results":     data["result_info"],
     }, default=str))
 
     base = os.path.join(save_dir, "run_data")
