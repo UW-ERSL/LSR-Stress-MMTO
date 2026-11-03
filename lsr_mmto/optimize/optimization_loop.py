@@ -130,7 +130,7 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
                         f"not {to_problem!r}; the coded examples are now the project files in projects/")
     physics = physics_module(to_problem.physics)            # the front page of the project's physics
     problem = to_problem
-    mesh_structural, mat_prop_struct, bc_struct, elem_body_force, to_params, vae_params = problem.build()
+    mesh_structural, mat_prop_struct, bcs, elem_body_force, to_params, vae_params = problem.build()
     print(f"[SWEEP] nDOFDesired={to_params.nDOFDesired}  "
           f"RelativeFilterRadius={to_params.RelativeFilterRadius}  "
           f"MaterialFilterRadius={to_params.MaterialFilterRadius}  "
@@ -202,12 +202,12 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
     dsolver = deflation.DeflationSolver()
     if (to_params.nDOFDesired > DIRECT_SOLVER_DOF_CUTOFF):
         solver = linear_solvers.Solvers.DPCG
-        nGroups = dsolver.getRecommendedNumberOfGroups(nDOF=3 * mesh_structural.num_nodes)
+        nGroups = dsolver.getRecommendedNumberOfGroups(nDOF=sum(physics.FIELDS.values()) * mesh_structural.num_nodes)
         dsolver.create_deflation_groups(mesh_structural, nGroups)
         dsolver.create_deflation_matrix(mesh_structural)
     print("Solver:", solver.name)
 
-    fe_solver_structural = physics.make_solver(mesh_structural, mat_prop_struct, {"u": bc_struct}, solver, dsolver,
+    fe_solver_structural = physics.make_solver(mesh_structural, mat_prop_struct, bcs, solver, dsolver,
                                                elem_body_force)
 
     num_dof = fe_solver_structural.bc.num_dofs
@@ -516,7 +516,7 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
     run_config = _save.build_run_config(
         example_name=getattr(to_problem, "name", str(to_problem)),
         run_args=_run_args, to_params=to_params, vae_params=vae_params,
-        beta_schedule=beta_schedule, mesh=mesh_structural, bc=bc_struct,
+        beta_schedule=beta_schedule, mesh=mesh_structural, bcs=bcs, fields=physics.FIELDS,
         mat_encoder=matEncoder, z_real_points=zRealPoints,
         material_colors=material_colors, material_labels=material_labels,
         mma_settings={"optimizer": "MMA (mmaWrapper)", "kktTol": MMA_KKT_TOL,

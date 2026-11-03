@@ -27,9 +27,9 @@ def _dofs(dofs):
 
 
 def _kind(doc, role, check, apply, script, fields=(), picks=None):
-    """The arguments of one BCKind, in its order."""
-    return {"doc": doc, "role": role, "check": check, "apply": apply, "script": script, "fields": fields,
-            "picks": picks or {}}
+    """The arguments of one BCKind, in its order; every structural kind acts on the displacement u."""
+    return {"doc": doc, "role": role, "field": "u", "check": check, "apply": apply, "script": script,
+            "fields": fields, "picks": picks or {}}
 
 
 def _picked_force(f):
@@ -58,6 +58,17 @@ def _check_direction(bc):
     if bc.get("area") == "bbox" and np.count_nonzero(d) != 1:
         return ["area 'bbox' needs a direction along x, y or z; give a number instead"]
     return []
+
+
+def supports_and_loads_error(mesh, bcs):
+    """Why the supports let the part move where the loads push, or None (PyTO-AD's check)."""
+    from lsr_mmto.pyto_ad_imports import bound_cond
+    well_posed, worst = bound_cond.check_rigid_body_constraint(mesh, bcs["u"])
+    if well_posed:
+        return None
+    size = "" if worst is None else f" (relative size {worst:.3g})"
+    return (f"the supports leave the part free to move or rotate in a direction the loads push{size}; "
+            f"add supports that hold it")
 
 
 def _apply_support(bc, n, mesh, state, where):

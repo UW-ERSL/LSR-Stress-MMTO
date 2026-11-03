@@ -290,6 +290,8 @@ class Project:
             if bc.get("on") not in self.selections:
                 errors.append(f"{where}: no selection named {bc.get('on')!r}")
             errors += [f"{where}: {e}" for e in BC_KINDS[bc["kind"]].check(bc)]
+            if self.physics in PHYSICS and BC_KINDS[bc["kind"]].field not in PHYSICS[self.physics].FIELDS:
+                errors.append(f"{where}: not a kind of {self.physics} support or load")
         roles = {BC_KINDS[bc["kind"]].role for bc in self.bcs if bc.get("kind") in BC_KINDS}
         if "support" not in roles:
             errors.append("no supports")
@@ -545,9 +547,8 @@ class Project:
         from lsr_mmto.problem.mesh import make_mesh
 
         mesh = make_mesh(self.stl_path(), self.n_dof, self.single_layer)
-        bc, _ = self.supports_and_loads(mesh)
-        fixed_dofs, force = bc.fixed_dofs, bc.force
-        error = self.rigid_body_error(mesh, bc)                     # as PyTO-AD's FEA does, but before the
+        bcs, _ = self.supports_and_loads(mesh)
+        error = self.supports_and_loads_error(mesh, bcs)            # as PyTO-AD's FEA does, but before the
         if error:                                                   # VAE and the run
             raise ValueError(f"project {self.name!r}: {error}")
 
@@ -576,7 +577,10 @@ class Project:
         # ---- keep-solid elements
         to_params.ElemsToKeep = None
         if self.keep_support_elements:
-            to_params.ElemsToKeep = find_elements_with_fixedDOF(mesh, bc, nDOFPerNode=3)
+            for field, n in PHYSICS[self.physics].FIELDS.items():
+                held = find_elements_with_fixedDOF(mesh, bcs[field], nDOFPerNode=n)
+                to_params.ElemsToKeep = held if to_params.ElemsToKeep is None else np.union1d(to_params.ElemsToKeep,
+                                                                                               held)
         if self.keep_solid_names:
             keep = np.unique(np.concatenate([self.evaluate(n, mesh, "elements")
                                              for n in self.keep_solid_names])).astype(int)
@@ -586,14 +590,17 @@ class Project:
         mat_prop = mat_lib.create_material_with_defaults(          # placeholder; the VAE gives the real ones
             "CustomMaterial", youngs_modulus=1.0, poissons_ratio=0.3, mass_density=1.0, yield_strength=1.0)
         if verbose:
-            print(f"[{self.name}] elems={mesh.num_elems}  h={np.round(mesh.elem_size, 4).tolist()}  "
-                  f"fixed dofs={len(fixed_dofs)}  total force={np.round(force.reshape(-1, 3).sum(0), 6).tolist()}  "
+            held = "  ".join(f"{field}: fixed dofs={len(bc.fixed_dofs)}  total load="
+                             f"{np.round(bc.force.reshape(-1, PHYSICS[self.physics].FIELDS[field]).sum(0), 6).tolist()}"
+                             for field, bc in bcs.items())
+            print(f"[{self.name}] elems={mesh.num_elems}  h={np.round(mesh.elem_size, 4).tolist()}  {held}  "
                   f"keep solid={0 if to_params.ElemsToKeep is None else len(to_params.ElemsToKeep)}")
-        return mesh, mat_prop, bc, None, to_params, vae_params
+        return mesh, mat_prop, bcs, None, to_params, vae_params
 
     def supports_and_loads(self, mesh):
-        """(PyTO-AD BC, {selection name: its nodes}): the supports, then the loads (BC_KINDS), on mesh.
-        ValueError for a selection with no nodes or a dof given two values."""
+        """({field: PyTO-AD BC}, {selection name: its nodes}): the supports, then the loads (BC_KINDS), on
+        mesh, one boundary condition for each field of the project's physics. ValueError for a selection
+        with no nodes or a dof given two values."""
         from lsr_mmto.pyto_ad_imports import bound_cond
         nodes_of = {}
 
@@ -604,28 +611,27 @@ class Project:
                 raise ValueError(f"{where}: selection {name!r} has no nodes on this mesh")
             return nodes_of[name]
 
-        state = {"values": {}, "force": np.zeros(3 * mesh.num_nodes)}   # values: dof -> imposed value
+        # values: dof -> imposed value; force: the load on each dof of the field
+        states = {field: {"values": {}, "force": np.zeros(n * mesh.num_nodes)}
+                  for field, n in PHYSICS[self.physics].FIELDS.items()}
         for role in ("support", "load"):
             for i, bc in enumerate(self.bcs, 1):
                 kind = BC_KINDS[bc["kind"]]
                 if kind.role == role:
                     where = f"boundary condition {i}"
-                    kind.apply(bc, nodes(bc["on"], where), mesh, state, where)
-        values, force = state["values"], state["force"]
-        fixed_dofs = np.array(sorted(values), dtype=int)
-        dirichlet_values = np.array([values[d] for d in fixed_dofs], dtype=float)
-        return bound_cond.BC(force=force, fixed_dofs=fixed_dofs, dirichlet_values=dirichlet_values), nodes_of
+                    kind.apply(bc, nodes(bc["on"], where), mesh, states[kind.field], where)
+        bcs = {}
+        for field, state in states.items():
+            values, force = state["values"], state["force"]
+            fixed_dofs = np.array(sorted(values), dtype=int)
+            dirichlet_values = np.array([values[d] for d in fixed_dofs], dtype=float)
+            bcs[field] = bound_cond.BC(force=force, fixed_dofs=fixed_dofs, dirichlet_values=dirichlet_values)
+        return bcs, nodes_of
 
-    @staticmethod
-    def rigid_body_error(mesh, bc):
-        """Why the supports let the part move where the loads push, or None (PyTO-AD's check)."""
-        from lsr_mmto.pyto_ad_imports import bound_cond
-        well_posed, worst = bound_cond.check_rigid_body_constraint(mesh, bc)
-        if well_posed:
-            return None
-        size = "" if worst is None else f" (relative size {worst:.3g})"
-        return (f"the supports leave the part free to move or rotate in a direction the loads push{size}; "
-                f"add supports that hold it")
+    def supports_and_loads_error(self, mesh, bcs):
+        """Why the supports and loads leave the problem without a solution (the part free to move), or None:
+        the physics' own check."""
+        return PHYSICS[self.physics].supports_and_loads_error(mesh, bcs)
 
     # ------------------------------------------------------------------ files
     def to_dict(self):

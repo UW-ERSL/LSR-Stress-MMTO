@@ -24,7 +24,10 @@ MODULE_ENTRIES = {
                    "element solver; bcs holds one boundary condition per field",
     "analyse": "analyse(model): one iteration's solve inside the torch tree, from model.x_phys and model.props, "
                "leaving on the model what its quantities read",
-    "SUPPORT_AND_LOAD_KINDS": "its kinds of support and load, {name: the arguments of a BCKind}",
+    "SUPPORT_AND_LOAD_KINDS": "its kinds of support and load, {name: the arguments of a BCKind}, each naming "
+                              "the field it acts on",
+    "supports_and_loads_error": "supports_and_loads_error(mesh, bcs): why the supports and loads leave the "
+                                "problem without a solution (the part free to move), or None",
     "QUANTITIES": "its objectives and constraints, each as the arguments of a Quantity",
     "SETTINGS": "its own settings, each as the arguments of a Setting",
     "RESULT_FIELDS": "the per-element results a run saves, {name: (label, measures, value(solver))}",

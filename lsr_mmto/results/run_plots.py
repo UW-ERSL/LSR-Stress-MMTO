@@ -363,17 +363,15 @@ def boundary_conditions(problem, out=None, *, size=(1400, 1050), zoom=0.82):
     the view and then applies zoom(1.25), which crops the load arrow and the
     clamped face. zoom < 1 here undoes that.
     """
-    from lsr_mmto.pyto_ad_imports import hex_structural_fea, linear_solvers, deflation
+    from lsr_mmto.physics.available_physics import physics_module
+    from lsr_mmto.pyto_ad_imports import linear_solvers, deflation
     import pyvista as pv
 
-    mesh, mat_prop, bc, body_force, to_params, _ = problem.build()
+    mesh, mat_prop, bcs, body_force, to_params, _ = problem.build()
 
     # plot_mesh never solves, so the solver choice does not matter here
-    fe = hex_structural_fea.HexStructuralFEA(
-        mesh=mesh, mat_prop=mat_prop, bc=bc,
-        solver=linear_solvers.Solvers.PARDISO,
-        dsolver=deflation.DeflationSolver(),
-        rtol=1e-8, elem_body_force=body_force)
+    fe = physics_module(problem.physics).make_solver(mesh, mat_prop, bcs, linear_solvers.Solvers.PARDISO,
+                                                     deflation.DeflationSolver(), body_force)
 
     p = pv.Plotter(off_screen=out is not None, window_size=list(size))
     p.enable_anti_aliasing()

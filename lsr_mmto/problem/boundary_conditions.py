@@ -9,7 +9,8 @@ from lsr_mmto.physics.available_physics import MODULES
 
 
 class BCKind:
-    """One kind of boundary condition. role is "support" or "load"; check(bc) gives a list
+    """One kind of boundary condition. role is "support" or "load"; field is the field it acts on
+    (one of its physics' FIELDS, e.g. "u"), and each field gets a boundary condition of its own; check(bc) gives a list
     of errors; apply(bc, nodes, mesh, state, where) puts it on the mesh, in
     state["values"] (dof -> imposed value) or state["force"]; script(bc, on) is the
     Project call that makes it. Supports are applied before loads, each in the order given.
@@ -19,8 +20,8 @@ class BCKind:
     picks: {type in the picking window: its values from the window's entry}, for a kind that can be
     picked on the part (None is an entry with no type)."""
 
-    def __init__(self, doc, role, check, apply, script, fields=(), picks=None):
-        self.doc, self.role, self.check, self.apply, self.script = doc, role, check, apply, script
+    def __init__(self, doc, role, field, check, apply, script, fields=(), picks=None):
+        self.doc, self.role, self.field, self.check, self.apply, self.script = doc, role, field, check, apply, script
         self.fields, self.picks = tuple(fields), dict(picks or {})
 
 

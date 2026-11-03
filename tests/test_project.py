@@ -101,7 +101,8 @@ def test_validate():
 
 def test_build_coded():
     p = coded_ubracket()
-    mesh, mat_prop, bc, body_force, to_params, vae_params = p.build(verbose=False)
+    mesh, mat_prop, bcs, body_force, to_params, vae_params = p.build(verbose=False)
+    bc = bcs["u"]
     P = np.asarray(mesh.node_xyz)
     bottom = S.face("ymin").evaluate(mesh, "nodes")
     side = S.nearest([0.0, 0.5, 0.0]).evaluate(mesh, "nodes")
@@ -192,7 +193,8 @@ def test_window_picks_become_the_project():
         assert p.selections["gui_support2"].TYPE == "halfspaces"
         p.database = "6Materials_AF_3Attr"
         p.objective("Compliance()")
-        mesh, _, bc, _, _, _ = p.build(verbose=False)
+        mesh, _, bcs, _, _, _ = p.build(verbose=False)
+        bc = bcs["u"]
         assert mesh.num_elems == int(ref["num_elems"])
         assert np.array_equal(np.sort(bc.fixed_dofs), ref["fixed_dofs"])
         assert np.array_equal(bc.force, ref["force"])

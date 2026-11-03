@@ -13,7 +13,8 @@ linear elasticity with a different material in each element; the stresses are vo
 from lsr_mmto.physics.structural.structural_physics import analyse, make_solver, set_pnorm_exponent  # noqa: F401
 from lsr_mmto.physics.structural.structural_quantities import (QUANTITIES, final_summary,  # noqa: F401
                                                                iteration_diagnostics)
-from lsr_mmto.physics.structural.structural_supports_and_loads import SUPPORT_AND_LOAD_KINDS  # noqa: F401
+from lsr_mmto.physics.structural.structural_supports_and_loads import (SUPPORT_AND_LOAD_KINDS,  # noqa: F401
+                                                                      supports_and_loads_error)
 
 NAME = "structural"
 DOC = "linear elasticity, small strain"

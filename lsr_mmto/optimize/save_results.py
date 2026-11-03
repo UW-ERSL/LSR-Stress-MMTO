@@ -253,7 +253,7 @@ def provenance():
 # public API                                                                  #
 # --------------------------------------------------------------------------- #
 def build_run_config(example_name, run_args, to_params, vae_params, beta_schedule,
-                     mesh, bc, mat_encoder, z_real_points, material_colors,
+                     mesh, bcs, fields, mat_encoder, z_real_points, material_colors,
                      mma_settings=None, runtime_sec=None, iterations=None,
                      comment="", pnorm_exponent=None, material_labels=None):
     """Assemble the complete sectioned parameter manifest. Never raises."""
@@ -295,7 +295,7 @@ def build_run_config(example_name, run_args, to_params, vae_params, beta_schedul
     cfg["materials"] = _material_summary(mat_encoder, z_real_points, material_colors, material_labels)
     cfg["fea"] = {
         "mesh": _mesh_summary(mesh),
-        "loading_and_bc": _loading_bc_summary(mesh, bc),
+        "loading_and_bc": {field: _loading_bc_summary(mesh, bc, fields[field]) for field, bc in bcs.items()},
         "use_constant_poissons_ratio": ra.get("use_constant_poissons_ratio"),
         "constant_poissons_ratio": ra.get("constant_poissons_ratio"),
     }

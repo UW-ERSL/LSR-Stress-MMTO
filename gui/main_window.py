@@ -1325,8 +1325,8 @@ class MMTOWindow(MainWindow):
                 continue
             self._arrow(i, d, xyz[nodes], size)
         try:
-            bc_obj, _ = p.supports_and_loads(mesh)
-            error = p.rigid_body_error(mesh, bc_obj) if p.bcs else None
+            bcs, _ = p.supports_and_loads(mesh)
+            error = p.supports_and_loads_error(mesh, bcs) if p.bcs else None
             lines.append(f"<span style='color:#b00000'>Error: {error}</span>" if error else
                          "<span style='color:#1a7f37'>The supports hold the part against the loads.</span>"
                          if p.bcs else "No supports or loads yet.")

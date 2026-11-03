@@ -54,7 +54,8 @@ def compare_problem(example):
     key = example.replace(" ", "_").replace("-", "_")
 
     p = Project.load(os.path.join(PROJECTS, f"{example}.mmto"))
-    mesh, _, bc, _, tp, vae = p.build(verbose=False)
+    mesh, _, bcs, _, tp, vae = p.build(verbose=False)
+    bc = bcs["u"]
     assert (mesh.num_elems, mesh.num_nodes) == (ref["num_elems"], ref["num_nodes"]), "mesh size"
 
     order = np.argsort(bc.fixed_dofs)
