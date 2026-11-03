@@ -10,7 +10,7 @@ linear elasticity with a different material in each element; the stresses are vo
     structural_quantities.py           compliance, p-norm stress and failure factor, the stress
                                        diagnostics of each iteration and of the final design
 """
-from lsr_mmto.physics.structural.structural_physics import analyse, make_solver  # noqa: F401
+from lsr_mmto.physics.structural.structural_physics import analyse, make_solver, set_pnorm_exponent  # noqa: F401
 from lsr_mmto.physics.structural.structural_quantities import (QUANTITIES, final_summary,  # noqa: F401
                                                                iteration_diagnostics)
 from lsr_mmto.physics.structural.structural_supports_and_loads import SUPPORT_AND_LOAD_KINDS  # noqa: F401
@@ -24,7 +24,7 @@ PROPERTIES = ["Youngs_Modulus"]                     # Poisson's ratio may be one
 SETTINGS = [
     dict(section="common", key="pnorm_exponent", default=6.0, label="p-norm exponent",
          help="How closely the single stress value follows the highest stress in the part. Larger is closer, "
-              "but harder to optimize.", group="Main"),
+              "but harder to optimize.", group="Main", at_build=set_pnorm_exponent),
     dict(section="advanced", key="use_constant_poissons_ratio", default=False, label="Constant Poisson's ratio",
          help="One Poisson's ratio for every material, instead of each material's own.", group="Material model"),
     dict(section="advanced", key="constant_poissons_ratio", default=0.3, label="Poisson's ratio value",

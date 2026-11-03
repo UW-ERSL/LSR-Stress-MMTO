@@ -120,6 +120,11 @@ def pnorm(v, p):
 
 
 # ----------------------------------------------------------------------------- the module's entries
+def set_pnorm_exponent(p):
+    """The p-norm exponent where PyTO-AD's material model keeps it, read by every p-norm."""
+    ad_mm._PNORM_EXPONENT = float(p)
+
+
 def elastic_constants(props, settings):
     """E and nu per element from the decoded properties: the database's Poisson's ratio, or one value
     for every element when the setting asks for it or the database has none."""

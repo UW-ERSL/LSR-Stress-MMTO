@@ -40,15 +40,16 @@ OPTIMIZATION, VAE = "Optimization", "VAE"                 # the Settings panel's
 class Setting:
     """One setting. none_means: what an empty value (None) means, for a setting that may be empty;
     integer: a whole number; choices: the Enum whose member names are its only values; pyto_ad_field:
-    the field of the optimization parameters (TOParams) that holds it during a run."""
+    the field of the optimization parameters (TOParams) that holds it during a run; at_build(value):
+    for a setting PyTO-AD keeps elsewhere, puts it there when the project is built."""
     __slots__ = ("section", "key", "default", "label", "help", "group", "none_means", "integer", "choices",
-                 "pyto_ad_field")
+                 "pyto_ad_field", "at_build")
 
     def __init__(self, section, key, default, label, help, group, none_means=None, integer=False, choices=None,
-                 pyto_ad_field=None):
+                 pyto_ad_field=None, at_build=None):
         self.section, self.key, self.default, self.label, self.help = section, key, default, label, help
         self.group, self.none_means, self.integer, self.choices = group, none_means, integer, choices
-        self.pyto_ad_field = pyto_ad_field
+        self.pyto_ad_field, self.at_build = pyto_ad_field, at_build
 
     @property
     def tab(self):

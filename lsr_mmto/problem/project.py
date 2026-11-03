@@ -61,10 +61,11 @@ from lsr_mmto.materials.databases import (ATTRIBUTES, DATABASE_DIR, DATABASE_VAE
                                          recommended_latent_dim, unit_ratio)
 from lsr_mmto.formulation.formulation_text import parse_expression, to_params_form
 from lsr_mmto.physics.available_physics import PHYSICS
-from lsr_mmto.physics.structural.structural_supports_and_loads import _SUPPORT_DOFS, _dofs
 from lsr_mmto.problem.boundary_conditions import BC_KINDS
 from lsr_mmto.problem.settings import (BY_KEY, DEFAULT_SETTINGS, MESH_DEFAULTS, SETTINGS, VAE_PARAMS, pyto_ad_value,
                                        run_settings)
+
+DEFAULT_PHYSICS = next(iter(PHYSICS))          # a project that names no physics: the first one listed
 
 SCHEMA_VERSION = 1
 # _UPGRADES[n] turns an mmto section of version n into version n + 1. When the format
@@ -103,22 +104,22 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 
 
 def _supports_and_loads(picks):
-    """Supports as (type, triangles, points, regions) and loads as (triangles, points, regions,
-    force), from the window's constraint_data and force_data lists."""
-    supports, loads = [], []
-    for c in picks.get("constraint_data", []):
-        supports.append((c["type"], c.get("triangles") or [], c.get("points") or [],
-                         c.get("regions") or []))
-    for f in picks.get("force_data", []):
-        if f.get("type", "force_xyz") != "force_xyz":
-            raise NotImplementedError(f"load type {f.get('type')!r} is not supported")
-        loads.append((f.get("triangles") or [], f.get("points") or [], f.get("regions") or [],
-                      [f.get("force_x", 0.0), f.get("force_y", 0.0), f.get("force_z", 0.0)]))
-    for s in supports:
-        if s[0] not in _SUPPORT_DOFS:
-            raise NotImplementedError(f"support type {s[0]!r} is not supported; "
-                                      f"use one of {', '.join(_SUPPORT_DOFS)}")
-    return supports, loads
+    """Supports and loads as (kind, values, triangles, points, regions), from the window's
+    constraint_data (supports) and force_data (loads) lists, each made a kind of BC_KINDS by the
+    kind's picks."""
+    found = {}
+    for role, key in (("load", "force_data"), ("support", "constraint_data")):
+        found[role] = []
+        for entry in picks.get(key, []):
+            t = entry.get("type")
+            kinds = [(name, k.picks[t]) for name, k in BC_KINDS.items() if k.role == role and t in k.picks]
+            if not kinds:
+                known = [p for k in BC_KINDS.values() if k.role == role for p in k.picks if p is not None]
+                raise NotImplementedError(f"{role} type {t!r} is not supported; use one of {', '.join(known)}")
+            name, values = kinds[0]
+            found[role].append((name, values(entry), entry.get("triangles") or [], entry.get("points") or [],
+                                entry.get("regions") or []))
+    return found["support"], found["load"]
 
 
 class Project:
@@ -129,7 +130,7 @@ class Project:
         self.n_dof = int(MESH_DEFAULTS["n_dof"] if n_dof is None else n_dof)
         self.single_layer = bool(MESH_DEFAULTS["single_layer"] if single_layer is None else single_layer)
         self.comment = ""
-        self.physics = "structural"
+        self.physics = DEFAULT_PHYSICS
         self.selections = {}                    # name -> Selection
         self.bcs = []                           # dicts, see BC_KINDS
         self.keep_solid_names = []
@@ -177,21 +178,19 @@ class Project:
             return parts[0] if len(parts) == 1 else S.union(*parts)
 
         names = []
-        for i, (kind, triangles, points, regions) in enumerate(supports):
-            name = self.add_selection(self._free_name("gui_support"),
-                                      selection(triangles, points, regions, f"support {i + 1}"))
-            self.add_support(name, dofs="".join("xyz"[d] for d in _SUPPORT_DOFS[kind]))
-            names.append(name)
-        for i, (triangles, points, regions, f) in enumerate(loads):
-            name = self.add_selection(self._free_name("gui_load"),
-                                      selection(triangles, points, regions, f"load {i + 1}"))
-            self.add_force(name, total=f)
-            names.append(name)
+        for role, found in (("support", supports), ("load", loads)):
+            for i, (kind, values, triangles, points, regions) in enumerate(found):
+                name = self.add_selection(self._free_name(f"gui_{role}"),
+                                          selection(triangles, points, regions, f"{role} {i + 1}"))
+                self.bcs.append({"kind": kind, "on": name, **values})
+                names.append(name)
         return names
 
     def add_support(self, on, dofs="xyz", value=0.0):
-        _dofs(dofs)
         kind = "fixed" if float(value) == 0.0 else "displacement"
+        errors = BC_KINDS[kind].check({"dofs": dofs})
+        if errors:
+            raise ValueError(errors[0])
         bc = {"kind": kind, "on": self._on(on, "support"), "dofs": dofs}
         if kind == "displacement":
             bc["value"] = float(value)
@@ -541,8 +540,7 @@ class Project:
                 for w in shown:
                     print(f"[{self.name}] warning: {w}")
                 self._shown_warnings = shown
-        from lsr_mmto.pyto_ad_imports import (mat_lib, topopt_material_model,
-                                      find_elements_with_fixedDOF)
+        from lsr_mmto.pyto_ad_imports import mat_lib, find_elements_with_fixedDOF
         from lsr_mmto.optimize.mmto_to_params import MMTOParams
         from lsr_mmto.problem.mesh import make_mesh
 
@@ -554,7 +552,6 @@ class Project:
             raise ValueError(f"project {self.name!r}: {error}")
 
         # ---- optimization parameters
-        common = self.settings.get("common", {})
         to_params = MMTOParams()
         to_params.Comment = self.comment or self.name
         to_params.KeepFixedElems = self.keep_support_elements
@@ -562,7 +559,9 @@ class Project:
             if e.pyto_ad_field is not None:
                 value = getattr(self, e.key) if e.section == "mesh" else self.settings[e.section][e.key]
                 setattr(to_params, e.pyto_ad_field, pyto_ad_value(e, value))
-        topopt_material_model._PNORM_EXPONENT = float(common["pnorm_exponent"])
+        for e in SETTINGS:                                          # every setting PyTO-AD keeps elsewhere
+            if e.at_build is not None:
+                e.at_build(getattr(self, e.key) if e.section == "mesh" else self.settings[e.section][e.key])
         xlsx, _ = self.database_paths()
         to_params.MaterialsExcelFile = xlsx
         obj = self.formulation["objective"]
@@ -705,7 +704,7 @@ class Project:
                  "            base_dir=HERE)"]
         if self.comment:
             lines.append(f"p.comment = {self.comment!r}")
-        if self.physics != "structural":
+        if self.physics != DEFAULT_PHYSICS:
             lines.append(f"p.physics = {self.physics!r}")
         if self.units != "none":
             lines.append(f"p.units = {self.units!r}")
@@ -780,7 +779,7 @@ class Project:
         p = cls(m.get("name") or default_name, data.get("stl_file_path", ""),
                 n_dof=mesh.get("n_dof"), single_layer=mesh.get("single_layer"),
                 base_dir=base_dir)
-        p.comment, p.physics = m.get("comment", ""), m.get("physics", "structural")
+        p.comment, p.physics = m.get("comment", ""), m.get("physics", DEFAULT_PHYSICS)
         p.selections = {k: S.from_dict(v) for k, v in m.get("selections", {}).items()}
         p.bcs = [dict(bc) for bc in m.get("bcs", [])]
         p.keep_solid_names = list(m.get("keep_solid", []))

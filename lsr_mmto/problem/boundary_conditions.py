@@ -15,11 +15,13 @@ class BCKind:
     Project call that makes it. Supports are applied before loads, each in the order given.
     fields: its values, as (name, kind, measures, doc); kind is "dofs" (some of x, y, z),
     "number", "vector" (three numbers) or "area" (a number or "bbox"); measures is what
-    the number is (one of UNITS, or "area"), for its unit. The GUI's form is made from them."""
+    the number is (one of UNITS, or "area"), for its unit. The GUI's form is made from them.
+    picks: {type in the picking window: its values from the window's entry}, for a kind that can be
+    picked on the part (None is an entry with no type)."""
 
-    def __init__(self, doc, role, check, apply, script, fields=()):
+    def __init__(self, doc, role, check, apply, script, fields=(), picks=None):
         self.doc, self.role, self.check, self.apply, self.script = doc, role, check, apply, script
-        self.fields = tuple(fields)
+        self.fields, self.picks = tuple(fields), dict(picks or {})
 
 
 BC_KINDS = {name: BCKind(**args) for m in MODULES for name, args in m.SUPPORT_AND_LOAD_KINDS.items()}

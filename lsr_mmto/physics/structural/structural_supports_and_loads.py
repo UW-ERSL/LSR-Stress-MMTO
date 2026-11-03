@@ -10,14 +10,15 @@ The structural supports and loads, each acting on a named selection, evaluated o
                    seen along an axis-aligned direction (each side at least half an
                    element). "bbox" is approximate; it is there for the airplane bracket.
 Each kind is given as the arguments of a BCKind (problem/boundary_conditions.py), which turns
-them into the kinds a project can use.
+them into the kinds a project can use. picks: how a support or a load picked on the part in the
+window (its type there) becomes this kind.
 """
 import numpy as np
 
 _AXES = {"x": 0, "y": 1, "z": 2}
 _MARK_FIXED, _MARK_LOAD, _MARK_ROLLER = 1, 2, 3
-# degrees of freedom each support type of the picking tools fixes
-_SUPPORT_DOFS = {"Fixed XYZ": (0, 1, 2), "Fixed X": (0,), "Fixed Y": (1,), "Fixed Z": (2,)}
+# the directions each support type of the picking tools holds
+_PICKED_SUPPORTS = {"Fixed XYZ": "xyz", "Fixed X": "x", "Fixed Y": "y", "Fixed Z": "z"}
 
 def _dofs(dofs):
     if not dofs or any(c not in _AXES for c in dofs) or len(set(dofs)) != len(dofs):
@@ -25,9 +26,14 @@ def _dofs(dofs):
     return [_AXES[c] for c in sorted(dofs, key="xyz".index)]
 
 
-def _kind(doc, role, check, apply, script, fields=()):
+def _kind(doc, role, check, apply, script, fields=(), picks=None):
     """The arguments of one BCKind, in its order."""
-    return {"doc": doc, "role": role, "check": check, "apply": apply, "script": script, "fields": fields}
+    return {"doc": doc, "role": role, "check": check, "apply": apply, "script": script, "fields": fields,
+            "picks": picks or {}}
+
+
+def _picked_force(f):
+    return {"total": [float(f.get("force_x", 0.0)), float(f.get("force_y", 0.0)), float(f.get("force_z", 0.0))]}
 
 
 def _check_dofs(bc):
@@ -88,7 +94,8 @@ SUPPORT_AND_LOAD_KINDS = {
     "fixed": _kind(
         "the given dofs (x, y, z) held at 0", "support", _check_dofs, _apply_support,
         lambda bc, on: f"p.add_support({on}, dofs={bc['dofs']!r})",
-        [("dofs", "dofs", None, "the directions held")]),
+        [("dofs", "dofs", None, "the directions held")],
+        {t: (lambda c, d=d: {"dofs": d}) for t, d in _PICKED_SUPPORTS.items()}),
     "displacement": _kind(
         "the given dofs held at a nonzero value", "support", _check_dofs, _apply_support,
         lambda bc, on: f"p.add_support({on}, dofs={bc['dofs']!r}, value={bc['value']!r})",
@@ -96,7 +103,8 @@ SUPPORT_AND_LOAD_KINDS = {
     "force": _kind(
         "a total force [Fx, Fy, Fz], split equally over the nodes", "load", _check_force, _apply_force,
         lambda bc, on: f"p.add_force({on}, total={bc['total']!r})",
-        [("total", "vector", "force", "the total force, split equally over the nodes")]),
+        [("total", "vector", "force", "the total force, split equally over the nodes")],
+        {"force_xyz": _picked_force, None: _picked_force}),
     "traction": _kind(
         "pressure * area along a direction, split equally over the nodes; area a number or 'bbox'",
         "load", _check_direction, _apply_traction,
