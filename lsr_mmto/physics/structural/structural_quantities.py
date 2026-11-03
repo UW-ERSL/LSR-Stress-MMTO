@@ -1,10 +1,10 @@
 """
 structural_quantities.py
 ========================
-What the structural module measures: the structural objectives and constraints (compliance,
-p-norm stress, p-norm failure factor), entered by name in formulation/quantities.py; each
-iteration's stress diagnostics (max failure factor, stress-violation counts) recorded into the
-history; and the final design's compliance, stresses and mass, printed by the final check.
+What the structural module measures: its objectives and constraints (QUANTITIES: compliance,
+p-norm stress, p-norm failure factor), each iteration's stress diagnostics (max failure factor,
+stress-violation counts) recorded into the history (iteration_diagnostics), and the final
+designs' compliance, stresses and mass, printed by the final check (final_summary).
 """
 import numpy as np
 import torch
@@ -27,6 +27,21 @@ def _failure_factor_pnorm(m, opt):
     p = ad_mm.get_pNorm_exponent()                      # mean form (1/N), as the manual code on main
     Y = torch.clamp(m.props["Yield_Strength"], min=1e-12)
     return (torch.sum((m.svm / Y) ** p) / m.N) ** (1.0 / p)
+
+
+# the structural objectives and constraints, as the arguments of a Quantity (formulation/quantities.py)
+QUANTITIES = [
+    dict(name="Compliance", objective=True, constraint=True, needs=[], fn=_compliance, doc="F . u",
+         shown="Compliance", help="How much the part gives under the loads. Lower is stiffer."),
+    dict(name="StressPNorm", objective=True, constraint=False, needs=[], fn=_stress_pnorm,
+         doc="p-norm of the relaxed von Mises stress, no 1/N", shown="Stress (p-norm)",
+         help="One value close to the highest von Mises stress in the part."),
+    dict(name="FailureFactorPNorm", objective=True, constraint=True, needs=["Yield_Strength"],
+         fn=_failure_factor_pnorm, doc="mean p-norm of von Mises / yield strength, per element",
+         shown="Failure factor (p-norm)",
+         help="One value close to the highest stress / yield strength in the part. Above 1 means some element "
+              "yields."),
+]
 
 
 def compute_max_failure_factor(vm, material_properties):
@@ -368,3 +383,38 @@ def eval_stress_compliance_metrics(
         "vm_min_active": vm_min_active,
         "max_failure_factor": max_failure_factor,
     }
+
+
+def iteration_diagnostics(history, iteration, solver, x_phys, properties, elem_volume, design_domain_volume,
+                          plot_progress=False, plotter=None, verbose=True):
+    """After the iteration's solve: the solver's stresses at x_phys (postprocess), then the mass ratio,
+    the max failure factor and the stress-violation counts recorded into history, printed when verbose."""
+    solver.mesh.setPseudoDensity(torch.as_tensor(x_phys))   # PyTO-AD's mesh takes torch
+    solver.postprocess()
+    record_fea_diagnostics(history, iteration, x_phys, None, properties, solver, elem_volume,
+                           design_domain_volume, plot_progress=plot_progress, plotter=plotter, verbose=verbose)
+
+
+def final_summary(designs, solver, properties_of, settings, encoder, latent_dim, elem_volume,
+                  design_domain_volume):
+    """The final check's numbers: each design (label, x, z element-major) analysed and printed, then the
+    stress violations of the last one. properties_of(z) gives the decoded properties of latent points z."""
+    from lsr_mmto.physics.structural.structural_physics import elastic_constants
+
+    def decode(z):
+        props = properties_of(z)
+        E, nu = elastic_constants(props, settings)
+        return E, nu, props
+
+    for label, x, z in designs:
+        eval_stress_compliance_metrics(
+            x_vec=x, z_vec=np.asarray(z).T.reshape(-1), label=label, active_thresh=0.5, latentDim=latent_dim,
+            matEncoder=encoder, fe_solver_structural=solver, MaterialModel=ad_mm.MaterialModel,
+            elem_volume=elem_volume, design_domain_volume=design_domain_volume, decode=decode)
+    _, x, z = designs[-1]
+    with torch.no_grad():
+        props = properties_of(z if torch.is_tensor(z) else torch.as_tensor(np.asarray(z), dtype=torch.get_default_dtype()))
+    final_stress_diag = compute_stress_violation_diagnostics(
+        vm=solver.vonMisesStress, material_properties=props, x_vec=x, active_thresh=0.5,
+        mesh=solver.mesh, bc=solver.bc, violation_tol=0.0)
+    print_stress_violation_diagnostics(final_stress_diag, iteration=None, prefix="[FINAL STRESS DIAG]")

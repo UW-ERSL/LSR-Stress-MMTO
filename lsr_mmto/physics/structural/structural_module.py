@@ -1,15 +1,37 @@
 """
 structural_module.py
 ====================
-What the structural module offers the optimization, the names physics/available_physics.py says
-every physics offers: Solver (the finite element solver), Model (one iteration's physics:
-decode, solve, objective, constraints and their slopes), decode, distance_penalty and
-latent_smoothing.
-"""
-from lsr_mmto.design.latent_penalties import distance_penalty, latent_smoothing  # noqa: F401
-from lsr_mmto.design.latent_to_properties import decode  # noqa: F401
-from lsr_mmto.optimize.design_model import MMTOModelAD
-from lsr_mmto.physics.structural.structural_physics import MultiMaterialHexFEA
+The structural module's front page: everything the rest of LSR MMTO takes from the structural
+physics, one entry each, as physics/available_physics.py lists them (MODULE_ENTRIES). Small-strain
+linear elasticity with a different material in each element; the stresses are von Mises.
 
-Solver = MultiMaterialHexFEA
-Model = MMTOModelAD
+    structural_physics.py              the solver, one iteration's solve, element stress
+    structural_supports_and_loads.py   fixed, displacement, force, traction
+    structural_quantities.py           compliance, p-norm stress and failure factor, the stress
+                                       diagnostics of each iteration and of the final design
+"""
+from lsr_mmto.physics.structural.structural_physics import analyse, make_solver  # noqa: F401
+from lsr_mmto.physics.structural.structural_quantities import (QUANTITIES, final_summary,  # noqa: F401
+                                                               iteration_diagnostics)
+from lsr_mmto.physics.structural.structural_supports_and_loads import SUPPORT_AND_LOAD_KINDS  # noqa: F401
+
+NAME = "structural"
+DOC = "linear elasticity, small strain"
+FIELDS = {"u": 3}                                   # the displacement, three unknowns per node
+PROPERTIES = ["Youngs_Modulus"]                     # Poisson's ratio may be one value for all (SETTINGS)
+
+# the structural settings, as the arguments of a Setting (problem/settings.py)
+SETTINGS = [
+    dict(section="common", key="pnorm_exponent", default=6.0, label="p-norm exponent",
+         help="How closely the single stress value follows the highest stress in the part. Larger is closer, "
+              "but harder to optimize.", group="Main"),
+    dict(section="advanced", key="use_constant_poissons_ratio", default=False, label="Constant Poisson's ratio",
+         help="One Poisson's ratio for every material, instead of each material's own.", group="Material model"),
+    dict(section="advanced", key="constant_poissons_ratio", default=0.3, label="Poisson's ratio value",
+         help="The Poisson's ratio used when Constant Poisson's ratio is ticked.", group="Material model"),
+]
+
+# the per-element results a run saves: (label, what it measures, its value from the solver after the final check)
+RESULT_FIELDS = {
+    "von_mises": ("von Mises stress", "stress", lambda solver: solver.vonMisesStress),
+}

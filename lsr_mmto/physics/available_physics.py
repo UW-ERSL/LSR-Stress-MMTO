@@ -1,31 +1,51 @@
 """
 available_physics.py
 ====================
-PHYSICS: each physics a project may name ("physics": "structural" in its file), the module that
-implements it and the database columns every problem of it reads.
+The physics a project may name ("physics": "structural" in its file), one module each, listed in
+MODULES by hand. A module is a folder in physics/ whose <name>_module.py is its front page: it
+gives every entry in MODULE_ENTRIES, and the core takes what it needs of the physics only from
+there. A new physics is one folder and one line in MODULES.
 
-A physics module offers what the optimization builds from it: Solver (the finite element solver,
-made from the mesh, the boundary conditions and the linear solver), Model (one iteration's
-physics: decode, solve, objective, constraints and their slopes), decode, distance_penalty and
-latent_smoothing. A new physics is one folder offering these, plus one entry here.
+A module's files import the layers below them (elements/, design/, the PyTO-AD solvers), never
+the core's lists: a module gives its quantities, its kinds of support and load and its settings
+as plain arguments, and the core makes them into Quantity, BCKind and Setting entries.
 """
-import importlib
+from lsr_mmto.physics.structural import structural_module
+
+MODULES = [structural_module]
+
+# what a module's front page gives, and what each is
+MODULE_ENTRIES = {
+    "NAME": "the name a project file uses",
+    "DOC": "what the physics is, in one line",
+    "FIELDS": "each field it solves for and its unknowns per node, e.g. {'u': 3}",
+    "PROPERTIES": "the material database columns every problem of it reads",
+    "make_solver": "make_solver(mesh, mat_prop, bcs, linear_solver, dsolver, elem_body_force): its finite "
+                   "element solver; bcs holds one boundary condition per field",
+    "analyse": "analyse(model): one iteration's solve inside the torch tree, from model.x_phys and model.props, "
+               "leaving on the model what its quantities read",
+    "SUPPORT_AND_LOAD_KINDS": "its kinds of support and load, {name: the arguments of a BCKind}",
+    "QUANTITIES": "its objectives and constraints, each as the arguments of a Quantity",
+    "SETTINGS": "its own settings, each as the arguments of a Setting",
+    "RESULT_FIELDS": "the per-element results a run saves, {name: (label, measures, value(solver))}",
+    "iteration_diagnostics": "iteration_diagnostics(history, iteration, solver, x_phys, properties, ...): what each "
+                             "iteration records and prints besides the objective and the constraints",
+    "final_summary": "final_summary(designs, solver, ...): the final designs' numbers, printed by the final check",
+}
 
 
-class Physics:
-    __slots__ = ("name", "module", "needs", "doc")
+def _checked(module):
+    missing = [k for k in MODULE_ENTRIES if not hasattr(module, k)]
+    if missing:
+        raise TypeError(f"physics module {module.__name__} does not give {', '.join(missing)}")
+    return module
 
-    def __init__(self, name, module, needs, doc):
-        self.name, self.module, self.needs, self.doc = name, module, tuple(needs), doc
 
-
-PHYSICS = {p.name: p for p in [
-    Physics("structural", "lsr_mmto.physics.structural.structural_module", ["Youngs_Modulus"], "linear elasticity, small strain"),
-]}
+PHYSICS = {m.NAME: _checked(m) for m in MODULES}
 
 
 def physics_module(name):
-    """The file of physics name, imported; an unknown name is an error that lists the known ones."""
+    """The front page of physics name; an unknown name is an error that lists the known ones."""
     if name not in PHYSICS:
         raise ValueError(f"physics {name!r}: one of {', '.join(PHYSICS)}")
-    return importlib.import_module(PHYSICS[name].module)
+    return PHYSICS[name]

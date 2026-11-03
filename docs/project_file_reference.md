@@ -92,10 +92,10 @@ An objective or a constraint is one quantity, e.g. `Mass()` or `MaterialVolumeFr
 | name | shown as | objective | constraint | needs columns | value | meaning |
 |---|---|---|---|---|---|---|
 | `Compliance` | Compliance | yes | yes |  | F . u | How much the part gives under the loads. Lower is stiffer. |
-| `Mass` | Mass | yes | yes | Density | sum of density * x_phys * element volume | The mass of the part, from each material's density. |
-| `Cost` | Cost |  | yes | Density, Cost | sum of density * cost * x_phys * element volume | The cost of the part, from each material's density and cost per mass. |
 | `StressPNorm` | Stress (p-norm) | yes |  |  | p-norm of the relaxed von Mises stress, no 1/N | One value close to the highest von Mises stress in the part. |
 | `FailureFactorPNorm` | Failure factor (p-norm) | yes | yes | Yield_Strength | mean p-norm of von Mises / yield strength, per element | One value close to the highest stress / yield strength in the part. Above 1 means some element yields. |
+| `Mass` | Mass | yes | yes | Density | sum of density * x_phys * element volume | The mass of the part, from each material's density. |
+| `Cost` | Cost |  | yes | Density, Cost | sum of density * cost * x_phys * element volume | The cost of the part, from each material's density and cost per mass. |
 | `VolumeFraction` | Volume fraction |  | yes |  | mean of x_phys | The share of the design space filled with material, 0 to 1. |
 | `MaterialVolumeFraction` | Material volume fraction |  | yes |  | volume fraction of one database material, softmax weights | The share of the design space filled with one chosen material, 0 to 1. |
 
@@ -117,8 +117,8 @@ Every setting a run takes, under its own name. A new project starts from these v
 | `maxIterations` | 300 | The optimization stops after this many iterations. |
 | `relative_filter_radius` | 2.5 | The smallest feature the design may have, in element sizes. Larger gives smoother, simpler designs. |
 | `material_filter_radius` | None | How far material choices are smoothed between neighbouring elements, in element sizes. Ticked: the same as the density filter radius. Empty (None): same as density filter. |
-| `pnorm_exponent` | 6.0 | How closely the single stress value follows the highest stress in the part. Larger is closer, but harder to optimize. |
 | `beta_schedule_scheme` | 'PAPER' (one of PAPER, PAPER_BM1) | How fast the design is pushed to clear solid and empty: the sharpness starts at 1 and grows 1.5 times every 5 iterations after iteration 50, up to 32 (PAPER) or 16 (PAPER_BM1). |
+| `pnorm_exponent` | 6.0 | How closely the single stress value follows the highest stress in the part. Larger is closer, but harder to optimize. |
 
 ### advanced
 
@@ -143,11 +143,11 @@ Every setting a run takes, under its own name. A new project starts from these v
 | `z_smoothing_weight` | 0.0001 | How strong that smoothing is. |
 | `z_smoothing_disable_after_iter` | 250 | The iteration it stops at. |
 | `use_continuation` | False | Raises the SIMP penalty by 0.25 every 10 iterations during the run. |
-| `use_constant_poissons_ratio` | False | One Poisson's ratio for every material, instead of each material's own. |
-| `constant_poissons_ratio` | 0.3 | The Poisson's ratio used when Constant Poisson's ratio is ticked. |
 | `z0_init_method` | 'ORIGIN' (one of LIGHTEST, HEAVIEST, ORIGIN, UNIFORM) | The material every element starts with: ORIGIN (the middle of the material map), the LIGHTEST or HEAVIEST material, or UNIFORM (random). |
 | `snap_to_real_material` | False | In the final design, give each element the nearest real material. |
 | `binarize_topology` | True | In the final design, make each element fully solid or empty, keeping the volume. |
+| `use_constant_poissons_ratio` | False | One Poisson's ratio for every material, instead of each material's own. |
+| `constant_poissons_ratio` | 0.3 | The Poisson's ratio used when Constant Poisson's ratio is ticked. |
 
 ### vae
 

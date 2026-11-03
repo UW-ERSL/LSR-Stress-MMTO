@@ -3,7 +3,8 @@ structural_physics.py
 =====================
 The structural physics of one iteration: PyTO-AD's structural solver with a different (E, nu) in
 each element, as torch tensors in the AD tree, and the element stress, von Mises stress and
-p-norm that the structural quantities read.
+p-norm that the structural quantities read. make_solver and analyse are the module's entries
+of the same names (structural_module.py).
 
     u      -> K -> x_phys, E, nu             K_e = SIMP(x_phys) * (lam_e K_lam + mu_e K_mu)
 
@@ -116,3 +117,28 @@ def von_mises(s):
 def pnorm(v, p):
     """(sum v^p)^(1/p), as in PyTO's postprocess (no 1/N)."""
     return torch.sum(v ** p) ** (1.0 / p)
+
+
+# ----------------------------------------------------------------------------- the module's entries
+def elastic_constants(props, settings):
+    """E and nu per element from the decoded properties: the database's Poisson's ratio, or one value
+    for every element when the setting asks for it or the database has none."""
+    E = props["Youngs_Modulus"]                 # column names are registry names (databases.ATTRIBUTES)
+    nu = (torch.full_like(E, float(settings.constant_poissons_ratio))
+          if (settings.use_constant_poissons_ratio or "Poissons_Ratio" not in props) else props["Poissons_Ratio"])
+    return E, nu
+
+
+def make_solver(mesh, mat_prop, bcs, linear_solver, dsolver, elem_body_force):
+    """The structural solver of the mesh, with the boundary condition of the displacement field u."""
+    return MultiMaterialHexFEA(mesh=mesh, mat_prop=mat_prop, bc=bcs["u"], solver=linear_solver, dsolver=dsolver,
+                               rtol=1e-8, elem_body_force=elem_body_force)
+
+
+def analyse(m):
+    """One iteration's solve, inside the torch tree: E and nu from m.props, the displacement m.u at the
+    density m.x_phys, and the relaxed von Mises stress m.svm that the stress quantities read."""
+    E, nu = elastic_constants(m.props, m.settings)
+    m.fe.set_material_fields(E, nu)
+    m.u = m.fe.solve(m.x_phys, ad_mm.MaterialModel.SIMP)
+    m.svm = von_mises(m.fe.element_stress(m.u, m.x_phys))

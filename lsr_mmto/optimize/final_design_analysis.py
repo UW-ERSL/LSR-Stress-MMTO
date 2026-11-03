@@ -1,15 +1,11 @@
 """
 final_design_analysis.py
 ========================
-The final design analysed three ways (continuous, binarized, binarized with snapped materials),
-its stress diagnostics printed, and the run saved for later postprocessing.
+The final design analysed three ways (continuous, binarized, binarized with snapped materials) by
+the physics (its final_summary), and the run saved for later postprocessing.
 """
 import numpy as np
 import torch
-
-from lsr_mmto.physics.structural.structural_quantities import (compute_stress_violation_diagnostics,
-                                                               eval_stress_compliance_metrics,
-                                                               print_stress_violation_diagnostics)
 
 
 def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
@@ -17,15 +13,16 @@ def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
                        zRealPoints, material_colors, num_elems, latentDim,
                        elem_volume, design_domain_volume,
                        binarize_topology, snap_to_real_material, save_dir=None,
-                       run_config=None, example_name=None, material_labels=None, decode=None):
-    """Reconstruct the optimal fields, evaluate stress/compliance metrics at the
-    continuous / binarized / snapped designs, and draw the final plots.
+                       run_config=None, example_name=None, material_labels=None, physics=None,
+                       properties_of=None, settings=None):
+    """Reconstruct the optimal fields, have the physics analyse the continuous / binarized /
+    snapped designs (its final_summary), and save the run.
 
-    decode(z) -> (E, nu, properties) is the optimization's own decode, so the final check analyses
-    the design with the same materials (a decoded or constant Poisson's ratio) as the optimization;
+    properties_of(z) -> properties is the optimization's own decode, and settings its settings, so the
+    final check analyses the design with the same materials as the optimization;
     physical_density(x) -> x_phys is its own density filter and projection, at the last beta."""
-    if decode is None:
-        raise ValueError("run_postprocessing needs decode: the optimization's E, nu for latent points")
+    if physics is None or properties_of is None:
+        raise ValueError("run_postprocessing needs the physics and properties_of, the optimization's decode")
     import os
     if save_dir is not None:
         pass  # plot autosave disabled; figures are drawn by results/run_plots.py from the saved record
@@ -39,77 +36,26 @@ def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
 
     xOptimal_cont = physical_density(xOptimal_raw)   # the optimization's own filter and projection
 
-    eval_stress_compliance_metrics(
-        x_vec=xOptimal_cont,
-        z_vec=zOptimal.T.reshape(-1),
-        label="Continuous (x_phys projected, raw z)",
-        active_thresh=0.5,
-        latentDim=latentDim,
-        matEncoder=matEncoder,
-        fe_solver_structural=fe_solver,
-        MaterialModel=MaterialModel,
-        elem_volume=elem_volume,
-        design_domain_volume=design_domain_volume,
-        decode=decode,
-    )
-
     xOptimal = xOptimal_cont.copy()
     if binarize_topology:
         x_sorted = np.sort(xOptimal)
         threshold = x_sorted[int((1 - np.mean(xOptimal)) * len(xOptimal))]
         xOptimal = np.where(xOptimal < threshold, 0.0, 1.0)
 
-    eval_stress_compliance_metrics(
-        x_vec=xOptimal,
-        z_vec=zOptimal.T.reshape(-1),
-        label="Binarized topology (x projected -> binarized, raw z)",
-        active_thresh=0.5,
-        latentDim=latentDim,
-        matEncoder=matEncoder,
-        fe_solver_structural=fe_solver,
-        MaterialModel=MaterialModel,
-        elem_volume=elem_volume,
-        design_domain_volume=design_domain_volume,
-        decode=decode,
-    )
-
     zOptimalPts = torch.tensor(zOptimal, dtype=torch.get_default_dtype())
     if snap_to_real_material:
         zSnappedPts = torch.tensor(matEncoder.getClosestRealMaterialZValues(zOptimalPts))
         zOptimalPts = zSnappedPts
-    eval_stress_compliance_metrics(
-        x_vec=xOptimal,
-        z_vec=zOptimalPts.T.flatten().numpy(),
-        label="Binarized + snapped materials (x binarized, snapped z)",
-        active_thresh=0.5,
-        latentDim=latentDim,
-        matEncoder=matEncoder,
-        fe_solver_structural=fe_solver,
-        MaterialModel=MaterialModel,
-        elem_volume=elem_volume,
-        design_domain_volume=design_domain_volume,
-        decode=decode,
-    )
+
+    physics.final_summary(
+        [("Continuous (x_phys projected, raw z)", xOptimal_cont, zOptimal),
+         ("Binarized topology (x projected -> binarized, raw z)", xOptimal, zOptimal),
+         ("Binarized + snapped materials (x binarized, snapped z)", xOptimal, zOptimalPts)],
+        fe_solver, properties_of, settings, matEncoder, latentDim, elem_volume, design_domain_volume)
 
     decoded = matEncoder.vaeNet.decoder(zOptimalPts)
     material_properties = matEncoder.getMaterialProperties(decoded)
     Youngs_Modulus = material_properties["Youngs_Modulus"].detach().cpu().numpy()
-
-    final_stress_diag = compute_stress_violation_diagnostics(
-        vm=fe_solver.vonMisesStress,
-        material_properties=material_properties,
-        x_vec=xOptimal,
-        active_thresh=0.5,
-        mesh=fe_solver.mesh,
-        bc=fe_solver.bc,
-        violation_tol=0.0,
-    )
-
-    print_stress_violation_diagnostics(
-        final_stress_diag,
-        iteration=None,
-        prefix="[FINAL STRESS DIAG]",
-    )
 
     # --- persist everything for offline postprocessing (results/load_results.py, results/run_plots.py) ---
     material_indices = matEncoder.getClosestRealMaterialIndex(zOptimalPts)

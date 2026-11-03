@@ -364,7 +364,7 @@ class Project:
         """Columns the physics and the objective and constraints read that the database lacks."""
         from lsr_mmto.formulation.quantities import QUANTITIES
         out = [f"material database: the {self.physics} model needs a {c} column"
-               for c in (PHYSICS[self.physics].needs if self.physics in PHYSICS else ()) if c not in columns]
+               for c in (PHYSICS[self.physics].PROPERTIES if self.physics in PHYSICS else ()) if c not in columns]
         by_name = {q.name: q for q in QUANTITIES}
         f = self.formulation
         for expr in [(f.get("objective") or {}).get("expression")] + \

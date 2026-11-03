@@ -7,7 +7,8 @@ page), and the group of the Settings panel it sits in. Everything else is made f
 DEFAULT_SETTINGS, the Settings panel, docs/project_file_reference.md, and the settings object s the
 optimization reads (s.gamma_factor).
 
-A new setting is one Setting here, plus the line in optimize/optimization_loop.py that reads s.<name>. A setting
+A new setting is one Setting here (or, for a setting of one physics, one entry of SETTINGS on its
+module's front page), plus the line in optimize/optimization_loop.py that reads s.<name>. A setting
 PyTO-AD's TOParams already has a field for names it (pyto_ad_field): build() copies it there, and
 the run reads it from there (to_params.MaxIterations), so the two never disagree.
 
@@ -16,6 +17,8 @@ project.settings[section]. A VAE setting whose default is FROM_DATABASE starts f
 known values (databases.DATABASE_VAE), or VAEParams for another database.
 """
 from enum import Enum
+
+from lsr_mmto.physics.available_physics import MODULES
 
 
 class Z0InitMethod(Enum):
@@ -72,9 +75,6 @@ SETTINGS = [
             "How far material choices are smoothed between neighbouring elements, in element sizes. Ticked: "
             "the same as the density filter radius.", "Main", none_means="same as density filter",
             pyto_ad_field="MaterialFilterRadius"),
-    Setting("common", "pnorm_exponent", 6.0, "p-norm exponent",
-            "How closely the single stress value follows the highest stress in the part. Larger is closer, but "
-            "harder to optimize.", "Main"),
     Setting("common", "beta_schedule_scheme", "PAPER", "Projection sharpness schedule",
             "How fast the design is pushed to clear solid and empty: the sharpness starts at 1 and grows 1.5 "
             "times every 5 iterations after iteration 50, up to 32 (PAPER) or 16 (PAPER_BM1).", "Main",
@@ -126,10 +126,6 @@ SETTINGS = [
     # ---- Material model
     Setting("advanced", "use_continuation", False, "SIMP continuation",
             "Raises the SIMP penalty by 0.25 every 10 iterations during the run.", "Material model"),
-    Setting("advanced", "use_constant_poissons_ratio", False, "Constant Poisson's ratio",
-            "One Poisson's ratio for every material, instead of each material's own.", "Material model"),
-    Setting("advanced", "constant_poissons_ratio", 0.3, "Poisson's ratio value",
-            "The Poisson's ratio used when Constant Poisson's ratio is ticked.", "Material model"),
     # ---- Start and reported design
     Setting("advanced", "z0_init_method", "ORIGIN", "Starting latent point",
             "The material every element starts with: ORIGIN (the middle of the material map), the LIGHTEST or "
@@ -161,6 +157,7 @@ SETTINGS = [
     Setting("vae", "numEpochs", FROM_DATABASE, "Max epochs", "Training stops after this many passes at the latest.",
             "VAE", integer=True),
 ]
+SETTINGS += [Setting(**args) for m in MODULES for args in m.SETTINGS]   # each physics' own, after the rest
 # the views made from SETTINGS, kept in step by _make_views
 BY_KEY, DEFAULT_SETTINGS, MESH_DEFAULTS = {}, {}, {}
 VAE_PARAMS = RUN_KEYS = ()

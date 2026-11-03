@@ -91,7 +91,7 @@ def generate():
     out += ["", "## Physics", "",
             "The `physics` of a project names the model its optimization uses.", "",
             "| physics | model | needs columns |", "|---|---|---|"]
-    out += [f"| `{k}` | {v.doc} | {', '.join(v.needs)} |" for k, v in PHYSICS.items()]
+    out += [f"| `{k}` | {v.DOC} | {', '.join(v.PROPERTIES)} |" for k, v in PHYSICS.items()]
 
     out += ["", "## Quantities", "",
             "An objective or a constraint is one quantity, e.g. `Mass()` or "

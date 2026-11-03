@@ -1,10 +1,11 @@
 """
 boundary_conditions.py
 ======================
-The kinds of support and load a project can use, BC_KINDS: one BCKind each, from the physics
-modules (today the structural one, physics/structural/structural_supports_and_loads.py).
+The kinds of support and load a project can use, BC_KINDS: one BCKind each, from every physics
+module's SUPPORT_AND_LOAD_KINDS (the structural ones are in
+physics/structural/structural_supports_and_loads.py).
 """
-from lsr_mmto.physics.structural.structural_supports_and_loads import STRUCTURAL_BC_KINDS
+from lsr_mmto.physics.available_physics import MODULES
 
 
 class BCKind:
@@ -21,4 +22,4 @@ class BCKind:
         self.fields = tuple(fields)
 
 
-BC_KINDS = {name: BCKind(**args) for name, args in STRUCTURAL_BC_KINDS.items()}
+BC_KINDS = {name: BCKind(**args) for m in MODULES for name, args in m.SUPPORT_AND_LOAD_KINDS.items()}

@@ -2,15 +2,14 @@
 quantities.py
 =============
 Every objective and constraint a formula can name, by name: QUANTITIES, find_quantity and
-quantity_label. The quantities that need no physics solve (mass, cost, volume fraction,
-material volume fraction) are computed here; the structural ones are computed in
-physics/structural/structural_quantities.py.
+quantity_label. The quantities every physics has (mass, cost, volume fraction, material volume
+fraction) are computed here; each physics module gives its own (the structural ones are in
+physics/structural/structural_quantities.py), listed after these.
 """
 import torch
 
 import lsr_mmto.pyto_ad_imports  # noqa: F401  puts PyTO-AD on sys.path (and its float64 default)
-from lsr_mmto.physics.structural.structural_quantities import (_compliance, _failure_factor_pnorm,
-                                                               _stress_pnorm)
+from lsr_mmto.physics.available_physics import MODULES
 
 DEFAULT_TAU = 0.5        # sharpness of the material assignment, the same for every material volume fraction
 
@@ -23,20 +22,21 @@ def material_volume_fraction(xb, z, z_real, material_id, tau):
 
 
 # ----------------------------------------------------------------------------- quantities
-# Every objective and constraint is one entry here. To add one: write its function of the
-# model's current state (m.x_phys, m.z, m.u, m.svm, m.props, ...) in torch, add an entry, and
-# add it to tests/test_ad_quantities.py. Nothing else changes: the gradient comes from autograd.
+# Every objective and constraint is one entry of QUANTITIES. One that every physics has is written
+# here; one of a physics is written in its module (QUANTITIES on its front page, as the arguments
+# below without physics). Write its function of the model's current state (m.x_phys, m.z, m.props,
+# and what the physics' analyse leaves, e.g. m.u, m.svm) in torch, add the entry, and add it to
+# tests/test_ad_quantities.py. Nothing else changes: the gradient comes from autograd.
 #
 #   name         the name a project file uses (P1); PyTO-AD's name where the meaning is the same
 #   objective    True if it can be the objective
 #   constraint   True if it can be a constraint
-#   physics      the physics it applies to
+#   physics      the physics it applies to; empty: every physics
 #   needs        material database columns it reads (checked, with a clear error)
 #   fn(m, opt)   the value, a torch scalar; a constraint is fn / limit - 1 <= 0
 #   doc          what fn computes, for the settings page
 #   shown        its name in the app
 #   help         what it is, in plain words: the app's tooltip and the settings page
-STRUCTURAL = "structural"
 
 
 class Quantity:
@@ -65,27 +65,17 @@ def _material_volume_fraction(m, opt):
                                     int(opt["material_id"]), float(opt.get("tau", DEFAULT_TAU)))
 
 
-QUANTITIES = [
-    Quantity("Compliance", True, True, [STRUCTURAL], [],
-             _compliance, "F . u", "Compliance",
-             "How much the part gives under the loads. Lower is stiffer."),
-    Quantity("Mass", True, True, [STRUCTURAL], ["Density"],
+QUANTITIES = [Quantity(physics=[m.NAME], **q) for m in MODULES for q in m.QUANTITIES] + [
+    Quantity("Mass", True, True, [], ["Density"],
              _mass, "sum of density * x_phys * element volume", "Mass",
              "The mass of the part, from each material's density."),
-    Quantity("Cost", False, True, [STRUCTURAL], ["Density", "Cost"],
+    Quantity("Cost", False, True, [], ["Density", "Cost"],
              _cost, "sum of density * cost * x_phys * element volume", "Cost",
              "The cost of the part, from each material's density and cost per mass."),
-    Quantity("StressPNorm", True, False, [STRUCTURAL], [],
-             _stress_pnorm, "p-norm of the relaxed von Mises stress, no 1/N", "Stress (p-norm)",
-             "One value close to the highest von Mises stress in the part."),
-    Quantity("FailureFactorPNorm", True, True, [STRUCTURAL], ["Yield_Strength"],
-             _failure_factor_pnorm, "mean p-norm of von Mises / yield strength, per element", "Failure factor (p-norm)",
-             "One value close to the highest stress / yield strength in the part. Above 1 means some element "
-             "yields."),
-    Quantity("VolumeFraction", False, True, [STRUCTURAL], [],
+    Quantity("VolumeFraction", False, True, [], [],
              _volume_fraction, "mean of x_phys", "Volume fraction",
              "The share of the design space filled with material, 0 to 1."),
-    Quantity("MaterialVolumeFraction", False, True, [STRUCTURAL], [],
+    Quantity("MaterialVolumeFraction", False, True, [], [],
              _material_volume_fraction, "volume fraction of one database material, softmax weights",
              "Material volume fraction", "The share of the design space filled with one chosen material, 0 to 1."),
 ]

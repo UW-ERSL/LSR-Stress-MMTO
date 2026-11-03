@@ -42,8 +42,11 @@ from lsr_mmto.pyto_ad_imports import (
 )
 from lsr_mmto.materials.encoder import MaterialEncoder, NetworkRunCancelled, network_warning
 from lsr_mmto.physics.available_physics import physics_module
-from lsr_mmto.design.latent_penalties import (smooth_latent_constraint_gradient_inplace,
+from lsr_mmto.design.latent_penalties import (distance_penalty, latent_smoothing,
+                                              smooth_latent_constraint_gradient_inplace,
                                               smooth_latent_gradient_inplace)
+from lsr_mmto.design.latent_to_properties import decode
+from lsr_mmto.optimize.design_model import MMTOModelAD
 from lsr_mmto.problem.settings import BetaScheduleScheme, Z0InitMethod
 from lsr_mmto.optimize.filters import create_density_and_material_filters
 from lsr_mmto.optimize.history import (
@@ -53,7 +56,6 @@ from lsr_mmto.optimize.history import (
     log_objective_and_constraints,
 )
 from lsr_mmto.optimize.final_design_analysis import run_postprocessing
-from lsr_mmto.physics.structural.structural_quantities import record_fea_diagnostics
 def get_beta_schedule(scheme: BetaScheduleScheme):
     """Return the Heaviside beta-continuation parameters (PAPER scheme).
 
@@ -126,7 +128,7 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
     if not hasattr(to_problem, "build"):
         raise TypeError(f"to_problem must be a Project, e.g. Project.load('projects/L-bracket.mmto'), "
                         f"not {to_problem!r}; the coded examples are now the project files in projects/")
-    AD = physics_module(to_problem.physics)                 # the solver and model of the project's physics
+    physics = physics_module(to_problem.physics)            # the front page of the project's physics
     problem = to_problem
     mesh_structural, mat_prop_struct, bc_struct, elem_body_force, to_params, vae_params = problem.build()
     print(f"[SWEEP] nDOFDesired={to_params.nDOFDesired}  "
@@ -205,15 +207,8 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
         dsolver.create_deflation_matrix(mesh_structural)
     print("Solver:", solver.name)
 
-    fe_solver_structural = AD.Solver(
-        mesh=mesh_structural,
-        mat_prop=mat_prop_struct,
-        bc=bc_struct,
-        solver=solver,
-        dsolver=dsolver,
-        rtol=1e-8,
-        elem_body_force=elem_body_force,
-    )
+    fe_solver_structural = physics.make_solver(mesh_structural, mat_prop_struct, {"u": bc_struct}, solver, dsolver,
+                                               elem_body_force)
 
     num_dof = fe_solver_structural.bc.num_dofs
     print(f"Number of DOF: {num_dof}")
@@ -228,7 +223,7 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
     H_density, Hs_density, H_material, Hs_material = create_density_and_material_filters(
         fe_solver_structural, to_params, createFilters
     )
-    ad_model = AD.Model(
+    ad_model = MMTOModelAD(
         fe_solver_structural, matEncoder, H_density, Hs_density, H_material, Hs_material,
         zRealPoints_np, to_params, s.use_constant_poissons_ratio, s.constant_poissons_ratio, elem_volume,
     )
@@ -322,12 +317,9 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
         log_design_state(history, mmaIterations, x_phys, z, material_properties,
                          zTorch, matEncoder, num_elems, beta_proj, s.eta_proj, verbose=verbose)
 
-        fe_solver_structural.mesh.setPseudoDensity(torch.as_tensor(x_phys))   # PyTO-AD's mesh takes torch
-        fe_solver_structural.postprocess()
-
-        record_fea_diagnostics(history, mmaIterations, x_phys, z, material_properties,
-                               fe_solver_structural, elem_volume, design_domain_volume,
-                               plot_progress=plot_progress, plotter=plotter, verbose=verbose)
+        physics.iteration_diagnostics(history, mmaIterations, fe_solver_structural, x_phys, material_properties,
+                                      elem_volume, design_domain_volume, plot_progress=plot_progress,
+                                      plotter=plotter, verbose=verbose)
 
         # ============ OBJECTIVE / CONSTRAINTS / SENSITIVITIES =========
         # gradients w.r.t. (x_phys, z), the layout the manual code returned
@@ -358,7 +350,7 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
             # penalty is ZERO at a spatially-uniform start, so it has no valid
             # own-initial-value to normalize by (dividing by it would blow up).
             # z_smoothing_weight multiplies the raw roughness directly.
-            Pz_t = AD.latent_smoothing(ad_model.x_phys, ad_model.z, ad_model.Hm, ad_model.Hsm)
+            Pz_t = latent_smoothing(ad_model.x_phys, ad_model.z, ad_model.Hm, ad_model.Hsm)
             Pzn = float(s.z_smoothing_weight) * float(Pz_t.detach())
             obj = obj + Pzn
             grad_obj_phys += float(s.z_smoothing_weight) * ad_model.grad_phys(Pz_t)
@@ -370,7 +362,7 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
 
         if use_penalization and (s.use_dynamic_gamma_scheduling or mmaIterations >= int(s.penalty_start_iter)):
             # RAW penalty (gamma = 1); weighting + normalization applied here
-            Dp_t = AD.distance_penalty(ad_model.x_phys, ad_model.z, ad_model.z_real)
+            Dp_t = distance_penalty(ad_model.x_phys, ad_model.z, ad_model.z_real)
             penalty_raw = float(Dp_t.detach())
 
             if Sd0 is None:
@@ -569,5 +561,7 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
         save_dir=save_dir,
         run_config=run_config,
         example_name=getattr(to_problem, "name", str(to_problem)),
-        decode=lambda z: AD.decode(matEncoder, z, s.use_constant_poissons_ratio, s.constant_poissons_ratio),
+        physics=physics,
+        properties_of=lambda z: decode(matEncoder, z, s.use_constant_poissons_ratio, s.constant_poissons_ratio)[2],
+        settings=s,
     )

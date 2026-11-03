@@ -84,7 +84,7 @@ def _apply_traction(bc, n, mesh, state, where):
     _add_load(bc["pressure"] * area * d, n, mesh, state)
 
 
-STRUCTURAL_BC_KINDS = {
+SUPPORT_AND_LOAD_KINDS = {
     "fixed": _kind(
         "the given dofs (x, y, z) held at 0", "support", _check_dofs, _apply_support,
         lambda bc, on: f"p.add_support({on}, dofs={bc['dofs']!r})",

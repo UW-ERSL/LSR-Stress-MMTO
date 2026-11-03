@@ -64,7 +64,7 @@ def test_one_entry_makes_a_setting():
 
 def test_one_entry_makes_a_quantity():
     from lsr_mmto.formulation import quantities
-    q = quantities.Quantity("MyQuantity", None, ("VOLUME_FRACTION", "mine"), [quantities.STRUCTURAL], [],
+    q = quantities.Quantity("MyQuantity", False, True, [], [],
                             lambda m, opt: m.x_phys.mean(), "mean of x_phys", "My quantity",
                             "What my quantity is.")
     with one_more(quantities.QUANTITIES, q, lambda: None):
