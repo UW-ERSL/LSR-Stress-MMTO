@@ -113,6 +113,31 @@ def test_progress_and_stop():
     assert "progress" not in json.dumps(captured["config"]["run"], default=str)    # watching is not recorded
 
 
+def test_optimizer_failure_names_the_constraint_over_its_limit():
+    """When the optimizer fails while a constraint is far over its limit (a limit that cannot be met
+    from the starting design), the error says which constraint, by how much, and keeps the
+    optimizer's own message."""
+    p = ubracket_project()
+    p.formulation["constraints"] = []
+    p.constraint("Mass()", "<=", 1e-9)                         # far below the starting mass
+    real = M.runMMA
+
+    def failing(n, m, f, x0, *a, **k):
+        f(x0)                                                  # the first evaluation, as MMA makes it
+        raise ValueError("array must not contain infs or NaNs")
+    M.runMMA = failing
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            _run(p, _run_arguments(p, save_dir=d, verbose=False))
+        raise AssertionError("the run should have failed")
+    except RuntimeError as e:
+        text = str(e)
+        assert "Mass" in text and "times its limit" in text and "iteration 0" in text, text
+        assert "array must not contain infs or NaNs" in text, text
+    finally:
+        M.runMMA = real
+
+
 def test_unknown_and_missing_settings():
     p = ubracket_project()
     p.settings["advanced"]["gama_max"] = 5.0                       # a typo

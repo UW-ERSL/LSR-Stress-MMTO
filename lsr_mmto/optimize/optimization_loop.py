@@ -53,6 +53,7 @@ from lsr_mmto.problem.settings import BetaScheduleScheme, Z0InitMethod
 from lsr_mmto.optimize.filters import create_density_and_material_filters
 from lsr_mmto.optimize.history import (
     compute_domain_volume,
+    constraints_over_limit,
     init_run_history,
     log_design_state,
     log_objective_and_constraints,
@@ -504,6 +505,15 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
         zetaOptimal = _last_zeta
         _during_run["stopped_at_iter"] = int(mmaIterations)
         print(f"Stopped at iteration {mmaIterations}; saving the design reached so far.")
+    except Exception as e:                     # MMA failed: say which constraints were far off, if any
+        over = constraints_over_limit(history, to_params, material_labels)
+        if not over:
+            raise
+        raise RuntimeError(
+            f"The optimizer could not continue at iteration {max(mmaIterations - 1, 0)}. These constraints were "
+            f"over their limit: " + "; ".join(over) + ". A constraint many times over its limit at the start "
+            "usually cannot be met from the starting design: check the limit and its unit. "
+            f"(The optimizer's own error: {type(e).__name__}: {e})") from e
     tEnd = time.time()
     print(f"Total optimization time: {tEnd - tStart:.2f} seconds")
     # ---- assemble the full parameter manifest (no plotting; saved as YAML+pkl) ----

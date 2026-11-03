@@ -139,6 +139,22 @@ def log_design_state(history, iteration, x_phys, z, material_properties, zTorch,
     print("[MAT] " + " | ".join(parts))
 
 
+def constraints_over_limit(history, to_params, material_labels=None):
+    """The constraints of the last evaluated design that are over their limit, as lines of text
+    ("Mass: 3.2, 6.4 times its limit of 0.5"); [] when none is, or nothing was evaluated."""
+    from lsr_mmto.formulation.quantities import quantity_label
+    if not history.get("constraints"):
+        return []
+    lines = []
+    for (name, options, bound), g in zip(to_params.Constraints, np.asarray(history["constraints"][-1]).flatten()):
+        if not np.isfinite(g) or g > 0:
+            label = quantity_label(name, options, material_labels)
+            value = (g + 1) * bound
+            times = f"{value / bound:.3g} times its limit" if np.isfinite(g) and bound else "not a number"
+            lines.append(f"{label}: {value:.4g}, {times} of {bound:.4g}")
+    return lines
+
+
 def log_objective_and_constraints(history, obj, J_phys, Jn, P, Pn, Pzn, cons,
                                   to_params, verbose=True, material_labels=None):
     """Record objective/constraint history. In verbose mode print the full
