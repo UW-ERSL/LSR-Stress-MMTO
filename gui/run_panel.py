@@ -1,7 +1,7 @@
 """
 run_panel.py
 ============
-The Run strip: an optimization of the project, started from the window.
+The Current run strip: an optimization of the project, started and stopped with Run in the top row.
 
 RunWindow is PyTO-AD's Optimize window (StructuralTopOptWindow): its worker thread, its Qt
 signals, its live plot, its live redraw of the design and its log. What it overrides:
@@ -16,7 +16,7 @@ signals, its live plot, its live redraw of the design and its log. What it overr
 While the material network trains, before the optimization starts, the status line counts
 its epochs from the lines the training prints.
 
-The project can still be edited while a run goes: the run has its own copy, taken at Start.
+The project can still be edited while a run goes: the run has its own copy, taken when it starts.
 """
 import os
 import re
@@ -33,8 +33,9 @@ from .pyto_ad_imports import StructuralTopOptWindow
 
 DRAW_EVERY = 1.5                                            # seconds between redraws of the design
 LATENT_POINTS = 5000                                        # the most elements the live latent space draws
-RUN_HELP = ("Start optimizes the project as it is now: it is saved first, and the run keeps its own copy, "
-            "so you can go on editing for the next run. Stop ends the run after the iteration under way "
+NOT_STARTED = "No run yet. Press Run at the top to start one."
+RUN_HELP = ("Run, at the top, optimizes the project as it is now: it is saved first, and the run keeps its own "
+            "copy, so you can go on editing for the next run. Stop ends the run after the iteration under way "
             "and keeps the design reached so far. Each run has its own folder in the project's results "
             "folder.\n\nWhile it runs, each element is drawn in its material's colour, pale while it is "
             "half solid and full colour once solid; elements that are almost empty are not drawn.\n\n"
@@ -175,7 +176,7 @@ class RunWindow(StructuralTopOptWindow):
         self.started, self.last_draw, self.history = 0.0, 0.0, {"objective": [], "constraints": []}
         self.first_frame, self.optimizing = True, False
         super().__init__(window)
-        self.setWindowTitle("Run")
+        self.setWindowTitle("Current run")
         self.log_line.connect(self._training_progress, QtCore.Qt.QueuedConnection)
         self.latent_update.connect(self.update_latent_plot, QtCore.Qt.QueuedConnection)
         self.network_question.connect(self._ask_network, QtCore.Qt.BlockingQueuedConnection)
@@ -185,18 +186,11 @@ class RunWindow(StructuralTopOptWindow):
         """In place of PyTO-AD's: no formulation of its own (the project's Formulation panel is the one)."""
         from matplotlib.figure import Figure
         layout = QtWidgets.QVBoxLayout(self)
-        buttons = QtWidgets.QHBoxLayout()
-        self.optimize_button = QtWidgets.QPushButton("Start")
-        self.optimize_button.clicked.connect(self.start_optimization)
-        self.stop_button = QtWidgets.QPushButton("Stop")
-        self.stop_button.clicked.connect(self.stop_optimization)
-        self.stop_button.setEnabled(False)
-        for widget in (self.optimize_button, self.stop_button):
-            buttons.addWidget(widget)
+        buttons = QtWidgets.QHBoxLayout()                          # started and stopped by Run in the top row
         buttons.addStretch()
         buttons.addWidget(Info(RUN_HELP))
         layout.addLayout(buttons)
-        self.status = QtWidgets.QLabel("Not started.")
+        self.status = QtWidgets.QLabel(NOT_STARTED)
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
 
@@ -225,8 +219,6 @@ class RunWindow(StructuralTopOptWindow):
         layout.addWidget(self.live_topology_check)
 
         after = QtWidgets.QHBoxLayout()                            # once a run has finished
-        self.view_button = self.window.view_button()               # Show setup / Show design
-        after.addWidget(self.view_button)
         self.folder_button = QtWidgets.QPushButton("Open results folder")
         self.folder_button.clicked.connect(self.open_folder)
         self.results_button = QtWidgets.QPushButton("Open in Results")
@@ -277,8 +269,6 @@ class RunWindow(StructuralTopOptWindow):
         self.epochs = int(self.project.settings["vae"].get("numEpochs") or 0)
         self.colours = self._material_colours()
         self.optimization_running = True
-        self.optimize_button.setEnabled(False)
-        self.stop_button.setEnabled(True)
         for widget in self.run_buttons:
             widget.setVisible(False)
         self.formulation.log_view.clear()
@@ -361,7 +351,6 @@ class RunWindow(StructuralTopOptWindow):
         """Ask _run_topopt to stop before its next iteration; it saves the design reached so far."""
         if self.optimization_running:
             self.stop_requested = True
-            self.stop_button.setEnabled(False)
             self.status.setText("Stopping after the iteration under way; the design so far is kept..." if self.optimizing
                                 else "Stopping...")
 
@@ -393,7 +382,7 @@ class RunWindow(StructuralTopOptWindow):
     @QtCore.pyqtSlot(object, int)
     def update_visualization(self, frame, iteration):
         """The design so far (main thread), as the window's design: shown at the first frame of a run,
-        later only while the Design view is on (Show setup keeps the part in view)."""
+        later only while the Design view is on (Part, in the top row, keeps the part in view)."""
         mesh = draw_design.mesh_of(self.window, self.project)           # the run's own copy: edits wait
         x, material, colours = np.asarray(frame["x"]), np.asarray(frame["material"]), self.colours
         self.window.set_design(lambda w: draw_design.live(w, mesh, x, material, colours), show=self.first_frame)
@@ -478,8 +467,6 @@ class RunWindow(StructuralTopOptWindow):
     def optimization_completed(self, success, error, history, save_dir, _):
         self.optimization_running = False
         self._end_live_latent()
-        self.optimize_button.setEnabled(True)
-        self.stop_button.setEnabled(False)
         w = self.window
         cancelled = getattr(self, "network_cancelled", False)
         if getattr(self, "stopped_training", False) or cancelled:   # nothing to keep: no design

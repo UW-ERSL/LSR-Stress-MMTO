@@ -199,6 +199,83 @@ def test_display_options():
     w.close()
 
 
+def styled():
+    """The window's style sheet on the app, as main() puts it; cleared again by the caller."""
+    G.apply_style(APP)
+    settle()
+
+
+def test_top_row_and_bottom_buttons():
+    """One top row: LSR MMTO, File and Help (their menus and shortcuts), Part / Design, the light / dark
+    switch, Export STL, Run; nothing in it cut short at 1225 px wide, even with a long progress text.
+    Snap, Measure and Ruler at the bottom drive the window's measuring and scales."""
+    styled()
+    try:
+        w = window()
+        assert not w.menuBar().isVisible()
+        menus = {b.text(): [a.text() for a in b.menu().actions()] for b in w.findChildren(QtWidgets.QToolButton)
+                 if b.objectName() == "menuButton"}
+        assert set(menus) == {"&File", "&Help"} and "&Save" in menus["&File"]
+        assert {a.shortcut().toString() for a in w.actions()} >= {"Ctrl+N", "Ctrl+O", "Ctrl+S"}
+        assert [b.text() for b in (w.part_button, w.design_button, w.export_button, w.run_button)] == \
+            ["Part", "Design", "Export STL", "Run"]
+        assert not w.design_button.isEnabled() and w.part_button.isChecked()      # no design yet
+        for text in ("Starting: building the mesh and the material network...",
+                     "Iteration 6 / 40 \u00b7 0:09 so far \u00b7 about 0:46 left"):
+            w.progress_text.setText(text)
+            settle(0.1)
+            row = w.top_row.widgetForAction(w.top_row.actions()[0])
+            cut = [x for x in row.findChildren((QtWidgets.QLabel, QtWidgets.QToolButton))
+                   if x.isVisible() and x.width() < x.sizeHint().width()]
+            assert not cut, [(x.objectName(), x.text()) for x in cut]
+        w.ruler_box.click()
+        assert w.ruler_box.isChecked() and w._rulers
+        w.measure.click()
+        assert w.measured.text() == "Measure: click the first point"
+        w.measure.setChecked(False)                                       # (Esc)
+        assert w.measured.text() == ""
+        w.snap.setCurrentIndex(2)
+        assert w.snapped(np.array([0.4, 1.6, 0.0])).tolist() == [0.0, 2.0, 0.0]
+        w.close()
+    finally:
+        APP.setStyleSheet("")
+
+
+def test_light_by_default_and_dark_on_the_switch():
+    """The 3D view starts light. In the dark view the window's own drawings are drawn light from the
+    first frame (the Measure line here), and back in the light view they are dark again; the part keeps
+    its colour."""
+    from gui import dark_and_light_3d_view as view_mode
+    w = window()
+    assert not w.dark_view and tuple(w.plotter.renderer.GetBackground()) == (1.0, 1.0, 1.0)
+    part_colour = w.part_actor().GetProperty().GetColor()
+    w.theme_button.click()
+    assert w.dark_view
+    w._measure_points = [np.zeros(3), np.array([10.0, 0.0, 0.0])]
+    w._draw_measure()
+    line = w.plotter.actors["measure_line"].GetProperty().GetColor()
+    assert min(line) > 0.7                                                # light on the dark view
+    view_mode.apply(w.plotter, w.dark_view)                               # the next frame leaves it alone
+    assert w.plotter.actors["measure_line"].GetProperty().GetColor() == line
+    assert w.part_actor().GetProperty().GetColor() == part_colour
+    w.theme_button.click()
+    assert not w.dark_view
+    assert max(w.plotter.actors["measure_line"].GetProperty().GetColor()) < 0.2
+    w.close()
+
+
+def test_message_panel_merges_repeats():
+    """A line repeated at once is shown once, with how many times."""
+    w = window()
+    w.message_text.clear()
+    for _ in range(3):
+        w.message_text.append("Saved.")
+    w.message_text.append("Done.")
+    assert w.message_text.toPlainText().splitlines() == ["Saved.  (\u00d73)", "Done."]
+    assert "-0 " not in w.extent.text() and "-0." not in w.extent.text()
+    w.close()
+
+
 if __name__ == "__main__":
     for name, f in list(globals().items()):
         if name.startswith("test_"):

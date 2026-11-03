@@ -14,7 +14,9 @@ asks for a folder of your own, so the examples never change.
 
 The 3D view shows either the part (the Setup view: supports, loads, previews) or a design (the
 Design view: a run's result, drawn by draw_design.py). Anything about the setup switches to the
-Setup view; the design is kept until the next run, so Show design always brings it back.
+Setup view; the design is kept until the next run, so Design in the top row always brings it back.
+The top row also holds Run (Stop while a run goes), Export STL and the light / dark switch of the 3D
+view; Snap, Measure and Ruler are in the status bar.
 
     python run_gui.py [project.mmto]        (from the repository folder)
 
@@ -29,8 +31,10 @@ import re
 import sys
 
 import numpy as np
-from PyQt5 import QtCore, QtWidgets
+from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtGui import QKeySequence
+
+from . import dark_and_light_3d_view as view_mode
 
 from .formulation_panel import FormulationPanel
 from .materials_panel import MaterialsPanel
@@ -48,13 +52,69 @@ OUTLINE_COLOUR = "#c400c4"                  # selection shapes: magenta, unlike 
 SNAPS = [("Snap: off", 0.0), ("Snap: 0.1", 0.1), ("Snap: 1", 1.0), ("Snap: 5", 5.0), ("Snap: 10", 10.0)]
 PROJECT_FILTER = "LSR MMTO project (*.mmto)"
 SCRIPT_FILTER = "Python script (*.py)"
-ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "lsr_mmto.ico")
+ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+ICON = os.path.join(ASSETS, "lsr_mmto.ico")
+STYLE = os.path.join(ASSETS, "app_style.qss")           # the window's colours and shapes
+ICONS = os.path.join(ASSETS, "icons")                    # the buttons' pictures
+SIDEBAR_WORDS = {"Run": "Current run"}                   # a sidebar button's text, where not its name
+SIDEBAR_ICONS = {"Units": "units", "Geometry": "geometry", "Materials": "materials", "Supports and loads": "supports",
+                 "Formulation": "formulation", "Settings": "settings", "Run": "run", "Results": "results",
+                 "Display Options": "display"}
+MESSAGE_LINES = 3                                        # the message panel shows the last three lines
 SIDEBAR = ("Units", "Geometry", "Materials", "Supports and loads", "Formulation", "Settings", "Run",
            "Results", "Display Options")
 FOLDER_HELP = ("A project keeps everything it uses in its own folder: the project file, the part (in part), "
                "the material database and its trained network (in materials), and the results of every run "
                "(in results). Zip the folder to send the whole project.")
 PANELS = {"Materials": MaterialsPanel, "Formulation": FormulationPanel, "Settings": SettingsPanel}
+
+
+def icon(name):
+    """One of the window's pictures (gui/assets/icons/<name>.svg)."""
+    return QtGui.QIcon(os.path.join(ICONS, name + ".svg"))
+
+
+def apply_style(app):
+    """The window's style sheet on the whole app, its pictures found in gui/assets/icons."""
+    with open(STYLE, encoding="utf-8") as f:
+        app.setStyleSheet(f.read().replace("ICONS/", ICONS.replace("\\", "/") + "/"))
+
+
+def without_minus_zero(text):
+    """'-0' and '-0.0' in a text written as '0': a coordinate a hair below zero is zero to the reader."""
+    return re.sub(r"(?<![\d.])-(0(?:\.0+)?)(?![\d.])", r"\1", text)
+
+
+class MessageLog(QtWidgets.QTextEdit):
+    """The message panel: read-only, scrolled to the last line, and a line repeated at once shown once
+    with how many times, Selected 5 triangles (x3)."""
+
+    def __init__(self):
+        super().__init__()
+        self.setReadOnly(True)
+        self._last, self._count = None, 0
+
+    def append(self, text):
+        text = str(text)
+        if "\n" not in text and text == self._last:
+            self._count += 1
+            cursor = self.textCursor()
+            cursor.movePosition(QtGui.QTextCursor.End)
+            cursor.select(QtGui.QTextCursor.BlockUnderCursor)
+            cursor.removeSelectedText()
+            super().append(f"{text}  (\u00d7{self._count})")
+        else:
+            self._last, self._count = text, 1
+            super().append(text)
+        self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
+
+    def setText(self, text):
+        self._last, self._count = None, 0
+        super().setText(text)
+
+    def clear(self):
+        self._last, self._count = None, 0
+        super().clear()
 
 
 def point_text(p):
@@ -486,12 +546,196 @@ class MMTOWindow(MainWindow):
         super().__init__(parent)
         self.project, self.path, self._saved = None, None, None
         self._mesh, self._mesh_key, self.preview_on = None, None, False
-        self.design_bars, self._view_buttons = set(), []            # colour scales of the design; Show buttons
+        self.design_bars = set()                                    # colour scales of the design
         self._said = set()                                          # errors and warnings already shown
         self.message_text.setText(f"{APP}. File > New starts a project from an STL; File > Open opens a "
                                   f".mmto project.")
+        self.dark_view = False                                      # the 3D view: light unless switched
+        self.sidebar.setObjectName("sidebar")
+        self.pv_frame.setObjectName("viewFrame")
+        view_mode.install(self.plotter, lambda: self.dark_view)
         self._build_menu()
+        self._build_top_row()
+        self.set_dark_view(False)
         self._refresh_title()
+
+    def create_button(self, config, style):
+        """A sidebar button with its picture, in the style sheet's look rather than PyTO-AD's own."""
+        btn = super().create_button(config, "")
+        btn.setText(SIDEBAR_WORDS.get(config["name"], config["name"]))
+        btn.setIcon(icon(SIDEBAR_ICONS.get(config["name"], "units")))
+        btn.setIconSize(QtCore.QSize(20, 20))
+        return btn
+
+    def set_sidebar_icon(self, button_text, icon_type):
+        """A done step shows a check; otherwise the button keeps its own picture."""
+        btn = self.sidebar_buttons.get(button_text)
+        if btn is not None:
+            btn.setIcon(icon("check") if icon_type == "check" else icon(SIDEBAR_ICONS.get(button_text, "units")))
+
+    def create_message_frame(self):
+        """PyTO-AD's message panel, three lines high, with a repeated line shown once (MessageLog)."""
+        super().create_message_frame()
+        old, log = self.message_text, MessageLog()
+        layout = self.message_frame.layout()
+        layout.replaceWidget(old, log)
+        old.hide()
+        old.setParent(None)
+        old.deleteLater()
+        self.message_text = log
+        log.setObjectName("log")
+        self.message_frame.setObjectName("logFrame")
+        self.message_frame.setFrameStyle(QtWidgets.QFrame.NoFrame)
+        line = QtGui.QFontMetrics(log.font()).lineSpacing()
+        log.setFixedHeight(MESSAGE_LINES * line + 26)
+        self.message_frame.setMaximumHeight(MESSAGE_LINES * line + 48)
+
+    def _build_top_row(self):
+        """One row along the top: LSR MMTO, the File and Help menus, the Part / Design switch, the light /
+        dark switch of the 3D view, Export STL, and Run (Stop while a run goes) with its progress beside
+        it. It is a tool bar: a tool bar lays itself out again when its contents change size, so a longer
+        progress text never squeezes the rest. The menu bar itself is hidden; its shortcuts stay."""
+        row_box = QtWidgets.QWidget()
+        row_box.setObjectName("topButtons")
+        row = QtWidgets.QHBoxLayout(row_box)
+        row.setContentsMargins(0, 2, 10, 2)
+        row.setSpacing(8)
+        title = QtWidgets.QLabel(APP)
+        title.setObjectName("appTitle")
+        row.addWidget(title)
+        bar = self.menuBar()
+        for menu_action in list(bar.actions()):
+            menu = menu_action.menu()
+            if menu is None:
+                continue
+            self.addActions(menu.actions())                         # Ctrl+N, Ctrl+O, Ctrl+S with the bar hidden
+            b = QtWidgets.QToolButton()
+            b.setText(menu_action.text())
+            b.setMenu(menu)
+            b.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+            b.setObjectName("menuButton")
+            row.addWidget(b)
+        bar.hide()
+
+        def divider():
+            line = QtWidgets.QFrame()
+            line.setObjectName("topDivider")
+            line.setFixedSize(1, 24)
+            return line
+
+        def button(text, picture, name=""):
+            b = QtWidgets.QToolButton()
+            b.setText(text)
+            if picture:
+                b.setIcon(icon(picture))
+            b.setIconSize(QtCore.QSize(18, 18))
+            b.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon if text else QtCore.Qt.ToolButtonIconOnly)
+            if name:
+                b.setObjectName(name)
+            return b
+
+        row.addSpacing(6)
+        row.addWidget(divider())
+        row.addSpacing(6)
+        switch = QtWidgets.QWidget()
+        two = QtWidgets.QHBoxLayout(switch)
+        two.setContentsMargins(0, 0, 0, 0)
+        two.setSpacing(0)
+        self.part_button = button("Part", "geometry", "segLeft")
+        self.design_button = button("Design", "materials", "segRight")
+        group = QtWidgets.QButtonGroup(switch)
+        for b in (self.part_button, self.design_button):
+            b.setCheckable(True)
+            group.addButton(b)
+            two.addWidget(b)
+        self.part_button.setToolTip("Show the part, with its supports and loads")
+        self.part_button.clicked.connect(lambda: self.show_setup_view())
+        self.design_button.clicked.connect(lambda: self.show_design_view())
+        row.addWidget(switch)
+        self.theme_button = button("", "moon", "themeButton")
+        self.theme_button.clicked.connect(lambda: self.set_dark_view(not self.dark_view))
+        row.addWidget(self.theme_button)
+        self.export_button = button("Export STL", "export")
+        self.export_button.setEnabled(False)
+        row.addWidget(self.export_button)
+        row.addSpacing(6)
+        row.addWidget(divider())
+        row.addSpacing(6)
+        self.run_button = button("Run", "run_white", "runButton")
+        self.run_button.clicked.connect(self.run_or_stop)
+        row.addWidget(self.run_button)
+        self.progress_text = QtWidgets.QLabel("")
+        self.progress_text.setObjectName("progressText")
+        row.addWidget(self.progress_text)
+        self.top_row = QtWidgets.QToolBar()
+        self.top_row.setObjectName("topBar")
+        self.top_row.setMovable(False)
+        self.top_row.setFloatable(False)
+        self.top_row.toggleViewAction().setVisible(False)          # no "hide the tool bar" on a right click
+        self.top_row.addWidget(row_box)
+        self.addToolBar(QtCore.Qt.TopToolBarArea, self.top_row)
+        self._running = False
+        self._top_timer = QtCore.QTimer(self)                      # the row follows the run and the view
+        self._top_timer.timeout.connect(self.update_top_row)
+        self._top_timer.start(300)
+        self._view_changed()
+
+    def run_going_now(self):
+        rw = getattr(self, "run_window", None)
+        try:
+            return rw is not None and bool(getattr(rw, "optimization_running", False))
+        except RuntimeError:                                        # its strip was closed
+            return False
+
+    def run_or_stop(self):
+        """Run starts the project's run in the Current run panel; while it goes, the same button stops it."""
+        if self.run_going_now():
+            self.run_window.stop_optimization()
+            return
+        rw = self.open_run_panel()
+        if rw is not None:
+            rw.start_optimization()
+
+    def update_top_row(self):
+        running = self.run_going_now()
+        if running != self._running:
+            self._running = running
+            self.run_button.setText("Stop" if running else "Run")
+            self.run_button.setIcon(icon("stop" if running else "run_white"))
+            self.run_button.setObjectName("stopButton" if running else "runButton")
+            self.run_button.style().unpolish(self.run_button)
+            self.run_button.style().polish(self.run_button)
+        rw = getattr(self, "run_window", None)
+        if running:
+            self.run_button.setEnabled(not getattr(rw, "stop_requested", False))
+            self.progress_text.setText(re.sub(r"<[^>]+>", " ", rw.status.text()))
+        else:
+            self.run_button.setEnabled(True)
+            self.progress_text.setText("")
+
+    def set_dark_view(self, dark):
+        """The 3D view dark or light (the default), its drawings recoloured to suit; material colours stay."""
+        self.dark_view = bool(dark)
+        view_mode.set_background(self.plotter, self.dark_view)
+        self.pv_frame.setProperty("dark", self.dark_view)
+        self.pv_frame.style().unpolish(self.pv_frame)
+        self.pv_frame.style().polish(self.pv_frame)
+        self.theme_button.setIcon(icon("sun" if self.dark_view else "moon"))
+        self.theme_button.setToolTip("Light 3D view" if self.dark_view else "Dark 3D view")
+        try:
+            self.plotter.add_axes(color="white" if self.dark_view else "black")
+        except Exception:                                           # noqa: BLE001  (no 3D view off-screen)
+            pass
+        view_mode.apply(self.plotter, self.dark_view)
+        self.plotter.render()
+
+    def view_colour(self, colour, text=False):
+        """The colour to draw one of the window's own drawings with, in the current 3D view."""
+        return view_mode.colour_for(colour, self.dark_view, text)
+
+    def mark_drawing(self, prop, colour, text=False):
+        """A drawing of the window's own, drawn with view_colour(colour): kept in step with the view."""
+        view_mode.mark(prop, colour, self.dark_view, text)
 
     def open_display_options_window(self):
         if self._raise_if_open("_display_options_dialog"):
@@ -502,7 +746,7 @@ class MMTOWindow(MainWindow):
     # ------------------------------------------------------------------ the window
     def create_status_bar(self):
         """The part's extent on the left, with its facts behind an (i); on the right, the point under the
-        mouse and the Ruler tick."""
+        mouse, then Snap, Measure and Ruler as buttons with their pictures."""
         self.extent = QtWidgets.QLabel(APP)                        # the part's extent, once there is one
         self.statusBar().addWidget(self.extent)
         self.facts = Info("")                                       # the part, its volume and size, the database
@@ -511,28 +755,41 @@ class MMTOWindow(MainWindow):
         self.coords = QtWidgets.QLabel("")
         self.coords.setStyleSheet("color: #666666;")
         self.coords.setMinimumWidth(240)
-        self.ruler_box = QtWidgets.QCheckBox("Ruler")
-        self.ruler_box.setToolTip("Show scales along the part, in the project's length unit")
-        self.ruler_box.toggled.connect(lambda on: self.draw_ruler())
-        self.measure = QtWidgets.QPushButton("Measure")
+        self.snap = QtWidgets.QComboBox()
+        for text, step in SNAPS:
+            self.snap.addItem(icon("magnet"), text, step)
+        self.snap.setToolTip("Round the point under the mouse, a copied point and Measure to this step, in the "
+                             "project's length unit")
+        self.measure = QtWidgets.QToolButton()
+        self.measure.setText("Measure")
+        self.measure.setIcon(icon("measure"))
         self.measure.setCheckable(True)
         self.measure.setToolTip("Click two points on the part to see the distance between them; Esc to stop")
         self.measure.toggled.connect(self._measure_toggled)
+        self.ruler_box = QtWidgets.QToolButton()
+        self.ruler_box.setText("Ruler")
+        self.ruler_box.setIcon(icon("ruler"))
+        self.ruler_box.setCheckable(True)
+        self.ruler_box.setToolTip("Show scales along the part, in the project's length unit")
+        self.ruler_box.toggled.connect(lambda on: self.draw_ruler())
+        tools = QtWidgets.QWidget()
+        tools.setObjectName("viewTools")
+        row = QtWidgets.QHBoxLayout(tools)
+        row.setContentsMargins(0, 3, 8, 3)
+        row.setSpacing(6)
+        for b in (self.snap, self.measure, self.ruler_box):
+            if isinstance(b, QtWidgets.QToolButton):
+                b.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
+                b.setIconSize(QtCore.QSize(16, 16))
+            row.addWidget(b)
         self.measured = QtWidgets.QLabel("")
-        self.snap = QtWidgets.QComboBox()
-        for text, step in SNAPS:
-            self.snap.addItem(text, step)
-        self.snap.setToolTip("Round the point under the mouse, a copied point and Measure to this step, in the "
-                             "project's length unit")
         self._measure_points = []
         self._measure_esc = QtWidgets.QShortcut(QKeySequence(QtCore.Qt.Key_Escape), self,
                                                 activated=lambda: self.measure.setChecked(False))
         self._measure_esc.setEnabled(False)                         # Esc stops measuring, and only that
         self.statusBar().addPermanentWidget(self.measured)
         self.statusBar().addPermanentWidget(self.coords)
-        self.statusBar().addPermanentWidget(self.snap)
-        self.statusBar().addPermanentWidget(self.measure)
-        self.statusBar().addPermanentWidget(self.ruler_box)
+        self.statusBar().addPermanentWidget(tools)
         self._rulers = []
         self._picker = None
         QtCore.QTimer.singleShot(0, self._track_mouse)              # once the 3D view exists
@@ -566,7 +823,7 @@ class MMTOWindow(MainWindow):
         lo, hi = b
         f = self.length_format(float(np.max(hi - lo)))
         parts = ", ".join(f"{a} {f % lo[k]} to {f % hi[k]}" for k, a in enumerate("xyz"))
-        return f"The part spans {parts} {self.length_unit()}".rstrip() + "."
+        return without_minus_zero(f"The part spans {parts} {self.length_unit()}".rstrip() + ".")
 
     def part_facts(self):
         """The part's facts, shown behind the (i) beside its extent."""
@@ -584,7 +841,7 @@ class MMTOWindow(MainWindow):
             pass
         lines.append("Size: " + " × ".join(f % v for v in size) + f" {unit}".rstrip())
         lines.append(f"Material database: {self.project.database or 'none chosen yet'}")
-        return "\n".join(lines)
+        return without_minus_zero("\n".join(lines))
 
     def update_part_facts(self):
         text = self.part_facts()
@@ -616,8 +873,8 @@ class MMTOWindow(MainWindow):
             size = float(np.max(hi - lo))
             off = 0.06 * size
             style = dict(number_labels=3, font_size_factor=0.6, label_size_factor=1.3, tick_length=3,
-                         tick_label_offset=6, label_color="#8a8a8a", tick_color="#b5b5b5",
-                         label_format=self.length_format(size))
+                         tick_label_offset=6, label_color=self.view_colour("#8a8a8a", text=True),
+                         tick_color=self.view_colour("#b5b5b5"), label_format=self.length_format(size))
             x0, y0, z1 = lo[0] - off, lo[1] - off, hi[2]
             lines = [([lo[0], y0, z1], [hi[0], y0, z1], False, self.length_unit()),
                      ([x0, hi[1], z1], [x0, lo[1], z1], True, "")]
@@ -630,6 +887,8 @@ class MMTOWindow(MainWindow):
                     prop.ItalicOff()
                     prop.BoldOff()
                     prop.ShadowOff()
+                    self.mark_drawing(prop, "#8a8a8a", text=True)
+                self.mark_drawing(actor.GetProperty(), "#b5b5b5")
                 actor.SetPickable(False)
                 self._rulers.append(actor)
             self._rulers.append(self.plotter.add_point_labels(          # the origin, where 0, 0, 0 is
@@ -796,12 +1055,16 @@ class MMTOWindow(MainWindow):
         for name in [n for n in self.plotter.actors if str(n).startswith("measure_")]:
             self.plotter.remove_actor(name, reset_camera=False)
         pts = self._measure_points
+        drawn = []
         if pts:
-            self.plotter.add_mesh(pv.PolyData(np.vstack(pts)), color="#222222", point_size=12,
-                                  render_points_as_spheres=True, pickable=False, name="measure_points")
+            drawn.append(self.plotter.add_mesh(pv.PolyData(np.vstack(pts)), color=self.view_colour("#222222"),
+                                               point_size=12, render_points_as_spheres=True, pickable=False,
+                                               name="measure_points"))
         if len(pts) == 2:
-            self.plotter.add_mesh(pv.Line(pts[0], pts[1]), color="#222222", line_width=3, pickable=False,
-                                  name="measure_line")
+            drawn.append(self.plotter.add_mesh(pv.Line(pts[0], pts[1]), color=self.view_colour("#222222"),
+                                               line_width=3, pickable=False, name="measure_line"))
+        for actor in drawn:
+            self.mark_drawing(actor.GetProperty(), "#222222")
         self.plotter.render()
 
     def _build_menu(self):
@@ -1208,7 +1471,7 @@ class MMTOWindow(MainWindow):
         return self.supports_panel
 
     def open_run_panel(self):
-        """The Run strip (PyTO-AD's Optimize window on LSR MMTO's run), beside Supports and loads."""
+        """The Current run strip (PyTO-AD's Optimize window on LSR MMTO's run), beside Supports and loads."""
         if self.project is None:
             QtWidgets.QMessageBox.information(self, APP, "Start a project first: File > New or File > Open.")
             return None
@@ -1359,7 +1622,7 @@ class MMTOWindow(MainWindow):
         self.preview_on = False
 
     def clear_preview(self):
-        """The preview drawings gone, back to the Setup view. The design is kept (Show design)."""
+        """The preview drawings gone, back to the Setup view. The design is kept (Design, in the top row)."""
         self._remove_preview()
         self.show_setup_view(render=False)
         self.plotter.render()
@@ -1409,7 +1672,7 @@ class MMTOWindow(MainWindow):
         return True
 
     def show_setup_view(self, render=True):
-        """The part, for its supports, loads and previews; the design is kept for Show design."""
+        """The part, for its supports, loads and previews; the design is kept for Design, in the top row."""
         if self.view == "setup":
             return
         self._remove_design()
@@ -1424,27 +1687,14 @@ class MMTOWindow(MainWindow):
         if render:
             self.plotter.render()
 
-    def toggle_view(self):
-        if self.view == "design":
-            self.show_setup_view()
-        else:
-            self.show_design_view()
-
-    def view_button(self):
-        """A Show setup / Show design button that follows the view; shown while there is a design."""
-        button = QtWidgets.QPushButton("Show design")
-        button.clicked.connect(self.toggle_view)
-        self._view_buttons.append(button)
-        self._view_changed()
-        return button
-
     def _view_changed(self):
-        for button in list(self._view_buttons):
-            try:
-                button.setVisible(self._design is not None)
-                button.setText("Show setup" if self.view == "design" else "Show design")
-            except RuntimeError:                                    # its strip was closed
-                self._view_buttons.remove(button)
+        """The Part / Design switch follows the view; Design is greyed while there is no design."""
+        if not hasattr(self, "design_button"):
+            return
+        self.design_button.setEnabled(self._design is not None)
+        self.design_button.setToolTip("Show the design" if self._design is not None else
+                                      "A design shows here once a run has made one")
+        (self.design_button if self.view == "design" and self._design is not None else self.part_button).setChecked(True)
 
     def _arrow(self, i, direction, points, size):
         """A load's arrow, its tip on the load's nodes, coming from outside the part. A load that pulls
@@ -1608,7 +1858,7 @@ def install_error_handler(window):
 def main(argv=(), splash=None):
     """The window, with argv[0] open if given; splash (run_gui.py's start-up picture) closes when it shows."""
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
-    app.setStyleSheet("* { font-size: 10pt; }")                    # as PyTO-AD's main()
+    apply_style(app)
     from PyQt5.QtGui import QIcon
     app.setWindowIcon(QIcon(ICON))                                 # title bar and taskbar
     window = MMTOWindow()

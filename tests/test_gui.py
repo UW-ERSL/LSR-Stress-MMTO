@@ -961,7 +961,7 @@ def test_run():
         w.project.settings["common"]["maxIterations"] = 3
         assert w.save_project()
         r = w.open_run_panel()
-        assert r is w.run_window and r.windowTitle() == "Run"
+        assert r is w.run_window and r.windowTitle() == "Current run"
         assert not hasattr(r, "spec")                                         # PyTO-AD's formulation: not here
         assert r.start_optimization()
         assert _wait(lambda: not r.optimization_running), "the run did not finish"
@@ -976,12 +976,12 @@ def test_run():
         assert [r.tabs.tabText(i) for i in range(r.tabs.count())] == ["Progress", "Log", "Convergence",
                                                                       "Latent space", "Summary"]
         assert "result_design" in w.plotter.actors and not w.part_actor().GetVisibility()
-        assert w.view == "design" and r.view_button.text() == "Show setup"
-        r.view_button.click()                                                 # Show setup
+        assert w.view == "design" and w.design_button.isChecked() and w.design_button.isEnabled()
+        w.part_button.click()                                                 # Part, in the top row
         assert w.part_actor().GetVisibility() and "result_design" not in w.plotter.actors
-        assert r.view_button.text() == "Show design"
+        assert w.part_button.isChecked()
         panel = w.open_supports_and_loads_panel()
-        r.view_button.click()                                                 # Show design again
+        w.design_button.click()                                               # Design again
         assert w.view == "design"
         panel.preview()                                                       # a setup action: the part
         assert w.view == "setup" and w.part_actor().GetVisibility()

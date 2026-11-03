@@ -178,7 +178,7 @@ class ResultsWindow(QtWidgets.QDialog):
         self.list.currentItemChanged.connect(lambda item, _: self.show_run(item))
         self.list.itemChanged.connect(lambda _: self._update_buttons())
         layout.addWidget(self.list)
-        self.empty = QtWidgets.QLabel("No runs yet: Run > Start makes one.")
+        self.empty = QtWidgets.QLabel("No runs yet. Press Run at the top to make one.")
         self.empty.setStyleSheet(GREY)
         layout.addWidget(self.empty)
 
@@ -200,7 +200,6 @@ class ResultsWindow(QtWidgets.QDialog):
         self.field.currentTextChanged.connect(lambda _: self.redraw())
         show.addWidget(self.field)
         show.addStretch()
-        show.addWidget(self.window.view_button())                  # Show setup / Show design
         layout.addLayout(show)
         self.status = QtWidgets.QLabel("")
         self.status.setWordWrap(True)
