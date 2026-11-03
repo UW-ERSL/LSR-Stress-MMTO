@@ -1222,7 +1222,7 @@ def test_examples_open_as_templates():
 
 def test_part_facts_pca_live_colours_training():
     """The part's facts behind the (i), not over the 3D view; the PCA breakdown behind the Materials
-    panel's (i); the live design by density; the training's epochs in the Run status line."""
+    panel's (i), and its Values | Network error switch; the live design by density; the training's epochs in the Run status line."""
     from gui import draw_design
     s = draw_design.strength([0.1, 0.55, 1.0])
     assert np.allclose(s, [0.25, 0.625, 1.0])                                # pale to full colour
@@ -1235,8 +1235,19 @@ def test_part_facts_pca_live_colours_training():
         assert facts[0] == "Part: LBracket_BM1.STL" and facts[1].startswith("Volume: ")
         assert facts[2].startswith("Size: ") and facts[3] == "Material database: BM1_3Mats_2Attr"
 
-        tip = materials_panel.MaterialsPanel(w, w.project).latent_info.toolTip()
+        panel = materials_panel.MaterialsPanel(w, w.project)
+        tip = panel.latent_info.toolTip()
         assert "direction 1: " in tip and "The recommended latent dimension is the smallest whole number" in tip
+        # Values | Network error: the same table, each cell the network's error with both values behind it
+        assert panel.show_values.isChecked() and panel.show_errors.isEnabled()
+        value = panel.table.item(0, 2).text()
+        panel.show_errors.click()
+        cells = [panel.table.item(i, j) for i in range(panel.table.rowCount())
+                 for j in range(2, panel.table.columnCount())]
+        assert cells and all(c.text().endswith("%") for c in cells)
+        assert cells[0].toolTip().startswith("Database: ") and "\nNetwork: " in cells[0].toolTip()
+        panel.show_values.click()
+        assert panel.table.item(0, 2).text() == value
 
         w.project.n_dof, w.project.single_layer = 3000, True
         mesh = w.preview_mesh()
