@@ -457,7 +457,7 @@ class FormulationPanel(QtWidgets.QDialog):
     def _stored_tau(self):
         """The tau of the project's material volume fraction constraints (the first, if they differ)."""
         from lsr_mmto.formulation.quantities import DEFAULT_TAU
-        from lsr_mmto.problem.project import parse_expression
+        from lsr_mmto.formulation.formulation_text import parse_expression
         for c in self.original.get("constraints", []):
             try:
                 name, _, kwargs = parse_expression(c.get("expression"))
@@ -500,7 +500,7 @@ class FormulationPanel(QtWidgets.QDialog):
         return combo
 
     def _set_quantity(self, combo, expression):
-        from lsr_mmto.problem.project import parse_expression
+        from lsr_mmto.formulation.formulation_text import parse_expression
         if not expression:
             combo.setCurrentIndex(-1)
             return
@@ -512,7 +512,7 @@ class FormulationPanel(QtWidgets.QDialog):
 
     def add_row(self, constraint):
         """A constraint row: quantity, material (MaterialVolumeFraction only), <=, bound, unit."""
-        from lsr_mmto.problem.project import parse_expression
+        from lsr_mmto.formulation.formulation_text import parse_expression
         row = QtWidgets.QHBoxLayout()
         widgets = {"quantity": self._quantity_combo("constraint"), "material": QtWidgets.QComboBox(),
                    "bound": NumberEdit(0.0), "unit": QtWidgets.QLabel(),
@@ -614,7 +614,7 @@ class FormulationPanel(QtWidgets.QDialog):
 
     @staticmethod
     def _same_expression(a, b):
-        from lsr_mmto.problem.project import parse_expression
+        from lsr_mmto.formulation.formulation_text import parse_expression
         try:
             return parse_expression(a) == parse_expression(b)
         except ValueError:
@@ -630,7 +630,7 @@ class FormulationPanel(QtWidgets.QDialog):
 
 def formulation_lines(f, project):
     """The formulation in words, for the message panel: Minimize Stress (p-norm); Mass <= 0.4 t; ..."""
-    from lsr_mmto.problem.project import parse_expression
+    from lsr_mmto.formulation.formulation_text import parse_expression
     _, labels, _ = database_columns(project)
 
     def words(expression):

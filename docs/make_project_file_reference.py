@@ -39,7 +39,7 @@ def generate():
     from lsr_mmto.problem import selections as S
     from lsr_mmto.formulation.quantities import QUANTITIES
     from lsr_mmto.physics.available_physics import PHYSICS
-    from lsr_mmto.problem.project import BC_KINDS
+    from lsr_mmto.problem.boundary_conditions import BC_KINDS
     from lsr_mmto.problem.settings import FROM_DATABASE, SETTINGS
     from lsr_mmto.materials.databases import ATTRIBUTES, UNIT_SYSTEMS
 

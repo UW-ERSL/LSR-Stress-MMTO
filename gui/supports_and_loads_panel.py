@@ -649,7 +649,7 @@ def bc_values(bc, units=None):
 
 def bc_value(bc, units=None):
     """A support or load's value, short, for the table: x, y, z / 0, -4, 0 N / 75 MPa."""
-    from lsr_mmto.problem.project import BC_KINDS
+    from lsr_mmto.problem.boundary_conditions import BC_KINDS
     fields = {name: measures for name, _, measures, _ in BC_KINDS[bc["kind"]].fields} if bc["kind"] in BC_KINDS \
         else {}
     parts = []
@@ -683,7 +683,7 @@ class BCDialog(QtWidgets.QDialog):
     """A support or load: its kind, its region, and the kind's values (BCKind.fields)."""
 
     def __init__(self, parent, project, bc=None, preview=None):
-        from lsr_mmto.problem.project import BC_KINDS
+        from lsr_mmto.problem.boundary_conditions import BC_KINDS
         super().__init__(parent)
         self.preview = preview
         self.pages = None                                           # the strip's open_page, when docked
@@ -1144,7 +1144,7 @@ class SupportsPanel(QtWidgets.QDialog):
         """Only the support or load clicked, on the part."""
         r = self._selected(self.bcs)
         if r is not None and r < len(self.project.bcs):
-            from lsr_mmto.problem.project import BC_KINDS
+            from lsr_mmto.problem.boundary_conditions import BC_KINDS
             bc = self.project.bcs[r]
             colour = SUPPORT_COLOUR if BC_KINDS[bc["kind"]].role == "support" else LOAD_COLOUR
             self._show_one(bc["on"], colour, r)

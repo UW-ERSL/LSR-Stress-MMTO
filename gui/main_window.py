@@ -1285,7 +1285,7 @@ class MMTOWindow(MainWindow):
         """Every region on the run's mesh: supports blue, loads red with an arrow each, other regions
         orange, keep-solid elements grey. Returns (report lines, {region: node count})."""
         import pyvista as pv
-        from lsr_mmto.problem.project import BC_KINDS
+        from lsr_mmto.problem.boundary_conditions import BC_KINDS
         p, mesh = self.project, self.preview_mesh()
         self.clear_preview()
         xyz, centres = np.asarray(mesh.node_xyz, dtype=float), np.asarray(mesh.elem_centers, dtype=float)

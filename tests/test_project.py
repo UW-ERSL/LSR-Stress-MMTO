@@ -18,7 +18,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from lsr_mmto.problem import selections as S  # noqa: E402
-from lsr_mmto.problem.project import Project, to_params_form  # noqa: E402
+from lsr_mmto.formulation.formulation_text import to_params_form  # noqa: E402
+from lsr_mmto.problem.project import Project  # noqa: E402
 
 UBRACKET = os.path.join(ROOT, "data", "models", "UBracket")
 N_DOF = 3000
@@ -280,7 +281,7 @@ def test_schema_upgrades():
 
 def test_bc_kinds():
     """Every kind of boundary condition is a support or a load, and is documented."""
-    from lsr_mmto.problem.project import BC_KINDS
+    from lsr_mmto.problem.boundary_conditions import BC_KINDS
     for name, kind in BC_KINDS.items():
         assert kind.role in ("support", "load") and kind.doc, name
 
