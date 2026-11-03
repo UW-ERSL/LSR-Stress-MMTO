@@ -29,14 +29,9 @@ settings.common, settings.advanced and settings.vae. A new project starts from t
 settings of the paper's examples; a file missing some is completed from the same
 defaults, and the run says which.
 
-Boundary conditions (each acts on a named selection, evaluated on the mesh nodes):
-    fixed          dofs "x", "y", "z" or any combination, value 0
-    displacement   dofs as above, a nonzero imposed value
-    force          a total force [Fx, Fy, Fz], split equally over the nodes
-    traction       pressure * area along a direction, split equally over the nodes;
-                   area is a number, or "bbox": the bounding box of the loaded nodes
-                   seen along an axis-aligned direction (each side at least half an
-                   element). "bbox" is approximate; it is there for the airplane bracket.
+Supports and loads each act on a named selection, evaluated on the mesh nodes. Their kinds are
+those of the project's physics (the <name>_supports_and_loads.py file of each physics); every
+kind with its values is listed in docs/project_file_reference.md, made from the code.
 Supports and loads picked on the part in the window (faces, nodes, boxes) become selections
 and boundary conditions of the project as soon as they are applied (adopt_picks), with the
 picking tools' own rules (stl_faces with tol 0.8, nearest boundary node, halfspaces): the mmto
@@ -46,9 +41,8 @@ Forces are used as given, with no unit conversion: they must be in the units of 
 material database.
 
 Objective and constraints are written as PyTO-AD stores them: an expression, a sense
-(minimize) or an operator (<=) and a bound. An expression is exactly one quantity of the
-registry in formulation/quantities.py, e.g. "Mass()", "FailureFactorPNorm()",
-"MaterialVolumeFraction(2, tau=0.5)".
+(minimize) or an operator (<=) and a bound. An expression is exactly one quantity, e.g. "Mass()"
+or "MaterialVolumeFraction(2, tau=0.5)"; every quantity is listed in docs/project_file_reference.md.
 """
 import json
 import os

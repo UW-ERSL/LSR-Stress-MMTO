@@ -1,12 +1,14 @@
 """
-Structural MMTO driver: density topology + VAE-decoded materials, MMA optimizer.
+The optimization loop: density topology + VAE-decoded materials, MMA optimizer, for any physics
+on the list in physics/available_physics.py.
 
 PIPELINE:
     zeta = [x ; z]                         design vector (MMA variables)
       x  -> x_filt = (H_density @ x)/Hs    density filter
       x_filt -> x_phys = Heaviside(x_filt) optional projection (density only)
-      z  -> decode (VAE) -> E, Y, mass_density  per-element material properties
-    FEA solve(x_phys) -> von Mises stress (relaxed) -> objective/constraints
+      z  -> decode (VAE) -> per-element material properties (the physics' PROPERTIES)
+    the physics' analyse (its front page): the solve(x_phys) and what its quantities read
+      -> objective/constraints
     all of the above is one torch tree (optimize/design_model.py, MMTOModelAD);
     gradients by autograd, through PyTO-AD's solve
     optional penalties (latent z-smoothing, distance-to-real-material) added here

@@ -6,18 +6,9 @@ It knows no physics: the physics' analyse (its front page) does the solve betwee
 properties and the quantities. The tree below is the structural one.
 
 TREE (arrow = "depends on")
-    J      -> svm -> s -> x_phys, E, nu, u   objective (to_params.Objective, a quantity's name):
-                                               StressPNorm                  p-norm of relaxed von Mises
-                                               FailureFactorPNorm           mean p-norm of svm / Y, Y -> z
-                                               Compliance                   F . u
-                                               Mass                         sum rho x_phys V, rho -> z
-    g_k    -> x_phys, z                      constraints (to_params.Constraints), each g_k <= 0:
-                                               VolumeFraction               global, mean(x_phys)
-                                               MaterialVolumeFraction       per material, softmax weights
-                                               Mass                         sum rho x_phys V, rho -> z
-                                               Cost                         sum rho c x_phys V, rho, c -> z
-                                               Compliance                   F . u
-                                               FailureFactorPNorm           mean p-norm of svm / Y
+    J      -> svm -> s -> x_phys, E, nu, u   the objective (to_params.Objective, a quantity's name)
+    g_k    -> x_phys, z                      the constraints (to_params.Constraints), each g_k <= 0
+                                             (every quantity: docs/project_file_reference.md)
     Pz     -> x_phys, z                      latent smoothing penalty
     Dp     -> x_phys (frozen), z             distance to the nearest real material
     E, nu, Y, rho -> z                       VAE decoder (whichever attributes the database has)
