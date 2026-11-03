@@ -2,6 +2,8 @@
 design_model.py
 ===============
 The optimization callback's differentiable model, one torch tree per MMA iteration (MMTOModelAD).
+It knows no physics: the physics' analyse (its front page) does the solve between the decoded
+properties and the quantities. The tree below is the structural one.
 
 TREE (arrow = "depends on")
     J      -> svm -> s -> x_phys, E, nu, u   objective (to_params.Objective, a quantity's name):
@@ -30,13 +32,11 @@ PyTO-AD sets torch's default dtype to float64 on import; everything here is floa
 import numpy as np
 import torch
 
-import lsr_mmto.pyto_ad_imports  # noqa: F401  puts PyTO-AD on sys.path
-import pyto.autodiff.material_model as ad_mm
+import lsr_mmto.pyto_ad_imports  # noqa: F401  puts PyTO-AD on sys.path (and its float64 default)
 
 from lsr_mmto.design.density_filter_and_projection import SparseOperator, density_filter, heaviside
 from lsr_mmto.design.latent_to_properties import decode
 from lsr_mmto.formulation.quantities import find_quantity
-from lsr_mmto.physics.structural.structural_physics import von_mises
 
 _DTYPE = torch.float64
 
@@ -45,8 +45,8 @@ class MMTOModelAD:
     """The optimization callback's differentiable model, one torch tree per MMA iteration.
 
         x (raw MMA density) -> density filter -> Heaviside -> x_phys
-        z (latents)         -> VAE decoder    -> E, nu (and Y, rho when the database has them)
-        x_phys, E, nu       -> PyTO-AD solve  -> u -> element stress -> von Mises
+        z (latents)         -> VAE decoder    -> props (every property the database has)
+        x_phys, props       -> physics.analyse (structural: E, nu -> solve -> u -> von Mises)
         -> objective J, constraints, and the two penalties Pz (latent smoothing), Dp (distance)
 
     grad_phys(q) returns dq/d(x_phys, z) in the driver's layout [x (N) ; z latent-major (N*latentDim)],
@@ -56,9 +56,9 @@ class MMTOModelAD:
     Every derivative comes from autograd; nothing is derived by hand.
     """
 
-    def __init__(self, fe, enc, H_density, Hs_density, H_material, Hs_material, z_real,
-                 to_params, use_constant_nu, nu_const, elem_volume):
-        self.fe, self.enc, self.to_params = fe, enc, to_params
+    def __init__(self, fe, physics, enc, H_density, Hs_density, H_material, Hs_material, z_real,
+                 to_params, settings, elem_volume):
+        self.fe, self.physics, self.enc, self.to_params, self.settings = fe, physics, enc, to_params, settings
         self.N = fe.mesh.num_elems
         self.latentDim = enc.vae_params.latentDim
         self.H = SparseOperator(H_density)
@@ -66,7 +66,6 @@ class MMTOModelAD:
         self.Hm = SparseOperator(H_material)
         self.Hsm = torch.as_tensor(np.asarray(Hs_material, dtype=float).ravel(), dtype=_DTYPE)
         self.z_real = torch.as_tensor(np.asarray(z_real, dtype=float), dtype=_DTYPE)
-        self.use_constant_nu, self.nu_const = bool(use_constant_nu), float(nu_const)
         self.elem_volume = float(elem_volume)
 
     def evaluate(self, zeta, beta, eta, use_heaviside=True, apply_density_filter=True):
@@ -79,10 +78,8 @@ class MMTOModelAD:
         x_filt = density_filter(self.x, self.H, self.Hs) if apply_density_filter else self.x
         self.x_phys = heaviside(x_filt, beta, eta) if use_heaviside else x_filt
 
-        E, nu, self.props = decode(self.enc, self.z, self.use_constant_nu, self.nu_const)
-        self.fe.set_material_fields(E, nu)
-        self.u = u = self.fe.solve(self.x_phys, ad_mm.MaterialModel.SIMP)
-        self.svm = von_mises(self.fe.element_stress(u, self.x_phys))
+        self.props = decode(self.enc, self.z)
+        self.physics.analyse(self)              # the solve, and what the physics' quantities read
 
         self.J = self._objective()
         self.cons = [self._constraint(name, opt, limit) for name, opt, limit in self.to_params.Constraints]

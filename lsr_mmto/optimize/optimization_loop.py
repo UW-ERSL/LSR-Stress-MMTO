@@ -224,8 +224,8 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
         fe_solver_structural, to_params, createFilters
     )
     ad_model = MMTOModelAD(
-        fe_solver_structural, matEncoder, H_density, Hs_density, H_material, Hs_material,
-        zRealPoints_np, to_params, s.use_constant_poissons_ratio, s.constant_poissons_ratio, elem_volume,
+        fe_solver_structural, physics, matEncoder, H_density, Hs_density, H_material, Hs_material,
+        zRealPoints_np, to_params, s, elem_volume,
     )
 
 
@@ -562,6 +562,6 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
         run_config=run_config,
         example_name=getattr(to_problem, "name", str(to_problem)),
         physics=physics,
-        properties_of=lambda z: decode(matEncoder, z, s.use_constant_poissons_ratio, s.constant_poissons_ratio)[2],
+        properties_of=lambda z: decode(matEncoder, z),
         settings=s,
     )
