@@ -3,7 +3,7 @@ gradient_check.py
 =================
 The autodiff gradient against central finite differences.
 
-check(p)          sets the project p up as run(p) does, then, at a random design,
+check(p)          sets the project p up as run(p) does (optimization_loop.setup), then, at a random design,
                   compares the gradient of the objective J and of the first
                   constraint with central differences on a few design variables,
                   for several step sizes h
@@ -19,35 +19,16 @@ from __future__ import annotations
 import numpy as np
 
 
-class _Stop(Exception):
-    pass
-
-
 def _model_from_setup(run_args):
-    """Run _run_topopt's setup and hand back the autodiff model, before MMA starts."""
+    """Set the project up as a run does (optimization_loop.setup) and hand back the autodiff model, the
+    Heaviside beta and eta it starts with, and the bounds of every design variable, before any design
+    is evaluated."""
     from lsr_mmto.optimize import optimization_loop as M
-    found = {}
-
-    def intercept(nVar, nCon, fn, x0, lb, ub, **kw):
-        cells = dict(zip(fn.__code__.co_freevars, fn.__closure__))
-        found["model"] = cells["ad_model"].cell_contents
-        found["beta"] = cells["beta_proj"].cell_contents
-        found["eta"] = cells["s"].cell_contents.eta_proj
-        found["lb"] = np.asarray(lb, dtype=float).ravel()
-        found["ub"] = np.asarray(ub, dtype=float).ravel()
-        raise _Stop
-
-    saved = M.runMMA
-    M.runMMA = intercept
-    try:
-        M._run_topopt(**{**run_args, "verbose": False, "plot_progress": False})
-    except _Stop:
-        pass
-    finally:
-        M.runMMA = saved
-    if "model" not in found:
-        raise RuntimeError("_run_topopt finished without reaching the optimizer")
-    return found
+    state = M.setup(**{**run_args, "verbose": False, "plot_progress": False})
+    if state is None:
+        raise RuntimeError("the project names no material database, so there is nothing to check")
+    return {"model": state.model, "beta": state.beta, "eta": state.s.eta_proj,
+            "lb": np.asarray(state.lower, dtype=float).ravel(), "ub": np.asarray(state.upper, dtype=float).ravel()}
 
 
 def check(project, n_x=3, n_z=3, steps=(1e-3, 1e-4, 1e-5), seed=0):

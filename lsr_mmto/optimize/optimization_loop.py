@@ -106,12 +106,47 @@ def update_beta(beta_proj, mmaIterations, beta_schedule):
     return min(beta_proj * beta_schedule["beta_factor"], beta_schedule["beta_max"]), True
 
 class _StopRequested(Exception):
-    """Raised inside the MMA callback when should_stop() says so; _run_topopt catches it."""
+    """Raised inside evaluate() when should_stop() says so; optimize() catches it."""
+
+
+APPLY_LATENT_SENS_FILTER = False      # (H_material@g)/Hs smoothing of the latent gradient blocks: switched off
+MMA_MOVE_LIMIT, MMA_KKT_TOL = 0.05, 1e-6
+
+
+class RunState:
+    """Everything a run keeps from its setup to its end: what setup() built, and what changes from one
+    iteration to the next (the iteration count, the Heaviside beta, the penalties' scales and weights).
+    The steps of an iteration read and change it; nothing else is shared between them."""
+
+    def __init__(self, **fields):
+        self.__dict__.update(fields)
+
+
+class Iteration:
+    """The numbers of one design, as the steps of evaluate() compute them, in order."""
+
+    def __init__(self, zeta):
+        self.zeta = zeta
 
 
 def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, plotter, progress, should_stop,
                 on_network_error):
+    """One run of a project: setup(), then optimize(). Project.run calls it with the project's settings."""
+    state = setup(s=s, to_problem=to_problem, save_dir=save_dir, verbose=verbose, plot_progress=plot_progress,
+                  plot_bcs=plot_bcs, plotter=plotter, progress=progress, should_stop=should_stop,
+                  on_network_error=on_network_error)
+    if state is None:
+        return
+    return optimize(state)
+
+
+def setup(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, plotter, progress, should_stop,
+          on_network_error):
     """
+    Everything before the first design is evaluated: the problem built, the material network read or
+    trained, the solver, the filters, the autodiff model, the start design and the bounds. Returns the
+    RunState (None when the project names no material database).
+
     DENSITY FILTER + HEAVISIDE PROJECTION (density ONLY):
       x (MMA var) --density filter--> x_filt = (H@x)/Hs --projection--> x_phys = H_{beta,eta}(x_filt)
 
@@ -124,7 +159,6 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
     _args_at_start = dict(s.as_dict(), to_problem=to_problem, save_dir=save_dir, verbose=verbose,
                           plot_progress=plot_progress, plot_bcs=plot_bcs, plotter=plotter)   # what the run records
     saveNet = s.saveNet                                     # resolved below: None is the .nt beside the database
-    use_z_smoothing, use_penalization = s.use_z_smoothing, s.use_penalization      # switched off during the run
     from lsr_mmto.optimize import save_results as _save
     _provenance = _save.provenance()   # the code as it is when the run starts
 
@@ -142,7 +176,7 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
 
     if to_params.MaterialsExcelFile is None:
         print("Please provide a valid MaterialsExcelFile in to_params.")
-        return
+        return None
 
     matEncoder = MaterialEncoder(vae_params)
     matEncoder.readExcel(to_params.MaterialsExcelFile)
@@ -194,7 +228,6 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
     zRealPoints = matEncoder.training_latents
     zRealPoints_np = zRealPoints.detach().cpu().numpy().astype(float)
 
-
     # --- Solver selection: direct (PARDISO) for small problems; iterative
     #     (DPCG + deflation) beyond the DOF cutoff, for a physics that builds a deflation space
     #     (its deflation_space); a physics without one keeps the direct solver at every size.
@@ -230,7 +263,6 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
         zRealPoints_np, to_params, s, elem_volume,
     )
 
-
     # ---- visualize loads & boundary conditions before optimization ----
     if plot_bcs:
             print("[plot_bcs] opening interactive loads/BCs window...")
@@ -242,19 +274,8 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
                 camera_position="iso",
                 save_path=None,          # interactive window, no file
             )
-    APPLY_LATENT_SENS_FILTER = False  # (H_material@g)/Hs smoothing of latent
-                                      # gradient blocks; set False.
-    MMA_MOVE_LIMIT, MMA_KKT_TOL = 0.05, 1e-6
 
-    mmaIterations = 0
-    obj0 = None
-    Sd0 = None    # frozen reference scale for distance penalty (own initial value)
-    _J_hist = []               # objective history for dynamic-gamma plateau trigger
-    _dyn_ramp_started = False   # latches True once the dynamic ramp begins
-    _during_run = {}            # iteration at which a setting changed during the run
-    gamma = float(s.gamma_init)
     beta_schedule = get_beta_schedule(s.beta_schedule_scheme)
-    beta_proj = float(beta_schedule["beta_init"])
 
     if s.use_continuation:
         initialize_SIMP_STRUCTURAL_PENALTY(1.5)
@@ -262,183 +283,6 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
     else:
         initialize_SIMP_STRUCTURAL_PENALTY(3)
         initialize_SIMP_THERMAL_PENALTY(1)
-
-    def MMTO_optimization_function(zeta):
-        """MMA callback: returns (obj, grad_obj, cons, grad_cons) for design zeta.
-
-        Steps:
-          1. split zeta into density x and latents z
-          2. AD model: density filter and Heaviside x -> x_phys, decode z -> material properties,
-             and solve, in one torch tree
-          3. x_phys and the decoded properties, detached, for logging and diagnostics
-          4. postprocess the solve; record stress-violation diagnostics into history
-          5. obj/cons values from the AD model; their gradients w.r.t. (x_phys, z) by autograd
-          6. normalize obj by obj0; add optional z-smoothing and distance penalties (autograd)
-          7. latent-block sens filter, then Heaviside + density filter (autograd)
-          8. log, update beta continuation / SIMP continuation
-        """
-        nonlocal mmaIterations, obj0, Sd0, gamma, beta_proj, use_z_smoothing, use_penalization, _dyn_ramp_started
-        nonlocal _last_zeta
-        if should_stop is not None and should_stop():
-            raise _StopRequested
-        if (
-            use_z_smoothing
-            and s.z_smoothing_disable_after_iter is not None
-            and mmaIterations >= s.z_smoothing_disable_after_iter
-        ):
-            use_z_smoothing = False
-            _during_run["z_smoothing_off_at_iter"] = int(mmaIterations)
-            if verbose:
-                print(f"[INFO] z-smoothing penalty disabled at iteration {mmaIterations}")
-        # Disable distance-based penalty after specified iteration
-        if (
-            use_penalization
-            and not s.use_dynamic_gamma_scheduling
-            and s.distance_penalty_disable_after_iter is not None
-            and mmaIterations >= s.distance_penalty_disable_after_iter
-        ):
-            use_penalization = False
-            _during_run["distance_penalty_off_at_iter"] = int(mmaIterations)
-            if verbose:
-                print(f"[INFO] Distance-based penalty disabled at iteration {mmaIterations}")
-        zeta = np.asarray(zeta).flatten()
-
-        # ===================== SPLIT DESIGN VECTOR =====================
-        z = zeta[num_elems:].reshape(latentDim, -1).T   # numpy, element-major (N, latentDim)
-
-        # ============ DECODE + MAIN FEA: one torch tree (AD model) ============
-        # zeta -> x_phys, decoded properties -> PyTO-AD solve -> stress -> J, constraints
-        J_t, cons_t = ad_model.evaluate(zeta, beta_proj, s.eta_proj,
-                                        use_heaviside=to_params.HeavisideProjection,
-                                        apply_density_filter=to_params.APPLY_FILTER_TO_DENSITY)
-
-        # x_phys and the decoded properties for logging and diagnostics: the same numbers, detached
-        x_phys = ad_model.x_phys.detach().numpy().copy()
-        material_properties = {k: v.detach() for k, v in ad_model.props.items()}
-        zTorch = ad_model.z.detach()
-        log_design_state(history, mmaIterations, x_phys, z, material_properties,
-                         zTorch, matEncoder, num_elems, beta_proj, s.eta_proj, verbose=verbose)
-
-        physics.iteration_diagnostics(history, mmaIterations, solver, x_phys, material_properties,
-                                      elem_volume, design_domain_volume, plot_progress=plot_progress,
-                                      plotter=plotter, verbose=verbose)
-
-        # ============ OBJECTIVE / CONSTRAINTS / SENSITIVITIES =========
-        # gradients w.r.t. (x_phys, z), the layout the manual code returned
-        obj = float(J_t.detach())
-        grad_obj = ad_model.grad_phys(J_t)
-        cons = np.array([[float(c.detach())] for c in cons_t])
-        grad_cons = np.array([ad_model.grad_phys(c) for c in cons_t])
-
-        # ================= PENALTIES + NORMALIZATION ==================
-        J_phys = float(obj)
-        if obj0 is None:
-            obj0 = J_phys
-
-        Jn = J_phys / float(obj0)
-        grad_obj = grad_obj / float(obj0)
-        obj = Jn
-
-        if to_params.ElemsToKeep is not None:
-            grad_obj[to_params.ElemsToKeep] = np.min(grad_obj)
-
-        grad_obj_phys = grad_obj.copy()
-        if APPLY_LATENT_SENS_FILTER:
-                    smooth_latent_gradient_inplace(grad_obj_phys, H_material, Hs_material, num_elems, latentDim)
-                    smooth_latent_constraint_gradient_inplace(grad_cons, H_material, Hs_material, num_elems, latentDim)
-
-        if use_z_smoothing:
-            # RAW scaling, applied consistently every iteration. The z-smoothing
-            # penalty is ZERO at a spatially-uniform start, so it has no valid
-            # own-initial-value to normalize by (dividing by it would blow up).
-            # z_smoothing_weight multiplies the raw roughness directly.
-            Pz_t = latent_smoothing(ad_model.x_phys, ad_model.z, ad_model.Hm, ad_model.Hsm)
-            Pzn = float(s.z_smoothing_weight) * float(Pz_t.detach())
-            obj = obj + Pzn
-            grad_obj_phys += float(s.z_smoothing_weight) * ad_model.grad_phys(Pz_t)
-        else:
-            Pzn = 0.0
-
-        P = 0.0
-        Pn = 0.0
-
-        if use_penalization and (s.use_dynamic_gamma_scheduling or mmaIterations >= int(s.penalty_start_iter)):
-            # RAW penalty (gamma = 1); weighting + normalization applied here
-            Dp_t = distance_penalty(ad_model.x_phys, ad_model.z, ad_model.z_real)
-            penalty_raw = float(Dp_t.detach())
-
-            if Sd0 is None:
-                Sd0 = max(float(penalty_raw), 1e-12)   # freeze initial scale (once)
-
-            # gamma is now a pure ratio: penalty's initial share of the objective
-            P = float(penalty_raw)
-            Pn = float(gamma) * (P / Sd0)
-            obj = obj + Pn
-            # x enters the realizability penalty as a frozen weight (detached in the AD
-            # model), so its x block is zero by construction, as before.
-            grad_obj_phys += float(gamma) * ad_model.grad_phys(Dp_t) / Sd0
-
-            if s.use_dynamic_gamma_scheduling:
-                _J_hist.append(float(Jn))
-                if not _dyn_ramp_started:
-                    # the ramp starts once J changed by less than the plateau tolerance over the last window
-                    # iterations (not before the earliest start), or in time to reach gamma_max end_margin
-                    # iterations before the last
-                    _K, _rel_tol = int(s.gamma_plateau_window), float(s.gamma_plateau_tolerance)
-                    _min_iter = int(s.gamma_plateau_earliest_iter)
-                    _n_ramp = int(np.ceil(np.log(max(s.gamma_max / s.gamma_init, 1 + 1e-9))
-                                          / np.log(max(s.gamma_factor, 1 + 1e-9))))
-                    _deadline = int(to_params.MaxIterations) - _n_ramp - int(s.gamma_ramp_end_margin)
-                    _settled = (mmaIterations >= _min_iter and len(_J_hist) > _K and
-                                abs(_J_hist[-1] - _J_hist[-1 - _K])
-                                <= _rel_tol * max(abs(_J_hist[-1 - _K]), 1e-12))
-                    if _settled or mmaIterations >= _deadline:
-                        _dyn_ramp_started = True
-                        _during_run["gamma_ramp_started_at_iter"] = int(mmaIterations)
-                        if verbose:
-                            print(f"[DYN-GAMMA] ramp started at iter {mmaIterations} "
-                                  f"({'plateau' if _settled else 'deadline'})")
-                if _dyn_ramp_started:
-                    gamma = min(gamma * s.gamma_factor, s.gamma_max)
-            else:
-                gamma = min(gamma * s.gamma_factor, s.gamma_max)
-
-        grad_obj = grad_obj_phys
-
-        # ============== CHAIN RULE -> DESIGN VARIABLES ================
-        grad_obj = ad_model.chain_to_x(grad_obj)
-        for i in range(grad_cons.shape[0]):
-            grad_cons[i, :] = ad_model.chain_to_x(grad_cons[i, :])
-
-        grad_obj = np.array([grad_obj]).reshape((num_design_var, 1))
-        cons = np.array(cons).reshape((-1, 1))
-        grad_cons = np.array(grad_cons).reshape((len(cons), num_design_var))
-
-        log_objective_and_constraints(history, obj, J_phys, Jn, P, Pn, Pzn, cons,
-                                      to_params, verbose=verbose, material_labels=material_labels)
-        _last_zeta = zeta.copy()
-        if progress is not None:
-            progress({"iteration": int(mmaIterations), "objective": float(J_phys),
-                      "constraints": [float(c) for c in np.ravel(cons)], "x_phys": np.array(x_phys),
-                      "z": np.array(z), "z_real": zRealPoints.detach().cpu().numpy()})
-
-        # ================ CONTINUATION + BETA UPDATE ==================
-        mmaIterations += 1
-
-        if s.use_continuation and (mmaIterations % 10 == 0):
-            increment_SIMP_THERMAL_PENALTY(0.25)
-            increment_SIMP_STRUCTURAL_PENALTY(0.25)
-        if to_params.HeavisideProjection:
-            beta_new, beta_updated = update_beta(
-                beta_proj=beta_proj,
-                mmaIterations=mmaIterations,
-                beta_schedule=beta_schedule,
-            )
-            if beta_updated:
-                beta_proj = beta_new
-                if verbose:
-                    print(f"[PROJ] Updated beta -> {beta_proj:.4g} (eta={s.eta_proj}, scheme={s.beta_schedule_scheme.value})")
-        return np.array([[float(obj)]]), grad_obj, cons, grad_cons
 
     initialDensity = 0.5                       # or the bound of the first constraint that sets it
     for name, _, bound in to_params.Constraints:
@@ -478,101 +322,364 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
     lowerBound[num_elems:num_design_var] = np.min(zRealPoints.detach().cpu().numpy())
     upperBound[num_elems:num_design_var] = np.max(zRealPoints.detach().cpu().numpy())
 
-    # ============================ RUN MMA ============================
-    nVariables = num_design_var
-    nConstraints = len(to_params.Constraints)
+    return RunState(
+        # what setup was given
+        s=s, to_problem=to_problem, save_dir=save_dir, verbose=verbose, plot_progress=plot_progress,
+        plotter=plotter, progress=progress, should_stop=should_stop,
+        args_at_start=_args_at_start, provenance=_provenance, save_net=saveNet,
+        # what it built
+        physics=physics, mesh=mesh, bcs=bcs, to_params=to_params, vae_params=vae_params, solver=solver,
+        encoder=matEncoder, network_errors=network_errors, model=ad_model, history=history,
+        material_colors=material_colors, material_labels=material_labels,
+        z_real=zRealPoints, num_elems=num_elems, latent_dim=latentDim, num_design_var=num_design_var,
+        elem_volume=elem_volume, design_domain_volume=design_domain_volume,
+        H_material=H_material, Hs_material=Hs_material,
+        beta_schedule=beta_schedule, initial_density=initialDensity,
+        zeta0=zeta0, lower=lowerBound, upper=upperBound,
+        # what changes from one iteration to the next
+        iteration=0,                        # designs evaluated so far
+        beta=float(beta_schedule["beta_init"]),
+        objective_scale=None,               # the first objective; later ones are divided by it
+        distance_scale=None,                # the distance penalty's own first value, its scale
+        gamma=float(s.gamma_init),          # the distance penalty's weight
+        objective_history=[],               # scaled objectives, for the start of the weight's ramp
+        gamma_ramp_started=False,
+        use_z_smoothing=s.use_z_smoothing, use_distance_penalty=s.use_penalization,   # switched off on schedule
+        during_run={},                      # iteration at which a setting changed during the run
+        last_zeta=zeta0.flatten().copy(),
+    )
 
-    tStart = time.time()
-    _last_zeta = zeta0.flatten().copy()
-    try:
-        optResults = runMMA(
-            nVariables,
-            nConstraints,
-            MMTO_optimization_function,
-            zeta0.reshape(-1, 1),
-            lowerBound,
-            upperBound,
-            maxIterations=to_params.MaxIterations,
-            timeLimitSecs=s.timeLimit,
-            move_limit=MMA_MOVE_LIMIT,
-            kktTol=MMA_KKT_TOL,
-            fTolerance=s.rel_conv_tol,
-            gTolerance=s.rel_conv_tol,
-            verbose=False,
+
+# ---------------------------------------------------------------------- the steps of one iteration
+# evaluate(state, zeta) runs these in order for each design the constraint method asks about. Each
+# step reads and writes the run state and the iteration's numbers; the order is the order that gives
+# today's numbers, so a new step goes where its inputs are ready and before the steps that read it.
+
+def stop_if_asked(state, it):
+    """The window's Stop: the run ends before this design is evaluated."""
+    if state.should_stop is not None and state.should_stop():
+        raise _StopRequested
+
+
+def penalties_switched_off_on_schedule(state, it):
+    """The latent smoothing and the distance penalty, each switched off from its set iteration on."""
+    s = state.s
+    if (
+        state.use_z_smoothing
+        and s.z_smoothing_disable_after_iter is not None
+        and state.iteration >= s.z_smoothing_disable_after_iter
+    ):
+        state.use_z_smoothing = False
+        state.during_run["z_smoothing_off_at_iter"] = int(state.iteration)
+        if state.verbose:
+            print(f"[INFO] z-smoothing penalty disabled at iteration {state.iteration}")
+    # Disable distance-based penalty after specified iteration
+    if (
+        state.use_distance_penalty
+        and not s.use_dynamic_gamma_scheduling
+        and s.distance_penalty_disable_after_iter is not None
+        and state.iteration >= s.distance_penalty_disable_after_iter
+    ):
+        state.use_distance_penalty = False
+        state.during_run["distance_penalty_off_at_iter"] = int(state.iteration)
+        if state.verbose:
+            print(f"[INFO] Distance-based penalty disabled at iteration {state.iteration}")
+
+
+def analyse_design(state, it):
+    """The design through the autodiff model: density filter and Heaviside x -> x_phys, decode z ->
+    material properties, the physics' solve and quantities, in one torch tree; then the design's log
+    and the physics' own per-iteration diagnostics."""
+    s, to_params, model = state.s, state.to_params, state.model
+    it.zeta = np.asarray(it.zeta).flatten()
+    it.z = it.zeta[state.num_elems:].reshape(state.latent_dim, -1).T   # numpy, element-major (N, latentDim)
+    it.J_t, it.cons_t = model.evaluate(it.zeta, state.beta, s.eta_proj,
+                                       use_heaviside=to_params.HeavisideProjection,
+                                       apply_density_filter=to_params.APPLY_FILTER_TO_DENSITY)
+    # x_phys and the decoded properties for logging and diagnostics: the same numbers, detached
+    it.x_phys = model.x_phys.detach().numpy().copy()
+    material_properties = {k: v.detach() for k, v in model.props.items()}
+    zTorch = model.z.detach()
+    log_design_state(state.history, state.iteration, it.x_phys, it.z, material_properties,
+                     zTorch, state.encoder, state.num_elems, state.beta, s.eta_proj, verbose=state.verbose)
+    state.physics.iteration_diagnostics(state.history, state.iteration, state.solver, it.x_phys,
+                                        material_properties, state.elem_volume, state.design_domain_volume,
+                                        plot_progress=state.plot_progress, plotter=state.plotter,
+                                        verbose=state.verbose)
+
+
+def objective_and_constraints(state, it):
+    """The objective and the constraints with their gradients with respect to (x_phys, z) by autograd;
+    the objective divided by its first value."""
+    model = state.model
+    it.obj = float(it.J_t.detach())
+    it.grad_obj = model.grad_phys(it.J_t)
+    it.cons = np.array([[float(c.detach())] for c in it.cons_t])
+    it.grad_cons = np.array([model.grad_phys(c) for c in it.cons_t])
+
+    it.J_phys = float(it.obj)
+    if state.objective_scale is None:
+        state.objective_scale = it.J_phys
+    it.Jn = it.J_phys / float(state.objective_scale)
+    it.grad_obj = it.grad_obj / float(state.objective_scale)
+    it.obj = it.Jn
+
+
+def keep_solid(state, it):
+    """Elements to keep solid get the objective's most favourable slope."""
+    if state.to_params.ElemsToKeep is not None:
+        it.grad_obj[state.to_params.ElemsToKeep] = np.min(it.grad_obj)
+
+
+def latent_sensitivity_filter(state, it):
+    """Smoothing of the latent gradient blocks (switched off: APPLY_LATENT_SENS_FILTER)."""
+    it.grad_obj = it.grad_obj.copy()
+    if APPLY_LATENT_SENS_FILTER:
+        smooth_latent_gradient_inplace(it.grad_obj, state.H_material, state.Hs_material, state.num_elems,
+                                       state.latent_dim)
+        smooth_latent_constraint_gradient_inplace(it.grad_cons, state.H_material, state.Hs_material,
+                                                  state.num_elems, state.latent_dim)
+
+
+def latent_smoothing_penalty(state, it):
+    """The latent smoothing penalty added to the objective, while it is switched on."""
+    s, model = state.s, state.model
+    if state.use_z_smoothing:
+        # RAW scaling, applied consistently every iteration. The z-smoothing
+        # penalty is ZERO at a spatially-uniform start, so it has no valid
+        # own-initial-value to normalize by (dividing by it would blow up).
+        # z_smoothing_weight multiplies the raw roughness directly.
+        Pz_t = latent_smoothing(model.x_phys, model.z, model.Hm, model.Hsm)
+        it.Pzn = float(s.z_smoothing_weight) * float(Pz_t.detach())
+        it.obj = it.obj + it.Pzn
+        it.grad_obj += float(s.z_smoothing_weight) * model.grad_phys(Pz_t)
+    else:
+        it.Pzn = 0.0
+
+
+def distance_penalty_step(state, it):
+    """The distance-to-real-material penalty added to the objective, and its weight's growth."""
+    s, model = state.s, state.model
+    it.P = 0.0
+    it.Pn = 0.0
+    if state.use_distance_penalty and (s.use_dynamic_gamma_scheduling or state.iteration >= int(s.penalty_start_iter)):
+        # RAW penalty (gamma = 1); weighting + normalization applied here
+        Dp_t = distance_penalty(model.x_phys, model.z, model.z_real)
+        penalty_raw = float(Dp_t.detach())
+
+        if state.distance_scale is None:
+            state.distance_scale = max(float(penalty_raw), 1e-12)   # freeze initial scale (once)
+
+        # gamma is now a pure ratio: penalty's initial share of the objective
+        it.P = float(penalty_raw)
+        it.Pn = float(state.gamma) * (it.P / state.distance_scale)
+        it.obj = it.obj + it.Pn
+        # x enters the realizability penalty as a frozen weight (detached in the AD
+        # model), so its x block is zero by construction, as before.
+        it.grad_obj += float(state.gamma) * model.grad_phys(Dp_t) / state.distance_scale
+
+        if s.use_dynamic_gamma_scheduling:
+            state.objective_history.append(float(it.Jn))
+            if not state.gamma_ramp_started:
+                # the ramp starts once J changed by less than the plateau tolerance over the last window
+                # iterations (not before the earliest start), or in time to reach gamma_max end_margin
+                # iterations before the last
+                _K, _rel_tol = int(s.gamma_plateau_window), float(s.gamma_plateau_tolerance)
+                _min_iter = int(s.gamma_plateau_earliest_iter)
+                _n_ramp = int(np.ceil(np.log(max(s.gamma_max / s.gamma_init, 1 + 1e-9))
+                                      / np.log(max(s.gamma_factor, 1 + 1e-9))))
+                _deadline = int(state.to_params.MaxIterations) - _n_ramp - int(s.gamma_ramp_end_margin)
+                _J_hist = state.objective_history
+                _settled = (state.iteration >= _min_iter and len(_J_hist) > _K and
+                            abs(_J_hist[-1] - _J_hist[-1 - _K])
+                            <= _rel_tol * max(abs(_J_hist[-1 - _K]), 1e-12))
+                if _settled or state.iteration >= _deadline:
+                    state.gamma_ramp_started = True
+                    state.during_run["gamma_ramp_started_at_iter"] = int(state.iteration)
+                    if state.verbose:
+                        print(f"[DYN-GAMMA] ramp started at iter {state.iteration} "
+                              f"({'plateau' if _settled else 'deadline'})")
+            if state.gamma_ramp_started:
+                state.gamma = min(state.gamma * s.gamma_factor, s.gamma_max)
+        else:
+            state.gamma = min(state.gamma * s.gamma_factor, s.gamma_max)
+
+
+def chain_to_design_variables(state, it):
+    """The gradients carried back through the Heaviside projection and the density filter (autograd),
+    to the optimizer's variables, in the shapes the constraint method gets."""
+    model, n = state.model, state.num_design_var
+    it.grad_obj = model.chain_to_x(it.grad_obj)
+    for i in range(it.grad_cons.shape[0]):
+        it.grad_cons[i, :] = model.chain_to_x(it.grad_cons[i, :])
+    it.grad_obj = np.array([it.grad_obj]).reshape((n, 1))
+    it.cons = np.array(it.cons).reshape((-1, 1))
+    it.grad_cons = np.array(it.grad_cons).reshape((len(it.cons), n))
+
+
+def record(state, it):
+    """The iteration's line in the history and the log, and what the window's progress hears."""
+    log_objective_and_constraints(state.history, it.obj, it.J_phys, it.Jn, it.P, it.Pn, it.Pzn, it.cons,
+                                  state.to_params, verbose=state.verbose, material_labels=state.material_labels)
+    state.last_zeta = it.zeta.copy()
+    if state.progress is not None:
+        state.progress({"iteration": int(state.iteration), "objective": float(it.J_phys),
+                        "constraints": [float(c) for c in np.ravel(it.cons)], "x_phys": np.array(it.x_phys),
+                        "z": np.array(it.z), "z_real": state.z_real.detach().cpu().numpy()})
+
+
+def continuation(state, it):
+    """The next iteration's count, SIMP penalty and Heaviside beta."""
+    s = state.s
+    state.iteration += 1
+    if s.use_continuation and (state.iteration % 10 == 0):
+        increment_SIMP_THERMAL_PENALTY(0.25)
+        increment_SIMP_STRUCTURAL_PENALTY(0.25)
+    if state.to_params.HeavisideProjection:
+        beta_new, beta_updated = update_beta(
+            beta_proj=state.beta,
+            mmaIterations=state.iteration,
+            beta_schedule=state.beta_schedule,
         )
-        zetaOptimal = np.asarray(optResults[0]).flatten()
+        if beta_updated:
+            state.beta = beta_new
+            if state.verbose:
+                print(f"[PROJ] Updated beta -> {state.beta:.4g} (eta={s.eta_proj}, scheme={s.beta_schedule_scheme.value})")
+
+
+ITERATION_STEPS = [
+    stop_if_asked,
+    penalties_switched_off_on_schedule,
+    analyse_design,
+    objective_and_constraints,
+    keep_solid,
+    latent_sensitivity_filter,
+    latent_smoothing_penalty,
+    distance_penalty_step,
+    chain_to_design_variables,
+    record,
+    continuation,
+]
+
+
+def evaluate(state, zeta):
+    """One design through ITERATION_STEPS: (objective, its gradient, constraints, their gradients), the
+    objective scaled and with the penalties, the gradients with respect to the optimizer's variables."""
+    it = Iteration(zeta)
+    for step in ITERATION_STEPS:
+        step(state, it)
+    return np.array([[float(it.obj)]]), it.grad_obj, it.cons, it.grad_cons
+
+
+# ---------------------------------------------------------------------- the optimizer
+def optimize(state):
+    """The constraint method runs from the start design; then the run record and the final analysis."""
+    s, to_params, history = state.s, state.to_params, state.history
+    tStart = time.time()
+    try:
+        zetaOptimal, method_settings = mma(state, lambda zeta: evaluate(state, zeta),
+                                           state.zeta0, state.lower, state.upper)
     except _StopRequested:                     # stopped from outside: the last design evaluated
-        zetaOptimal = _last_zeta
-        _during_run["stopped_at_iter"] = int(mmaIterations)
-        print(f"Stopped at iteration {mmaIterations}; saving the design reached so far.")
-    except Exception as e:                     # MMA failed: say which constraints were far off, if any
-        over = constraints_over_limit(history, to_params, material_labels)
+        zetaOptimal, method_settings = state.last_zeta, mma_record(state)
+        state.during_run["stopped_at_iter"] = int(state.iteration)
+        print(f"Stopped at iteration {state.iteration}; saving the design reached so far.")
+    except Exception as e:                     # the optimizer failed: say which constraints were far off, if any
+        over = constraints_over_limit(history, to_params, state.material_labels)
         if not over:
             raise
         raise RuntimeError(
-            f"The optimizer could not continue at iteration {max(mmaIterations - 1, 0)}. These constraints were "
+            f"The optimizer could not continue at iteration {max(state.iteration - 1, 0)}. These constraints were "
             f"over their limit: " + "; ".join(over) + ". A constraint many times over its limit at the start "
             "usually cannot be met from the starting design: check the limit and its unit. "
             f"(The optimizer's own error: {type(e).__name__}: {e})") from e
     tEnd = time.time()
     print(f"Total optimization time: {tEnd - tStart:.2f} seconds")
     # ---- assemble the full parameter manifest (no plotting; saved as YAML+pkl) ----
-    _run_args = dict(_args_at_start, saveNet=saveNet)   # as given, with the VAE file resolved
+    from lsr_mmto.optimize import save_results as _save
+    _run_args = dict(state.args_at_start, saveNet=state.save_net)   # as given, with the VAE file resolved
     _iters = None
     try:
         _iters = max((len(v) for v in history.values() if hasattr(v, "__len__")),
                      default=None)
     except Exception:
         pass
+    to_problem = state.to_problem
     run_config = _save.build_run_config(
         example_name=getattr(to_problem, "name", str(to_problem)),
-        run_args=_run_args, to_params=to_params, vae_params=vae_params,
-        beta_schedule=beta_schedule, mesh=mesh, bcs=bcs, fields=physics.FIELDS,
-        mat_encoder=matEncoder, z_real_points=zRealPoints,
-        material_colors=material_colors, material_labels=material_labels,
-        mma_settings={"optimizer": "MMA (mmaWrapper)", "kktTol": MMA_KKT_TOL,
-                      "move_limit": MMA_MOVE_LIMIT,
-                      "fTolerance": s.rel_conv_tol, "gTolerance": s.rel_conv_tol},
+        run_args=_run_args, to_params=to_params, vae_params=state.vae_params,
+        beta_schedule=state.beta_schedule, mesh=state.mesh, bcs=state.bcs, fields=state.physics.FIELDS,
+        mat_encoder=state.encoder, z_real_points=state.z_real,
+        material_colors=state.material_colors, material_labels=state.material_labels,
+        mma_settings=method_settings,
         runtime_sec=(tEnd - tStart), iterations=_iters,
         comment=getattr(to_params, "Comment", ""))
-    run_config["during_run"] = dict(_during_run)
-    run_config["network_errors_percent"] = network_errors   # what the run's materials were off by, per property
-    run_config["network_reconstruction"] = matEncoder.reconstruction()   # and per material: database vs network
-    run_config["provenance"] = _provenance
+    run_config["during_run"] = dict(state.during_run)
+    run_config["network_errors_percent"] = state.network_errors   # what the run's materials were off by, per property
+    run_config["network_reconstruction"] = state.encoder.reconstruction()   # and per material: database vs network
+    run_config["provenance"] = state.provenance
     run_config["units"] = to_problem.unit_record()
     from lsr_mmto.pyto_ad_imports import topopt_material_model
     run_config["fixed_in_code"] = {
         "mma_move_limit": MMA_MOVE_LIMIT, "mma_kkt_tol": MMA_KKT_TOL,
         "apply_latent_sensitivity_filter": APPLY_LATENT_SENS_FILTER,
-        "initial_density": float(initialDensity),
+        "initial_density": float(state.initial_density),
         "simp_structural_penalty_at_end": float(topopt_material_model._SIMP_STRUCTURAL_PENALTY),
         "stress_relaxation_exponent": float(topopt_material_model._SIMP_STRESS_RELAXATION),
         "void_stiffness_relative": float(topopt_material_model._EVOID_RELATIVE),
     }
 
+    model, matEncoder = state.model, state.encoder
     run_postprocessing(
         history=history,
         zetaOptimal=zetaOptimal,
-        fe_solver=solver,
+        fe_solver=state.solver,
         matEncoder=matEncoder,
         mat_lib=mat_lib,
         MaterialModel=MaterialModel,
-        physical_density=lambda x: ad_model.physical_density(x, beta_proj, s.eta_proj,
-                                                             to_params.HeavisideProjection,
-                                                             to_params.APPLY_FILTER_TO_DENSITY),
-        zRealPoints=zRealPoints,
-        material_colors=material_colors,
-        material_labels=material_labels,
-        num_elems=num_elems,
-        latentDim=latentDim,
-        elem_volume=elem_volume,
-        design_domain_volume=design_domain_volume,
+        physical_density=lambda x: model.physical_density(x, state.beta, s.eta_proj,
+                                                          to_params.HeavisideProjection,
+                                                          to_params.APPLY_FILTER_TO_DENSITY),
+        zRealPoints=state.z_real,
+        material_colors=state.material_colors,
+        material_labels=state.material_labels,
+        num_elems=state.num_elems,
+        latentDim=state.latent_dim,
+        elem_volume=state.elem_volume,
+        design_domain_volume=state.design_domain_volume,
         binarize_topology=s.binarize_topology,
         snap_to_real_material=s.snap_to_real_material,
-        save_dir=save_dir,
+        save_dir=state.save_dir,
         run_config=run_config,
         example_name=getattr(to_problem, "name", str(to_problem)),
-        physics=physics,
+        physics=state.physics,
         properties_of=lambda z: decode(matEncoder, z),
         settings=s,
     )
+
+
+def mma_record(state):
+    """What the run record keeps of the MMA run."""
+    s = state.s
+    return {"optimizer": "MMA (mmaWrapper)", "kktTol": MMA_KKT_TOL, "move_limit": MMA_MOVE_LIMIT,
+            "fTolerance": s.rel_conv_tol, "gTolerance": s.rel_conv_tol}
+
+
+def mma(state, evaluate_design, zeta0, lower, upper):
+    """MMA with the constraints as its constraints (g <= 0)."""
+    s = state.s
+    optResults = runMMA(
+        state.num_design_var,
+        len(state.to_params.Constraints),
+        evaluate_design,
+        zeta0.reshape(-1, 1),
+        lower,
+        upper,
+        maxIterations=state.to_params.MaxIterations,
+        timeLimitSecs=s.timeLimit,
+        move_limit=MMA_MOVE_LIMIT,
+        kktTol=MMA_KKT_TOL,
+        fTolerance=s.rel_conv_tol,
+        gTolerance=s.rel_conv_tol,
+        verbose=False,
+    )
+    return np.asarray(optResults[0]).flatten(), mma_record(state)

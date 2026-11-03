@@ -81,10 +81,11 @@ def runs():
 
 
 def test_settings_cover_run_topopt():
-    """The loop reads each setting as s.<name>: every name it reads is a setting of SETTINGS, the run gets
-    every one, and _run_topopt has no setting of its own (no default that could differ from SETTINGS)."""
+    """The loop reads each setting as s.<name>: every name it reads (anywhere in the loop's file: its setup,
+    the steps of an iteration, the optimizer) is a setting of SETTINGS, the run gets every one, and
+    _run_topopt has no setting of its own (no default that could differ from SETTINGS)."""
     import re
-    source = inspect.getsource(M._run_topopt)
+    source = inspect.getsource(M)
     read = set(re.findall(r"(?<![\w.])s\.(\w+)", source)) - {"as_dict"}
     assert read - set(RUN_KEYS) == set(), f"read but not settings: {sorted(read - set(RUN_KEYS))}"
     args = _run_arguments(ubracket_project(), save_dir=tempfile.gettempdir(), verbose=False)
