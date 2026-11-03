@@ -174,6 +174,31 @@ def test_summary_in_sections():
     assert both.count(" met") + both.count("NOT MET") == 2 * len(r.constraint_spec)
 
 
+def test_display_options():
+    """Display Options in plain words, without the controls that have nothing to act on, and its cuts
+    work: a cut along x draws the part clipped, and back to 0 draws it whole again."""
+    w = window()
+    w.open_display_options_window()
+    d = w._display_options_dialog
+    settle(0.2)
+    shown = [x.text() for x in d.findChildren((QtWidgets.QLabel, QtWidgets.QCheckBox, QtWidgets.QPushButton))
+             if x.isVisible()]
+    assert shown == ["Cut along x (%)", "Cut along y (%)", "Cut along z (%)", "Show bounding box",
+                     "Show the part's triangles", "See-through part", "Hide Selected Part", "Save Image", "Close"]
+    part = w.part_actor()
+    whole = part.GetMapper().GetInput().GetNumberOfCells()
+    d.x_cutting_spin.setValue(40)
+    settle()
+    cut = [a for n, a in w.plotter.actors.items() if str(n).startswith("cut_")]
+    assert len(cut) == 1 and not part.GetVisibility()
+    assert 0 < cut[0].GetMapper().GetInput().GetNumberOfCells() <= 2 * whole
+    d.x_cutting_spin.setValue(0)
+    settle()
+    assert part.GetVisibility() and not any(str(n).startswith("cut_") for n in w.plotter.actors)
+    assert "geometry_info" not in w.plotter.actors                    # no text over the 3D view
+    w.close()
+
+
 if __name__ == "__main__":
     for name, f in list(globals().items()):
         if name.startswith("test_"):

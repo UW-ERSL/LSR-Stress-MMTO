@@ -37,7 +37,8 @@ from .materials_panel import MaterialsPanel
 from .panel_widgets import GREY, Info, ok_cancel
 from .settings_panel import SettingsPanel
 from .supports_and_loads_panel import KEEP_COLOUR, LOAD_COLOUR, OTHER_COLOUR, SUPPORT_COLOUR, SupportsPanel, bc_name, bc_value
-from .pyto_ad_imports import (FILE_DIALOG_OPTIONS, MATERIAL_COLOR, UNIT_SYSTEMS, GeometryWindow, MainWindow,
+from .pyto_ad_imports import (FILE_DIALOG_OPTIONS, MATERIAL_COLOR, UNIT_SYSTEMS, DisplayOptionsWindow,
+                              GeometryWindow, MainWindow,
                               ProjectsWindow, STLGeom, StructuralLoadsWindow, UnitsWindow)
 
 APP = "LSR MMTO"
@@ -196,6 +197,97 @@ class PickWindow(StructuralLoadsWindow):
         hint.setWordWrap(True)
         self.layout().insertWidget(0, hint)
         self.layout().addStretch()
+
+
+class DisplayOptions(DisplayOptionsWindow):
+    """PyTO-AD's Display Options with the words of LSR MMTO, and without the controls that have nothing
+    to act on here: the geometry, field and display choices and the eigen number (for PyTO-AD's own
+    analyses), the thermal, optimization-option and structural load drawings (LSR MMTO draws supports and
+    loads in the Supports and loads panel), the text over the 3D view (the part's facts are behind the (i)
+    in the status bar) and the animation."""
+
+    WORDS = {"XCuttingPercent": "Cut along x (%)", "YCuttingPercent": "Cut along y (%)",
+             "ZCuttingPercent": "Cut along z (%)", "Show triangles": "Show the part's triangles",
+             "Show transparent geometry": "See-through part"}
+
+    def setup_ui(self):
+        super().setup_ui()
+        for label in self.findChildren(QtWidgets.QLabel):
+            label.setText(self.WORDS.get(label.text(), label.text()))
+        for box in self.findChildren(QtWidgets.QCheckBox):
+            box.setText(self.WORDS.get(box.text(), box.text()))
+        self.show_text.setChecked(False)
+        hidden = [self.geometry_combo, self.field_combo, self.display_combo, self.eigen_spin, self.show_text,
+                  self.show_structural_loads_checkbox, self.show_thermal_loads_checkbox,
+                  self.show_topopt_options_checkbox]
+        hidden += [b for b in self.findChildren(QtWidgets.QPushButton) if b.text().startswith("Animate")]
+        for widget in hidden:
+            self._hide_row(widget)
+
+    def _hide_row(self, widget):
+        """widget hidden, with the label on its row."""
+        widget.setVisible(False)
+        top = self.layout()
+        for i in range(top.count()):
+            row = top.itemAt(i).layout()
+            if row is not None and row.indexOf(widget) >= 0:
+                for k in range(row.count()):
+                    if row.itemAt(k).widget() is not None:
+                        row.itemAt(k).widget().setVisible(False)
+
+    def update_checkbox_states(self):
+        super().update_checkbox_states()
+        for box in (self.show_structural_loads_checkbox, self.show_thermal_loads_checkbox,
+                    self.show_topopt_options_checkbox):
+            box.setChecked(False)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.setFixedSize(300, self.sizeHint().height())
+
+    def apply_cutting_planes(self, x_percent, y_percent, z_percent):
+        """The part (or the design) drawn cut: the first x_percent of it along x taken away, and so on
+        for y and z. Each drawing of it is clipped in place of PyTO-AD's clip widgets, which were handed
+        drawings instead of meshes and stopped with an error."""
+        import pyvista as pv
+        import vtk
+        self.remove_cutting_planes()
+        b = self.parent.part_bounds()
+        if b is None:
+            return
+        lo, hi = b
+        cuts = [(k, lo[k] + (hi[k] - lo[k]) * f) for k, f in enumerate((x_percent, y_percent, z_percent)) if f > 0]
+        plotter = self.parent.plotter
+        self._cut = []
+        for name, actor in list(plotter.actors.items()):
+            mapper = actor.GetMapper() if isinstance(actor, vtk.vtkActor) else None
+            data = mapper.GetInput() if mapper is not None else None
+            if data is None or data.GetNumberOfCells() == 0 or not actor.GetVisibility():
+                continue
+            clipped = pv.wrap(data)
+            for k, at in cuts:
+                normal, origin = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
+                normal[k], origin[k] = -1.0, at
+                clipped = clipped.clip(normal=normal, origin=origin)
+            m = vtk.vtkDataSetMapper()
+            m.ShallowCopy(mapper)
+            m.SetInputData(clipped)
+            shown = vtk.vtkActor()
+            shown.SetMapper(m)
+            shown.SetProperty(actor.GetProperty())
+            shown.SetPickable(False)
+            plotter.add_actor(shown, name=f"cut_{name}", reset_camera=False)
+            actor.VisibilityOff()
+            self._cut.append((name, actor))
+        plotter.render()
+
+    def remove_cutting_planes(self):
+        plotter = self.parent.plotter
+        for name, actor in getattr(self, "_cut", []):
+            plotter.remove_actor(f"cut_{name}", reset_camera=False)
+            actor.VisibilityOn()
+        self._cut = []
+        plotter.render()
 
 
 def part_mass_properties(stl_geom):
@@ -400,6 +492,12 @@ class MMTOWindow(MainWindow):
                                   f".mmto project.")
         self._build_menu()
         self._refresh_title()
+
+    def open_display_options_window(self):
+        if self._raise_if_open("_display_options_dialog"):
+            return
+        self._display_options_dialog = DisplayOptions(self)
+        self._display_options_dialog.show()
 
     # ------------------------------------------------------------------ the window
     def create_status_bar(self):
