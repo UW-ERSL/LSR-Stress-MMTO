@@ -78,6 +78,15 @@ def failed_to_start(error):
 
 if __name__ == "__main__":
     windowed = without_console()
+    try:
+        # torch before anything from PyQt5: on Windows, torch's c10.dll fails to load (WinError 1114) when
+        # Qt's libraries are loaded first
+        import torch  # noqa: F401
+    except Exception as e:                                          # noqa: BLE001
+        if not windowed:
+            raise
+        failed_to_start(e)
+        sys.exit(1)
     if os.name == "nt":                                             # the taskbar shows the app's own icon
         import ctypes
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("UW-ERSL.LSR-MMTO")

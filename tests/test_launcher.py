@@ -48,6 +48,26 @@ def test_start_without_console_writes_the_log():
         assert open(log, encoding="utf-8").read().strip() == "hello from the app"
 
 
+def test_torch_loads_before_qt():
+    """run_gui.py imports torch before anything from PyQt5: the other way round, torch's c10.dll fails to
+    load on Windows (WinError 1114). The start is stopped as soon as PyQt5 is imported."""
+    code = ("import builtins, runpy, sys\n"
+            "seen, real = [], builtins.__import__\n"
+            "def imp(name, *a, **k):\n"
+            "    top = name.split('.')[0]\n"
+            "    if top in ('torch', 'PyQt5') and top not in seen:\n"
+            "        seen.append(top)\n"
+            "        if top == 'PyQt5':\n"
+            "            print(','.join(seen)); sys.stdout.flush(); raise SystemExit(0)\n"
+            "    return real(name, *a, **k)\n"
+            "builtins.__import__ = imp\n"
+            "runpy.run_path(%r, run_name='__main__')\n" % os.path.join(ROOT, "run_gui.py"))
+    env = dict(os.environ, QT_QPA_PLATFORM="offscreen")
+    done = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=120)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "torch,PyQt5", done.stdout
+
+
 def test_shortcut_lines_quote_every_path():
     lines = M.powershell(r"C:\Users\o'brien\miniforge3\envs\lsr\pythonw.exe", root=r"C:\LSR\my repo",
                          icon=r"C:\LSR\my repo\gui\assets\lsr_mmto.ico")
