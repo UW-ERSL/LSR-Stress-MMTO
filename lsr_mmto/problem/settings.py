@@ -106,6 +106,17 @@ SETTINGS = [
             f"The iteration it stops at, when {_PLATEAU} is off.", "Distance penalty", integer=True),
     Setting("advanced", "use_dynamic_gamma_scheduling", True, _PLATEAU,
             "Start the push when the design stops improving, instead of at a set iteration.", "Distance penalty"),
+    Setting("advanced", "gamma_plateau_window", 10, "Plateau window",
+            "The objective has plateaued when it changed by less than the plateau tolerance over this many "
+            "iterations.", "Distance penalty", integer=True),
+    Setting("advanced", "gamma_plateau_tolerance", 1e-3, "Plateau tolerance",
+            "How little the objective may change over the plateau window, relatively, to count as plateaued.",
+            "Distance penalty"),
+    Setting("advanced", "gamma_plateau_earliest_iter", 20, "Earliest start",
+            "The push never starts before this iteration.", "Distance penalty", integer=True),
+    Setting("advanced", "gamma_ramp_end_margin", 30, "Iterations left at full weight",
+            "If the objective never plateaus, the push starts in time to reach its largest weight this many "
+            "iterations before Max iterations.", "Distance penalty", integer=True),
     # ---- Latent smoothing
     Setting("advanced", "use_z_smoothing", True, "Latent smoothing",
             "Discourages neighbouring elements from flickering between materials.", "Latent smoothing"),

@@ -135,6 +135,10 @@ Every setting a run takes, under its own name. A new project starts from these v
 | `penalty_start_iter` | 0 | The iteration it starts at, when Start the ramp when the objective plateaus is off. |
 | `distance_penalty_disable_after_iter` | 250 | The iteration it stops at, when Start the ramp when the objective plateaus is off. |
 | `use_dynamic_gamma_scheduling` | True | Start the push when the design stops improving, instead of at a set iteration. |
+| `gamma_plateau_window` | 10 | The objective has plateaued when it changed by less than the plateau tolerance over this many iterations. |
+| `gamma_plateau_tolerance` | 0.001 | How little the objective may change over the plateau window, relatively, to count as plateaued. |
+| `gamma_plateau_earliest_iter` | 20 | The push never starts before this iteration. |
+| `gamma_ramp_end_margin` | 30 | If the objective never plateaus, the push starts in time to reach its largest weight this many iterations before Max iterations. |
 | `use_z_smoothing` | True | Discourages neighbouring elements from flickering between materials. |
 | `z_smoothing_weight` | 0.0001 | How strong that smoothing is. |
 | `z_smoothing_disable_after_iter` | 250 | The iteration it stops at. |

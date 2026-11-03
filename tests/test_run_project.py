@@ -143,7 +143,7 @@ def test_record_keeps_settings_as_given():
     assert cfg["penalization_zsmoothing"]["use_z_smoothing"] is True
     assert cfg["during_run"]["z_smoothing_off_at_iter"] == SMOOTHING_OFF
     fixed = cfg["fixed_in_code"]
-    assert fixed["mma_move_limit"] == 0.05 and fixed["dynamic_gamma"]["window"] == 10
+    assert fixed["mma_move_limit"] == 0.05 and cfg["arguments_resolved"]["gamma_plateau_window"] == 10
     assert fixed["stress_relaxation_exponent"] == 0.5
 
 

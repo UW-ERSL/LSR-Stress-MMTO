@@ -246,9 +246,6 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
     APPLY_LATENT_SENS_FILTER = False  # (H_material@g)/Hs smoothing of latent
                                       # gradient blocks; set False.
     MMA_MOVE_LIMIT, MMA_KKT_TOL = 0.05, 1e-6
-    # dynamic gamma: the ramp starts once J changed by less than rel_tol over the last
-    # window iterations (not before min_iter), or end_margin iterations before it must
-    DYN_GAMMA = {"window": 10, "rel_tol": 1e-3, "min_iter": 20, "end_margin": 30}
 
     mmaIterations = 0
     obj0 = None
@@ -412,10 +409,14 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
             if s.use_dynamic_gamma_scheduling:
                 _J_hist.append(float(Jn))
                 if not _dyn_ramp_started:
-                    _K, _rel_tol, _min_iter = DYN_GAMMA["window"], DYN_GAMMA["rel_tol"], DYN_GAMMA["min_iter"]
+                    # the ramp starts once J changed by less than the plateau tolerance over the last window
+                    # iterations (not before the earliest start), or in time to reach gamma_max end_margin
+                    # iterations before the last
+                    _K, _rel_tol = int(s.gamma_plateau_window), float(s.gamma_plateau_tolerance)
+                    _min_iter = int(s.gamma_plateau_earliest_iter)
                     _n_ramp = int(np.ceil(np.log(max(s.gamma_max / s.gamma_init, 1 + 1e-9))
                                           / np.log(max(s.gamma_factor, 1 + 1e-9))))
-                    _deadline = int(to_params.MaxIterations) - _n_ramp - DYN_GAMMA["end_margin"]
+                    _deadline = int(to_params.MaxIterations) - _n_ramp - int(s.gamma_ramp_end_margin)
                     _settled = (mmaIterations >= _min_iter and len(_J_hist) > _K and
                                 abs(_J_hist[-1] - _J_hist[-1 - _K])
                                 <= _rel_tol * max(abs(_J_hist[-1 - _K]), 1e-12))
@@ -561,7 +562,6 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
     from lsr_mmto.pyto_ad import topopt_material_model
     run_config["fixed_in_code"] = {
         "mma_move_limit": MMA_MOVE_LIMIT, "mma_kkt_tol": MMA_KKT_TOL,
-        "dynamic_gamma": dict(DYN_GAMMA),
         "apply_latent_sensitivity_filter": APPLY_LATENT_SENS_FILTER,
         "initial_density": float(initialDensity),
         "simp_structural_penalty_at_end": float(topopt_material_model._SIMP_STRUCTURAL_PENALTY),
