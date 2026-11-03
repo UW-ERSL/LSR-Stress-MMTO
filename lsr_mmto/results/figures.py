@@ -33,10 +33,13 @@ def _save(fig, out, *, dpi=DPI):
     """Write PNG and PDF. out is a path without extension; None returns fig.
 
     A failure on one format is reported and does not lose the other, which
-    matters on Windows where an open viewer locks the file.
+    matters on Windows where an open viewer locks the file. Either way the
+    figure is let go by pyplot (a returned one still draws, in the app or a
+    notebook), so showing many runs does not pile up open figures.
     """
     import matplotlib.pyplot as plt
     if out is None:
+        plt.close(fig)
         return fig
     os.makedirs(os.path.dirname(os.path.abspath(out)) or ".", exist_ok=True)
     written, failed = [], []
