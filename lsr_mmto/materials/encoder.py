@@ -37,6 +37,34 @@ def network_warning(errors, limit):
             f"{listed} (each the largest error over the materials, in % of the property's range)")
 
 
+def network_reconstruction(xlsx, nt):
+    """MaterialEncoder.reconstruction() of the network saved in nt for the database xlsx, its shape read
+    from the file; None when nt is not a network for this database."""
+    from lsr_mmto.materials.databases import VAEParams
+    from lsr_mmto.problem.project import network_shape
+    shape = network_shape(nt)
+    if shape is None:
+        return None
+    params = VAEParams()
+    params.vae_hiddenDim, params.latentDim = shape[1], shape[2]
+    enc = MaterialEncoder(params)
+    enc.readExcel(xlsx)
+    if enc.nAttributes != shape[0]:
+        return None
+    enc.loadAutoencoderFromFile(nt)
+    return enc.reconstruction()
+
+
+def largest_errors(rows):
+    """{property: (largest error in % of its range, largest difference in its unit, unit)} over the
+    materials, from MaterialEncoder.reconstruction() rows."""
+    out = {}
+    for r in rows:
+        pct, diff, _ = out.get(r["property"], (0.0, 0.0, r["unit"]))
+        out[r["property"]] = (max(pct, r["percent_of_range"]), max(diff, abs(r["difference"])), r["unit"])
+    return out
+
+
 class MaterialEncoder:
     def __init__(self, vae_params):
         self.nAttributes = 0
@@ -130,23 +158,35 @@ class MaterialEncoder:
         self.vaeNet.encoder.isTraining = was
         return {name: 100.0 * float(diff[:, a["idx"]].abs().max()) for name, a in self.materialAttributes.items()}
 
-    def printEncodingErrors(self):
+    def reconstruction(self):
+        """Every material's every property as the database gives it and as the network gives it back
+        (encoded to its latent point, then decoded), one dict each: material, property, unit, database,
+        network, difference (network - database, in the unit), percent_of_range (the difference in % of
+        the property's range over the database; for E0..E3, Y0..Y3 of the range of their log10)."""
+        was = self.vaeNet.encoder.isTraining                # put back as found: left on, the encoder samples at random
+        self.vaeNet.encoder.isTraining = False
         with torch.no_grad():
-            z_real = self.vaeNet.encoder(self.scaledMaterialData)
-            decoded = self.vaeNet.decoder(z_real)
-            diffMatrix = self.scaledMaterialData - decoded
+            decoded = self.vaeNet.decoder(self.vaeNet.encoder(self.scaledMaterialData))
+            diff = (self.scaledMaterialData - decoded).abs()
+            props = self.getMaterialProperties(decoded)
+        self.vaeNet.encoder.isTraining = was
+        rows = []
+        for i, material in enumerate(self.materialNames):
+            for name, a in self.materialAttributes.items():
+                database, network = float(self.rawData[i, a["idx"]]), float(props[name][i])
+                rows.append({"material": str(material), "property": name, "unit": a["unit"],
+                             "database": database, "network": network, "difference": network - database,
+                             "percent_of_range": 100.0 * float(diff[i, a["idx"]])})
+        return rows
 
-        attribute_names = list(self.materialAttributes.keys())
-        print("-" * 40)
-        print("{:<25} {:>15}".format("Attribute", "Max % Error"))
-        print("-" * 40)
-        col = 0
-        for name in attribute_names:
-            percent_err = 100 * diffMatrix[:, col].abs().numpy()
-            max_percent_err = np.max(percent_err)
-            print("{:<25} {:>15.6f}".format(name, max_percent_err))
-            col += 1
-        print("-" * 40)
+    def printEncodingErrors(self):
+        print("-" * 72)
+        print("{:<25} {:>22} {:>23}".format("Property", "Largest error", "Largest difference"))
+        print("{:<25} {:>22} {:>23}".format("", "[% of its range]", "[its unit]"))
+        print("-" * 72)
+        for name, (pct, diff, unit) in largest_errors(self.reconstruction()).items():
+            print("{:<25} {:>22.6f} {:>23}".format(SHOWN.get(name, name), pct, f"{diff:.6g} {unit or ''}".strip()))
+        print("-" * 72)
     def compute_parameter_norm(self):
         total_sq = 0.0
         with torch.no_grad():

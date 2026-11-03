@@ -555,6 +555,7 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
         comment=getattr(to_params, "Comment", ""))
     run_config["during_run"] = dict(_during_run)
     run_config["network_errors_percent"] = network_errors   # what the run's materials were off by, per property
+    run_config["network_reconstruction"] = matEncoder.reconstruction()   # and per material: database vs network
     run_config["provenance"] = _provenance
     run_config["units"] = to_problem.unit_record()
     from lsr_mmto.pyto_ad import topopt_material_model

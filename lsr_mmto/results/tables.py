@@ -119,24 +119,30 @@ def pca(mat_encoder):
     return Tables(lead, t1, t2)
 
 
-def encoding_errors(mat_encoder):
+def encoding_errors(mat_encoder, per_material=False):
     """How faithfully the network reproduces each real material.
 
-    Each material is encoded to its latent point and decoded back; the error is
-    reported per attribute, over the normalized attribute values.
+    Each material is encoded to its latent point and decoded back. Per property: the median and
+    the largest error over the materials, in % of the property's range in the database, and the
+    largest difference in the property's own unit. per_material=True: one row per material and
+    property, with the database's value and the network's.
     """
-    import torch
     from .display import Table
+    from lsr_mmto.materials.databases import SHOWN
+    from lsr_mmto.materials.encoder import largest_errors
 
-    with torch.no_grad():
-        z_real = mat_encoder.vaeNet.encoder(mat_encoder.scaledMaterialData)
-        decoded = mat_encoder.vaeNet.decoder(z_real)
-        diff = (mat_encoder.scaledMaterialData - decoded).abs().cpu().numpy()
-
-    names = list(mat_encoder.materialAttributes.keys())
-    rows = []
-    for col, name in enumerate(names):
-        err = 100.0 * diff[:, col]
-        rows.append([name, f"{np.median(err):.4f}", f"{err.max():.4f}"])
-    return Table(rows, headers=["attribute", "median error %", "max error %"],
+    rows = mat_encoder.reconstruction()
+    if per_material:
+        return Table([[r["material"], SHOWN.get(r["property"], r["property"]), r["unit"] or "",
+                       f"{r['database']:.6g}", f"{r['network']:.6g}", f"{r['percent_of_range']:.4f}"]
+                      for r in rows],
+                     headers=["material", "property", "unit", "database", "network", "error [% of range]"],
+                     title="Each real material as the network gives it back")
+    table = []
+    for name, (pct, diff, unit) in largest_errors(rows).items():
+        errs = [r["percent_of_range"] for r in rows if r["property"] == name]
+        table.append([SHOWN.get(name, name), f"{np.median(errs):.4f}", f"{pct:.4f}",
+                      f"{diff:.6g} {unit or ''}".strip()])
+    return Table(table, headers=["property", "median error [% of range]", "largest error [% of range]",
+                                 "largest difference"],
                  title="Reconstruction error of the real materials")

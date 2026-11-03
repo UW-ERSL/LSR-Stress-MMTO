@@ -117,6 +117,22 @@ def effective_text(d_eff, n_z):
     return f"{d_eff:.6g}"
 
 
+def network_help(rows):
+    """Every material as the trained network gives it back, as a table (rows from
+    MaterialEncoder.reconstruction)."""
+    from lsr_mmto.materials.databases import SHOWN
+    head = ("<p>Each material is turned into its point on the material map and back by the network. The "
+            "error is the difference in % of the property's range over the database's materials.</p>")
+    cells = "".join(
+        f"<tr><td>{r['material']}</td><td>{SHOWN.get(r['property'], r['property'])}</td>"
+        f"<td align='right'>{r['database']:.6g}</td><td align='right'>{r['network']:.6g}</td>"
+        f"<td align='right'>{r['difference']:+.3g}</td><td align='right'>{r['percent_of_range']:.2g}%</td></tr>"
+        for r in rows)
+    return (head + "<table cellspacing='0' cellpadding='2'><tr><th align='left'>Material</th>"
+            "<th align='left'>Property</th><th>Database</th><th>Network</th><th>Difference</th><th>Error</th></tr>"
+            + cells + "</table>")
+
+
 def latent_help(d_eff, n_z, ratios):
     """Where the recommended latent dimension comes from, in words: the share of the variation in
     each direction the materials differ in, and the effective dimension counted from them."""
@@ -183,6 +199,9 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.latent_info = Info("")                                 # how the latent dimension is recommended
         self.latent_info.setVisible(False)
         below.addWidget(self.latent_info, alignment=QtCore.Qt.AlignTop)
+        self.network_info = Info("")                                # every material as the network gives it back
+        self.network_info.setVisible(False)
+        below.addWidget(self.network_info, alignment=QtCore.Qt.AlignTop)
         layout.addLayout(below)
         ok_cancel(self, layout)
         self._refresh()
@@ -284,6 +303,7 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.table.setRowCount(0)
         self.table.setColumnCount(0)
         self.latent_info.setVisible(False)
+        self.network_info.setVisible(False)
         xlsx, error = database_choice(self.project)
         if error:
             self.report.setText(error)
@@ -320,7 +340,28 @@ class MaterialsPanel(QtWidgets.QDialog):
                             f"{effective_text(d_eff, n_z)}).")
             self.latent_info.setToolTip(latent_help(d_eff, n_z, ratios))
             self.latent_info.setVisible(True)
+            network = self._network_line(xlsx)
+            if network:
+                lines.insert(1, network)
         self.report.setText("\n".join(lines))
+
+    def _network_line(self, xlsx):
+        """How closely the trained network gives back the database's materials, in one line, with every
+        value behind its (i); None when the database has no trained network yet."""
+        from lsr_mmto.materials.encoder import network_reconstruction
+        nt = self.project.network_path()
+        if not (os.path.isfile(nt) and os.path.getsize(nt) > 0):
+            return None
+        try:
+            rows = network_reconstruction(xlsx, nt)
+        except Exception:                                           # noqa: BLE001
+            return None
+        if not rows:
+            return None
+        self.network_info.setToolTip(network_help(rows))
+        self.network_info.setVisible(True)
+        worst = max(r["percent_of_range"] for r in rows)
+        return f"The trained network gives back every material within {worst:.2g}% of each property's range."
 
     def apply(self, project):
         """The database, and on a change the VAE settings of the new one. Returns lines saying what changed."""
