@@ -243,3 +243,15 @@ if __name__ == "__main__":
     test_template_solver_gives_a_straight_line_along_a_bar()
     test_template_physics_runs_with_no_core_file_changed()
     print("ok (run with pytest for the tests that need monkeypatch)")
+
+
+def test_the_mesh_is_sized_by_the_physics_unknowns_per_node():
+    """Mesh dofs counts every unknown at every node: the template (one unknown per node) gets about three
+    times the elements the structural physics (three per node) gets for the same number."""
+    from lsr_mmto.problem.mesh import make_mesh
+    with registered(TEMPLATE):
+        p = _project("mesh size", "UBracket.STL", UBRACKET, 3000)
+        assert p.unknowns_per_node() == 1
+        one = make_mesh(p.stl_path(), p.n_dof, p.single_layer, p.unknowns_per_node())
+        three = make_mesh(p.stl_path(), p.n_dof, p.single_layer, 3)
+    assert 2.0 < one.num_elems / three.num_elems < 4.5, (one.num_elems, three.num_elems)

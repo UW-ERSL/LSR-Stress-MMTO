@@ -126,7 +126,7 @@ The STL should be closed (watertight) and in the project's length unit. The size
 
 A run does not work on the STL itself. It fills the part with a grid of small equal blocks, the elements, and decides the material of each one. The corners of the blocks are the nodes, which supports and loads act on.
 
-How fine the grid is comes from **Mesh dofs** in Settings: the number of unknowns the mesh is built for. More is finer, and slower. A finer mesh shows more detail, and makes smoother STL files when you export.
+How fine the grid is comes from **Mesh dofs** in Settings: the number of unknowns the mesh is built for, three at each node for a structural problem (the movement in x, y and z). More is finer, and slower. A finer mesh shows more detail, and makes smoother STL files when you export.
 
 For a flat part, tick **Single element layer (2D)** in Settings: the grid then has one element through the thickness, and the run is much faster.
 
@@ -420,7 +420,7 @@ Every setting, in the groups of the Settings panel:
 
 | Group | Setting | What it does |
 | --- | --- | --- |
-| Main | Mesh dofs | How fine the mesh is: the number of unknowns it is built for. More is finer, and slower. |
+| Main | Mesh dofs | How fine the mesh is: the number of unknowns it is built for, counting each unknown at each node (three per node for a structural problem: the movement in x, y and z). More is finer, and slower. |
 | Main | Single element layer (2D) | One element through the thickness, for a flat (2D) part. |
 | Main | Max iterations | The optimization stops after this many iterations. |
 | Main | Density filter radius | The smallest feature the design may have, in element sizes. Larger gives smoother, simpler designs. |

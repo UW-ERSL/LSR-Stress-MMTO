@@ -240,6 +240,11 @@ class Project:
     def stl_path(self):
         return self.stl if os.path.isabs(self.stl) else os.path.join(self.base_dir, self.stl)
 
+    def unknowns_per_node(self):
+        """How many unknowns the project's physics solves for at each node (3 for structural: the
+        displacement in x, y and z); the mesh is built for n_dof unknowns in all."""
+        return sum(PHYSICS[self.physics if self.physics in PHYSICS else DEFAULT_PHYSICS].FIELDS.values())
+
     @property
     def units(self):
         """The unit system: "MKS", "mmKS", "IPS" (those of the PyTO-AD GUI, kept where the GUI
@@ -541,7 +546,7 @@ class Project:
         from lsr_mmto.optimize.mmto_to_params import MMTOParams
         from lsr_mmto.problem.mesh import make_mesh
 
-        mesh = make_mesh(self.stl_path(), self.n_dof, self.single_layer)
+        mesh = make_mesh(self.stl_path(), self.n_dof, self.single_layer, self.unknowns_per_node())
         bcs, _ = self.supports_and_loads(mesh)
         error = self.supports_and_loads_error(mesh, bcs)            # as PyTO-AD's FEA does, but before the
         if error:                                                   # VAE and the run

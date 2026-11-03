@@ -62,7 +62,9 @@ _PLATEAU = "Start the ramp when the objective plateaus"
 SETTINGS = [
     # ---- Main
     Setting("mesh", "n_dof", 30000, "Mesh dofs",
-            "How fine the mesh is: the number of unknowns it is built for. More is finer, and slower.",
+            "How fine the mesh is: the number of unknowns it is built for, counting each unknown at each "
+            "node (three per node for a structural problem: the movement in x, y and z). More is finer, and "
+            "slower.",
             "Main", integer=True, pyto_ad_field="nDOFDesired"),
     Setting("mesh", "single_layer", False, "Single element layer (2D)",
             "One element through the thickness, for a flat (2D) part.", "Main", pyto_ad_field="ExtrudeZ"),

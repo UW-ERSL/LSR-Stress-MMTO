@@ -56,7 +56,8 @@ def mesh_for(run: Run):
     if key not in _MESH_CACHE:
         from lsr_mmto.problem.mesh import make_mesh
         p = _problem(run)
-        _MESH_CACHE[key] = make_mesh(p.stl_path(), p.n_dof if ndof is None else int(ndof), p.single_layer)
+        _MESH_CACHE[key] = make_mesh(p.stl_path(), p.n_dof if ndof is None else int(ndof), p.single_layer,
+                                     p.unknowns_per_node())
 
     mesh = _MESH_CACHE[key]
     if int(mesh.num_elems) != run.n_elems:

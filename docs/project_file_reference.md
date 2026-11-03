@@ -107,7 +107,7 @@ Every setting a run takes, under its own name. A new project starts from these v
 
 | setting | default | meaning |
 |---|---|---|
-| `n_dof` | 30000 | How fine the mesh is: the number of unknowns it is built for. More is finer, and slower. |
+| `n_dof` | 30000 | How fine the mesh is: the number of unknowns it is built for, counting each unknown at each node (three per node for a structural problem: the movement in x, y and z). More is finer, and slower. |
 | `single_layer` | False | One element through the thickness, for a flat (2D) part. |
 
 ### common

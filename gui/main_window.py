@@ -1734,13 +1734,13 @@ class MMTOWindow(MainWindow):
         """The mesh a run of the project uses, built once and kept until the STL or the dofs change."""
         from lsr_mmto.problem.mesh import make_mesh
         p = self.project
-        key = (os.path.abspath(p.stl_path()), p.n_dof, p.single_layer)
+        key = (os.path.abspath(p.stl_path()), p.n_dof, p.single_layer, p.unknowns_per_node())
         if key != self._mesh_key:
             self.message_text.append(f"Building the mesh ({p.n_dof} dofs) for the preview...")
             QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
             try:
                 QtWidgets.QApplication.processEvents()
-                self._mesh = make_mesh(p.stl_path(), p.n_dof, p.single_layer)
+                self._mesh = make_mesh(*key)
                 self._mesh_key = key
             finally:
                 QtWidgets.QApplication.restoreOverrideCursor()

@@ -158,7 +158,7 @@ class MeshError(RuntimeError):
 def mesh_of(window, project):
     """The mesh a run of project uses: the window's own when it is the same one, else built once."""
     from lsr_mmto.problem.mesh import make_mesh
-    key = (os.path.abspath(project.stl_path()), project.n_dof, project.single_layer)
+    key = (os.path.abspath(project.stl_path()), project.n_dof, project.single_layer, project.unknowns_per_node())
     if key == getattr(window, "_mesh_key", None) and window._mesh is not None:
         return window._mesh
     if key not in _MESHES:
