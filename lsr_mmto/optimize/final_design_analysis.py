@@ -55,7 +55,9 @@ def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
 
     decoded = matEncoder.vaeNet.decoder(zOptimalPts)
     material_properties = matEncoder.getMaterialProperties(decoded)
-    Youngs_Modulus = material_properties["Youngs_Modulus"].detach().cpu().numpy()
+    # each element's value of every property the physics reads (its PROPERTIES), as property_<name>
+    element_properties = {f"property_{name}": material_properties[name].detach().cpu().numpy()
+                          for name in physics.PROPERTIES}
 
     # --- persist everything for offline postprocessing (results/load_results.py, results/run_plots.py) ---
     material_indices = matEncoder.getClosestRealMaterialIndex(zOptimalPts)
@@ -76,7 +78,7 @@ def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
                 "x_cont": np.asarray(xOptimal_cont),
                 "x_bin": np.asarray(xOptimal),
                 "z_elem": np.asarray(zOptimal),
-                "youngs_modulus": np.asarray(Youngs_Modulus),
+                **{k: np.asarray(v) for k, v in element_properties.items()},
                 "material_indices": np.asarray(material_indices),
             },
             results={name: dict(r, value=np.asarray(r["value"](fe_solver)))

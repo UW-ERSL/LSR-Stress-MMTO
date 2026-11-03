@@ -406,7 +406,7 @@ def _save_record(save_dir, data):
     """Write run_data.npz and run_data.config.json into save_dir.
 
     x_bin is stored bitpacked; z_elem is stored for solid elements only.
-    results/load_results.py undoes both. zeta, youngs_modulus and vae_state_dict
+    results/load_results.py undoes both. zeta, the property_<name> fields and vae_state_dict
     are not stored; they are recoverable from z_elem and the .nt named in meta.
     Each of the physics' results is stored as r_<name>, described in meta's results.
     """
