@@ -65,6 +65,7 @@ the code takes from it. `MODULE_ENTRIES` in `physics/available_physics.py` lists
 | `analyse` | one iteration's solve, inside the torch tree |
 | `SUPPORT_AND_LOAD_KINDS` | its kinds of support and load, each naming its field |
 | `NEEDS` | what every project of it must have: a support, and a load if a problem without one has no meaning |
+| `deflation_space` | for DPCG on problems above the direct solver's limit; `None` keeps the direct solver |
 | `supports_and_loads_error` | why the supports and loads leave no solution, or None |
 | `QUANTITIES` | its objectives and constraints |
 | `SETTINGS` | its own settings |

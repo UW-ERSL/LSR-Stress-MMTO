@@ -10,7 +10,8 @@ linear elasticity with a different material in each element; the stresses are vo
     structural_quantities.py           compliance, p-norm stress and failure factor, the stress
                                        diagnostics of each iteration and of the final design
 """
-from lsr_mmto.physics.structural.structural_physics import analyse, make_solver, set_pnorm_exponent  # noqa: F401
+from lsr_mmto.physics.structural.structural_physics import (analyse, deflation_space, make_solver,  # noqa: F401
+                                                             set_pnorm_exponent)
 from lsr_mmto.physics.structural.structural_quantities import (QUANTITIES, final_summary,  # noqa: F401
                                                                iteration_diagnostics)
 from lsr_mmto.physics.structural.structural_supports_and_loads import (SUPPORT_AND_LOAD_KINDS,  # noqa: F401

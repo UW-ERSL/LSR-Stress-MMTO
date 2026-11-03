@@ -140,6 +140,14 @@ def make_solver(mesh, mat_prop, bcs, linear_solver, dsolver, elem_body_force):
                                rtol=1e-8, elem_body_force=elem_body_force)
 
 
+def deflation_space(dsolver, mesh):
+    """The deflation space of the structural system on dsolver, for DPCG on large problems: the mesh in
+    groups of nodes, and the rigid-body motions of each group (three unknowns per node)."""
+    nGroups = dsolver.getRecommendedNumberOfGroups(nDOF=3 * mesh.num_nodes)
+    dsolver.create_deflation_groups(mesh, nGroups)
+    dsolver.create_deflation_matrix(mesh)
+
+
 def analyse(m):
     """One iteration's solve, inside the torch tree: E and nu from m.props, the displacement m.u at the
     density m.x_phys, and the relaxed von Mises stress m.svm that the stress quantities read."""

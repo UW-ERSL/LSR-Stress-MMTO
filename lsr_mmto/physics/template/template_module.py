@@ -24,9 +24,9 @@ To make a physics of your own:
     5. Add one line to physics/available_physics.py: import your front page, and put it in MODULES.
     6. Copy tests/test_template_physics.py for your physics and run it.
 
-One thing the template cannot show: for large problems (more unknowns than the direct solver's limit,
-DIRECT_SOLVER_DOF_CUTOFF in PyTO-AD) the loop switches to DPCG, whose deflation space is built from
-the mesh for the structural problem. A physics that is meant to run that large needs checking there.
+Large problems: above the direct solver's limit (DIRECT_SOLVER_DOF_CUTOFF in PyTO-AD) the loop uses
+DPCG only for a physics that builds its own deflation space (deflation_space below); the template has
+none, so it keeps the direct solver at every size.
 """
 # keep as is: the entries the other three files give
 from lsr_mmto.physics.template.template_physics import analyse, make_solver  # noqa: F401
@@ -49,6 +49,11 @@ FIELDS = {"c": 1}                                                  # FILL
 # PROPERTIES: the database columns every problem of this physics reads; a database without them is
 # refused before the run.
 PROPERTIES = [COEFFICIENT]                                         # FILL
+
+# deflation_space: deflation_space(dsolver, mesh) builds the deflation space of this physics' system on
+# dsolver, so problems above the direct solver's limit use DPCG (structural: the rigid-body motions of
+# groups of nodes). None keeps the direct solver at every size. Read by optimize/optimization_loop.py.
+deflation_space = None                                             # FILL, if your problems get large
 
 # NEEDS: what every project of this physics must have, as roles of its kinds of support and load;
 # Project.validate refuses a project without them ("no supports", "no loads"). Diffusion held at

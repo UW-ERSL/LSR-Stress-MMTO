@@ -28,6 +28,9 @@ MODULE_ENTRIES = {
                               "the field it acts on",
     "NEEDS": "what every project of it must have, as roles of its kinds: ('support', 'load') when a problem "
              "without a load has no meaning, ('support',) when held values alone make a problem",
+    "deflation_space": "deflation_space(dsolver, mesh): builds the deflation space of its system on dsolver, so "
+                       "problems above the direct solver's limit use DPCG; None for a physics without one, which "
+                       "then keeps the direct solver at every size",
     "supports_and_loads_error": "supports_and_loads_error(mesh, bcs): why the supports and loads leave the "
                                 "problem without a solution (the part free to move), or None",
     "QUANTITIES": "its objectives and constraints, each as the arguments of a Quantity",

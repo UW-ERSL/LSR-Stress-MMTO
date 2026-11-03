@@ -199,6 +199,46 @@ def test_a_result_the_physics_does_not_return_stops_the_save_with_a_message(monk
             run(p, save_dir=d, verbose=False)
 
 
+def test_a_large_template_problem_keeps_the_direct_solver(monkeypatch, capsys):
+    """Above the direct solver's limit the loop uses DPCG only for a physics with a deflation space; the
+    template has none, so it keeps PARDISO. The limit is lowered here so the test stays small."""
+    import lsr_mmto.pyto_ad_imports as imports
+    from lsr_mmto.problem import selections as S
+    from lsr_mmto.problem.project import run
+    monkeypatch.setattr(imports, "DIRECT_SOLVER_DOF_CUTOFF", 100)
+    with registered(TEMPLATE):
+        p = _project("template", "UBracket.STL", UBRACKET, 3000)
+        p.add_selection("bottom", S.face("ymin"))
+        p.add_selection("top_right", S.box([0.75, 0.9, -1], [1.0, 1.0, 1]))
+        p.bcs += [{"kind": "set_value", "on": "bottom", "value": 0.0},
+                  {"kind": "source", "on": "top_right", "total": 1.0}]
+        p.settings["common"]["maxIterations"] = 2
+        with tempfile.TemporaryDirectory() as d:
+            run(p, save_dir=d, verbose=True)
+    out = capsys.readouterr().out
+    assert "Solver: PARDISO" in out and "Solver: DPCG" not in out
+
+
+def test_a_large_structural_problem_still_uses_dpcg(monkeypatch, capsys):
+    """The structural physics builds its deflation space, so above the limit it runs DPCG as before."""
+    import lsr_mmto.pyto_ad_imports as imports
+    from lsr_mmto.problem import selections as S
+    from lsr_mmto.problem.project import Project, run
+    monkeypatch.setattr(imports, "DIRECT_SOLVER_DOF_CUTOFF", 100)
+    p = Project("structural", stl="UBracket.STL", n_dof=3000, single_layer=True, base_dir=UBRACKET)
+    p.add_selection("bottom", S.face("ymin"))
+    p.add_selection("top_right", S.box([0.75, 0.9, -1], [1.0, 1.0, 1]))
+    p.add_support("bottom", dofs="xyz")
+    p.add_force("top_right", total=[-1.0, 0.0, 0.0])
+    p.database = "6Materials_AF_3Attr"
+    p.objective("Compliance()")
+    p.constraint("VolumeFraction()", "<=", 0.5)
+    p.settings["common"]["maxIterations"] = 2
+    with tempfile.TemporaryDirectory() as d:
+        run(p, save_dir=d, verbose=True)
+    assert "Solver: DPCG" in capsys.readouterr().out
+
+
 if __name__ == "__main__":
     test_template_solver_gives_a_straight_line_along_a_bar()
     test_template_physics_runs_with_no_core_file_changed()

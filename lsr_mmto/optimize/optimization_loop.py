@@ -192,19 +192,18 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
 
 
     # --- Solver selection: direct (PARDISO) for small problems; iterative
-    #     (DPCG + deflation) beyond the DOF cutoff. Mirrors topopt_mma.py so the
-    #     MMTO driver uses the same tested iterative path as single-material.
-    #     The adjoint solve in PyTO-AD's differentiable solve reuses fe_solver.solver
-    #     and fe_solver.dsolver, so it follows this choice automatically.
+    #     (DPCG + deflation) beyond the DOF cutoff, for a physics that builds a deflation space
+    #     (its deflation_space); a physics without one keeps the direct solver at every size.
+    #     Mirrors topopt_mma.py so the MMTO driver uses the same tested iterative path as
+    #     single-material. The adjoint solve in PyTO-AD's differentiable solve reuses
+    #     fe_solver.solver and fe_solver.dsolver, so it follows this choice automatically.
     from lsr_mmto.pyto_ad_imports import DIRECT_SOLVER_DOF_CUTOFF    # dof limit for the direct solver; above it, DPCG
 
     solver = linear_solvers.Solvers.PARDISO
     dsolver = deflation.DeflationSolver()
-    if (to_params.nDOFDesired > DIRECT_SOLVER_DOF_CUTOFF):
+    if to_params.nDOFDesired > DIRECT_SOLVER_DOF_CUTOFF and physics.deflation_space is not None:
         solver = linear_solvers.Solvers.DPCG
-        nGroups = dsolver.getRecommendedNumberOfGroups(nDOF=sum(physics.FIELDS.values()) * mesh_structural.num_nodes)
-        dsolver.create_deflation_groups(mesh_structural, nGroups)
-        dsolver.create_deflation_matrix(mesh_structural)
+        physics.deflation_space(dsolver, mesh_structural)
     print("Solver:", solver.name)
 
     fe_solver_structural = physics.make_solver(mesh_structural, mat_prop_struct, bcs, solver, dsolver,

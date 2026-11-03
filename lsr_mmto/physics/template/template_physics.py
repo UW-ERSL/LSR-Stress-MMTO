@@ -89,7 +89,8 @@ def make_solver(mesh, mat_prop, bcs, linear_solver, dsolver, elem_body_force):
     mesh            the voxel mesh (PyTO-AD's)
     mat_prop        a placeholder material from Project.build; the real properties come each iteration
     bcs             {field name: PyTO-AD BC}, one per field in FIELDS, built from the supports and loads
-    linear_solver   PARDISO for small problems; see the note on DPCG in template_module.py
+    linear_solver   PARDISO, or DPCG for a large problem when the physics has a deflation_space
+                    (template_module.py)
     dsolver         the deflation solver, used only with DPCG
     elem_body_force a body force per element, or None (not used by this physics)
     """
