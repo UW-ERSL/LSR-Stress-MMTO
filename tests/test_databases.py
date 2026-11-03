@@ -232,8 +232,8 @@ def test_project_uses_the_check():
         shutil.copy(os.path.join(ubracket, "UBracket.STL"), d)
         p = Project("u", stl="UBracket.STL", base_dir=d)
         p.add_selection("bottom", __import__("lsr_mmto").face("ymin"))
-        p.add_support("bottom")
-        p.add_force("bottom", total=[1, 0, 0])
+        p.add_bc("fixed", "bottom", dofs="xyz")
+        p.add_bc("force", "bottom", total=[1, 0, 0])
         p.objective("FailureFactorPNorm()")
         p.constraint("Mass()", "<=", 1.0)
 

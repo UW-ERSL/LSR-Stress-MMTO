@@ -10,8 +10,11 @@ The structural supports and loads, each acting on a named selection, evaluated o
                    seen along an axis-aligned direction (each side at least half an
                    element). "bbox" is approximate; it is there for the airplane bracket.
 Each kind is given as the arguments of a BCKind (problem/boundary_conditions.py), which turns
-them into the kinds a project can use. picks: how a support or a load picked on the part in the
-window (its type there) becomes this kind.
+them into the kinds a project can use: what it does (apply), its name and help in the GUI, and its
+values, from which the form, the checks and the setup-script line are made. Every kind here acts on
+the displacement u, the physics' one field. picks: how a support or a load picked on the part in the
+window (its type there) becomes this kind. A script adds one with p.add_bc, e.g.
+p.add_bc("fixed", "clamp", dofs="xyz") or p.add_bc("force", "corner", total=[0, -4, 0]).
 """
 import numpy as np
 
@@ -26,35 +29,13 @@ def _dofs(dofs):
     return [_AXES[c] for c in sorted(dofs, key="xyz".index)]
 
 
-def _kind(doc, role, check, apply, script, fields, shown, help, labels, picks=None):
-    """The arguments of one BCKind; every structural kind acts on the displacement u."""
-    return {"doc": doc, "role": role, "field": "u", "check": check, "apply": apply, "script": script,
-            "fields": fields, "shown": shown, "help": help, "labels": labels, "picks": picks or {}}
-
-
 def _picked_force(f):
     return {"total": [float(f.get("force_x", 0.0)), float(f.get("force_y", 0.0)), float(f.get("force_z", 0.0))]}
 
 
-def _check_dofs(bc):
-    try:
-        _dofs(bc.get("dofs"))
-        return []
-    except ValueError as e:
-        return [str(e)]
-
-
-def _check_force(bc):
-    f = np.asarray(bc.get("total", []), dtype=float)
-    if f.shape != (3,) or not np.any(f):
-        return ["total must be three numbers, not all zero"]
-    return []
-
-
 def _check_direction(bc):
-    d = np.asarray(bc.get("direction", []), dtype=float)
-    if d.shape != (3,) or not np.any(d):
-        return ["direction must be three numbers, not all zero"]
+    """An area taken from the selection needs a direction along x, y or z."""
+    d = np.asarray(bc["direction"], dtype=float)
     if bc.get("area") == "bbox" and np.count_nonzero(d) != 1:
         return ["area 'bbox' needs a direction along x, y or z; give a number instead"]
     return []
@@ -101,34 +82,31 @@ def _apply_traction(bc, n, mesh, state, where):
     _add_load(bc["pressure"] * area * d, n, mesh, state)
 
 
+_DOFS = dict(name="dofs", kind="dofs", label="Held in", doc="the directions held")
 SUPPORT_AND_LOAD_KINDS = {
-    "fixed": _kind(
-        "the given dofs (x, y, z) held at 0", "support", _check_dofs, _apply_support,
-        lambda bc, on: f"p.add_support({on}, dofs={bc['dofs']!r})",
-        [("dofs", "dofs", None, "the directions held")],
-        "Fixed support", "Holds the selection still in the ticked directions.", {"dofs": "Held in"},
-        {t: (lambda c, d=d: {"dofs": d}) for t, d in _PICKED_SUPPORTS.items()}),
-    "displacement": _kind(
-        "the given dofs held at a nonzero value", "support", _check_dofs, _apply_support,
-        lambda bc, on: f"p.add_support({on}, dofs={bc['dofs']!r}, value={bc['value']!r})",
-        [("dofs", "dofs", None, "the directions moved"), ("value", "number", "length", "the displacement")],
-        "Moved support", "Moves the selection by a set distance in the ticked directions.",
-        {"dofs": "Moved in", "value": "Distance"}),
-    "force": _kind(
-        "a total force [Fx, Fy, Fz], split equally over the nodes", "load", _check_force, _apply_force,
-        lambda bc, on: f"p.add_force({on}, total={bc['total']!r})",
-        [("total", "vector", "force", "the total force, split equally over the nodes")],
-        "Force", "A total force on the selection, shared equally by its nodes.", {"total": "Total force"},
-        {"force_xyz": _picked_force, None: _picked_force}),
-    "traction": _kind(
-        "pressure * area along a direction, split equally over the nodes; area a number or 'bbox'",
-        "load", _check_direction, _apply_traction,
-        lambda bc, on: f"p.add_traction({on}, pressure={bc['pressure']!r}, "
-                       f"direction={bc['direction']!r}, area={bc['area']!r})",
-        [("pressure", "number", "stress", "the pressure"), ("direction", "vector", None, "the direction it pushes"),
-         ("area", "area", "area", "the area it acts on, or bbox: the selection's extent across the direction")],
-        "Pressure", "A pressure on the selection, turned into a force: Pressure times Area, pushing along Direction, "
-        "shared equally by its nodes. Tick Area from the selection to use the selection's size across the "
-        "direction (Direction must then be along x, y or z).",
-        {"pressure": "Pressure", "direction": "Direction", "area": "Area"}),
+    "fixed": dict(
+        role="support", apply=_apply_support, shown="Fixed support",
+        help="Holds the selection still in the ticked directions.",
+        values=[_DOFS],
+        picks={t: (lambda c, d=d: {"dofs": d}) for t, d in _PICKED_SUPPORTS.items()}),
+    "displacement": dict(
+        role="support", apply=_apply_support, shown="Moved support",
+        help="Moves the selection by a set distance in the ticked directions.",
+        values=[dict(_DOFS, label="Moved in", doc="the directions moved"),
+                dict(name="value", kind="number", measures="length", label="Distance", doc="the displacement")]),
+    "force": dict(
+        role="load", apply=_apply_force, shown="Force",
+        help="A total force on the selection, shared equally by its nodes.",
+        values=[dict(name="total", kind="vector", measures="force", label="Total force",
+                     doc="the total force, split equally over the nodes")],
+        picks={"force_xyz": _picked_force, None: _picked_force}),
+    "traction": dict(
+        role="load", apply=_apply_traction, check=_check_direction, shown="Pressure",
+        help="A pressure on the selection, turned into a force: Pressure times Area, pushing along Direction, "
+             "shared equally by its nodes. Tick Area from the selection to use the selection's size across the "
+             "direction (Direction must then be along x, y or z).",
+        values=[dict(name="pressure", kind="number", measures="stress", label="Pressure", doc="the pressure"),
+                dict(name="direction", kind="vector", label="Direction", doc="the direction it pushes"),
+                dict(name="area", kind="area", measures="area", label="Area",
+                     doc="the area it acts on, or bbox: the selection's extent across the direction")]),
 }

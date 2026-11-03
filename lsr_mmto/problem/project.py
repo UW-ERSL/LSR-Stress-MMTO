@@ -10,8 +10,8 @@ file, with the problem in its own "mmto" section. Project.load reads .mmto files
     from lsr_mmto.problem.selections import face, box
     p = Project("bracket", stl="bracket.stl", n_dof=30000)
     p.add_selection("left", face("xmin"))
-    p.add_support("left", dofs="xyz")
-    p.add_force(box([9, 0, 0], [10, 10, 1]), total=[0, -1000, 0])
+    p.add_bc("fixed", "left", dofs="xyz")
+    p.add_bc("force", box([9, 0, 0], [10, 10, 1]), total=[0, -1000, 0])
     p.database = "6Materials_AF_3Attr"
     p.objective("FailureFactorPNorm()")
     p.constraint("Mass()", "<=", 3.5e-3)
@@ -187,23 +187,19 @@ class Project:
                 names.append(name)
         return names
 
-    def add_support(self, on, dofs="xyz", value=0.0):
-        kind = "fixed" if float(value) == 0.0 else "displacement"
-        errors = BC_KINDS[kind].check({"dofs": dofs})
+    def add_bc(self, kind, on, **values):
+        """A support or load of a kind of BC_KINDS (the structural ones: fixed, displacement, force,
+        traction) on a selection, its name or a Selection (stored under a new name), with the kind's
+        values: p.add_bc("fixed", "clamp", dofs="xyz"), p.add_bc("force", "corner", total=[0, -4, 0]).
+        The values are checked as the project's check checks them; a wrong one is an error here."""
+        if kind not in BC_KINDS:
+            raise ValueError(f"kind must be one of {', '.join(BC_KINDS)}, not {kind!r}")
+        k = BC_KINDS[kind]
+        errors = k.errors({"kind": kind, **values})
         if errors:
-            raise ValueError(errors[0])
-        bc = {"kind": kind, "on": self._on(on, "support"), "dofs": dofs}
-        if kind == "displacement":
-            bc["value"] = float(value)
-        self.bcs.append(bc)
-
-    def add_force(self, on, total):
-        self.bcs.append({"kind": "force", "on": self._on(on, "load"), "total": [float(v) for v in total]})
-
-    def add_traction(self, on, pressure, direction, area="bbox"):
-        self.bcs.append({"kind": "traction", "on": self._on(on, "load"), "pressure": float(pressure),
-                         "direction": [float(v) for v in direction],
-                         "area": area if area == "bbox" else float(area)})
+            raise ValueError(f"{kind}: {errors[0]}")
+        self.bcs.append({"kind": kind, "on": self._on(on, k.role),
+                         **{v.name: v.stored(values[v.name]) for v in k.values}})
 
     def evaluate(self, selection, mesh, on="nodes"):
         """Indices of a selection (or of the selection with that name) on mesh, with every selection(name) in
@@ -290,7 +286,7 @@ class Project:
                 continue
             if bc.get("on") not in self.selections:
                 errors.append(f"{where}: no selection named {bc.get('on')!r}")
-            errors += [f"{where}: {e}" for e in BC_KINDS[bc["kind"]].check(bc)]
+            errors += [f"{where}: {e}" for e in BC_KINDS[bc["kind"]].errors(bc)]
             if self.physics in PHYSICS and BC_KINDS[bc["kind"]].field not in PHYSICS[self.physics].FIELDS:
                 errors.append(f"{where}: not a kind of {self.physics} support or load")
         roles = {BC_KINDS[bc["kind"]].role for bc in self.bcs if bc.get("kind") in BC_KINDS}
@@ -718,7 +714,7 @@ class Project:
         for name, sel in self.selections.items():
             lines.append(f"p.add_selection({name!r}, {sel!r})")
         for bc in self.bcs:
-            lines.append(BC_KINDS[bc["kind"]].script(bc, repr(bc["on"])))
+            lines.append(BC_KINDS[bc["kind"]].script(bc["kind"], bc, repr(bc["on"])))
         if self.keep_solid_names:
             lines.append(f"p.keep_solid({', '.join(map(repr, self.keep_solid_names))})")
         if self.keep_support_elements:

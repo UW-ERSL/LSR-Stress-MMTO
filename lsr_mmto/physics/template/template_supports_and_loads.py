@@ -18,7 +18,7 @@ Glossary:
     the bc dict     one support or load as a project stores it, e.g.
                         {"kind": "source", "on": "top", "total": 4.0}
                     "kind" is a key of SUPPORT_AND_LOAD_KINDS, "on" the selection's name, the rest
-                    its values (the names in its fields)
+                    its values (the names in its values)
     state           what the supports and loads of one field build up, before the solve:
     state["values"] {dof: the value it is held at}; these dofs are not solved for
     state["force"]  f of K c = f: one number per dof, so one per node here
@@ -40,25 +40,15 @@ To add a kind, copy one entry of SUPPORT_AND_LOAD_KINDS and change the lines mar
 """
 import numpy as np
 
-FIELD = "c"                    # FILL: the field these kinds act on, one of FIELDS in template_module.py
+FIELD = "c"                    # FILL: the field, as in FIELDS in template_module.py (read below)
 
 
 # ----------------------------------------------------------------------------- what each kind does
-def _check_value(bc):
-    """Errors in a set-value support's values, as a list of short texts (empty when it is fine).
-    Read by Project.validate and by the form before it accepts."""
-    try:
-        float(bc.get("value", 0.0))
-        return []
-    except (TypeError, ValueError):
-        return ["value must be a number"]
-
-
 def _check_total(bc):
-    try:
-        return [] if float(bc.get("total")) != 0.0 else ["total must not be zero"]
-    except (TypeError, ValueError):
-        return ["total must be a number"]
+    """Errors its values' kinds do not catch, as a list of short texts (empty when it is fine). Read by
+    Project.validate and by the form before it accepts. That total is a number is checked already, from
+    its value's kind; here only that it is not zero."""
+    return [] if float(bc["total"]) != 0.0 else ["total must not be zero"]
 
 
 def _apply_set_value(bc, n, mesh, state, where):
@@ -78,48 +68,40 @@ def _apply_source(bc, n, mesh, state, where):
 
 # ----------------------------------------------------------------------------- the kinds
 # Each entry is the arguments of a BCKind (problem/boundary_conditions.py). What each one is, and who
-# reads it (as the files stand now):
-#   doc      one line on what it does, for a reader of the code; the Supports and loads form shows it
-#            only when help is empty (gui/supports_and_loads_panel.py, the kind's (i))
+# reads it:
 #   role     "support" or "load": supports are applied before loads (project.py, supports_and_loads);
 #            the Pick window and the "is the part held" check use it too
-#   field    the field it writes into, FIELD above (project.py: validate and supports_and_loads)
-#   check    check(bc) -> list of errors (project.py, validate; the form, before it accepts)
 #   apply    apply(bc, nodes, mesh, state, where): what it does to the equations (project.py,
 #            supports_and_loads); the only physics in the entry
-#   script   script(bc, on) -> the line of a setup script that makes it (project.py, to_script)
-#   fields   its values, as (name, type, measures, doc); type "number", "vector" (three numbers),
-#            "dofs" (some of x, y, z) or "area"; measures is what the number is, for its unit (one
-#            of the unit kinds of materials/databases.py, or None for no unit). The form is made
-#            from them (gui/supports_and_loads_panel.py)
 #   shown    its name in the GUI and the user guide
-#   help     one plain sentence for a user, in the form and the user guide
-#   labels   {value name: its label in the form}
-#   picks    optional: how a face picked in the Pick window becomes this kind; leave it out
+#   help     one plain sentence for a user: the form's (i), the user guide, the reference page
+#   values   its values, each a dict: name (its key in the bc dict), kind ("number", "vector" for three
+#            numbers, "dofs" for some of x, y, z, or "area": a number or bbox), label (its name in the
+#            form), measures (what the number is, for its unit: one of the unit kinds of
+#            materials/databases.py, or None for no unit) and doc (what it is, for the reference
+#            page). From them come the form (gui/supports_and_loads_panel.py), the checks that a value
+#            is there and is a number, three numbers or x, y, z (project.py, validate; the form), and
+#            the setup-script line, p.add_bc("source", "top", total=4.0) (project.py, to_script)
+#   check    optional: check(bc) -> errors the value kinds do not catch
+#   field    left out here: a physics of one field (FIELDS in template_module.py) has its kinds act on
+#            it; a physics of several fields names the field in each kind
+#   picks    optional: how a face picked in the Pick window becomes this kind; left out here
 SUPPORT_AND_LOAD_KINDS = {
     "set_value": dict(                                       # FILL: the kind's name in a project file
-        doc="c held at a value on the selection",            # FILL
         role="support",
-        field=FIELD,
-        check=_check_value,
         apply=_apply_set_value,
-        script=lambda bc, on: f"p.bcs.append({{'kind': 'set_value', 'on': {on}, 'value': {bc.get('value', 0.0)!r}}})",
-        fields=[("value", "number", None, "the value held")],
         shown="Set value",                                   # FILL
         help="Holds the value at the selection.",            # FILL
-        labels={"value": "Value"},
+        values=[dict(name="value", kind="number", label="Value", doc="the value held")],    # FILL
     ),
     "source": dict(
-        doc="a total amount, split equally over the nodes",
         role="load",
-        field=FIELD,
-        check=_check_total,
         apply=_apply_source,
-        script=lambda bc, on: f"p.bcs.append({{'kind': 'source', 'on': {on}, 'total': {bc['total']!r}}})",
-        fields=[("total", "number", None, "the total amount, split equally over the nodes")],
+        check=_check_total,
         shown="Source",
         help="Adds an amount at the selection, shared equally by its nodes.",
-        labels={"total": "Total"},
+        values=[dict(name="total", kind="number", label="Total",
+                     doc="the total amount, split equally over the nodes")],
     ),
 }
 

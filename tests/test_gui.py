@@ -1408,7 +1408,7 @@ def test_load_arrow_outside_the_part():
         x_face = float(np.max(np.asarray(w.preview_mesh().node_xyz)[:, 0]))
         for fx, outside in ((5.0, lambda b: b[0] >= x_face - 1e-6), (-5.0, lambda b: b[0] >= x_face - 1e-6)):
             w.project.bcs = [bc for bc in w.project.bcs if bc.get("on") != "right end"]
-            w.project.add_force("right end", total=[fx, 0.0, 0.0])
+            w.project.add_bc("force", "right end", total=[fx, 0.0, 0.0])
             w.draw_supports_and_loads()
             i = len(w.project.bcs) - 1
             bounds = w.plotter.actors[f"mmto_arrow{i}"].GetBounds()          # xmin, xmax, ...

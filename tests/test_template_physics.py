@@ -37,8 +37,7 @@ def registered(module):
     available_physics.MODULES.append(module)
     available_physics.PHYSICS[module.NAME] = module
     quantities.QUANTITIES.extend(added_q)
-    boundary_conditions.BC_KINDS.update({k: boundary_conditions.BCKind(**a)
-                                         for k, a in module.SUPPORT_AND_LOAD_KINDS.items()})
+    boundary_conditions.BC_KINDS.update(boundary_conditions.kinds_of(module))
     settings.SETTINGS.extend(added_s)
     settings._make_views()
     try:
@@ -119,7 +118,7 @@ def test_template_physics_runs_with_no_core_file_changed():
 
         q = _project("template", "UBracket.STL", UBRACKET, 3000)
         q.add_selection("bottom", S.face("ymin"))
-        q.add_support("bottom", dofs="xyz")                         # a structural kind: not the template's
+        q.add_bc("fixed", "bottom", dofs="xyz")                         # a structural kind: not the template's
         assert any("not a kind of template support or load" in e for e in q.validate())
 
         mesh, _, bcs, _, _, _ = p.build(verbose=False)
@@ -160,7 +159,7 @@ def test_a_template_run_with_held_values_only():
         assert np.all(np.isfinite(r.history["objective"]))
     s = Project("structural", stl="UBracket.STL", n_dof=3000, single_layer=True, base_dir=UBRACKET)
     s.add_selection("bottom", S.face("ymin"))
-    s.add_support("bottom", dofs="xyz")
+    s.add_bc("fixed", "bottom", dofs="xyz")
     assert "no loads" in s.validate()
 
 
@@ -244,8 +243,8 @@ def test_a_large_structural_problem_still_uses_dpcg(monkeypatch, capsys):
     p = Project("structural", stl="UBracket.STL", n_dof=3000, single_layer=True, base_dir=UBRACKET)
     p.add_selection("bottom", S.face("ymin"))
     p.add_selection("top_right", S.box([0.75, 0.9, -1], [1.0, 1.0, 1]))
-    p.add_support("bottom", dofs="xyz")
-    p.add_force("top_right", total=[-1.0, 0.0, 0.0])
+    p.add_bc("fixed", "bottom", dofs="xyz")
+    p.add_bc("force", "top_right", total=[-1.0, 0.0, 0.0])
     p.database = "6Materials_AF_3Attr"
     p.objective("Compliance()")
     p.constraint("VolumeFraction()", "<=", 0.5)

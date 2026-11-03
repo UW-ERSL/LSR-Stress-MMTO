@@ -31,10 +31,10 @@ def coded_ubracket(base_dir=UBRACKET):
     p.comment = "test"
     p.add_selection("bottom", S.face("ymin"))
     p.add_selection("top_right", S.box([0.75, 0.9, -1], [1.0, 1.0, 1]))
-    p.add_support("bottom", dofs="xyz")
-    p.add_support(S.nearest([0.0, 0.5, 0.0]), dofs="z", value=0.001)
-    p.add_force("top_right", total=[-1.0, 0.0, 0.0])
-    p.add_traction(S.box([0.0, 0.9, -1], [0.25, 1.0, 1]), pressure=2.0, direction=[0, -1, 0], area="bbox")
+    p.add_bc("fixed", "bottom", dofs="xyz")
+    p.add_bc("displacement", S.nearest([0.0, 0.5, 0.0]), dofs="z", value=0.001)
+    p.add_bc("force", "top_right", total=[-1.0, 0.0, 0.0])
+    p.add_bc("traction", S.box([0.0, 0.9, -1], [0.25, 1.0, 1]), pressure=2.0, direction=[0, -1, 0], area="bbox")
     p.keep_solid("bottom")
     p.database = "6Materials_AF_3Attr"
     p.objective("FailureFactorPNorm()")
@@ -131,7 +131,7 @@ def test_build_coded():
 def test_conflicting_values_are_refused():
     """A dof given 0 by one support and 0.001 by another is an error, not a silent pick."""
     p = coded_ubracket()
-    p.add_support(S.nearest([0.0, 0.0, 0.0]), dofs="z", value=0.001)     # (0, 0, 0) is on the bottom face
+    p.add_bc("displacement", S.nearest([0.0, 0.0, 0.0]), dofs="z", value=0.001)     # (0, 0, 0) is on the bottom face
     try:
         p.build(verbose=False)
     except ValueError as e:
@@ -144,8 +144,8 @@ def test_free_rigid_body_motion_is_refused():
     """Held at one node and pushed sideways at the top, the bracket is free to rotate: build stops,
     before the VAE and the run."""
     p = Project("pinned", stl="UBracket.STL", n_dof=N_DOF, single_layer=True, base_dir=UBRACKET)
-    p.add_support(S.nearest([0.0, 0.0, 0.0]), dofs="xyz")
-    p.add_force(S.box([0.75, 0.9, -1], [1.0, 1.0, 1]), total=[-1.0, 0.0, 0.0])
+    p.add_bc("fixed", S.nearest([0.0, 0.0, 0.0]), dofs="xyz")
+    p.add_bc("force", S.box([0.75, 0.9, -1], [1.0, 1.0, 1]), total=[-1.0, 0.0, 0.0])
     p.database = "6Materials_AF_3Attr"
     p.objective("FailureFactorPNorm()")
     try:
@@ -282,10 +282,40 @@ def test_schema_upgrades():
 
 
 def test_bc_kinds():
-    """Every kind of boundary condition is a support or a load, and is documented."""
+    """Every kind of boundary condition is a support or a load, says what it does, and labels its values."""
     from lsr_mmto.problem.boundary_conditions import BC_KINDS
     for name, kind in BC_KINDS.items():
-        assert kind.role in ("support", "load") and kind.doc, name
+        assert kind.role in ("support", "load") and kind.shown and kind.help, name
+        assert all(v.label and v.doc for v in kind.values), name
+
+
+# a value of each value kind, for the round trip of every kind
+_SAMPLE = {"dofs": "xz", "number": 2.5, "vector": [0.0, -1.0, 0.0], "area": 3.0}
+
+
+def test_every_kind_round_trips_through_a_setup_script():
+    """Each kind of support and load, added with add_bc, written into a setup script and the script run:
+    the same support or load. A wrong value is refused by add_bc as the project's check refuses it."""
+    from lsr_mmto.problem.boundary_conditions import BC_KINDS
+    for name, kind in BC_KINDS.items():
+        p = Project("kinds", stl="UBracket.STL", n_dof=3000, single_layer=True, base_dir=UBRACKET)
+        p.add_selection("top", S.face("ymax"))
+        p.add_bc(name, "top", **{v.name: _SAMPLE[v.kind] for v in kind.values})
+        assert kind.errors(p.bcs[0]) == [], name
+        line = kind.script(name, p.bcs[0], repr("top"))
+        assert line.startswith(f"p.add_bc({name!r}, 'top'"), line
+        q = Project("kinds", stl="UBracket.STL", n_dof=3000, single_layer=True, base_dir=UBRACKET)
+        q.add_selection("top", S.face("ymax"))
+        exec(line, {"p": q})
+        assert q.bcs == p.bcs, (name, q.bcs, p.bcs)
+        if kind.values:
+            v = kind.values[0]
+            try:
+                p.add_bc(name, "top", **{v.name: "nonsense"})
+            except ValueError as e:
+                assert name in str(e)
+            else:
+                raise AssertionError(f"{name}: a wrong value was accepted")
 
 
 if __name__ == "__main__":

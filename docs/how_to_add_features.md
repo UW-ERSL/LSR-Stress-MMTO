@@ -77,22 +77,26 @@ One entry in `SUPPORT_AND_LOAD_KINDS` on the front page of its physics (the stru
 `BCKind` (`lsr_mmto/problem/boundary_conditions.py`):
 
 - `role`: `"support"` or `"load"`; supports are applied before loads, each in the order given.
-- `field`: the field it acts on, one of the physics' `FIELDS`; each field gets its own boundary
-  condition.
-- `check(bc)`: a list of errors.
 - `apply(bc, nodes, mesh, state, where)`: writes into `state["values"]` (dof to imposed value) or
-  `state["force"]`, both of its field.
-- `script(bc, on)`: the line of a setup script that makes it.
-- `fields`: its values as `(name, kind, measures, doc)`; kind is `"dofs"`, `"number"`, `"vector"`
-  or `"area"`, measures what the number is, for its unit. The GUI makes its form from them.
-- `shown`, `help`, `labels`: the name, the help and a label for each value, as the GUI shows them.
+  `state["force"]`, both of its field. The only physics in the entry.
+- `shown`, `help`: its name and what it does, in one plain sentence, as the GUI, the user guide and
+  the reference page show them.
+- `values`: its values, each a dict of `name`, `kind` (`"dofs"`, `"number"`, `"vector"` or
+  `"area"`), `label` (its name in the form), `measures` (what the number is, for its unit; None for
+  none) and `doc`. The form, the checks that each value is there and is what its kind says, and the
+  setup-script line are made from them.
+- `check(bc)` (optional): errors the value kinds do not catch, as a list.
+- `field` (optional): the field it acts on; left out by a physics of one field, which is then the
+  one.
 - `picks` (optional): how one picked on the part in the Pick window becomes this kind.
 
-A project stores it as `{"kind": name, "on": selection, ...values}`. The structural kinds also have
-`add_support`, `add_force` and `add_traction` on `Project` for setup scripts.
+A project stores it as `{"kind": name, "on": selection, ...values}`, and a script adds it with
+`p.add_bc(name, on, **values)`, e.g. `p.add_bc("force", "corner", total=[0, -4, 0])`; a wrong value
+is an error there, as in the project's check.
 
-Add a build test to `tests/test_project.py`; `test_script_round_trip` checks `script`. What else
-to run: both generators above (the reference page and the user guide list every kind).
+`test_every_kind_round_trips_through_a_setup_script` in `tests/test_project.py` adds every kind,
+writes it into a script and runs it; add a build test there for what the kind does. What else to
+run: both generators above (the reference page and the user guide list every kind).
 
 ## A setting
 

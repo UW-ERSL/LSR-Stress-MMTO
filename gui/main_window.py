@@ -176,7 +176,7 @@ def load_direction(bc):
     kind = BC_KINDS.get(bc.get("kind"))
     if kind is None or kind.role != "load":
         return None
-    v = next((bc.get(name) for name, typ, _, _ in kind.fields if typ == "vector"), None)
+    v = next((bc.get(value.name) for value in kind.values if value.kind == "vector"), None)
     return None if v is None else np.asarray(v, dtype=float)
 
 

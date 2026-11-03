@@ -63,8 +63,12 @@ def generate():
         doc = " ".join((cls.__doc__ or "").split()).replace("|", "\\|")
         out.append(f"| `{name}` | {fields} | {doc} |")
 
-    out += ["", "## Boundary conditions", "", "| kind | means |", "|---|---|"]
-    out += [f"| `{k}` | {v.doc} |" for k, v in BC_KINDS.items()]
+    out += ["", "## Boundary conditions", "",
+            "A project file keeps each as {\"kind\": kind, \"on\": a selection's name, ...its values}; a setup "
+            "script adds one with p.add_bc(kind, on, **values).", "",
+            "| kind | values | means |", "|---|---|---|"]
+    out += [f"| `{k}` | " + ", ".join(f"`{v.name}` ({v.doc})" for v in kind.values) + f" | {kind.help} |"
+            for k, kind in BC_KINDS.items()]
 
     out += ["", "## Material database attributes", "",
             "A database is an .xlsx file: attribute names in row 1, units in row 2, then one row per "
