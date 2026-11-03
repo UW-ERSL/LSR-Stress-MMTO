@@ -11,7 +11,8 @@ Who reads it:
                            panel, the reference page and the user guide list it
     RESULT_FIELDS          optimize/final_design_analysis.py saves each one; the Results panel shows it
     iteration_diagnostics  optimize/optimization_loop.py, after each iteration's solve
-    final_summary          optimize/final_design_analysis.py, once, on the final designs
+    final_summary          optimize/final_design_analysis.py, once, on the final designs; it returns
+                           the RESULT_FIELDS values that are saved
 
 How a quantity gets its gradient: fn computes its value from m with torch operations only. m.c comes
 out of the solver's differentiable solve, m.x_phys out of the filter and projection, m.props out of
@@ -64,12 +65,12 @@ QUANTITIES = [
 
 
 # ----------------------------------------------------------------------------- results a run saves
-# {name: dict(view, title, measures, value(solver))}: view is the Results panel's choice that shows it,
-# title the colour scale's title, measures what it is (for its unit, None for no unit), and value(solver)
-# its value per element, numpy (elements,), read after final_summary has run.
+# {name: dict(view, title, measures)}: view is the Results panel's choice that shows it, title the colour
+# scale's title, measures what it is (for its unit, None for no unit). The values come from final_summary
+# below, which returns one array per element for each name here; a name it does not return stops the
+# save with a message that says so.
 RESULT_FIELDS = {
-    "mean_value": dict(view="Value", title="Value of c", measures=None,       # FILL
-                       value=lambda solver: solver.template_mean_value),
+    "mean_value": dict(view="Value", title="Value of c", measures=None),      # FILL
 }
 
 
@@ -95,8 +96,8 @@ def final_summary(designs, solver, properties_of, settings, encoder, latent_dim,
                   design_domain_volume):
     """Once, at the end. designs is [(label, x, z)] for the continuous, binarized and binarized-and-snapped
     final designs (x per element, z per element and latent dimension); properties_of(z) decodes latent
-    points to properties. Solve each, print its numbers, and leave on the solver what RESULT_FIELDS reads
-    (here from the last design)."""
+    points to properties. Solve each, print its numbers, and return the results a run saves,
+    {name: numpy array, one value per element}, one for each RESULT_FIELDS entry, of the last design."""
     for label, x, z in designs:
         with torch.no_grad():
             z = z if torch.is_tensor(z) else torch.as_tensor(np.asarray(z), dtype=torch.get_default_dtype())
@@ -105,4 +106,4 @@ def final_summary(designs, solver, properties_of, settings, encoder, latent_dim,
             c = solver.solve(x, ad_mm.MaterialModel.SIMP).detach()
             compliance = float(torch.dot(solver.total_force, c))
         print(f"[TEMPLATE] {label}: diffusion compliance {compliance:.6g}, largest value {float(c.max()):.4g}")
-    solver.template_mean_value = _element_mean(solver, c).numpy()           # FILL: what RESULT_FIELDS reads
+    return {"mean_value": _element_mean(solver, c).numpy()}                # FILL: one per RESULT_FIELDS entry

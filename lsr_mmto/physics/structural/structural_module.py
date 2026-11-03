@@ -36,6 +36,5 @@ SETTINGS = [
 # the per-element results a run saves, by name: the view that shows it in the Results panel, its title on the
 # colour scale, what it measures (for its unit), and its value from the solver after the final check
 RESULT_FIELDS = {
-    "von_mises": dict(view="Stress", title="von Mises stress", measures="stress",
-                      value=lambda solver: solver.vonMisesStress),
+    "von_mises": dict(view="Stress", title="von Mises stress", measures="stress"),
 }

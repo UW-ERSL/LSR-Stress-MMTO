@@ -47,11 +47,15 @@ def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
         zSnappedPts = torch.tensor(matEncoder.getClosestRealMaterialZValues(zOptimalPts))
         zOptimalPts = zSnappedPts
 
-    physics.final_summary(
+    results = physics.final_summary(
         [("Continuous (x_phys projected, raw z)", xOptimal_cont, zOptimal),
          ("Binarized topology (x projected -> binarized, raw z)", xOptimal, zOptimal),
          ("Binarized + snapped materials (x binarized, snapped z)", xOptimal, zOptimalPts)],
         fe_solver, properties_of, settings, matEncoder, latentDim, elem_volume, design_domain_volume)
+    missing = sorted(set(physics.RESULT_FIELDS) - set(results or {}))
+    if missing:
+        raise ValueError(f"the {physics.NAME} physics' final_summary returned no {', '.join(missing)}: it returns "
+                         f"one value per element for each entry of its RESULT_FIELDS")
 
     decoded = matEncoder.vaeNet.decoder(zOptimalPts)
     material_properties = matEncoder.getMaterialProperties(decoded)
@@ -81,8 +85,7 @@ def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
                 **{k: np.asarray(v) for k, v in element_properties.items()},
                 "material_indices": np.asarray(material_indices),
             },
-            results={name: dict(r, value=np.asarray(r["value"](fe_solver)))
-                     for name, r in physics.RESULT_FIELDS.items()},
+            results={name: dict(r, value=np.asarray(results[name])) for name, r in physics.RESULT_FIELDS.items()},
             vae_state_dict=matEncoder.vaeNet.state_dict(),
             history=history,
             example_name=example_name,

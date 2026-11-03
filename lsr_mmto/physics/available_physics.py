@@ -32,10 +32,12 @@ MODULE_ENTRIES = {
                                 "problem without a solution (the part free to move), or None",
     "QUANTITIES": "its objectives and constraints, each as the arguments of a Quantity",
     "SETTINGS": "its own settings, each as the arguments of a Setting",
-    "RESULT_FIELDS": "the per-element results a run saves, {name: dict(view, title, measures, value(solver))}",
+    "RESULT_FIELDS": "the per-element results a run saves, {name: dict(view, title, measures)}; final_summary "
+                     "returns their values",
     "iteration_diagnostics": "iteration_diagnostics(history, iteration, solver, x_phys, properties, ...): what each "
                              "iteration records and prints besides the objective and the constraints",
-    "final_summary": "final_summary(designs, solver, ...): the final designs' numbers, printed by the final check",
+    "final_summary": "final_summary(designs, solver, ...): prints the final designs' numbers and returns "
+                     "{name: value per element} of the last design, one for each RESULT_FIELDS entry",
 }
 
 

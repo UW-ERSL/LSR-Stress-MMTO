@@ -399,7 +399,8 @@ def iteration_diagnostics(history, iteration, solver, x_phys, properties, elem_v
 def final_summary(designs, solver, properties_of, settings, encoder, latent_dim, elem_volume,
                   design_domain_volume):
     """The final check's numbers: each design (label, x, z element-major) analysed and printed, then the
-    stress violations of the last one. properties_of(z) gives the decoded properties of latent points z."""
+    stress violations of the last one. properties_of(z) gives the decoded properties of latent points z.
+    Returns the results a run saves (RESULT_FIELDS), of the last design."""
     from lsr_mmto.physics.structural.structural_physics import elastic_constants
 
     def decode(z):
@@ -419,3 +420,4 @@ def final_summary(designs, solver, properties_of, settings, encoder, latent_dim,
         vm=solver.vonMisesStress, material_properties=props, x_vec=x, active_thresh=0.5,
         mesh=solver.mesh, bc=solver.bc, violation_tol=0.0)
     print_stress_violation_diagnostics(final_stress_diag, iteration=None, prefix="[FINAL STRESS DIAG]")
+    return {"von_mises": np.asarray(solver.vonMisesStress)}

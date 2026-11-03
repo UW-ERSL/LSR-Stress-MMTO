@@ -179,6 +179,26 @@ def test_the_saved_run_keeps_the_properties_the_physics_reads(monkeypatch):
     assert not any(k.lower().startswith("youngs") for k in saved)
 
 
+def test_a_result_the_physics_does_not_return_stops_the_save_with_a_message(monkeypatch):
+    """final_summary returns the value of every RESULT_FIELDS entry; one left out is a clear error, not a
+    result silently missing or taken from an earlier solve."""
+    import pytest
+    from lsr_mmto.physics.template import template_quantities
+    from lsr_mmto.problem import selections as S
+    from lsr_mmto.problem.project import run
+    real = template_quantities.final_summary
+    monkeypatch.setattr(TEMPLATE, "final_summary", lambda *a, **k: (real(*a, **k), {})[1])
+    with registered(TEMPLATE):
+        p = _project("template", "UBracket.STL", UBRACKET, 3000)
+        p.add_selection("bottom", S.face("ymin"))
+        p.add_selection("top_right", S.box([0.75, 0.9, -1], [1.0, 1.0, 1]))
+        p.bcs += [{"kind": "set_value", "on": "bottom", "value": 0.0},
+                  {"kind": "source", "on": "top_right", "total": 1.0}]
+        p.settings["common"]["maxIterations"] = 2
+        with tempfile.TemporaryDirectory() as d, pytest.raises(ValueError, match="returned no mean_value"):
+            run(p, save_dir=d, verbose=False)
+
+
 if __name__ == "__main__":
     test_template_solver_gives_a_straight_line_along_a_bar()
     test_template_physics_runs_with_no_core_file_changed()

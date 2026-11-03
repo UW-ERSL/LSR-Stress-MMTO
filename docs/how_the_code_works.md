@@ -46,7 +46,7 @@ different material in each element, a subclass does that (`MultiMaterialHexFEA` 
    penalties, carries the gradient back through the projection and the filter to `x`, and the
    physics records what each iteration measures (`iteration_diagnostics`).
 4. After the last iteration, `optimize/final_design_analysis.py` binarizes the design and snaps
-   the materials, the physics prints its numbers for each (`final_summary`), and
+   the materials, the physics prints its numbers for each and returns its results (`final_summary`), and
    `optimize/save_results.py` saves the run with the physics' results by name (`RESULT_FIELDS`).
 5. `results/load_results.py` reads a saved run back; the Results panel, the tables and the plots
    use it.
@@ -68,9 +68,9 @@ the code takes from it. `MODULE_ENTRIES` in `physics/available_physics.py` lists
 | `supports_and_loads_error` | why the supports and loads leave no solution, or None |
 | `QUANTITIES` | its objectives and constraints |
 | `SETTINGS` | its own settings |
-| `RESULT_FIELDS` | the per-element results a run saves |
+| `RESULT_FIELDS` | the per-element results a run saves: their names, views and units |
 | `iteration_diagnostics` | what each iteration records and prints |
-| `final_summary` | the final check's numbers |
+| `final_summary` | the final check's numbers, printed; it returns the values of `RESULT_FIELDS` for the last design |
 
 The core's lists are made from the modules: `QUANTITIES` (`formulation/quantities.py`),
 `BC_KINDS` (`problem/boundary_conditions.py`) and `SETTINGS` (`problem/settings.py`). No core file
