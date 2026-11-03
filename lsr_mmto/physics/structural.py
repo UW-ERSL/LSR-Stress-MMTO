@@ -6,25 +6,25 @@ PyTO-AD's differentiable sparse solve, a custom autograd node whose backward is 
 solve, reusing the forward factorization. PyTO-AD is imported and inherited, never edited.
 
 TREE (arrow = "depends on")
-    J      -> svm -> s -> x_phys, E, nu, u   objective (to_params.Objective):
-                                               PNORM_STRESS                 p-norm of relaxed von Mises
-                                               PNORM_STRESS, FAILURE_FACTOR mean p-norm of svm / Y, Y -> z
-                                               COMPLIANCE                   F . u
-                                               MASS                         sum rho x_phys V, rho -> z
+    J      -> svm -> s -> x_phys, E, nu, u   objective (to_params.Objective, a quantity's name):
+                                               StressPNorm                  p-norm of relaxed von Mises
+                                               FailureFactorPNorm           mean p-norm of svm / Y, Y -> z
+                                               Compliance                   F . u
+                                               Mass                         sum rho x_phys V, rho -> z
     g_k    -> x_phys, z                      constraints (to_params.Constraints), each g_k <= 0:
-                                               VOLUME_FRACTION              global, mean(x_phys)
-                                               VOLUME_FRACTION, material_id per material, softmax weights
-                                               MASS                         sum rho x_phys V, rho -> z
-                                               COST                         sum rho c x_phys V, rho, c -> z
-                                               COMPLIANCE                   F . u
-                                               STRESS_FAILURE_FACTOR        mean p-norm of svm / Y
+                                               VolumeFraction               global, mean(x_phys)
+                                               MaterialVolumeFraction       per material, softmax weights
+                                               Mass                         sum rho x_phys V, rho -> z
+                                               Cost                         sum rho c x_phys V, rho, c -> z
+                                               Compliance                   F . u
+                                               FailureFactorPNorm           mean p-norm of svm / Y
     Pz     -> x_phys, z                      latent smoothing penalty
     Dp     -> x_phys (frozen), z             distance to the nearest real material
     E, nu, Y, rho -> z                       VAE decoder (whichever attributes the database has)
     u      -> K -> x_phys, E, nu             K_e = SIMP(x_phys) * (lam_e K_lam + mu_e K_mu)
     x_phys -> x_filt -> x                    Heaviside(density filter(x))
 Each objective and constraint is one entry of QUANTITIES (section "quantities" below).
-Any other objective or constraint raises NotImplementedError rather than run something different.
+Any other name raises KeyError rather than run something different.
 The driver (optimize/run.py) combines them: OBJ = J/J0 + w*Pz + gamma*Dp/Sd0.
 
 Element stiffness and constitutive matrix are linear in the two Lame parameters:
@@ -259,8 +259,8 @@ def material_volume_fraction(xb, z, z_real, material_id, tau):
 # add it to tests/test_ad_quantities.py. Nothing else changes: the gradient comes from autograd.
 #
 #   name         the name a project file uses (P1); PyTO-AD's name where the meaning is the same
-#   objective    the to_params.Objective form it answers to, or None if it is not an objective
-#   constraint   the to_params.Constraints form (qoi name, option kind), or None
+#   objective    True if it can be the objective
+#   constraint   True if it can be a constraint
 #   physics      the physics it applies to
 #   needs        material database columns it reads (checked, with a clear error)
 #   fn(m, opt)   the value, a torch scalar; a constraint is fn / limit - 1 <= 0
@@ -277,13 +277,6 @@ class Quantity:
         self.name, self.objective, self.constraint = name, objective, constraint
         self.physics, self.needs, self.fn, self.doc = frozenset(physics), tuple(needs), fn, doc
         self.shown, self.help = shown, help
-
-
-def _option_kind(opt):
-    """None, "FAILURE_FACTOR", or "material" (a dict with material_id), as the forms are keyed."""
-    if isinstance(opt, dict) and "material_id" in opt:
-        return "material"
-    return opt
 
 
 def _compliance(m, opt):
@@ -318,41 +311,47 @@ def _material_volume_fraction(m, opt):
 
 
 QUANTITIES = [
-    Quantity("Compliance", ("COMPLIANCE", None), ("COMPLIANCE", None), [STRUCTURAL], [],
+    Quantity("Compliance", True, True, [STRUCTURAL], [],
              _compliance, "F . u", "Compliance",
              "How much the part gives under the loads. Lower is stiffer."),
-    Quantity("Mass", ("MASS", None), ("MASS", None), [STRUCTURAL], ["Density"],
+    Quantity("Mass", True, True, [STRUCTURAL], ["Density"],
              _mass, "sum of density * x_phys * element volume", "Mass",
              "The mass of the part, from each material's density."),
-    Quantity("Cost", None, ("COST", None), [STRUCTURAL], ["Density", "Cost"],
+    Quantity("Cost", False, True, [STRUCTURAL], ["Density", "Cost"],
              _cost, "sum of density * cost * x_phys * element volume", "Cost",
              "The cost of the part, from each material's density and cost per mass."),
-    Quantity("StressPNorm", ("PNORM_STRESS", None), None, [STRUCTURAL], [],
+    Quantity("StressPNorm", True, False, [STRUCTURAL], [],
              _stress_pnorm, "p-norm of the relaxed von Mises stress, no 1/N", "Stress (p-norm)",
              "One value close to the highest von Mises stress in the part."),
-    Quantity("FailureFactorPNorm", ("PNORM_STRESS", "FAILURE_FACTOR"), ("STRESS_FAILURE_FACTOR", None),
-             [STRUCTURAL], ["Yield_Strength"],
+    Quantity("FailureFactorPNorm", True, True, [STRUCTURAL], ["Yield_Strength"],
              _failure_factor_pnorm, "mean p-norm of von Mises / yield strength, per element", "Failure factor (p-norm)",
              "One value close to the highest stress / yield strength in the part. Above 1 means some element "
              "yields."),
-    Quantity("VolumeFraction", None, ("VOLUME_FRACTION", None), [STRUCTURAL], [],
+    Quantity("VolumeFraction", False, True, [STRUCTURAL], [],
              _volume_fraction, "mean of x_phys", "Volume fraction",
              "The share of the design space filled with material, 0 to 1."),
-    Quantity("MaterialVolumeFraction", None, ("VOLUME_FRACTION", "material"), [STRUCTURAL], [],
+    Quantity("MaterialVolumeFraction", False, True, [STRUCTURAL], [],
              _material_volume_fraction, "volume fraction of one database material, softmax weights",
              "Material volume fraction", "The share of the design space filled with one chosen material, 0 to 1."),
 ]
-_AS_OBJECTIVE = {q.objective: q for q in QUANTITIES if q.objective}
-_AS_CONSTRAINT = {q.constraint: q for q in QUANTITIES if q.constraint}
 
 
-def find_quantity(qoi, opt, role):
-    """The registry entry for a to_params form; role is "objective" or "constraint"."""
-    table = _AS_OBJECTIVE if role == "objective" else _AS_CONSTRAINT
-    q = table.get((qoi.name, _option_kind(opt)))
-    if q is None:
-        raise NotImplementedError(f"{role} {qoi.name} {opt} not in the AD path yet")
-    return q
+def find_quantity(name):
+    """The registry entry of a quantity, by the name a project file uses."""
+    for q in QUANTITIES:
+        if q.name == name:
+            return q
+    raise KeyError(f"unknown quantity {name!r}; known: {', '.join(q.name for q in QUANTITIES)}")
+
+
+def quantity_label(name, opt=None, material_labels=None):
+    """A quantity's name as the app shows it, with the material for a material volume fraction:
+    'Material volume fraction of Ti-6Al-4V'."""
+    shown = next((q.shown for q in QUANTITIES if q.name == name), str(name))
+    if isinstance(opt, dict) and "material_id" in opt:
+        i = int(opt["material_id"])
+        shown += f" of {material_labels[i] if material_labels is not None and 0 <= i < len(material_labels) else f'material {i}'}"
+    return shown
 
 
 # ----------------------------------------------------------------------------- the forward pass
@@ -400,7 +399,7 @@ class MMTOModelAD:
         self.svm = von_mises(self.fe.element_stress(u, self.x_phys))
 
         self.J = self._objective()
-        self.cons = [self._constraint(qoi, opt, limit) for qoi, opt, limit in self.to_params.Constraints]
+        self.cons = [self._constraint(name, opt, limit) for name, opt, limit in self.to_params.Constraints]
         return self.J, self.cons
 
     def physical_density(self, x, beta, eta, use_heaviside=True, apply_density_filter=True):
@@ -419,11 +418,11 @@ class MMTOModelAD:
         return q.fn(self, opt)
 
     def _objective(self):
-        qoi, opt = self.to_params.Objective[0], self.to_params.Objective[1]
-        return self._value(find_quantity(qoi, opt, "objective"), opt)
+        name, opt = self.to_params.Objective[0], self.to_params.Objective[1]
+        return self._value(find_quantity(name), opt)
 
-    def _constraint(self, qoi, opt, limit):
-        return self._value(find_quantity(qoi, opt, "constraint"), opt) / limit - 1.0
+    def _constraint(self, name, opt, limit):
+        return self._value(find_quantity(name), opt) / limit - 1.0
 
     def grad_phys(self, q):
         """dq/d(x_phys, z) as one numpy vector [x (N) ; z latent-major (N*latentDim)]."""

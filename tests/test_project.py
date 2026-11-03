@@ -19,7 +19,6 @@ sys.path.insert(0, ROOT)
 
 from lsr_mmto.problem import selections as S  # noqa: E402
 from lsr_mmto.problem.project import Project, to_params_form  # noqa: E402
-from lsr_mmto.pyto_ad import TO_QOI  # noqa: E402
 
 UBRACKET = os.path.join(ROOT, "data", "models", "UBracket")
 N_DOF = 3000
@@ -63,11 +62,11 @@ def test_round_trip():
 
 
 def test_expressions():
-    assert to_params_form("Mass()", "constraint", 4e7) == (TO_QOI.MASS, None, 4e7)
-    assert to_params_form("FailureFactorPNorm()", "objective") == (TO_QOI.PNORM_STRESS, "FAILURE_FACTOR")
-    assert to_params_form("FailureFactorPNorm()", "constraint", 1) == (TO_QOI.STRESS_FAILURE_FACTOR, None, 1.0)
+    assert to_params_form("Mass()", "constraint", 4e7) == ("Mass", None, 4e7)
+    assert to_params_form("FailureFactorPNorm()", "objective") == ("FailureFactorPNorm", None)
+    assert to_params_form("FailureFactorPNorm()", "constraint", 1) == ("FailureFactorPNorm", None, 1.0)
     assert to_params_form("MaterialVolumeFraction(2, tau=0.5)", "constraint", 0.15) == \
-        (TO_QOI.VOLUME_FRACTION, {"material_id": 2, "tau": 0.5}, 0.15)
+        ("MaterialVolumeFraction", {"material_id": 2, "tau": 0.5}, 0.15)
     for bad, role, says in [("Compliance() + 0.1*Mass()", "objective", "one quantity"),
                             ("Volume()", "constraint", "unknown quantity"),
                             ("VolumeFraction()", "objective", "cannot be the objective"),
@@ -120,8 +119,8 @@ def test_build_coded():
     assert np.allclose(F[left].sum(0), [0, -2.0 * area, 0])
     assert np.allclose(F.sum(0), [-1, -2.0 * area, 0])
     # formulation, settings, keep-solid
-    assert to_params.Objective == (TO_QOI.PNORM_STRESS, "FAILURE_FACTOR")
-    assert to_params.Constraints == [(TO_QOI.MASS, None, 0.0035)]
+    assert to_params.Objective == ("FailureFactorPNorm", None)
+    assert to_params.Constraints == [("Mass", None, 0.0035)]
     assert to_params.RelativeFilterRadius == 3.5 and to_params.ExtrudeZ is True
     assert vae_params.latentDim == 2 and vae_params.learningRate == 1e-4      # database default kept
     assert np.array_equal(to_params.ElemsToKeep, S.face("ymin").evaluate(mesh, "elements"))

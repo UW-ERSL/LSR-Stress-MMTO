@@ -52,7 +52,7 @@ from pyto.physics.thermal import hex_thermal_fea
 from pyto.solve import solvers as linear_solvers
 from pyto.solve import deflation
 
-from pyto.topopt.common import createFilters, TO_QOI, TOParams, find_elements_with_fixedDOF, DIRECT_SOLVER_DOF_CUTOFF
+from pyto.topopt.common import createFilters, TOParams, find_elements_with_fixedDOF, DIRECT_SOLVER_DOF_CUTOFF
 from pyto.topopt.drivers.mmaWrapper import runMMA
 from pyto.autodiff.material_model import MaterialModel, get_pNorm_exponent
 from pyto.autodiff.material_model import initialize_SIMP_STRUCTURAL_PENALTY, initialize_SIMP_THERMAL_PENALTY

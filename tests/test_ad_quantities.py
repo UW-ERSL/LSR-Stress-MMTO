@@ -20,7 +20,6 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from lsr_mmto.pyto_ad import TO_QOI  # noqa: E402
 from lsr_mmto.physics.gradcheck import _model_from_setup  # noqa: E402
 
 try:                                        # about a minute: skipped by  pytest -m "not slow"
@@ -35,18 +34,18 @@ N_DOF = 3000
 
 # (name, objective, constraint): the objective or the constraint is checked
 QUANTITIES = [
-    ("objective COMPLIANCE", (TO_QOI.COMPLIANCE, None), None),
-    ("objective MASS", (TO_QOI.MASS, None), None),
-    ("objective PNORM_STRESS, FAILURE_FACTOR", (TO_QOI.PNORM_STRESS, "FAILURE_FACTOR"), None),
-    ("constraint COMPLIANCE", None, (TO_QOI.COMPLIANCE, None, 1.0)),
-    ("constraint MASS", None, (TO_QOI.MASS, None, 1.0)),
-    ("constraint STRESS_FAILURE_FACTOR", None, (TO_QOI.STRESS_FAILURE_FACTOR, None, 1.0)),
-    ("objective PNORM_STRESS", (TO_QOI.PNORM_STRESS, None), None),
-    ("constraint VOLUME_FRACTION", None, (TO_QOI.VOLUME_FRACTION, None, 0.4)),
-    ("constraint VOLUME_FRACTION, material 2", None,
-     (TO_QOI.VOLUME_FRACTION, {"material_id": 2, "tau": 0.5}, 0.15)),
+    ("objective Compliance", ("Compliance", None), None),
+    ("objective Mass", ("Mass", None), None),
+    ("objective FailureFactorPNorm", ("FailureFactorPNorm", None), None),
+    ("constraint Compliance", None, ("Compliance", None, 1.0)),
+    ("constraint Mass", None, ("Mass", None, 1.0)),
+    ("constraint FailureFactorPNorm", None, ("FailureFactorPNorm", None, 1.0)),
+    ("objective StressPNorm", ("StressPNorm", None), None),
+    ("constraint VolumeFraction", None, ("VolumeFraction", None, 0.4)),
+    ("constraint MaterialVolumeFraction, material 2", None,
+     ("MaterialVolumeFraction", {"material_id": 2, "tau": 0.5}, 0.15)),
 ]
-# COST is the one entry not checked here: no database with a Cost column is small enough.
+# Cost is the one entry not checked here: no database with a Cost column is small enough.
 
 _SETUP = {}
 
@@ -77,7 +76,7 @@ def _value_and_gradient(model, zeta, beta, eta, objective, constraint):
         model.to_params.Objective = objective
         model.to_params.Constraints = []
     else:
-        model.to_params.Objective = (TO_QOI.MASS, None)
+        model.to_params.Objective = ("Mass", None)
         model.to_params.Constraints = [constraint]
 
     def value(z):
@@ -138,33 +137,30 @@ del _q, _t
 
 
 def test_missing_column_is_named():
-    """COST on a database without a Cost column says so, instead of a bare KeyError."""
+    """Cost on a database without a Cost column says so, instead of a bare KeyError."""
     s = _setup()
     model = s["model"]
     saved = (model.to_params.Objective, list(model.to_params.Constraints))
-    model.to_params.Objective = (TO_QOI.MASS, None)
-    model.to_params.Constraints = [(TO_QOI.COST, None, 1.0)]
+    model.to_params.Objective = ("Mass", None)
+    model.to_params.Constraints = [("Cost", None, 1.0)]
     try:
         model.evaluate(s["zeta"], s["beta"], s["eta"])
     except KeyError as e:
         assert "Cost column" in str(e), str(e)
     else:
-        raise AssertionError("COST without a Cost column did not raise")
+        raise AssertionError("Cost without a Cost column did not raise")
     finally:
         model.to_params.Objective, model.to_params.Constraints = saved
 
 
 def test_registry():
-    """Names are unique and every to_params form of an entry finds that entry."""
+    """Names are unique, each finds its entry, and each is an objective, a constraint or both."""
     from lsr_mmto.physics.structural import QUANTITIES as REGISTRY, find_quantity
     names = [q.name for q in REGISTRY]
     assert len(names) == len(set(names)), names
-    material = {"material_id": 0, "tau": 0.5}
     for q in REGISTRY:
-        for role, form in (("objective", q.objective), ("constraint", q.constraint)):
-            if form:
-                opt = material if form[1] == "material" else form[1]
-                assert find_quantity(TO_QOI[form[0]], opt, role) is q, (q.name, role)
+        assert find_quantity(q.name) is q, q.name
+        assert q.objective or q.constraint, q.name
 
 
 if __name__ == "__main__":

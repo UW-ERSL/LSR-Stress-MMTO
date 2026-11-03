@@ -398,12 +398,13 @@ def record_fea_diagnostics(history, iteration, x_phys, z, material_properties,
 
 
 def log_objective_and_constraints(history, obj, J_phys, Jn, P, Pn, Pzn, cons,
-                                  to_params, verbose=True):
+                                  to_params, verbose=True, material_labels=None):
     """Record objective/constraint history. In verbose mode print the full
-    Obj line + per-constraint lines (exactly as before); in simple mode print
-    one compact per-iteration line."""
+    Obj line + per-constraint lines; in simple mode print one compact per-iteration
+    line. Each constraint is named as the app names it."""
+    from lsr_mmto.physics.structural import quantity_label
     cons_flat = np.asarray(cons).flatten()
-    constraint_names = [getattr(c[0], "name", str(c[0])) for c in to_params.Constraints]
+    constraint_names = [quantity_label(c[0], c[1], material_labels) for c in to_params.Constraints]
 
     history["objective"].append(float(obj))
     history["constraints"].append(cons_flat.copy())
@@ -418,13 +419,10 @@ def log_objective_and_constraints(history, obj, J_phys, Jn, P, Pn, Pzn, cons,
             f"Pn={Pn:.3g} | Pz_n={Pzn:.3g} | f={float(obj):.4g}"
         )
         for idx, val in enumerate(cons_flat):
-            inequality = "<="
-            if constraint_names[idx] in ("STRESS_SAFETY_FACTOR", "TEMPERATURE_SAFETY_FACTOR"):
-                inequality = ">="
             print(
                 f"Constraint {idx+1} ({constraint_names[idx]}): "
                 f"{(val + 1) * to_params.Constraints[idx][2]:.3g} "
-                f"{inequality} {to_params.Constraints[idx][2]:.3g}?"
+                f"<= {to_params.Constraints[idx][2]:.3g}?"
             )
     else:
         mass = history["mass_ratio"][-1] if history["mass_ratio"] else float("nan")

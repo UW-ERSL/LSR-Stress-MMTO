@@ -109,26 +109,6 @@ def _panel_image(run, mesh, camera, size, png_path, view="iso", angles=(0, 0, 0,
     return img
 
 
-_OBJECTIVE_LABEL = {
-    "PNORM_STRESS": r"$p$-norm failure factor $\Phi_p$",
-    "COMPLIANCE":   "Compliance",
-    "MASS":         "Mass",
-}
-
-
-def _constraint_label(spec):
-    """Display name for one constraint, e.g. VOLUME_FRACTION with a material_id
-    becomes 'Volume fraction, material 1'."""
-    name = str(spec[0])
-    pretty = {"MASS": "Mass constraint", "COST": "Cost constraint",
-              "VOLUME_FRACTION": "Volume fraction",
-              "COMPLIANCE": "Compliance constraint"}.get(name, name + " constraint")
-    aux = spec[1] if len(spec) > 1 else None
-    if isinstance(aux, dict) and "material_id" in aux:
-        pretty += f", material {int(aux['material_id']) + 1}"
-    return pretty
-
-
 def convergence(run: Run, out=None):
     """Objective and every constraint as a fraction of its budget.
 
@@ -145,14 +125,12 @@ def convergence(run: Run, out=None):
         raise RenderError(f"{run.descriptor}: no objective history to plot")
     it = np.arange(1, J.size + 1)
 
-    obj = (run.config.get("topopt_params") or {}).get("Objective")
-    obj_label = _OBJECTIVE_LABEL.get(str(obj[0]) if obj else "",
-                                     r"$\Phi_p$ (objective)")
+    obj_label = run.objective_label
 
     cons = np.asarray(run.history.get("constraints", []), dtype=float)
     cons = cons.reshape(cons.shape[0], -1) if cons.size else cons
     n_con = cons.shape[1] if cons.size else 0
-    labels = [_constraint_label(c) for c in run.constraint_spec][:n_con]
+    labels = [run.constraint_label(i) for i in range(len(run.constraint_spec))][:n_con]
     while len(labels) < n_con:
         labels.append(f"Constraint {len(labels) + 1}")
 

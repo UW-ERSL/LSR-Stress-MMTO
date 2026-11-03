@@ -34,7 +34,6 @@ from lsr_mmto.pyto_ad import (
     createFilters,
     mat_lib,
     MaterialModel,
-    TO_QOI,
     runMMA,
     initialize_SIMP_STRUCTURAL_PENALTY,
     initialize_SIMP_THERMAL_PENALTY,
@@ -443,7 +442,7 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
         grad_cons = np.array(grad_cons).reshape((len(cons), num_design_var))
 
         log_objective_and_constraints(history, obj, J_phys, Jn, P, Pn, Pzn, cons,
-                                      to_params, verbose=verbose)
+                                      to_params, verbose=verbose, material_labels=material_labels)
         _last_zeta = zeta.copy()
         if progress is not None:
             progress({"iteration": int(mmaIterations), "objective": float(J_phys),
@@ -469,11 +468,9 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
         return np.array([[float(obj)]]), grad_obj, cons, grad_cons
 
     initialDensity = 0.5
-    for constraint in to_params.Constraints:
-        if constraint[0] == TO_QOI.VOLUME_FRACTION and not (
-            isinstance(constraint[1], dict) and ("material_id" in constraint[1])
-        ):
-            initialDensity = constraint[2]
+    for name, _, bound in to_params.Constraints:
+        if name == "VolumeFraction":
+            initialDensity = bound
             break
 
     d0 = initialDensity * np.ones(num_elems, dtype=float)

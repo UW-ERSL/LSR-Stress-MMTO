@@ -223,28 +223,26 @@ def parse_expression(text):
 
 
 def to_params_form(text, role, bound=None):
-    """The old to_params tuple for an expression: (TO_QOI, option) or (TO_QOI, option, bound)."""
+    """What to_params holds for an expression: (name, options) for the objective, (name, options,
+    bound) for a constraint; name is the quantity's, options None or {"material_id", "tau"}."""
     from lsr_mmto.physics.structural import DEFAULT_TAU, QUANTITIES
-    from lsr_mmto.pyto_ad import TO_QOI
     name, args, kwargs = parse_expression(text)
     by_name = {q.name: q for q in QUANTITIES}
     if name not in by_name:
         raise ValueError(f"expression {text!r}: unknown quantity {name!r}; "
                          f"known: {', '.join(by_name)}")
     q = by_name[name]
-    form = q.objective if role == "objective" else q.constraint
-    if form is None:
+    if not (q.objective if role == "objective" else q.constraint):
         raise ValueError(f"{name} cannot be the {role}")
-    qoi, kind = form
-    if kind == "material":
+    if name == "MaterialVolumeFraction":
         if len(args) != 1 or set(kwargs) - {"tau"}:
             raise ValueError(f"expression {text!r}: write MaterialVolumeFraction(material, tau=...)")
         opt = {"material_id": int(args[0]), "tau": float(kwargs.get("tau", DEFAULT_TAU))}
     else:
         if args or kwargs:
             raise ValueError(f"expression {text!r}: {name} takes no arguments")
-        opt = kind
-    return (TO_QOI[qoi], opt) if role == "objective" else (TO_QOI[qoi], opt, float(bound))
+        opt = None
+    return (name, opt) if role == "objective" else (name, opt, float(bound))
 
 
 def _supports_and_loads(picks):

@@ -34,18 +34,12 @@ def summary(run, show=True):
     rows.append(("latent dimension", str(run.n_latent)))
     rows.append(("materials available", str(len(run.material_names))))
     rows.append(("materials used", str(int(run.materials_used().size))))
-    rows.append(("objective, Phi_p", f"{run.phi_p:.4f}"))
+    rows.append((f"objective: {run.objective_label}", f"{run.final_objective:.4g}"))
     if np.isfinite(run.max_ff):
         rows.append(("max failure factor", f"{run.max_ff:.4f}"))
     rows.append(("grayness", f"{100 * run.grey:.2f}%"))
-    pretty = {"MASS": "mass", "COST": "cost",
-              "VOLUME_FRACTION": "volume fraction", "COMPLIANCE": "compliance"}
-    for i, spec in enumerate(run.constraint_spec):
-        name = pretty.get(str(spec[0]), str(spec[0]).lower().replace("_", " "))
-        aux = spec[1] if len(spec) > 1 else None
-        if isinstance(aux, dict) and "material_id" in aux:
-            name += f", material {int(aux['material_id']) + 1}"
-        rows.append((f"{name}, fraction of budget",
+    for i in range(len(run.constraint_spec)):
+        rows.append((f"{run.constraint_label(i)}, fraction of budget",
                      f"{run.utilisation(i):.4f}"))
 
     from .display import Table

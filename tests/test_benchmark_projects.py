@@ -31,8 +31,21 @@ _PER_RUN = ("to_problem", "save_dir", "verbose", "plot_progress", "plot_bcs", "p
             "relative_filter_radius", "material_filter_radius", "pnorm_exponent", "n_dof_desired")
 
 
-def _names(t):
-    return [getattr(x, "name", x) for x in t] if isinstance(t, tuple) else t
+# the reference keeps the paper code's form of each objective and constraint (its TO_QOI names);
+# the project's quantity in that form
+_PAPER_OBJECTIVE = {"Compliance": ["COMPLIANCE", None], "Mass": ["MASS", None],
+                    "StressPNorm": ["PNORM_STRESS", None], "FailureFactorPNorm": ["PNORM_STRESS", "FAILURE_FACTOR"]}
+_PAPER_CONSTRAINT = {"Compliance": "COMPLIANCE", "Mass": "MASS", "Cost": "COST",
+                     "FailureFactorPNorm": "STRESS_FAILURE_FACTOR", "VolumeFraction": "VOLUME_FRACTION",
+                     "MaterialVolumeFraction": "VOLUME_FRACTION"}
+
+
+def _paper_objective(t):
+    return _PAPER_OBJECTIVE[t[0]]
+
+
+def _paper_constraint(c):
+    return [_PAPER_CONSTRAINT[c[0]], c[1], c[2]]
 
 
 def compare_problem(example):
@@ -56,8 +69,8 @@ def compare_problem(example):
     keep = np.zeros(0, dtype=int) if tp.ElemsToKeep is None else np.unique(np.asarray(tp.ElemsToKeep, dtype=int))
     assert np.array_equal(keep, arrays[key + "__keep"]), "keep-solid elements"
 
-    assert _names(tp.Objective) == ref["objective"], "objective"
-    assert [_names(c) for c in tp.Constraints] == ref["constraints"], "constraints"
+    assert _paper_objective(tp.Objective) == ref["objective"], "objective"
+    assert [_paper_constraint(c) for c in tp.Constraints] == ref["constraints"], "constraints"
     for f in ("ExtrudeZ", "KeepFixedElems", "nDOFDesired", "RelativeFilterRadius", "MaterialFilterRadius"):
         assert getattr(tp, f) == ref[f], (f, getattr(tp, f), ref[f])
     assert os.path.basename(tp.MaterialsExcelFile) == ref["database"]

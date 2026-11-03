@@ -57,19 +57,13 @@ def table(runs):
     names = list(runs)
     rs = [runs[n] for n in names]
 
-    rows = [["objective, Phi_p"] + [f"{r.phi_p:.4f}" for r in rs]]
+    rows = [[f"objective: {rs[0].objective_label}"] + [f"{r.final_objective:.4g}" for r in rs]]
     if any(np.isfinite(r.max_ff) for r in rs):
         rows.append(["max failure factor"] + [f"{r.max_ff:.4f}" for r in rs])
     rows.append(["grayness"] + [f"{100 * r.grey:.2f}%" for r in rs])
 
-    pretty = {"MASS": "mass", "COST": "cost",
-              "VOLUME_FRACTION": "volume fraction", "COMPLIANCE": "compliance"}
-    for i, spec in enumerate(rs[0].constraint_spec):
-        name = pretty.get(str(spec[0]), str(spec[0]).lower().replace("_", " "))
-        aux = spec[1] if len(spec) > 1 else None
-        if isinstance(aux, dict) and "material_id" in aux:
-            name += f", material {int(aux['material_id']) + 1}"
-        rows.append([f"{name}, fraction of budget"] + [f"{r.utilisation(i):.4f}" for r in rs])
+    for i in range(len(rs[0].constraint_spec)):
+        rows.append([f"{rs[0].constraint_label(i)}, fraction of budget"] + [f"{r.utilisation(i):.4f}" for r in rs])
 
     rows.append(["solid elements"] + [f"{int(r.solid.sum())}" for r in rs])
     rows.append(["iterations"] + [f"{_iterations(r)}" for r in rs])
@@ -108,7 +102,7 @@ def histories(runs, out=None):
             cons = cons.reshape(cons.shape[0], -1) + 1.0      # stored as value/budget - 1
             for i in range(cons.shape[1]):
                 a_con.plot(np.arange(1, cons.shape[0] + 1), cons[:, i], ls, color=c, lw=1.2,
-                           label=f"{n}, constraint {i + 1}")
+                           label=f"{n}, {runs[n].constraint_label(i)}")
 
         g = np.asarray(h.get("grey", []), dtype=float).ravel()
         a_grey.plot(np.arange(1, g.size + 1), 100 * g, ls, color=c, lw=1.4, label=n)
@@ -119,11 +113,11 @@ def histories(runs, out=None):
             a_diff.semilogy(np.arange(1, m + 1), np.maximum(d, 1e-16), ls, color=c, lw=1.2,
                             label=f"{n} vs {names[0]}")
 
-    a_obj.set_title(r"objective $\Phi_p$")
+    a_obj.set_title(f"objective: {runs[names[0]].objective_label}")
     a_con.set_title("constraints, fraction of budget")
     a_con.axhline(1.0, color="#999999", lw=1.0, ls="--")
     a_grey.set_title("grayness (%)")
-    a_diff.set_title(r"relative difference in $\Phi_p$")
+    a_diff.set_title("relative difference in the objective")
     for a in (a_obj, a_con, a_grey, a_diff):
         a.set_xlabel("iteration")
         a.grid(True, color="#cccccc", lw=0.5, alpha=0.6)
