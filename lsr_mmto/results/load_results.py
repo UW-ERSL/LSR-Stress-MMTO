@@ -81,13 +81,13 @@ class Run:
     @property
     def objective_label(self) -> str:
         """The objective's name as the app shows it, e.g. 'Failure factor (p-norm)'."""
-        from lsr_mmto.physics.structural import quantity_label
+        from lsr_mmto.formulation.quantities import quantity_label
         obj = self.config.get("topopt_params", {}).get("Objective") or ["objective", None]
         return quantity_label(obj[0], obj[1] if len(obj) > 1 else None, self.material_labels)
 
     def constraint_label(self, i: int) -> str:
         """Constraint i's name as the app shows it, e.g. 'Material volume fraction of Ti-6Al-4V'."""
-        from lsr_mmto.physics.structural import quantity_label
+        from lsr_mmto.formulation.quantities import quantity_label
         spec = self.constraint_spec[i]
         return quantity_label(spec[0], spec[1] if len(spec) > 1 else None, self.material_labels)
 

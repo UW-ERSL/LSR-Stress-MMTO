@@ -60,7 +60,7 @@ from lsr_mmto.problem import selections as S
 from lsr_mmto.materials.databases import (ATTRIBUTES, DATABASE_DIR, DATABASE_VAE, UNIT_SYSTEMS, VAEParams,
                                          check_database, database_attributes, database_units, in_shipped_folder,
                                          recommended_latent_dim, unit_ratio)
-from lsr_mmto.physics import PHYSICS
+from lsr_mmto.physics.available_physics import PHYSICS
 from lsr_mmto.problem.settings import (BY_KEY, DEFAULT_SETTINGS, MESH_DEFAULTS, SETTINGS, VAE_PARAMS, pyto_ad_value,
                                        run_settings)
 
@@ -225,7 +225,7 @@ def parse_expression(text):
 def to_params_form(text, role, bound=None):
     """What to_params holds for an expression: (name, options) for the objective, (name, options,
     bound) for a constraint; name is the quantity's, options None or {"material_id", "tau"}."""
-    from lsr_mmto.physics.structural import DEFAULT_TAU, QUANTITIES
+    from lsr_mmto.formulation.quantities import DEFAULT_TAU, QUANTITIES
     name, args, kwargs = parse_expression(text)
     by_name = {q.name: q for q in QUANTITIES}
     if name not in by_name:
@@ -484,7 +484,7 @@ class Project:
             except ValueError:
                 continue
             if name == "MaterialVolumeFraction":
-                from lsr_mmto.physics.structural import DEFAULT_TAU
+                from lsr_mmto.formulation.quantities import DEFAULT_TAU
                 taus.add(float(kwargs.get("tau", DEFAULT_TAU)))
         if len(taus) > 1:
             listed = ", ".join(f"{t:g}" for t in sorted(taus))
@@ -505,7 +505,7 @@ class Project:
 
     def _missing_columns(self, columns):
         """Columns the physics and the objective and constraints read that the database lacks."""
-        from lsr_mmto.physics.structural import QUANTITIES
+        from lsr_mmto.formulation.quantities import QUANTITIES
         out = [f"material database: the {self.physics} model needs a {c} column"
                for c in (PHYSICS[self.physics].needs if self.physics in PHYSICS else ()) if c not in columns]
         by_name = {q.name: q for q in QUANTITIES}
@@ -523,7 +523,7 @@ class Project:
 
     def _unit_warnings(self, xlsx):
         """A database column in units other than the project's, with what it does to the results."""
-        from lsr_mmto.physics.structural import QUANTITIES
+        from lsr_mmto.formulation.quantities import QUANTITIES
         if self.units not in UNIT_SYSTEMS:
             return []
         system = UNIT_SYSTEMS[self.units]

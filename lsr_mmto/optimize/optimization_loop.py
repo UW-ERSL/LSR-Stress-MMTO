@@ -14,7 +14,7 @@ PIPELINE:
     MMA takes one step.
 
 Latents z are raw MMA variables (no forward filter); their *gradients* are
-optionally smoothed by _smooth_latent_gradient_inplace, gated by
+optionally smoothed by smooth_latent_gradient_inplace, gated by
 APPLY_LATENT_SENS_FILTER (note: plain (H@g)/Hs smoothing, not Sigmund's
 density-weighted form).
 """
@@ -41,7 +41,9 @@ from lsr_mmto.pyto_ad_imports import (
     increment_SIMP_THERMAL_PENALTY,
 )
 from lsr_mmto.materials.encoder import MaterialEncoder, NetworkRunCancelled, network_warning
-from lsr_mmto.physics import physics_module
+from lsr_mmto.physics.available_physics import physics_module
+from lsr_mmto.design.latent_penalties import (smooth_latent_constraint_gradient_inplace,
+                                              smooth_latent_gradient_inplace)
 from lsr_mmto.problem.settings import BetaScheduleScheme, Z0InitMethod
 from lsr_mmto.optimize.filters import create_density_and_material_filters
 from lsr_mmto.optimize.history import (
@@ -264,30 +266,6 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
         initialize_SIMP_STRUCTURAL_PENALTY(3)
         initialize_SIMP_THERMAL_PENALTY(1)
 
-    def _smooth_latent_gradient_inplace(vec: np.ndarray):
-        """Sensitivity-filter (in place) each latent block of an objective gradient.
-
-        Applies (H_material @ g)/Hs_material to each per-latent-dim slice. This is a
-        Sigmund-style regularizer on the latent gradient (z itself is not filtered).
-        """
-        for ell in range(latentDim):
-            sl = slice(
-                num_elems + ell * num_elems,
-                num_elems + (ell + 1) * num_elems,
-            )
-            vec[sl] = (H_material @ vec[sl]) / Hs_material
-
-    def _smooth_latent_constraint_gradient_inplace(mat: np.ndarray):
-        """Same latent-block sensitivity filter as above, for the constraint Jacobian."""
-        nCons = mat.shape[0]
-        for i in range(nCons):
-            for ell in range(latentDim):
-                sl = slice(
-                    num_elems + ell * num_elems,
-                    num_elems + (ell + 1) * num_elems,
-                )
-                mat[i, sl] = (H_material @ mat[i, sl]) / Hs_material
-
     def MMTO_optimization_function(zeta):
         """MMA callback: returns (obj, grad_obj, cons, grad_cons) for design zeta.
 
@@ -372,8 +350,8 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
 
         grad_obj_phys = grad_obj.copy()
         if APPLY_LATENT_SENS_FILTER:
-                    _smooth_latent_gradient_inplace(grad_obj_phys)
-                    _smooth_latent_constraint_gradient_inplace(grad_cons)
+                    smooth_latent_gradient_inplace(grad_obj_phys, H_material, Hs_material, num_elems, latentDim)
+                    smooth_latent_constraint_gradient_inplace(grad_cons, H_material, Hs_material, num_elems, latentDim)
 
         if use_z_smoothing:
             # RAW scaling, applied consistently every iteration. The z-smoothing

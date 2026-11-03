@@ -155,7 +155,7 @@ def test_missing_column_is_named():
 
 def test_registry():
     """Names are unique, each finds its entry, and each is an objective, a constraint or both."""
-    from lsr_mmto.physics.structural import QUANTITIES as REGISTRY, find_quantity
+    from lsr_mmto.formulation.quantities import QUANTITIES as REGISTRY, find_quantity
     names = [q.name for q in REGISTRY]
     assert len(names) == len(set(names)), names
     for q in REGISTRY:

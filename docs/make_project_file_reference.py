@@ -37,8 +37,8 @@ def _value(v):
 def generate():
     sys.path.insert(0, ROOT)
     from lsr_mmto.problem import selections as S
-    from lsr_mmto.physics.structural import QUANTITIES
-    from lsr_mmto.physics import PHYSICS
+    from lsr_mmto.formulation.quantities import QUANTITIES
+    from lsr_mmto.physics.available_physics import PHYSICS
     from lsr_mmto.problem.project import BC_KINDS
     from lsr_mmto.problem.settings import FROM_DATABASE, SETTINGS
     from lsr_mmto.materials.databases import ATTRIBUTES, UNIT_SYSTEMS

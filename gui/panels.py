@@ -412,7 +412,7 @@ class FormulationPanel(QtWidgets.QDialog):
     cannot give is greyed out with the reason."""
 
     def __init__(self, parent, project):
-        from lsr_mmto.physics.structural import QUANTITIES
+        from lsr_mmto.formulation.quantities import QUANTITIES
         super().__init__(parent)
         self.setWindowTitle("Formulation")
         self.resize(760, 420)
@@ -456,7 +456,7 @@ class FormulationPanel(QtWidgets.QDialog):
 
     def _stored_tau(self):
         """The tau of the project's material volume fraction constraints (the first, if they differ)."""
-        from lsr_mmto.physics.structural import DEFAULT_TAU
+        from lsr_mmto.formulation.quantities import DEFAULT_TAU
         from lsr_mmto.problem.project import parse_expression
         for c in self.original.get("constraints", []):
             try:
@@ -638,7 +638,7 @@ def formulation_lines(f, project):
             name, args, _ = parse_expression(expression)
         except ValueError:
             return expression
-        from lsr_mmto.physics.structural import QUANTITIES
+        from lsr_mmto.formulation.quantities import QUANTITIES
         shown = next((q.shown for q in QUANTITIES if q.name == name), name)
         if name == "MaterialVolumeFraction" and args:
             i = int(args[0])

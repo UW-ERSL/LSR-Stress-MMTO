@@ -402,7 +402,7 @@ def log_objective_and_constraints(history, obj, J_phys, Jn, P, Pn, Pzn, cons,
     """Record objective/constraint history. In verbose mode print the full
     Obj line + per-constraint lines; in simple mode print one compact per-iteration
     line. Each constraint is named as the app names it."""
-    from lsr_mmto.physics.structural import quantity_label
+    from lsr_mmto.formulation.quantities import quantity_label
     cons_flat = np.asarray(cons).flatten()
     constraint_names = [quantity_label(c[0], c[1], material_labels) for c in to_params.Constraints]
 
