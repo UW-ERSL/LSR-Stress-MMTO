@@ -218,11 +218,11 @@ def test_benchmark_unit_warnings():
     for name in ("L-bracket", "U-bracket", "beam", "Airplane bracket"):
         p = Project.load(os.path.join(ROOT, "projects", f"{name}.mmto"))
         counts[name] = (p.units, [w.split("the database gives ")[1].split(" in ")[0] for w in p.warnings()])
-    assert counts == {"L-bracket": ("mmKS", ["Youngs Modulus"]), "U-bracket": ("none", []),
-                      "beam": ("mmKS", ["Density", "Youngs Modulus"]),
-                      "Airplane bracket": ("mmKS", ["Density", "Youngs Modulus", "Cost"])}, counts
+    assert counts == {"L-bracket": ("mmKS", ["Young's modulus"]), "U-bracket": ("none", []),
+                      "beam": ("mmKS", ["Density", "Young's modulus"]),
+                      "Airplane bracket": ("mmKS", ["Density", "Young's modulus", "Cost"])}, counts
     w = Project.load(os.path.join(ROOT, "projects", "Airplane bracket.mmto")).warnings()
-    assert "the bound 4e+07 means 4e-05 t" in w[0] and "the bound 7.5e+08 means 0.75 USD" in w[2]
+    assert "limit of 4e+07 is really a limit of 4e-05 t" in w[0] and "limit of 7.5e+08 is really a limit of 0.75 USD" in w[2]
 
 
 def test_project_uses_the_check():
@@ -258,10 +258,10 @@ def test_project_uses_the_check():
         p.settings["vae"]["latentDim"] = n_z
 
         p.units = "mmKS"                                       # GOOD is in Pa: Y too
-        assert "the design is unaffected" in "\n".join(p.warnings())          # the failure factor as objective
+        assert "not the design" in "\n".join(p.warnings())          # the failure factor as objective
         p.objective("Compliance()")
         p.constraint("FailureFactorPNorm()", "<=", 1.0)                       # and as a constraint
-        assert "FailureFactorPNorm() <= 1 is a different problem" in "\n".join(p.warnings())
+        assert "Failure factor (p-norm) comes out" in "\n".join(p.warnings())
         p.units = "Imperial"
         assert any("units 'Imperial'" in e for e in p.validate())
         p.units = "none"

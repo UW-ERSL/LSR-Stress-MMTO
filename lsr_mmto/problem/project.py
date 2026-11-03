@@ -401,7 +401,7 @@ class Project:
             if abs(r - 1.0) < 1e-12:
                 continue
             a = ATTRIBUTES[name]
-            say = (f"the database gives {name.replace('_', ' ')} in {units[name]}, but the project's units "
+            say = (f"the database gives {a.shown} in {units[name]}, but the project's units "
                    f"({self.units}) expect {system[a.measures]}: its numbers are {times(r)} times what they "
                    f"should be.")
             if a.wrong_unit_effect:
@@ -423,12 +423,11 @@ class Project:
             unit = q.unit.format(**system) if "{" in q.unit else q.unit
             unit = "" if unit == "no units" or unit.startswith("fraction") else f" {unit}"
             if bound is None:
-                out[at[off[0]]] += (f" {name}() comes out {times(factor)} times its value; the design is "
-                                    f"unaffected, since the objective is only scaled.")
+                out[at[off[0]]] += (f" {q.shown} comes out {times(factor)} times its real value. As the "
+                                    f"objective that changes only the numbers shown, not the design.")
             else:
-                out[at[off[0]]] += (f" {name}() comes out {times(factor)} times its value, so the constraint "
-                                    f"{name}() <= {bound:g} is a different problem: the bound {bound:g} means "
-                                    f"{bound / factor:g}{unit}.")
+                out[at[off[0]]] += (f" {q.shown} comes out {times(factor)} times its real value, so its limit "
+                                    f"of {bound:g} is really a limit of {bound / factor:g}{unit}.")
         return out
 
     def warnings(self):

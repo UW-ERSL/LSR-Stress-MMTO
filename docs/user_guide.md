@@ -601,7 +601,7 @@ These appear in the messages as **Error:** lines, and under *Cannot start:* in t
 
 ### 14.3 Units
 
-- Warning **the database gives Youngs Modulus in Pa, but the project's units (mmKS) expect MPa: its numbers are 10^6 times what they should be. Displacement and compliance come out 10^6 times too small; stress and failure factor are unaffected.** The database and the project use different unit systems. The message says what it changes, sometimes including what a constraint's limit then really means. Either change the project's units (section 4) to match the database, or make a database in the project's units.
+- Warning **the database gives Young's modulus in Pa, but the project's units (mmKS) expect MPa: its numbers are 10^6 times what they should be. Displacement and compliance come out 10^6 times too small; stress and failure factor are unaffected.** The database and the project use different unit systems. The message says what it changes, sometimes including what a constraint's limit then really means. Either change the project's units (section 4) to match the database, or make a database in the project's units.
 
 ### 14.4 Supports and loads
 
