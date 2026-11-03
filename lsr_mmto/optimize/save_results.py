@@ -344,6 +344,11 @@ def write_run_config_yaml(config, path):
 SCHEMA_VERSION = 2          # 2: the physics' per-element results by name (results), not a von_mises field
 
 
+def files_written():
+    """The names of the files save_run_data writes into a run's folder."""
+    return ["run_data.npz", "run_data.config.json", "run_config.yaml"] + (["run_data.pkl"] if SAVE_PICKLE else [])
+
+
 def save_run_data(save_dir, config, fields, vae_state_dict, history,
                   example_name, z_real_points, material_colors, material_names,
                   latent_dim, num_elems, num_nodes, material_labels=None, results=None):

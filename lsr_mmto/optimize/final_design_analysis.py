@@ -92,4 +92,4 @@ def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
             num_elems=num_elems,
             num_nodes=int(fe_solver.mesh.num_nodes),
         )
-        print(f"[SAVE] run_data.pkl + run_config.yaml -> {save_dir}")
+        print(f"[SAVE] {', '.join(run_save.files_written())} -> {save_dir}")
