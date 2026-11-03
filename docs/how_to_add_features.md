@@ -118,6 +118,30 @@ settings a run gets are made from it. `test_settings_cover_run_topopt` in
 `tests/test_extending.py` shows one entry reaching every place. What else to run: both generators
 above (the reference page and the user guide list every setting).
 
+## A constraint method
+
+What is done with the constraints during a run. Today there is one, MMA, which hands them to its
+subproblem as constraints (g <= 0). A method is one entry of `CONSTRAINT_METHODS` in
+`lsr_mmto/optimize/optimization_loop.py`, `{"run": run, "record": record}`:
+
+- `run(state, evaluate, zeta0, lower, upper)` returns `(zeta_optimal, record)`. `evaluate(zeta)` gives,
+  for a design, the objective (divided by its first value, with the penalties), the constraint values
+  (met when <= 0) and the gradients of both with respect to the optimizer's variables, in the shapes
+  (1, 1), (n, 1), (m, 1) and (m, n). `zeta0` is the start design, `lower` and `upper` the bounds of
+  every variable. `run` calls `evaluate` as often as it needs and returns the best design it reached
+  (shape (n,)) and what the run record should keep of how it ran.
+- `record(state)` is that record on its own, used when the run is stopped from the window.
+- `state` is the run's `RunState`: its settings as `state.s`, the iteration count, the problem's
+  parameters (`state.to_params.Constraints`, `MaxIterations`), the number of variables.
+- What `evaluate` does for each design is `ITERATION_STEPS` in the same file, in order; the module's
+  header lists them. A method changes nothing there.
+
+Its settings are entries of `SETTINGS` (see "A setting"), read as `state.s.<name>`. With a second
+method comes the setting that chooses between them; `CONSTRAINT_METHOD` names the one used today.
+
+What else to run: `tests/test_regression.py` compares the first iterations of every shipped project
+with stored values; with MMA chosen they must not change.
+
 ## A material attribute
 
 One entry in `ATTRIBUTES` in `lsr_mmto/materials/databases.py`: its name, what it measures (one of

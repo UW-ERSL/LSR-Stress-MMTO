@@ -1,24 +1,40 @@
 """
-The optimization loop: density topology + VAE-decoded materials, MMA optimizer, for any physics
-on the list in physics/available_physics.py.
+The optimization loop: density topology + VAE-decoded materials, for any physics on the list in
+physics/available_physics.py.
 
-PIPELINE:
-    zeta = [x ; z]                         design vector (MMA variables)
+    run(p) -> _run_topopt(...) = optimize(setup(...))
+
+setup(...)          builds everything before the first design: the problem, the material network, the
+                    solver, the filters, the autodiff model (optimize/design_model.py), the start design
+                    and the bounds; returns the RunState
+evaluate(state, zeta)
+                    one design through ITERATION_STEPS, in order (each a function step(state, it)):
+                    stop_if_asked, penalties_switched_off_on_schedule, analyse_design,
+                    objective_and_constraints, keep_solid, latent_sensitivity_filter,
+                    latent_smoothing_penalty, distance_penalty_step, chain_to_design_variables, record,
+                    continuation; returns the objective (scaled by its first value, with the penalties),
+                    its gradient, the constraints and their gradients, with respect to the optimizer's
+                    variables
+optimize(state)     the constraint method runs from the start design, asking evaluate() about each design;
+                    then the run record and the final analysis (optimize/final_design_analysis.py)
+
+THE DESIGN THROUGH ONE ITERATION:
+    zeta = [x ; z]                         design vector (the optimizer's variables)
       x  -> x_filt = (H_density @ x)/Hs    density filter
       x_filt -> x_phys = Heaviside(x_filt) optional projection (density only)
       z  -> decode (VAE) -> per-element material properties (the physics' PROPERTIES)
     the physics' analyse (its front page): the solve(x_phys) and what its quantities read
       -> objective/constraints
-    all of the above is one torch tree (optimize/design_model.py, MMTOModelAD);
-    gradients by autograd, through PyTO-AD's solve
-    optional penalties (latent z-smoothing, distance-to-real-material) added here
+    all of the above is one torch tree; gradients by autograd, through PyTO-AD's solve
+    optional penalties (latent z-smoothing, distance-to-real-material) added to the objective
     gradient carried back through Heaviside + density filter by autograd -> w.r.t. x
-    MMA takes one step.
 
-Latents z are raw MMA variables (no forward filter); their *gradients* are
-optionally smoothed by smooth_latent_gradient_inplace, gated by
-APPLY_LATENT_SENS_FILTER (note: plain (H@g)/Hs smoothing, not Sigmund's
-density-weighted form).
+Latents z are raw design variables (no forward filter); their *gradients* are optionally smoothed by
+smooth_latent_gradient_inplace, gated by APPLY_LATENT_SENS_FILTER (switched off).
+
+A CONSTRAINT METHOD decides what is done with the constraints. CONSTRAINT_METHODS holds one, MMA, which
+hands them to its subproblem as constraints (g <= 0). How to add another: docs/how_to_add_features.md,
+"A constraint method".
 """
 import numpy as np
 import torch
@@ -575,12 +591,13 @@ def evaluate(state, zeta):
 def optimize(state):
     """The constraint method runs from the start design; then the run record and the final analysis."""
     s, to_params, history = state.s, state.to_params, state.history
+    method = CONSTRAINT_METHODS[CONSTRAINT_METHOD]
     tStart = time.time()
     try:
-        zetaOptimal, method_settings = mma(state, lambda zeta: evaluate(state, zeta),
-                                           state.zeta0, state.lower, state.upper)
+        zetaOptimal, method_settings = method["run"](state, lambda zeta: evaluate(state, zeta),
+                                                     state.zeta0, state.lower, state.upper)
     except _StopRequested:                     # stopped from outside: the last design evaluated
-        zetaOptimal, method_settings = state.last_zeta, mma_record(state)
+        zetaOptimal, method_settings = state.last_zeta, method["record"](state)
         state.during_run["stopped_at_iter"] = int(state.iteration)
         print(f"Stopped at iteration {state.iteration}; saving the design reached so far.")
     except Exception as e:                     # the optimizer failed: say which constraints were far off, if any
@@ -683,3 +700,19 @@ def mma(state, evaluate_design, zeta0, lower, upper):
         verbose=False,
     )
     return np.asarray(optResults[0]).flatten(), mma_record(state)
+
+
+# ---------------------------------------------------------------------- the constraint methods
+# A constraint method is {"run": run, "record": record}:
+#   run(state, evaluate, zeta0, lower, upper) -> (zeta_optimal, record)
+#       evaluate(zeta) gives, for a design, (objective, its gradient, constraints, their gradients),
+#       the objective scaled and with the penalties, every gradient with respect to the optimizer's
+#       variables (shapes (1, 1), (n, 1), (m, 1), (m, n)); constraints are met when <= 0.
+#       zeta0 is the start design, lower and upper the bounds of every variable, all (n, 1).
+#       run returns the best design it reached (n,) and what the run record keeps of how it ran.
+#   record(state) -> what the run record keeps, also when the run is stopped from the window.
+# Its settings are entries of SETTINGS (problem/settings.py), read as state.s.<name>.
+CONSTRAINT_METHODS = {
+    "MMA": {"run": mma, "record": mma_record},
+}
+CONSTRAINT_METHOD = "MMA"          # the one there is; a second method comes with the setting that chooses it
