@@ -134,7 +134,7 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
                         f"not {to_problem!r}; the coded examples are now the project files in projects/")
     physics = physics_module(to_problem.physics)            # the front page of the project's physics
     problem = to_problem
-    mesh_structural, mat_prop_struct, bcs, elem_body_force, to_params, vae_params = problem.build()
+    mesh, mat_prop, bcs, elem_body_force, to_params, vae_params = problem.build()
     print(f"[SWEEP] nDOFDesired={to_params.nDOFDesired}  "
           f"RelativeFilterRadius={to_params.RelativeFilterRadius}  "
           f"MaterialFilterRadius={to_params.MaterialFilterRadius}  "
@@ -203,31 +203,30 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
     #     fe_solver.solver and fe_solver.dsolver, so it follows this choice automatically.
     from lsr_mmto.pyto_ad_imports import DIRECT_SOLVER_DOF_CUTOFF    # dof limit for the direct solver; above it, DPCG
 
-    solver = linear_solvers.Solvers.PARDISO
+    linear_solver = linear_solvers.Solvers.PARDISO
     dsolver = deflation.DeflationSolver()
     if to_params.nDOFDesired > DIRECT_SOLVER_DOF_CUTOFF and physics.deflation_space is not None:
-        solver = linear_solvers.Solvers.DPCG
-        physics.deflation_space(dsolver, mesh_structural)
-    print("Solver:", solver.name)
+        linear_solver = linear_solvers.Solvers.DPCG
+        physics.deflation_space(dsolver, mesh)
+    print("Solver:", linear_solver.name)
 
-    fe_solver_structural = physics.make_solver(mesh_structural, mat_prop_struct, bcs, solver, dsolver,
-                                               elem_body_force)
+    solver = physics.make_solver(mesh, mat_prop, bcs, linear_solver, dsolver, elem_body_force)
 
-    num_dof = fe_solver_structural.bc.num_dofs
+    num_dof = solver.bc.num_dofs
     print(f"Number of DOF: {num_dof}")
 
-    num_elems = mesh_structural.num_elems
+    num_elems = mesh.num_elems
     latentDim = matEncoder.vae_params.latentDim
     num_design_var = num_elems + num_elems * latentDim
     print(f"Using latent dimension: {latentDim}")
-    elem_volume = float(np.prod(fe_solver_structural.mesh.elem_size))
-    design_domain_volume = compute_domain_volume(fe_solver_structural)
+    elem_volume = float(np.prod(solver.mesh.elem_size))
+    design_domain_volume = compute_domain_volume(solver)
     print("Creating filter...")
     H_density, Hs_density, H_material, Hs_material = create_density_and_material_filters(
-        fe_solver_structural, to_params, createFilters
+        solver, to_params, createFilters
     )
     ad_model = MMTOModelAD(
-        fe_solver_structural, physics, matEncoder, H_density, Hs_density, H_material, Hs_material,
+        solver, physics, matEncoder, H_density, Hs_density, H_material, Hs_material,
         zRealPoints_np, to_params, s, elem_volume,
     )
 
@@ -235,7 +234,7 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
     # ---- visualize loads & boundary conditions before optimization ----
     if plot_bcs:
             print("[plot_bcs] opening interactive loads/BCs window...")
-            fe_solver_structural.plot_mesh(
+            solver.plot_mesh(
                 title="Loads & BCs (red = applied force, black = fixed/symmetry DOFs)",
                 plot_bc=True,
                 rel_arrow_scale=0.1,
@@ -320,7 +319,7 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
         log_design_state(history, mmaIterations, x_phys, z, material_properties,
                          zTorch, matEncoder, num_elems, beta_proj, s.eta_proj, verbose=verbose)
 
-        physics.iteration_diagnostics(history, mmaIterations, fe_solver_structural, x_phys, material_properties,
+        physics.iteration_diagnostics(history, mmaIterations, solver, x_phys, material_properties,
                                       elem_volume, design_domain_volume, plot_progress=plot_progress,
                                       plotter=plotter, verbose=verbose)
 
@@ -528,7 +527,7 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
     run_config = _save.build_run_config(
         example_name=getattr(to_problem, "name", str(to_problem)),
         run_args=_run_args, to_params=to_params, vae_params=vae_params,
-        beta_schedule=beta_schedule, mesh=mesh_structural, bcs=bcs, fields=physics.FIELDS,
+        beta_schedule=beta_schedule, mesh=mesh, bcs=bcs, fields=physics.FIELDS,
         mat_encoder=matEncoder, z_real_points=zRealPoints,
         material_colors=material_colors, material_labels=material_labels,
         mma_settings={"optimizer": "MMA (mmaWrapper)", "kktTol": MMA_KKT_TOL,
@@ -554,7 +553,7 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
     run_postprocessing(
         history=history,
         zetaOptimal=zetaOptimal,
-        fe_solver=fe_solver_structural,
+        fe_solver=solver,
         matEncoder=matEncoder,
         mat_lib=mat_lib,
         MaterialModel=MaterialModel,
