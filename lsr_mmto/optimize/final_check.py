@@ -68,12 +68,12 @@ def eval_stress_compliance_metrics(
     if final_mass is not None:
         print(f" Final mass       : {final_mass:.6g}")
         print(
-            f" Mass ratio       : {mass_ratio:.6g} "
-            f"(final mass / volume of original design domain before optimization)"
+            f" Mass / design volume : {mass_ratio:.6g} "
+            f"(final mass divided by the volume of the design domain: a density, not a ratio)"
         )
     else:
         print(" Final mass       : N/A (Density not present in material database)")
-        print(" Mass ratio       : N/A (Density not present in material database)")
+        print(" Mass / design volume : N/A (Density not present in material database)")
     if max_failure_factor is not None:
         print(f" Max failure factor : {max_failure_factor:.6g}")
     else:

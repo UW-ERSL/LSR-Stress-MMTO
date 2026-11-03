@@ -246,7 +246,7 @@ def update_paper_history(
 ):
     """
     Update paper-style histories:
-      - mass ratio
+      - mass ratio: final mass / volume of the design domain (a density, kept under its old name)
       - maximum failure factor
 
     If Density or Yield_Strength are unavailable, store np.nan.
@@ -431,6 +431,6 @@ def log_objective_and_constraints(history, obj, J_phys, Jn, P, Pn, Pzn, cons,
             f"{constraint_names[idx]}={(val + 1) * to_params.Constraints[idx][2]:.3g}"
             for idx, val in enumerate(cons_flat)
         )
-        print(f"[iter] f={float(obj):.4g} J={J_phys:.4g} mass={mass:.3g} "
+        print(f"[iter] f={float(obj):.4g} J={J_phys:.4g} mass/V={mass:.3g} "
               f"maxFF={maxff:.3g} | {cons_str}")
 
