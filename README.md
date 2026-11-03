@@ -6,6 +6,12 @@ Stress-based multi-material topology optimization in a learned latent space.
 
 Install below, then open `Tutorial.ipynb` to reproduce the paper's examples.
 
+## What LSR MMTO is
+
+LSR MMTO designs parts made of several materials: it decides where material goes in the part and which material from a database goes where. The materials sit in a learned material space, so the optimization can move from one material to another smoothly. A problem is set up, run and exported in the LSR MMTO GUI, from the part's STL to the optimized design as STL, or in a short Python script.
+
+Today it solves structural problems, with stiffness, mass, cost, volume and stress as the objective or the constraints. Thermal problems, and thermoelastic problems with temperature-dependent material properties, are in development.
+
 ## Installation
 
 First, download the code: on this page, switch the branch menu (top left, it says `main`) to **autodiff**, then click the green **Code** button, then **Download ZIP**, and unzip it anywhere. With git instead: `git clone -b autodiff https://github.com/UW-ERSL/LSR-Stress-MMTO.git`.
@@ -104,8 +110,10 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 | `run_gui.py` | starts the LSR MMTO GUI: `python run_gui.py`, or `python run_gui.py projects/beam.mmto` |
 | `make_shortcut.py` | adds LSR MMTO to the Start menu and the desktop (Windows); the setup runs it, and running it again (`python make_shortcut.py`, with the environment active) repairs the shortcuts after the folder moves |
 | `projects/` | the four examples as project files: geometry, supports, loads, materials, objective, constraints, settings |
+| `docs/how_the_code_works.md` | how the code is laid out, and what happens in one run |
 | `docs/project_file_reference.md` | everything a project file can hold, generated from the code |
-| `docs/how_to_add_features.md` | how to add a quantity, a selection type, a boundary condition, a setting, a material attribute or a database |
+| `docs/how_to_add_features.md` | how to add a quantity, a selection type, a kind of support or load, a setting, a material attribute, a physics or a database |
+| `CONTRIBUTING.md` | how changes to the code are made and checked |
 | `docs/make_project_file_reference.py` | writes `docs/project_file_reference.md` from the code |
 | `setup_environment.py` | installs everything; see Installation |
 | `requirements.txt` | Python packages the setup installs |
@@ -139,7 +147,7 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad_imp
 | `project.py` | a project: saves and loads it, checks it, builds the problem, runs it (`run(p)`) |
 | `settings.py` | every setting, one entry each: its default, label, help and place in the Settings panel |
 | `selections.py` | named selections of the mesh that supports, loads and keep-solid regions act on |
-| `boundary_conditions.py` | what a kind of support or load is (`BCKind`), and the list of kinds |
+| `boundary_conditions.py` | what a kind of support or load is (`BCKind`), and the list of kinds of every physics |
 | `project_folder.py` | keeps everything a project uses in its folder |
 | `mesh.py` | turns the part's STL into the voxel mesh |
 
@@ -176,10 +184,10 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad_imp
 
 | File | Purpose |
 |---|---|
-| `available_physics.py` | the list of physics a project may name, and the module of each |
-| `structural/structural_module.py` | what the structural module offers the optimization |
-| `structural/structural_physics.py` | the finite element solve, element stress, von Mises, p-norm |
-| `structural/structural_supports_and_loads.py` | the structural supports and loads: fixed, displacement, force, traction |
+| `available_physics.py` | the list of physics a project may name, and what each one's front page gives |
+| `structural/structural_module.py` | the structural module's front page: everything the rest of the code takes from it |
+| `structural/structural_physics.py` | the structural solver, one iteration's solve, element stress, von Mises, p-norm |
+| `structural/structural_supports_and_loads.py` | the structural supports and loads: fixed, displacement, force, traction, and the check that they hold the part |
 | `structural/structural_quantities.py` | compliance, stress and failure factor, and the structural measurements of each iteration and of the final design |
 
 #### `lsr_mmto/optimize/`
@@ -187,7 +195,7 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad_imp
 | File | Purpose |
 |---|---|
 | `optimization_loop.py` | the optimization loop; internal, a project runs it only through `run(p)` |
-| `design_model.py` | one iteration: design, properties, physics, objective and constraints |
+| `design_model.py` | one iteration: design, properties, the physics' solve, objective and constraints |
 | `mmto_to_params.py` | the parameter container the loop reads |
 | `filters.py` | the density and material filters |
 | `history.py` | what each iteration records and prints |

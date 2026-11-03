@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "lsr_mmto"
 version = "0.1.0"
-description = "LSR MMTO: stress-based multi-material topology optimization in a learned latent space"
+description = "LSR MMTO: multi-material multiphysics topology optimization in a learned material space"
 requires-python = ">=3.10"
 
 [tool.setuptools.packages.find]
