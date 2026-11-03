@@ -60,6 +60,12 @@ deflation_space = None                                             # FILL, if yo
 # two values needs no load, so only a support is needed. Structural is ("support", "load").
 NEEDS = ("support",)                                               # FILL
 
+# UNIT_KINDS: the kinds of quantity this physics' own values and quantities measure that the core does
+# not have (the core has length, density, mass, cost per mass and ratio), each with its units' values in
+# SI and its unit in each unit system (MKS, mmKS, IPS). Read by materials/databases.py, which adds them to
+# UNITS and UNIT_SYSTEMS. Structural gives force and stress. Diffusion's values have no unit, so none.
+UNIT_KINDS = {}                                                    # FILL, e.g. {"temperature": {...}}
+
 # SETTINGS: settings of this physics only, each the arguments of a Setting (problem/settings.py): its
 # section ("common" shows in Main, "advanced" in Advanced), key (read as m.settings.<key>), default,
 # label and help in the Settings panel, and the group it sits in. May be empty.

@@ -128,8 +128,11 @@ dimensionless; its units cell may be left blank.
     Attribute("Yield_Strength", "stress", "yield strength, the stress at which the material yields",
               "Yield strength", low=0, aliases=("Yield Strength", "Yield")),
 
-A new kind of quantity (a conductivity, say) is a new entry in `UNITS`, with each unit's value
-in SI, and one in each of `UNIT_SYSTEMS`.
+A new kind of quantity (a conductivity, say) belongs to the physics that uses it: an entry in
+`UNIT_KINDS` on its front page, with each unit's value in SI and its unit in each unit system
+(`structural_module.py` gives force and stress this way). Only a kind every problem has (length,
+density, mass, cost per mass) is an entry in `UNITS` and `UNIT_SYSTEMS` in
+`lsr_mmto/materials/databases.py`.
 
 A database column not in `ATTRIBUTES` is an error, so a new attribute is added here before
 it is used. The check, the template and the database editor follow. Add a case to

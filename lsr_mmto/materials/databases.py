@@ -52,11 +52,10 @@ DATABASE_VAE = {
 _IN, _LBF, _LB = 0.0254, 4.4482216152605, 0.45359237           # inch in m, pound-force in N, pound in kg
 _SLINCH = _LBF / _IN                                            # lbf s^2/in, the IPS unit of mass, in kg
 
-# what one unit is in SI, for each kind of quantity
+# what one unit is in SI, for each kind of quantity every problem has (the part, its materials);
+# each physics adds the kinds of its own values and quantities (UNIT_KINDS on its front page)
 UNITS = {
     "length": {"m": 1.0, "mm": 1e-3, "in": _IN},
-    "force": {"N": 1.0, "lbf": _LBF},
-    "stress": {"Pa": 1.0, "kPa": 1e3, "MPa": 1e6, "GPa": 1e9, "psi": _LBF / _IN ** 2, "ksi": 1e3 * _LBF / _IN ** 2},
     "density": {"kg/m^3": 1.0, "g/cm^3": 1e3, "t/mm^3": 1e12, "lb/in^3": _LB / _IN ** 3,
                 "lbf*s^2/in^4": _SLINCH / _IN ** 3},
     "mass": {"kg": 1.0, "t": 1e3, "lbf*s^2/in": _SLINCH},
@@ -67,13 +66,33 @@ UNITS = {
 # The unit systems of the PyTO-AD GUI (settings.unit_system in a .mmto file). A project
 # without one is "none": its units are not checked.
 UNIT_SYSTEMS = {
-    "MKS":  {"length": "m", "force": "N", "stress": "Pa", "density": "kg/m^3", "mass": "kg",
-             "cost per mass": "USD/kg"},
-    "mmKS": {"length": "mm", "force": "N", "stress": "MPa", "density": "t/mm^3", "mass": "t",
-             "cost per mass": "USD/t"},
-    "IPS":  {"length": "in", "force": "lbf", "stress": "psi", "density": "lbf*s^2/in^4", "mass": "lbf*s^2/in",
-             "cost per mass": "USD/(lbf*s^2/in)"},
+    "MKS":  {"length": "m", "density": "kg/m^3", "mass": "kg", "cost per mass": "USD/kg"},
+    "mmKS": {"length": "mm", "density": "t/mm^3", "mass": "t", "cost per mass": "USD/t"},
+    "IPS":  {"length": "in", "density": "lbf*s^2/in^4", "mass": "lbf*s^2/in", "cost per mass": "USD/(lbf*s^2/in)"},
 }
+
+
+def _add_unit_kinds(module):
+    """A physics' own kinds of quantity (its UNIT_KINDS: {kind: {"units": {unit: value in SI}, and the
+    kind's unit in each unit system}}) added to UNITS and UNIT_SYSTEMS. A kind another physics gives
+    too must be given the same way."""
+    for kind, spec in module.UNIT_KINDS.items():
+        units = dict(spec["units"])
+        if kind in UNITS and UNITS[kind] != units:
+            raise ValueError(f"physics {module.NAME}: the units of {kind!r} differ from another physics'")
+        for system in UNIT_SYSTEMS:
+            if spec[system] not in units:
+                raise ValueError(f"physics {module.NAME}: {kind!r} in {system} is {spec[system]!r}, "
+                                 f"not one of its units ({', '.join(units)})")
+        UNITS[kind] = units
+        for system, table in UNIT_SYSTEMS.items():
+            table[kind] = spec[system]
+
+
+from lsr_mmto.physics.available_physics import MODULES  # noqa: E402  (the physics give their own kinds)
+
+for _module in MODULES:
+    _add_unit_kinds(_module)
 
 
 def unit_ratio(measures, unit, system):
