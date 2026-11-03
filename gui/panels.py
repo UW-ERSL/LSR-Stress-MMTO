@@ -484,7 +484,7 @@ class FormulationPanel(QtWidgets.QDialog):
         combo = QtWidgets.QComboBox()
         model = QtGui.QStandardItemModel()
         for name, q in self.quantities.items():
-            if (q.objective if role == "objective" else q.constraint) is None:
+            if not (q.objective if role == "objective" else q.constraint):
                 continue
             item = QtGui.QStandardItem(q.shown)
             item.setData(name, QtCore.Qt.UserRole)
