@@ -561,7 +561,7 @@ class Project:
                 value = getattr(self, e.key) if e.section == "mesh" else self.settings[e.section][e.key]
                 setattr(to_params, e.pyto_ad_field, pyto_ad_value(e, value))
         for e in SETTINGS:                                          # every setting PyTO-AD keeps elsewhere
-            if e.at_build is not None:
+            if e.at_build is not None and e.applies_to(self.physics):   # this project's physics' only
                 e.at_build(getattr(self, e.key) if e.section == "mesh" else self.settings[e.section][e.key])
         xlsx, _ = self.database_paths()
         to_params.MaterialsExcelFile = xlsx

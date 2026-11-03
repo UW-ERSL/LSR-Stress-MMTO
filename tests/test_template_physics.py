@@ -33,7 +33,7 @@ def registered(module):
     from lsr_mmto.problem import boundary_conditions, settings
     available_physics._checked(module)
     added_q = [quantities.Quantity(physics=[module.NAME], **q) for q in module.QUANTITIES]
-    added_s = [settings.Setting(**a) for a in module.SETTINGS]
+    added_s = [settings.Setting(physics=module.NAME, **a) for a in module.SETTINGS]
     available_physics.MODULES.append(module)
     available_physics.PHYSICS[module.NAME] = module
     quantities.QUANTITIES.extend(added_q)
@@ -63,6 +63,22 @@ def _project(name, stl, base_dir, n_dof):
     p.objective("DiffusionCompliance()")
     p.constraint("VolumeFraction()", "<=", 0.5)
     return p
+
+
+def test_a_project_sees_only_its_own_physics_settings():
+    """The Settings panel shows the settings every project has and those of the project's own physics, each
+    group once; the build sets only that physics' settings that PyTO-AD keeps elsewhere."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from gui import settings_panel
+    with registered(TEMPLATE):
+        structural, template = (set(settings_panel.all_setting_keys(name)) for name in ("structural", "template"))
+        assert ("common", "pnorm_exponent") in structural and ("common", "pnorm_exponent") not in template
+        assert ("advanced", "template_coefficient_scale") in template
+        assert ("advanced", "template_coefficient_scale") not in structural
+        assert ("common", "maxIterations") in structural & template                 # every project has it
+        for name in ("structural", "template", None):
+            groups = [(tab, group) for tab, group, _ in settings_panel.setting_groups(name)]
+            assert len(groups) == len(set(groups)), groups                        # each group once
 
 
 def test_template_solver_gives_a_straight_line_along_a_bar():
