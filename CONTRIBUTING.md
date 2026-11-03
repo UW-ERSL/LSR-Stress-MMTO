@@ -13,6 +13,8 @@ Every change is one of three kinds.
 | A widening of the core | a new option the core does not have yet, e.g. an augmented Lagrangian next to the p-norm, or a field solve that is nonlinear in temperature | the one layer it belongs to |
 | A new repository | anything every layer would have to check for | not here |
 
+A new physics starts as a copy of `lsr_mmto/physics/template/`.
+
 A widening of the core follows four rules:
 
 1. It is a new option, kept in one layer; what runs today runs the same with it.

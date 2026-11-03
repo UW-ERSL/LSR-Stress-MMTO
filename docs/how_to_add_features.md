@@ -11,6 +11,9 @@ rewritten.
 
 ## A quantity (an objective or a constraint)
 
+`lsr_mmto/physics/template/template_quantities.py` has one quantity of a physics, commented: what it
+is given, what it returns, and how its gradient comes from autograd.
+
 A quantity every physics has (mass, cost, a volume fraction) is one entry in `QUANTITIES` in
 `lsr_mmto/formulation/quantities.py`. A quantity of one physics is one entry in `QUANTITIES` on that
 physics' front page, given as the arguments of a `Quantity` without `physics` (the structural ones
@@ -53,6 +56,9 @@ The code line in the GUI picks it up by itself. For the selection form, add it t
 Add it to `tests/test_selections.py`, including the round trip through `to_dict`.
 
 ## A kind of support or load
+
+`lsr_mmto/physics/template/template_supports_and_loads.py` has one support and one load, with what
+each piece of an entry is, who reads it, and a worked example of how it reaches the solve.
 
 One entry in `SUPPORT_AND_LOAD_KINDS` on the front page of its physics (the structural ones are in
 `lsr_mmto/physics/structural/structural_supports_and_loads.py`), given as the arguments of a
@@ -113,7 +119,11 @@ it is used. The check, the template and the database editor follow. Add a case t
 
 ## A physics
 
-A folder in `lsr_mmto/physics/`, e.g. `thermoelastic/`, with four files:
+Start from `lsr_mmto/physics/template/`: a small working steady diffusion, commented line by line.
+Copy the folder, rename its four files, change the lines marked `FILL`, and add one line to
+`MODULES`; the steps are at the top of `template/template_module.py`.
+
+A physics is a folder in `lsr_mmto/physics/`, e.g. `thermoelastic/`, with four files:
 
 | File | What goes in it |
 |---|---|
@@ -124,7 +134,7 @@ A folder in `lsr_mmto/physics/`, e.g. `thermoelastic/`, with four files:
 
 plus one line in `MODULES` in `lsr_mmto/physics/available_physics.py`. The entries are described in
 `MODULE_ENTRIES` there; `structural/structural_module.py` is a complete example, and
-`tests/test_new_physics.py` registers and runs a small made-up one. A project names its physics with
+`tests/test_template_physics.py` registers and runs the template. A project names its physics with
 `"physics"` in its file (`p.physics` in code); an unknown name is an error before the run.
 
 A module's files import the layers below them (`elements/`, `design/`, `pyto_ad_imports.py`), never

@@ -190,6 +190,7 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad_imp
 | `structural/structural_physics.py` | the structural solver, one iteration's solve, element stress, von Mises, p-norm |
 | `structural/structural_supports_and_loads.py` | the structural supports and loads: fixed, displacement, force, traction, and the check that they hold the part |
 | `structural/structural_quantities.py` | compliance, stress and failure factor, and the structural measurements of each iteration and of the final design |
+| `template/` | a small working steady diffusion, commented line by line: the place to start a physics of your own |
 
 #### `lsr_mmto/optimize/`
 
