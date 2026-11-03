@@ -132,6 +132,38 @@ def attribute_name(name):
 
 
 # ---------------------------------------------------------------------- reading and checking
+_READ_CACHE = {}                 # once_per_file_version: (function, files, arguments) -> result
+
+
+def once_per_file_version(read):
+    """read(path, ...) done once for each version of the file (and of any other file named in its
+    arguments): the result is kept, keyed by each file's path, modification time and size, and a copy
+    of it handed back, so a panel that looks at a database several times reads it once, and a file
+    saved again is read again."""
+    import copy
+    import functools
+    import os
+
+    def version(a):
+        st = os.stat(a)
+        return os.path.abspath(a), st.st_mtime_ns, st.st_size
+
+    @functools.wraps(read)
+    def wrapper(path, *args):
+        try:
+            files = [version(path)] + [version(a) for a in args if isinstance(a, str) and os.path.isfile(a)]
+        except OSError:
+            return read(path, *args)
+        key = (read.__module__, read.__name__, tuple(files), repr(args))
+        if key not in _READ_CACHE:
+            if len(_READ_CACHE) > 64:
+                _READ_CACHE.clear()
+            _READ_CACHE[key] = read(path, *args)
+        return copy.deepcopy(_READ_CACHE[key])
+    return wrapper
+
+
+@once_per_file_version
 def _read(path):
     import warnings
     import pandas as pd
@@ -387,6 +419,7 @@ def default_colours(n):
     return out
 
 
+@once_per_file_version
 def _linked_names(path, sheet, column):
     """{row index, as pandas reads the sheet: material name} for the Material cells that are a formula
     pointing at one cell of a sheet, as the template's =Main!A3. The name is read from that cell, so
@@ -412,6 +445,7 @@ def _linked_names(path, sheet, column):
     return out
 
 
+@once_per_file_version
 def _display(path, names):
     """(colours, labels, errors, warnings) for the materials named, in that order."""
     import math
@@ -522,6 +556,77 @@ def material_display(path, names=None):
     if errors:
         raise ValueError(f"{path}:\n  " + "\n  ".join(errors))
     return colours, labels
+
+
+# ---------------------------------------------------------------------- importing a table made elsewhere
+def import_table(path):
+    """A table of materials made elsewhere (.xlsx, .xls or .csv), read for the database editor: the first
+    column holds the materials' names, row 1 the properties' names (a unit may follow in brackets,
+    "Density [kg/m^3]"), and an optional row 2 their units, as in a database of LSR MMTO. A column is
+    taken when its name is a property LSR MMTO knows, under any of its names; the others are skipped.
+    Returns a dict: names, attributes, units (None where none is given or the unit is not one the
+    property takes), rows (each value as text, for the editor to check), skipped (the column names left
+    out) and unknown_units ((property, unit) left out). ValueError when no column is a known property."""
+    import re
+    import warnings
+    import pandas as pd
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Data Validation extension")
+        if path.lower().endswith(".csv"):
+            df = pd.read_csv(path, header=None, dtype=str, keep_default_na=False)
+        else:
+            df = pd.read_excel(path, header=None)
+
+    def text(v):
+        if v is None or (isinstance(v, float) and v != v):
+            return ""
+        if isinstance(v, float):
+            return format(v, ".12g")
+        return str(v).strip()
+
+    def number(t):
+        try:
+            float(t)
+            return True
+        except ValueError:
+            return False
+
+    by_shown = {a.shown.lower(): a.name for a in ATTRIBUTES.values()}
+    columns, skipped, seen = [], [], set()
+    for c in range(1, df.shape[1]):
+        head = text(df.iat[0, c])
+        if not head:
+            continue
+        m = re.fullmatch(r"(.*?)\s*[\[(]\s*(.*?)\s*[\])]", head)
+        name, unit = (m.group(1), m.group(2)) if m else (head, None)
+        key = _BY_ALIAS.get(name.strip().lower()) or by_shown.get(name.strip().lower())
+        if key is None or key in seen:
+            skipped.append(head)
+        else:
+            seen.add(key)
+            columns.append((c, key, unit))
+    if not columns:
+        raise ValueError(f"none of the columns of {os.path.basename(path)} is a property LSR MMTO knows "
+                         f"({', '.join(a.shown for a in ATTRIBUTES.values())})")
+    first = 1
+    if df.shape[0] > 1 and not all(number(text(df.iat[1, c])) for c, _, _ in columns):
+        first = 2                                                   # row 2 holds the units
+    units, unknown_units = [], []
+    for c, key, unit in columns:
+        unit = (text(df.iat[1, c]) if first == 2 else "") or unit
+        if unit and unit not in ATTRIBUTES[key].units:
+            unknown_units.append((key, unit))
+            unit = None
+        units.append(unit or None)
+    names, rows = [], []
+    for r in range(first, df.shape[0]):
+        row = [text(df.iat[r, c]) for c, _, _ in columns]
+        name = text(df.iat[r, 0])
+        if name or any(row):
+            names.append(name)
+            rows.append(row)
+    return {"names": names, "attributes": [key for _, key, _ in columns], "units": units, "rows": rows,
+            "skipped": skipped, "unknown_units": unknown_units}
 
 
 # ---------------------------------------------------------------------- the Excel template

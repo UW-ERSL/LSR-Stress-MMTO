@@ -308,6 +308,57 @@ def test_vae_check():
         assert p.vae_check()[0] == ["ggd.nt could not be read as a VAE network"]
 
 
+
+def test_read_once_per_file_version():
+    """A database is read once for each version of its file: looked at again it is not read again, a
+    copy is handed back each time, and once the file is saved again it is read again."""
+    import time
+    from lsr_mmto.materials import databases
+    calls = []
+
+    @databases.once_per_file_version
+    def rows(path):
+        calls.append(path)
+        return [list(r) for r in load_workbook(path).active.iter_rows(values_only=True)]
+
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "db.xlsx")
+        write(path, GOOD)
+        first = rows(path)
+        first[2][1] = "changed by the caller"
+        assert rows(path)[2][1] == 1.0 and len(calls) == 1          # kept, and a copy each time
+        time.sleep(0.01)
+        write(path, GOOD[:-1])                                       # saved again: read again
+        assert len(rows(path)) == 4 and len(calls) == 2
+        assert check_database(path) == check_database(path)
+
+
+
+def test_import_table():
+    """A table made elsewhere: the first column the names, row 1 the properties under any of their names
+    (with a unit in brackets or not), an optional units row as in a database of LSR MMTO; columns that are
+    not a known property, a second column of the same property and units a property does not take are
+    reported, not read."""
+    from lsr_mmto.materials.databases import import_table
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "t.xlsx")
+        write(path, [["Material", "Young's modulus", "nu", "Hardness", "E", "Density"],
+                     ["Units", "GPa", "", "HV", "GPa", "furlongs"],
+                     ["A", 70, 0.3, 100, 1, 2700], ["B", 110, 0.34, 300, 2, 4400], [None, None, None, None, None, None]])
+        t = import_table(path)
+        assert t["names"] == ["A", "B"] and t["attributes"] == ["Youngs_Modulus", "Poissons_Ratio", "Density"]
+        assert t["units"] == ["GPa", None, None] and t["rows"] == [["70", "0.3", "2700"], ["110", "0.34", "4400"]]
+        assert t["skipped"] == ["Hardness", "E"] and t["unknown_units"] == [("Density", "furlongs")]
+        t = import_table(os.path.join(SHIPPED, "BM1_3Mats_2Attr.xlsx"))             # a database of LSR MMTO
+        assert t["attributes"] == ["Youngs_Modulus", "Poissons_Ratio"] and not t["skipped"] and len(t["names"]) == 3
+        write(path, [["Material", "Hardness"], ["A", 1]])
+        try:
+            import_table(path)
+            raise AssertionError("a table with no known property was read")
+        except ValueError as e:
+            assert "none of the columns of t.xlsx is a property LSR MMTO knows" in str(e)
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in [(k, v) for k, v in list(globals().items()) if k.startswith("test_")]:

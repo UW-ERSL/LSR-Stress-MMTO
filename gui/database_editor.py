@@ -63,10 +63,12 @@ class _Table(QtWidgets.QTableWidget):
 
 class DatabaseEditor(QtWidgets.QDialog):
     """New (path None: a database to be saved in folder) or an existing database to change. A shipped one
-    (in_shipped_folder) opens as a copy to be saved in folder. saved_path is set by a successful Save, and
-    network_set_aside names the network moved out of the way when the numbers changed."""
+    (in_shipped_folder) opens as a copy to be saved in folder. imported (databases.import_table, with its
+    file's name as "stem"): a new database filled from a table made elsewhere, to be checked and saved.
+    saved_path is set by a successful Save, and network_set_aside names the network moved out of the way
+    when the numbers changed."""
 
-    def __init__(self, parent, folder, path=None, unit_system=None):
+    def __init__(self, parent, folder, path=None, unit_system=None, imported=None):
         from lsr_mmto.materials.databases import in_shipped_folder
         super().__init__(parent)
         path = None if path is None else os.path.normpath(os.path.abspath(path))   # one kind of slash on Windows
@@ -120,7 +122,9 @@ class DatabaseEditor(QtWidgets.QDialog):
         self.save_button.setText("Save")
 
         self.attributes = []
-        if path is None:
+        if imported is not None:
+            self._fill(imported)
+        elif path is None:
             self.name.setText(self._free_name("my_materials"))
             self._columns(order=STARTING)
             for _ in range(3):
@@ -154,6 +158,20 @@ class DatabaseEditor(QtWidgets.QDialog):
             self.table.item(r, 1).setText("" if label == name else label)
             for j, v in enumerate(row):
                 self.table.item(r, 3 + j).setText(format(v, ".12g"))
+        self.table.blockSignals(False)
+
+    def _fill(self, imported):
+        """A new database from a table made elsewhere: its materials, properties, units and values as read,
+        each value as text so that one that is not a number shows as a cell to correct."""
+        self.setWindowTitle("Imported database")
+        self.name.setText(self._free_name(imported["stem"]))
+        self.table.blockSignals(True)
+        self._columns(order=imported["attributes"], units=imported["units"])
+        for name, row in zip(imported["names"], imported["rows"]):
+            r = self._new_row()
+            self.table.item(r, 0).setText(name)
+            for j, v in enumerate(row):
+                self.table.item(r, 3 + j).setText(v)
         self.table.blockSignals(False)
 
     # ------------------------------------------------------------------ the table

@@ -27,22 +27,6 @@ def effective_text(d_eff, n_z):
     return f"{d_eff:.6g}"
 
 
-def network_help(rows):
-    """Every material as the trained network gives it back, as a table (rows from
-    MaterialEncoder.reconstruction)."""
-    from lsr_mmto.materials.databases import SHOWN
-    head = ("<p>Each material is turned into its point on the material map and back by the network. The "
-            "error is the difference in % of the property's range over the database's materials.</p>")
-    cells = "".join(
-        f"<tr><td>{r['material']}</td><td>{SHOWN.get(r['property'], r['property'])}</td>"
-        f"<td align='right'>{r['database']:.6g}</td><td align='right'>{r['network']:.6g}</td>"
-        f"<td align='right'>{r['difference']:+.3g}</td><td align='right'>{r['percent_of_range']:.2g}%</td></tr>"
-        for r in rows)
-    return (head + "<table cellspacing='0' cellpadding='2'><tr><th align='left'>Material</th>"
-            "<th align='left'>Property</th><th>Database</th><th>Network</th><th>Difference</th><th>Error</th></tr>"
-            + cells + "</table>")
-
-
 def latent_help(d_eff, n_z, ratios):
     """Where the recommended latent dimension comes from, in words: the share of the variation in
     each direction the materials differ in, and the effective dimension counted from them."""
@@ -81,7 +65,8 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.combo.setCurrentIndex(-1 if project.database is None else self.combo.findText(project.database))
         self.combo.currentTextChanged.connect(self._choose)
         row.addWidget(self.combo, stretch=1)
-        for text, slot in (("New database...", self.new_database), ("Edit...", self.edit_database),
+        for text, slot in (("New database...", self.new_database), ("Import...", self.import_database),
+                           ("Edit...", self.edit_database),
                            ("Browse...", self._browse), ("Open in Excel", self._open_in_excel),
                            ("Check again", self._refresh)):
             button = QtWidgets.QPushButton(text)
@@ -89,9 +74,27 @@ class MaterialsPanel(QtWidgets.QDialog):
             row.addWidget(button)
         layout.addLayout(row)
 
+        switch = QtWidgets.QHBoxLayout()
+        self.show_values = QtWidgets.QPushButton("Values")
+        self.show_errors = QtWidgets.QPushButton("Network error")
+        self.shown = QtWidgets.QButtonGroup(self)
+        for b in (self.show_values, self.show_errors):
+            b.setCheckable(True)
+            self.shown.addButton(b)
+            switch.addWidget(b)
+        self.show_values.setChecked(True)
+        self.shown.buttonClicked.connect(lambda _: self._fill_table())
+        switch.addWidget(Info("Values: each material's properties as the database gives them.\n"
+                              "Network error: how far the trained network is from each value when it turns the "
+                              "material into its point on the material map and back, in % of the property's "
+                              "range over the database's materials. Rest the mouse on a cell for both values "
+                              "and the difference in the property's unit."))
+        switch.addStretch()
+        layout.addLayout(switch)
         self.table = QtWidgets.QTableWidget()
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         layout.addWidget(self.table, stretch=1)
+        self._shown_table = None                                    # what _refresh read, for _fill_table
         self.report = QtWidgets.QTextEdit()
         self.report.setReadOnly(True)
         self.report.setFixedHeight(64)
@@ -100,9 +103,6 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.latent_info = Info("")                                 # how the latent dimension is recommended
         self.latent_info.setVisible(False)
         below.addWidget(self.latent_info, alignment=QtCore.Qt.AlignTop)
-        self.network_info = Info("")                                # every material as the network gives it back
-        self.network_info.setVisible(False)
-        below.addWidget(self.network_info, alignment=QtCore.Qt.AlignTop)
         layout.addLayout(below)
         ok_cancel(self, layout)
         self._refresh()
@@ -143,6 +143,55 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.set_database(path)
         self.report.setText(f"{os.path.basename(path)} saved in the project's folder.")
         return path
+
+    def import_database(self, path=None):
+        """A database made from a table of materials made elsewhere (an Excel or CSV file): the columns that
+        are properties LSR MMTO knows are read, the others listed in one message; the database editor then
+        opens with what was read, to be checked and saved in the project's folder, which the project then
+        uses."""
+        from lsr_mmto.materials.databases import import_table
+        from .database_editor import DatabaseEditor
+        from .pyto_ad_imports import FILE_DIALOG_OPTIONS
+        folder = self._own_folder("Import a database")
+        if folder is None:
+            return None
+        if path is None:
+            path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Import a table of materials", folder,
+                                                            "Tables (*.xlsx *.xls *.csv)", options=FILE_DIALOG_OPTIONS)
+            if not path:
+                return None
+        try:
+            table = import_table(path)
+        except Exception as e:                                      # noqa: BLE001
+            QtWidgets.QMessageBox.warning(self, "Import a database", f"Nothing was imported: {e}.")
+            return None
+        table["stem"] = os.path.splitext(os.path.basename(path))[0]
+        note = self.import_note(table)
+        if note:
+            QtWidgets.QMessageBox.information(self, "Import a database", note)
+        editor = DatabaseEditor(self, folder, unit_system=self.project.units, imported=table)
+        if not editor.exec_():
+            return None
+        saved = editor.saved_path or editor.save()
+        self.set_database(saved)
+        self.report.setText(f"{os.path.basename(saved)} saved in the project's folder.\n" + self.report.toPlainText())
+        return saved
+
+    @staticmethod
+    def import_note(table):
+        """What an import read and what it left out, in plain words; None when it took every column."""
+        from lsr_mmto.materials.databases import SHOWN
+        if not table["skipped"] and not table["unknown_units"]:
+            return None
+        lines = [f"Read {len(table['names'])} materials with {', '.join(SHOWN[a] for a in table['attributes'])}."]
+        if table["skipped"]:
+            lines.append("Not imported, as LSR MMTO has no property of that name: "
+                         + ", ".join(table["skipped"]) + ".")
+        for key, unit in table["unknown_units"]:
+            lines.append(f"{SHOWN[key]}: the unit {unit} is not one LSR MMTO knows; choose its unit in the "
+                         f"editor's units row.")
+        lines.append("Check the values in the editor, then Save.")
+        return "\n".join(lines)
 
     def edit_database(self):
         """The database in the editor: one of the project's own is changed in place; one that comes with
@@ -203,8 +252,9 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.table.clear()
         self.table.setRowCount(0)
         self.table.setColumnCount(0)
+        self._shown_table, self._network_rows = None, None
         self.latent_info.setVisible(False)
-        self.network_info.setVisible(False)
+        self.show_errors.setEnabled(False)
         xlsx, error = database_choice(self.project)
         if error:
             self.report.setText(error)
@@ -218,23 +268,7 @@ class MaterialsPanel(QtWidgets.QDialog):
             lines.append(f"The table could not be read: {e}")
             self.report.setText("\n".join(lines))
             return
-        from lsr_mmto.materials.databases import SHOWN
-        heads = ["Label", "Material"] + [SHOWN.get(a, a) + ("" if u is None else f" [{u}]")
-                                         for a, u in zip(attributes, units)]
-        self.table.setColumnCount(len(heads))
-        self.table.setHorizontalHeaderLabels(heads)
-        self.table.setRowCount(len(names))
-        for i, name in enumerate(names):
-            item = QtWidgets.QTableWidgetItem(labels[i])
-            if colours[i]:
-                item.setIcon(swatch(colours[i]))
-            self.table.setItem(i, 0, item)
-            self.table.setItem(i, 1, QtWidgets.QTableWidgetItem(name))
-            for j in range(values.shape[1]):
-                self.table.setItem(i, 2 + j, QtWidgets.QTableWidgetItem(format(values[i, j], ".6g")))
-        self.table.verticalHeader().setVisible(False)
-        self.table.setColumnHidden(1, list(labels) == list(names))      # Material: only when the labels differ
-        self.table.resizeColumnsToContents()
+        self._shown_table = (names, attributes, units, values, colours, labels)
         if not errors:
             d_eff, n_z, ratios = latent_dim_breakdown(xlsx)
             lines.insert(0, f"{len(names)} materials; latent dimension {n_z} recommended (effective dimension "
@@ -244,11 +278,51 @@ class MaterialsPanel(QtWidgets.QDialog):
             network = self._network_line(xlsx)
             if network:
                 lines.insert(1, network)
+        if self._network_rows is None and self.show_errors.isChecked():
+            self.show_values.setChecked(True)
+        self._fill_table()
         self.report.setText("\n".join(lines))
 
+    def _fill_table(self):
+        """The table of the materials: their values, or with Network error chosen, how far the trained network
+        is from each value (in % of the property's range; both values and the difference behind the cell)."""
+        from lsr_mmto.materials.databases import SHOWN, attribute_name
+        if self._shown_table is None:
+            return
+        names, attributes, units, values, colours, labels = self._shown_table
+        errors = self.show_errors.isChecked() and self._network_rows is not None
+        by_cell = {(r["material"], attribute_name(r["property"])): r for r in (self._network_rows or [])}
+        heads = ["Label", "Material"] + [SHOWN.get(a, a) + ("" if errors or u is None else f" [{u}]")
+                                         for a, u in zip(attributes, units)]
+        self.table.clear()
+        self.table.setColumnCount(len(heads))
+        self.table.setHorizontalHeaderLabels(heads)
+        self.table.setRowCount(len(names))
+        for i, name in enumerate(names):
+            item = QtWidgets.QTableWidgetItem(labels[i])
+            if colours[i]:
+                item.setIcon(swatch(colours[i]))
+            self.table.setItem(i, 0, item)
+            self.table.setItem(i, 1, QtWidgets.QTableWidgetItem(name))
+            for j, a in enumerate(attributes):
+                r = by_cell.get((name, a))
+                if errors and r is not None:
+                    pct = r["percent_of_range"]
+                    cell = QtWidgets.QTableWidgetItem("< 0.01%" if pct < 0.01 else f"{pct:.2g}%")
+                    unit = f" {units[j]}" if units[j] else ""
+                    cell.setToolTip(f"Database: {r['database']:.6g}{unit}\nNetwork: {r['network']:.6g}{unit}\n"
+                                    f"Difference: {r['difference']:+.3g}{unit}")
+                    cell.setTextAlignment(int(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter))
+                else:
+                    cell = QtWidgets.QTableWidgetItem("" if errors else format(values[i, j], ".6g"))
+                self.table.setItem(i, 2 + j, cell)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setColumnHidden(1, list(labels) == list(names))      # Material: only when the labels differ
+        self.table.resizeColumnsToContents()
+
     def _network_line(self, xlsx):
-        """How closely the trained network gives back the database's materials, in one line, with every
-        value behind its (i); None when the database has no trained network yet."""
+        """How closely the trained network gives back the database's materials, in one line (every value
+        under Network error); None when the database has no trained network yet."""
         from lsr_mmto.materials.encoder import network_reconstruction
         nt = self.project.network_path()
         if not (os.path.isfile(nt) and os.path.getsize(nt) > 0):
@@ -259,8 +333,8 @@ class MaterialsPanel(QtWidgets.QDialog):
             return None
         if not rows:
             return None
-        self.network_info.setToolTip(network_help(rows))
-        self.network_info.setVisible(True)
+        self._network_rows = rows
+        self.show_errors.setEnabled(True)
         worst = max(r["percent_of_range"] for r in rows)
         return f"The trained network gives back every material within {worst:.2g}% of each property's range."
 

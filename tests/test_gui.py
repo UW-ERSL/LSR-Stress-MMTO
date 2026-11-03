@@ -490,6 +490,50 @@ def test_database_editor():
         assert material_display(copy)[1] == ["Red", "Mat2_Blue", "Mate3_Green"]
 
 
+def test_import_database():
+    """Import...: a table of materials made elsewhere (here a CSV) becomes a database. Columns named as a
+    property LSR MMTO knows are read (a unit in brackets after the name too), the others are listed in one
+    message, and the editor opens with what was read, a value that is not a number shown as a cell to
+    correct; once saved in the project's folder the project uses it."""
+    from lsr_mmto.materials.databases import check_database, database_table
+    from gui import database_editor as DE
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        assert w.save_project_as(os.path.join(d, "P", "P.mmto")) and w.own_folder()
+        table = os.path.join(d, "alloys.csv")
+        open(table, "w").write("Alloy,Density [kg/m^3],E (GPa),Price,E0\n"
+                               "Al 6061,2700,69,2.1,1\nTi-6Al-4V,4430,114,30,2\nSteel 304,8000,x,3,3\n")
+        m = materials_panel.MaterialsPanel(w, w.project)
+        said, seen = [], {}
+        real_exec, real_info = DE.DatabaseEditor.exec_, QtWidgets.QMessageBox.information
+
+        def review(e):
+            seen["heads"] = [e.table.horizontalHeaderItem(c).text() for c in range(e.table.columnCount())]
+            seen["units"] = [e.table.cellWidget(0, c).currentText() for c in (3, 4)]
+            seen["problems"] = e.check()
+            assert not e.save_button.isEnabled()
+            e.table.item(3, 4).setText("193")                                # the value that was not a number
+            assert e.check() == []
+            return 1
+        try:
+            DE.DatabaseEditor.exec_ = review
+            QtWidgets.QMessageBox.information = staticmethod(lambda _, title, text: said.append(text))
+            path = m.import_database(table)
+        finally:
+            DE.DatabaseEditor.exec_, QtWidgets.QMessageBox.information = real_exec, real_info
+        assert len(said) == 1 and "Not imported, as LSR MMTO has no property of that name: Price, E0." in said[0]
+        assert seen["heads"] == ["Name", "Shown as", "Colour", "Density", "Young's modulus"]
+        assert seen["units"] == ["kg/m^3", "GPa"] and seen["problems"] == ["Steel 304: Young's modulus: a number"]
+        assert path == os.path.join(d, "P", "materials", "alloys.xlsx")
+        assert m.project.database == "materials/alloys.xlsx" and check_database(path)[0] == []
+        names, attributes, units, values = database_table(path)
+        assert names == ["Al 6061", "Ti-6Al-4V", "Steel 304"] and attributes == ["Density", "Youngs_Modulus"]
+        assert values[2].tolist() == [8000.0, 193.0]
+        open(table, "w").write("Alloy,Price\nA,1\nB,2\n")                    # nothing LSR MMTO knows
+        with answers():
+            assert m.import_database(table) is None
+
+
 def test_error_in_the_app_keeps_it_running():
     """An error in what a button does is shown and written to the log; the app keeps running."""
     shown = []
@@ -1222,7 +1266,7 @@ def test_examples_open_as_templates():
 
 def test_part_facts_pca_live_colours_training():
     """The part's facts behind the (i), not over the 3D view; the PCA breakdown behind the Materials
-    panel's (i); the live design by density; the training's epochs in the Run status line."""
+    panel's (i), and its Values | Network error switch; the live design by density; the training's epochs in the Run status line."""
     from gui import draw_design
     s = draw_design.strength([0.1, 0.55, 1.0])
     assert np.allclose(s, [0.25, 0.625, 1.0])                                # pale to full colour
@@ -1235,8 +1279,19 @@ def test_part_facts_pca_live_colours_training():
         assert facts[0] == "Part: LBracket_BM1.STL" and facts[1].startswith("Volume: ")
         assert facts[2].startswith("Size: ") and facts[3] == "Material database: BM1_3Mats_2Attr"
 
-        tip = materials_panel.MaterialsPanel(w, w.project).latent_info.toolTip()
+        panel = materials_panel.MaterialsPanel(w, w.project)
+        tip = panel.latent_info.toolTip()
         assert "direction 1: " in tip and "The recommended latent dimension is the smallest whole number" in tip
+        # Values | Network error: the same table, each cell the network's error with both values behind it
+        assert panel.show_values.isChecked() and panel.show_errors.isEnabled()
+        value = panel.table.item(0, 2).text()
+        panel.show_errors.click()
+        cells = [panel.table.item(i, j) for i in range(panel.table.rowCount())
+                 for j in range(2, panel.table.columnCount())]
+        assert cells and all(c.text().endswith("%") for c in cells)
+        assert cells[0].toolTip().startswith("Database: ") and "\nNetwork: " in cells[0].toolTip()
+        panel.show_values.click()
+        assert panel.table.item(0, 2).text() == value
 
         w.project.n_dof, w.project.single_layer = 3000, True
         mesh = w.preview_mesh()
