@@ -112,6 +112,24 @@ def test_open_and_save_unchanged():
             assert open(path).read() == first, name                              # line endings aside
 
 
+def test_a_setting_missing_from_the_file_is_no_change():
+    """A project file written before a setting existed opens with that setting at its default and
+    counts as unchanged; the next save writes the setting into the file."""
+    w = G.MMTOWindow()
+    with scratch() as d:
+        path = os.path.join(d, "beam.mmto")
+        data = json.load(open(os.path.join(PROJECTS, "beam.mmto")))
+        section, key = next((s, k) for s, values in data["mmto"]["settings"].items() if isinstance(values, dict)
+                            for k in values)
+        del data["mmto"]["settings"][section][key]                         # as if the setting were new
+        json.dump(data, open(path, "w"), indent=2)
+        assert w.open_project(path)
+        assert not w.is_dirty() and "*" not in w.windowTitle(), w.windowTitle()
+        assert "settings missing from the file were set to their defaults" in w.message_text.toPlainText()
+        assert w.save_project()
+        assert key in json.load(open(path))["mmto"]["settings"][section]
+
+
 def test_only_mmto_projects_open():
     w = G.MMTOWindow()
     with answers(), scratch() as d:

@@ -1505,8 +1505,8 @@ class MMTOWindow(MainWindow):
         self._design, self.view, self._shown_wide = None, "setup", False    # the previous project's design goes
         self._shown_run = None
         self.design_bars.clear()
-        self._saved = self._state() if path else None
-        filled = project.complete_settings()                        # a file missing settings: filled, unsaved
+        filled = project.complete_settings()                        # a file missing settings: filled from defaults
+        self._saved = self._state() if path else None                # ... which is not a change; Save writes them
         self.init_state()                                           # PyTO-AD's own fresh state
         self._units_to_window()
         for actor in self._rulers:                                  # the old part's scales
