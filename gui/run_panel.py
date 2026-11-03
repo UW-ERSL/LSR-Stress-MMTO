@@ -78,16 +78,37 @@ def ask_delete_run(parent, folder):
     return True
 
 
+_PLOT_CANVAS = []
+
+
+def plot_canvas(figure):
+    """A plot for a panel. Its preferred size is the size it was made at. Matplotlib's own canvas prefers
+    the size it has just been given, so a panel holding one grew by its borders on every layout pass and
+    crept across the window."""
+    if not _PLOT_CANVAS:
+        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+
+        class PlotCanvas(FigureCanvasQTAgg):
+            def __init__(self, fig):
+                super().__init__(fig)
+                self._preferred = QtCore.QSize(super().sizeHint())
+
+            def sizeHint(self):
+                return self._preferred
+
+        _PLOT_CANVAS.append(PlotCanvas)
+    return _PLOT_CANVAS[0](figure)
+
+
 def result_tabs(tabs, run, keep=0):
     """Convergence, Latent space and Summary tabs of a saved run, after the first keep tabs."""
-    from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
     from lsr_mmto.results import run_plots, tables
     while tabs.count() > keep:
         tabs.removeTab(keep)
     for title, make in (("Convergence", lambda: run_plots.convergence(run)),
                         ("Latent space", lambda: run_plots.latent_scatter(run))):
         try:
-            tabs.addTab(FigureCanvasQTAgg(make()), title)
+            tabs.addTab(plot_canvas(make()), title)
         except Exception as e:                                      # noqa: BLE001
             tabs.addTab(QtWidgets.QLabel(f"Could not draw: {e}"), title)
     tabs.addTab(table_view(str(tables.summary(run, show=False))), "Summary")
@@ -142,7 +163,6 @@ class RunWindow(StructuralTopOptWindow):
     # ------------------------------------------------------------------ the strip
     def setup_ui(self):
         """In place of PyTO-AD's: no formulation of its own (the project's Formulation panel is the one)."""
-        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
         from matplotlib.figure import Figure
         layout = QtWidgets.QVBoxLayout(self)
         buttons = QtWidgets.QHBoxLayout()
@@ -162,11 +182,11 @@ class RunWindow(StructuralTopOptWindow):
 
         self.tabs = QtWidgets.QTabWidget()
         self.history_figure = Figure(figsize=(4, 2.6), tight_layout=True)
-        self.history_canvas = FigureCanvasQTAgg(self.history_figure)
+        self.history_canvas = plot_canvas(self.history_figure)
         self.history_canvas.setMinimumHeight(200)
         self.tabs.addTab(self.history_canvas, "Progress")
         self.latent_figure = Figure(figsize=(4, 2.6))              # the live latent space: a tab while a run goes
-        self.latent_canvas = FigureCanvasQTAgg(self.latent_figure)
+        self.latent_canvas = plot_canvas(self.latent_figure)
         self.latent_canvas.setMinimumHeight(200)
         self.latent_canvas.mpl_connect("button_press_event", lambda _: setattr(self, "latent_dragging", True))
         self.latent_canvas.mpl_connect("button_release_event", lambda _: self._latent_released())

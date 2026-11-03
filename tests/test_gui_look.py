@@ -2,7 +2,8 @@
 test_gui_look.py
 ================
 The LSR MMTO window's look and speed, off-screen: the part's facts come from one fast sum equal to
-PyTO-AD's, and a large part opens and draws its ruler in a second or two.
+PyTO-AD's, and a large part opens and draws its ruler in a second or two; plots keep the size they
+were made at, so the panels holding them do not creep wider.
 
     python tests/test_gui_look.py        (or: python -m pytest tests)
 """
@@ -85,6 +86,34 @@ def test_large_part_opens_fast():
         settle()
         assert time.time() - t < 2.0
         w.close()
+
+
+def test_plot_keeps_its_preferred_size():
+    """A plot's preferred size is the size it was made at, whatever size it is given later: the panels
+    holding plots no longer creep wider."""
+    from matplotlib.figure import Figure
+    from gui.run_panel import plot_canvas
+    canvas = plot_canvas(Figure(figsize=(4, 2.6)))
+    first = canvas.sizeHint()
+    canvas.resize(900, 700)
+    canvas.show()
+    settle()
+    assert canvas.sizeHint() == first
+    canvas.close()
+
+
+def test_current_run_panel_keeps_its_width():
+    """Opening Current run again and again leaves its width where it was."""
+    w = window()
+    w.open_run_panel()
+    settle(0.3)
+    dock = w.run_window.parentWidget()
+    width = dock.width()
+    for _ in range(10):
+        w.open_run_panel()
+        settle(0.1)
+    assert abs(dock.width() - width) <= 2
+    w.close()
 
 
 if __name__ == "__main__":

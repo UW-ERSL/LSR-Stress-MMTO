@@ -17,7 +17,7 @@ from PyQt5 import QtCore, QtWidgets
 
 from . import draw_design
 from .panel_widgets import GREY, Info
-from .run_panel import ask_delete_run, open_folder, result_tabs, table_view
+from .run_panel import ask_delete_run, open_folder, plot_canvas, result_tabs, table_view
 
 RESULTS_HELP = ("Each run of the project is listed here, newest first. Click one to see its design on the part "
                 "and its convergence, latent space and summary in the tabs. Show chooses what the part shows: "
@@ -125,7 +125,6 @@ class CompareWindow(QtWidgets.QDialog):
     the latent spaces side by side, the summaries in columns. Closing it ends the comparison."""
 
     def __init__(self, parent, runs, on_close):
-        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
         from lsr_mmto.results import compare
         super().__init__(parent)
         self.setWindowFlags(QtCore.Qt.Window)
@@ -142,7 +141,7 @@ class CompareWindow(QtWidgets.QDialog):
         for title, make in (("Convergence", lambda: convergence_overlaid(runs)),
                             ("Latent space", lambda: latent_side_by_side(runs))):
             try:
-                self.tabs.addTab(FigureCanvasQTAgg(make()), title)
+                self.tabs.addTab(plot_canvas(make()), title)
             except Exception as e:                                  # noqa: BLE001
                 self.tabs.addTab(QtWidgets.QLabel(f"Could not draw: {e}"), title)
         try:
