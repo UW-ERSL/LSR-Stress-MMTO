@@ -4,10 +4,13 @@ Most additions are one entry in a list. `docs/how_the_code_works.md` says where 
 code is. The tests listed under each one fail when the entry is incomplete. After any addition, run
 
     python docs/make_project_file_reference.py
+    python -m gui.user_guide_window --write
     python -m pytest tests -q
 
-The first rewrites `docs/project_file_reference.md`; `tests/test_reference.py` fails until it is
-rewritten.
+The first rewrites `docs/project_file_reference.md`, the second the lists in `docs/user_guide.md`
+(the settings, quantities, kinds of support and load, selection types and material attributes, as
+the user guide shows them); `tests/test_reference.py` and `tests/test_user_guide.py` fail until
+they are rewritten. Each section below ends with what else to run.
 
 ## A quantity (an objective or a constraint)
 
@@ -37,7 +40,8 @@ as torch from the model's state; autograd gives the gradient.
   read them from there; a quantity with none is written `Name()`.
 - A project names it by its name; the objective and the constraints are kept by that name.
 - Add it to `QUANTITIES` in `tests/test_ad_quantities.py`, which checks the gradient against
-  finite differences.
+  finite differences. What else to run: both generators above (the reference page and the user
+  guide list every quantity).
 
 ## A selection type
 
@@ -53,7 +57,8 @@ The code line in the GUI picks it up by itself. For the selection form, add it t
 `gui/supports_and_loads_panel.py`: the name the form shows, a plain description, and a label for each field
 (the form never shows the code names).
 
-Add it to `tests/test_selections.py`, including the round trip through `to_dict`.
+Add it to `tests/test_selections.py`, including the round trip through `to_dict`. What else to run:
+both generators above (the user guide lists every selection type).
 
 ## A kind of support or load
 
@@ -79,7 +84,8 @@ One entry in `SUPPORT_AND_LOAD_KINDS` on the front page of its physics (the stru
 A project stores it as `{"kind": name, "on": selection, ...values}`. The structural kinds also have
 `add_support`, `add_force` and `add_traction` on `Project` for setup scripts.
 
-Add a build test to `tests/test_project.py`; `test_script_round_trip` checks `script`.
+Add a build test to `tests/test_project.py`; `test_script_round_trip` checks `script`. What else
+to run: both generators above (the reference page and the user guide list every kind).
 
 ## A setting
 
@@ -98,7 +104,8 @@ Settings panel it sits in; `none_means`, `integer` and `choices` when it needs t
 somewhere else (the p-norm exponent). The defaults, the Settings panel, the reference page and the
 settings a run gets are made from it. `test_settings_cover_run_topopt` in
 `tests/test_run_project.py` fails when the loop reads a name that is not a setting;
-`tests/test_extending.py` shows one entry reaching every place.
+`tests/test_extending.py` shows one entry reaching every place. What else to run: both generators
+above (the reference page and the user guide list every setting).
 
 ## A material attribute
 
@@ -115,7 +122,8 @@ in SI, and one in each of `UNIT_SYSTEMS`.
 
 A database column not in `ATTRIBUTES` is an error, so a new attribute is added here before
 it is used. The check, the template and the database editor follow. Add a case to
-`tests/test_databases.py`.
+`tests/test_databases.py`. What else to run: both generators above (the reference page lists the
+units, the user guide the attributes).
 
 ## A physics
 
@@ -135,7 +143,8 @@ A physics is a folder in `lsr_mmto/physics/`, e.g. `thermoelastic/`, with four f
 plus one line in `MODULES` in `lsr_mmto/physics/available_physics.py`. The entries are described in
 `MODULE_ENTRIES` there; `structural/structural_module.py` is a complete example, and
 `tests/test_template_physics.py` registers and runs the template. A project names its physics with
-`"physics"` in its file (`p.physics` in code); an unknown name is an error before the run.
+`"physics"` in its file (`p.physics` in code); an unknown name is an error before the run. What else to run: both generators
+above, since its settings, quantities and kinds join their lists.
 
 A module's files import the layers below them (`elements/`, `design/`, `pyto_ad_imports.py`), never
 the core's lists: its quantities, kinds and settings are given as plain arguments, and the core
