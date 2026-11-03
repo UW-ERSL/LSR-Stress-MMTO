@@ -558,6 +558,77 @@ def material_display(path, names=None):
     return colours, labels
 
 
+# ---------------------------------------------------------------------- importing a table made elsewhere
+def import_table(path):
+    """A table of materials made elsewhere (.xlsx, .xls or .csv), read for the database editor: the first
+    column holds the materials' names, row 1 the properties' names (a unit may follow in brackets,
+    "Density [kg/m^3]"), and an optional row 2 their units, as in a database of LSR MMTO. A column is
+    taken when its name is a property LSR MMTO knows, under any of its names; the others are skipped.
+    Returns a dict: names, attributes, units (None where none is given or the unit is not one the
+    property takes), rows (each value as text, for the editor to check), skipped (the column names left
+    out) and unknown_units ((property, unit) left out). ValueError when no column is a known property."""
+    import re
+    import warnings
+    import pandas as pd
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Data Validation extension")
+        if path.lower().endswith(".csv"):
+            df = pd.read_csv(path, header=None, dtype=str, keep_default_na=False)
+        else:
+            df = pd.read_excel(path, header=None)
+
+    def text(v):
+        if v is None or (isinstance(v, float) and v != v):
+            return ""
+        if isinstance(v, float):
+            return format(v, ".12g")
+        return str(v).strip()
+
+    def number(t):
+        try:
+            float(t)
+            return True
+        except ValueError:
+            return False
+
+    by_shown = {a.shown.lower(): a.name for a in ATTRIBUTES.values()}
+    columns, skipped, seen = [], [], set()
+    for c in range(1, df.shape[1]):
+        head = text(df.iat[0, c])
+        if not head:
+            continue
+        m = re.fullmatch(r"(.*?)\s*[\[(]\s*(.*?)\s*[\])]", head)
+        name, unit = (m.group(1), m.group(2)) if m else (head, None)
+        key = _BY_ALIAS.get(name.strip().lower()) or by_shown.get(name.strip().lower())
+        if key is None or key in seen:
+            skipped.append(head)
+        else:
+            seen.add(key)
+            columns.append((c, key, unit))
+    if not columns:
+        raise ValueError(f"none of the columns of {os.path.basename(path)} is a property LSR MMTO knows "
+                         f"({', '.join(a.shown for a in ATTRIBUTES.values())})")
+    first = 1
+    if df.shape[0] > 1 and not all(number(text(df.iat[1, c])) for c, _, _ in columns):
+        first = 2                                                   # row 2 holds the units
+    units, unknown_units = [], []
+    for c, key, unit in columns:
+        unit = (text(df.iat[1, c]) if first == 2 else "") or unit
+        if unit and unit not in ATTRIBUTES[key].units:
+            unknown_units.append((key, unit))
+            unit = None
+        units.append(unit or None)
+    names, rows = [], []
+    for r in range(first, df.shape[0]):
+        row = [text(df.iat[r, c]) for c, _, _ in columns]
+        name = text(df.iat[r, 0])
+        if name or any(row):
+            names.append(name)
+            rows.append(row)
+    return {"names": names, "attributes": [key for _, key, _ in columns], "units": units, "rows": rows,
+            "skipped": skipped, "unknown_units": unknown_units}
+
+
 # ---------------------------------------------------------------------- the Excel template
 def write_database(path, attributes, units, names, labels, colours, values):
     """A whole database, as the app's editor saves it: the template's layout and Excel checks

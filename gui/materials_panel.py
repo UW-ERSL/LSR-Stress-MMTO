@@ -65,7 +65,8 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.combo.setCurrentIndex(-1 if project.database is None else self.combo.findText(project.database))
         self.combo.currentTextChanged.connect(self._choose)
         row.addWidget(self.combo, stretch=1)
-        for text, slot in (("New database...", self.new_database), ("Edit...", self.edit_database),
+        for text, slot in (("New database...", self.new_database), ("Import...", self.import_database),
+                           ("Edit...", self.edit_database),
                            ("Browse...", self._browse), ("Open in Excel", self._open_in_excel),
                            ("Check again", self._refresh)):
             button = QtWidgets.QPushButton(text)
@@ -142,6 +143,55 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.set_database(path)
         self.report.setText(f"{os.path.basename(path)} saved in the project's folder.")
         return path
+
+    def import_database(self, path=None):
+        """A database made from a table of materials made elsewhere (an Excel or CSV file): the columns that
+        are properties LSR MMTO knows are read, the others listed in one message; the database editor then
+        opens with what was read, to be checked and saved in the project's folder, which the project then
+        uses."""
+        from lsr_mmto.materials.databases import import_table
+        from .database_editor import DatabaseEditor
+        from .pyto_ad_imports import FILE_DIALOG_OPTIONS
+        folder = self._own_folder("Import a database")
+        if folder is None:
+            return None
+        if path is None:
+            path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Import a table of materials", folder,
+                                                            "Tables (*.xlsx *.xls *.csv)", options=FILE_DIALOG_OPTIONS)
+            if not path:
+                return None
+        try:
+            table = import_table(path)
+        except Exception as e:                                      # noqa: BLE001
+            QtWidgets.QMessageBox.warning(self, "Import a database", f"Nothing was imported: {e}.")
+            return None
+        table["stem"] = os.path.splitext(os.path.basename(path))[0]
+        note = self.import_note(table)
+        if note:
+            QtWidgets.QMessageBox.information(self, "Import a database", note)
+        editor = DatabaseEditor(self, folder, unit_system=self.project.units, imported=table)
+        if not editor.exec_():
+            return None
+        saved = editor.saved_path or editor.save()
+        self.set_database(saved)
+        self.report.setText(f"{os.path.basename(saved)} saved in the project's folder.\n" + self.report.toPlainText())
+        return saved
+
+    @staticmethod
+    def import_note(table):
+        """What an import read and what it left out, in plain words; None when it took every column."""
+        from lsr_mmto.materials.databases import SHOWN
+        if not table["skipped"] and not table["unknown_units"]:
+            return None
+        lines = [f"Read {len(table['names'])} materials with {', '.join(SHOWN[a] for a in table['attributes'])}."]
+        if table["skipped"]:
+            lines.append("Not imported, as LSR MMTO has no property of that name: "
+                         + ", ".join(table["skipped"]) + ".")
+        for key, unit in table["unknown_units"]:
+            lines.append(f"{SHOWN[key]}: the unit {unit} is not one LSR MMTO knows; choose its unit in the "
+                         f"editor's units row.")
+        lines.append("Check the values in the editor, then Save.")
+        return "\n".join(lines)
 
     def edit_database(self):
         """The database in the editor: one of the project's own is changed in place; one that comes with
