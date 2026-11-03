@@ -50,10 +50,10 @@ from lsr_mmto.optimize.history import (
     compute_domain_volume,
     init_run_history,
     log_design_state,
-    record_fea_diagnostics,
     log_objective_and_constraints,
 )
 from lsr_mmto.optimize.final_design_analysis import run_postprocessing
+from lsr_mmto.physics.structural.structural_quantities import record_fea_diagnostics
 def get_beta_schedule(scheme: BetaScheduleScheme):
     """Return the Heaviside beta-continuation parameters (PAPER scheme).
 

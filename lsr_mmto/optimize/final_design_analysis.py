@@ -7,94 +7,9 @@ its stress diagnostics printed, and the run saved for later postprocessing.
 import numpy as np
 import torch
 
-from .history import (compute_mass_from_x_and_z, compute_max_failure_factor,
-                      compute_stress_violation_diagnostics, print_stress_violation_diagnostics)
-
-
-def eval_stress_compliance_metrics(
-    x_vec,
-    z_vec,
-    label,
-    active_thresh,
-    latentDim,
-    matEncoder,
-    fe_solver_structural,
-    MaterialModel,
-    elem_volume,
-    design_domain_volume,
-    decode,
-):
-    """The design's compliance, stresses and mass, printed under label. decode(z) gives the
-    per-element (E, nu, properties) the optimization used for latent points z."""
-    x_vec = np.asarray(x_vec, dtype=float).flatten()
-    z_vec = np.asarray(z_vec, dtype=float).flatten()
-
-    zPts = torch.tensor(np.asarray(z_vec, dtype=float).reshape(latentDim, -1).T, dtype=torch.get_default_dtype())
-
-    # E and nu exactly as the optimization had them: the same decode, the same constant-nu setting
-    with torch.no_grad():
-        E, nu, material_properties = decode(zPts)
-    fe_solver_structural.set_material_fields(E.detach(), nu.detach())
-
-    sol_local = fe_solver_structural.solve(x_vec, MaterialModel.SIMP)
-    fe_solver_structural.mesh.setPseudoDensity(torch.as_tensor(x_vec))   # PyTO-AD's mesh takes torch
-    fe_solver_structural.postprocess()
-
-    vm = np.asarray(fe_solver_structural.vonMisesStress, dtype=float)
-    max_failure_factor = compute_max_failure_factor(vm, material_properties)
-    pnorm_vm = float(fe_solver_structural.pNormStress)
-    compliance = float(np.einsum("i,i->", fe_solver_structural.total_force, sol_local))
-
-    active = x_vec > active_thresh
-    vm_min_active = float(np.min(vm[active])) if np.any(active) else float("nan")
-    vm_max_active = float(np.max(vm[active])) if np.any(active) else float("nan")
-
-    final_mass = compute_mass_from_x_and_z(
-        x_density=x_vec,
-        z_flat=z_vec,
-        matEncoder=matEncoder,
-        latentDim=latentDim,
-        elem_volume=elem_volume,
-    )
-
-    if final_mass is not None:
-        mass_ratio = final_mass / max(design_domain_volume, 1e-12)
-    else:
-        mass_ratio = None
-
-    print("\n" + "=" * 70)
-    print(f"[FINAL METRICS] {label}")
-
-    if final_mass is not None:
-        print(f" Final mass       : {final_mass:.6g}")
-        print(
-            f" Mass / design volume : {mass_ratio:.6g} "
-            f"(final mass divided by the volume of the design domain: a density, not a ratio)"
-        )
-    else:
-        print(" Final mass       : N/A (Density not present in material database)")
-        print(" Mass / design volume : N/A (Density not present in material database)")
-    if max_failure_factor is not None:
-        print(f" Max failure factor : {max_failure_factor:.6g}")
-    else:
-        print(" Max failure factor : N/A (Yield_Strength not present in material database)")
-
-    print(f" Compliance       : {compliance:.6g}")
-    print(f" p-norm(vonMises) : {pnorm_vm:.6g}")
-    print(f" max(vonMises)    : {vm_max_active:.6g} (x > {active_thresh})")
-    print(f" min(vonMises)    : {vm_min_active:.6g} (x > {active_thresh})")
-    print("=" * 70 + "\n")
-
-    return {
-        "final_mass": final_mass,
-        "mass_ratio": mass_ratio,
-        "compliance": compliance,
-        "pnorm_vm": pnorm_vm,
-        "vm_max_active": vm_max_active,
-        "vm_min_active": vm_min_active,
-        "max_failure_factor": max_failure_factor,
-    }
-
+from lsr_mmto.physics.structural.structural_quantities import (compute_stress_violation_diagnostics,
+                                                               eval_stress_compliance_metrics,
+                                                               print_stress_violation_diagnostics)
 
 
 def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
