@@ -1366,7 +1366,7 @@ def test_stop_while_training():
 
 
 def test_export_stl():
-    """Export STL from Results: design.stl and a file per material used, in the run's folder, all closed;
+    """Export STL of the design shown: design.stl and a file per material used, in the run's folder, all closed;
     the pieces add up to their whole; they are drawn on the part, and can be pulled apart."""
     import trimesh
     with scratch() as d:
@@ -1378,9 +1378,11 @@ def test_export_stl():
         r = w.open_run_panel()
         assert r.start_optimization() and _wait(lambda: not r.optimization_running)
         res = w.open_results_panel(r.save_dir)
-        assert res.current == r.save_dir and res.stl_button.isEnabled()
-        assert res.export_stl()
-        assert _wait(lambda: not res.exporting, 300), res.status.text()
+        w.update_top_row()
+        assert res.current == r.save_dir and w.shown_run()[0] == r.save_dir and w.export_button.isEnabled()
+        assert w.export_stl()                                                 # Export STL, in the top row
+        assert _wait(lambda: not w.exporting, 300)
+        assert "STL files saved" in w.banner.text() and "Open folder" in w.banner.text()
         folder, report = res.smooth
         assert folder == r.save_dir and not report.whole_error, report.whole_error
         assert os.path.isfile(os.path.join(folder, "design.stl")) and report.whole_closed

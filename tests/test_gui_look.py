@@ -220,6 +220,8 @@ def test_top_row_and_bottom_buttons():
         assert [b.text() for b in (w.part_button, w.design_button, w.export_button, w.run_button)] == \
             ["Part", "Design", "Export STL", "Run"]
         assert not w.design_button.isEnabled() and w.part_button.isChecked()      # no design yet
+        w.update_top_row()
+        assert not w.export_button.isEnabled() and w.shown_run() is None          # nothing to export
         for text in ("Starting: building the mesh and the material network...",
                      "Iteration 6 / 40 \u00b7 0:09 so far \u00b7 about 0:46 left"):
             w.progress_text.setText(text)

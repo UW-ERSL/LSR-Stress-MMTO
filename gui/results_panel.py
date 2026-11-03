@@ -25,7 +25,7 @@ RESULTS_HELP = ("Each run of the project is listed here, newest first. Click one
                 "Tick two runs and press Compare to see them side by side. Open other results... shows a run "
                 "from anywhere, another project's too; it changes nothing in your project.")
 OTHER = "Other: "
-STL_HELP = ("Export STL writes two kinds of smooth STL into the run's folder.\n\n"
+STL_HELP = ("Export STL, at the top, writes the design shown as two kinds of smooth STL into the run's folder.\n\n"
             "design.stl is the whole part, for printing in one material. Faces the optimization did not touch keep "
             "their exact shape from your STL.\n\n"
             "design_<material>.stl is one file per material the design uses. Together they make up the part, with "
@@ -158,7 +158,6 @@ class CompareWindow(QtWidgets.QDialog):
 
 class ResultsWindow(QtWidgets.QDialog):
     """See the module docstring."""
-    exported = QtCore.pyqtSignal(object, object, str)              # folder, report or None, error
 
     def __init__(self, window):
         super().__init__(window)
@@ -210,15 +209,11 @@ class ResultsWindow(QtWidgets.QDialog):
         layout.addWidget(self.tabs, stretch=1)
 
         after = QtWidgets.QHBoxLayout()
-        self.stl_button = QtWidgets.QPushButton("Export STL...")
-        self.stl_button.setToolTip("Write this run's design as smooth STL files into its folder: the whole part, "
-                                   "and one file per material")
-        self.stl_button.clicked.connect(self.export_stl)
         self.folder_button = QtWidgets.QPushButton("Open folder")
         self.folder_button.clicked.connect(lambda: open_folder(self.current))
         self.delete_button = QtWidgets.QPushButton("Delete this run")
         self.delete_button.clicked.connect(self.delete_run)
-        for widget in (self.stl_button, self.folder_button, self.delete_button):
+        for widget in (self.folder_button, self.delete_button):
             after.addWidget(widget)
         after.addStretch()
         after.addWidget(Info(STL_HELP))
@@ -227,8 +222,7 @@ class ResultsWindow(QtWidgets.QDialog):
         self.apart.setVisible(False)
         self.apart.toggled.connect(lambda _: self._draw_smooth())
         layout.addWidget(self.apart)
-        self.exported.connect(self._exported, QtCore.Qt.QueuedConnection)
-        self.smooth, self.exporting = None, False                  # (folder, pieces) last exported
+        self.smooth = None                                          # (folder, report) last exported
         self.refresh()
 
     # ------------------------------------------------------------------ the list
@@ -279,7 +273,6 @@ class ResultsWindow(QtWidgets.QDialog):
     def _update_buttons(self):
         mine = self.current is not None and self.current not in self.others
         self.delete_button.setEnabled(mine)                         # others are for looking only
-        self.stl_button.setEnabled(mine and not self.exporting)     # it writes into the run's folder
         self.folder_button.setEnabled(self.current is not None)
         self.compare_button.setEnabled(len(self.ticked()) == 2)
 
@@ -356,48 +349,13 @@ class ResultsWindow(QtWidgets.QDialog):
             return
         run, mesh = loaded
         field = self.field.currentText()
-        self.window.set_design(lambda w: draw_design.record(w, run, mesh, field))
+        mine = (self.current, run, mesh) if self.current not in self.others else None
+        self.window.set_design(lambda w: draw_design.record(w, run, mesh, field), run=mine)
 
     # ------------------------------------------------------------------ STL
-    def export_stl(self):
-        """The run shown, as smooth STL files in its folder (lsr_mmto/results/stl_export.py), in the background."""
-        import threading
-        if self.current is None or self.current in self.others or self.exporting:
-            return False
-        loaded = self._loaded(self.current)
-        if loaded is None:
-            return False
-        run, mesh = loaded
-        folder = self.current
-        self.exporting = True
-        self._update_buttons()
-        self.status.setText("Exporting STL: smoothing the design and building the surfaces...")
-
-        def work():
-            from lsr_mmto.results import stl_export
-            try:
-                self.exported.emit(folder, stl_export.export(run, mesh, folder), "")
-            except Exception as e:                                  # noqa: BLE001
-                self.exported.emit(folder, None, str(e))
-        self.export_thread = threading.Thread(target=work, daemon=True)
-        self.export_thread.start()
-        return True
-
-    @QtCore.pyqtSlot(object, object, str)
-    def _exported(self, folder, report, error):
-        self.exporting = False
-        self._update_buttons()
-        if report is None:
-            self.status.setText(f"<span style='color:#b00000'>The STL export failed: {error}</span>")
-            return
-        unit = ((self.records[folder].config or {}).get("units") or {}).get("length", "")
-        lines = report.lines(unit)
-        for line in [f"STL exported to {folder}:"] + lines:
-            self.window.message_text.append(line)
-        good = not report.whole_error and report.whole_closed and all(p.closed for p in report.pieces)
-        self.status.setText(("STL written: design.stl and " f"{len(report.pieces)} material files. " if good else
-                             "<span style='color:#b00000'>STL written, with problems:</span> ")
-                            + "The check is in the message panel.")
+    def show_exported(self, folder, report):
+        """Export STL (top row) wrote the run's smooth pieces: they are drawn on the part when the run is the
+        one shown here, and can be pulled apart."""
         self.smooth = (folder, report)
         if folder == self.current:
             self.apart.setVisible(bool(report.pieces))
@@ -414,7 +372,9 @@ class ResultsWindow(QtWidgets.QDialog):
         if not pieces and report.whole_path:
             pieces = [(report.whole_path, draw_design.SOLID_COLOUR)]
         apart = self.apart.isChecked()
-        self.window.set_design(lambda w: draw_design.smooth(w, pieces, apart), wide=apart)
+        loaded = self._loaded(folder)
+        mine = (folder, *loaded) if loaded is not None and folder not in self.others else None
+        self.window.set_design(lambda w: draw_design.smooth(w, pieces, apart), wide=apart, run=mine)
 
     def delete_run(self):
         if self.current is None or self.current in self.others:

@@ -510,7 +510,7 @@ class RunWindow(StructuralTopOptWindow):
             return
         mesh = draw_design.mesh_of(self.window, self.project)
         if int(mesh.num_elems) == int(run.n_elems):
-            self.window.set_design(lambda w: draw_design.record(w, run, mesh, "Material"))
+            self.window.set_design(lambda w: draw_design.record(w, run, mesh, "Material"), run=(save_dir, run, mesh))
         result_tabs(self.tabs, run, keep=2)                        # Progress and Log stay
 
     def open_folder(self):

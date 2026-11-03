@@ -29,6 +29,7 @@ import json
 import os
 import re
 import sys
+from html import escape as html_escape
 
 import numpy as np
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -115,6 +116,51 @@ class MessageLog(QtWidgets.QTextEdit):
     def clear(self):
         self._last, self._count = None, 0
         super().clear()
+
+
+class Banner(QtWidgets.QLabel):
+    """A short note at the top of the 3D view that fades by itself: an export under way, then its result
+    with a link to the folder."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setObjectName("banner")
+        self.setTextFormat(QtCore.Qt.RichText)
+        self.setTextInteractionFlags(QtCore.Qt.LinksAccessibleByMouse)
+        self.setOpenExternalLinks(False)
+        self.effect = QtWidgets.QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self.effect)
+        self.fade = QtCore.QPropertyAnimation(self.effect, b"opacity", self)
+        self.fade.setDuration(700)
+        self.fade.finished.connect(lambda: self.hide() if self.effect.opacity() < 0.05 else None)
+        self.timer = QtCore.QTimer(self)
+        self.timer.setSingleShot(True)
+        self.timer.timeout.connect(self._fade_out)
+        self.hide()
+
+    def say(self, html, error=False, seconds=None):
+        self.setProperty("error", error)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.setText(html)
+        self.adjustSize()
+        self.place()
+        self.fade.stop()
+        self.effect.setOpacity(1.0)
+        self.show()
+        self.raise_()
+        self.timer.stop()
+        if seconds:
+            self.timer.start(int(seconds * 1000))
+
+    def place(self):
+        p = self.parentWidget()
+        self.move(max((p.width() - self.width()) // 2, 8), 14)
+
+    def _fade_out(self):
+        self.fade.setStartValue(1.0)
+        self.fade.setEndValue(0.0)
+        self.fade.start()
 
 
 def point_text(p):
@@ -538,6 +584,7 @@ class MMTOWindow(MainWindow):
     BUTTON_CONFIG = [next((c for c in MainWindow.BUTTON_CONFIG if c["name"] == name),
                           {"name": name, "icon": "arrow", "always_enabled": True,
                            "handler": f"open_{name.lower().replace(' ', '_')}_panel"}) for name in SIDEBAR]
+    stl_done = QtCore.pyqtSignal(object, object, str)       # Export STL: folder, report or None, error
     template = False                        # an example project: Save asks for a folder of one's own
     view = "setup"                          # what the 3D view shows: "setup" (the part) or "design"
     _design = None                          # draws the design kept for the Design view, or None
@@ -551,6 +598,7 @@ class MMTOWindow(MainWindow):
         self.message_text.setText(f"{APP}. File > New starts a project from an STL; File > Open opens a "
                                   f".mmto project.")
         self.dark_view = False                                      # the 3D view: light unless switched
+        self._shown_run, self.exporting, self.exported_last = None, False, None
         self.sidebar.setObjectName("sidebar")
         self.pv_frame.setObjectName("viewFrame")
         view_mode.install(self.plotter, lambda: self.dark_view)
@@ -657,7 +705,11 @@ class MMTOWindow(MainWindow):
         row.addWidget(self.theme_button)
         self.export_button = button("Export STL", "export")
         self.export_button.setEnabled(False)
+        self.export_button.clicked.connect(self.export_stl)
         row.addWidget(self.export_button)
+        self.banner = Banner(self.pv_frame)
+        self.banner.linkActivated.connect(lambda _: self._open_exported_folder())
+        self.stl_done.connect(self._stl_done, QtCore.Qt.QueuedConnection)
         row.addSpacing(6)
         row.addWidget(divider())
         row.addSpacing(6)
@@ -712,6 +764,71 @@ class MMTOWindow(MainWindow):
         else:
             self.run_button.setEnabled(True)
             self.progress_text.setText("")
+        shown = self.shown_run()
+        self.export_button.setEnabled(shown is not None and not self.exporting)
+        self.export_button.setToolTip(
+            "Exporting..." if self.exporting else
+            "Write the design shown as smooth STL files into its run's folder: the whole part, and one file "
+            "per material" if shown is not None else "Show a finished run's design to export it")
+        if self.banner.isVisible():
+            self.banner.place()
+
+    # ------------------------------------------------------------------ Export STL
+    def shown_run(self):
+        """(folder, run, mesh) of the finished run whose design the 3D view shows, or None (the part, a run
+        still going, two runs compared, another project's run)."""
+        return self._shown_run if self.view == "design" and self._design is not None else None
+
+    def export_stl(self):
+        """The design shown, as smooth STL files in its run's folder (lsr_mmto/results/stl_export.py), made
+        in the background; the banner on the 3D view says when it is done and links to the folder."""
+        import threading
+        shown = self.shown_run()
+        if shown is None or self.exporting:
+            return False
+        folder, run, mesh = shown
+        self.exporting = True
+        self.update_top_row()
+        self.banner.say(f"Exporting STL for the run of {html_escape(os.path.basename(os.path.normpath(folder)))}...")
+
+        def work():
+            from lsr_mmto.results import stl_export
+            try:
+                self.stl_done.emit(folder, stl_export.export(run, mesh, folder), "")
+            except Exception as e:                                  # noqa: BLE001
+                self.stl_done.emit(folder, None, str(e))
+        self.export_thread = threading.Thread(target=work, daemon=True)
+        self.export_thread.start()
+        return True
+
+    @QtCore.pyqtSlot(object, object, str)
+    def _stl_done(self, folder, report, error):
+        self.exporting = False
+        self.update_top_row()
+        if report is None:
+            self.banner.say(f"The STL export failed: {html_escape(error)}", error=True, seconds=12)
+            return
+        self.exported_last = (folder, report)
+        shown = self._shown_run
+        unit = ((shown[1].config or {}).get("units") or {}).get("length", "") if shown and shown[0] == folder else ""
+        for line in [f"STL exported to {folder}:"] + report.lines(unit):
+            self.message_text.append(line)
+        good = not report.whole_error and report.whole_closed and all(p.closed for p in report.pieces)
+        files = 1 + len(report.pieces)
+        note = "" if good else " (with problems: see the messages)"
+        self.banner.say(f"{files} STL files saved{note} \u00b7 <a href='open'>Open folder</a>", error=not good,
+                        seconds=8)
+        results = getattr(self, "results_window", None)
+        if results is not None:
+            try:
+                results.show_exported(folder, report)
+            except RuntimeError:                                    # its strip was closed
+                pass
+
+    def _open_exported_folder(self):
+        from .run_panel import open_folder
+        if self.exported_last is not None:
+            open_folder(self.exported_last[0])
 
     def set_dark_view(self, dark):
         """The 3D view dark or light (the default), its drawings recoloured to suit; material colours stay."""
@@ -1357,6 +1474,7 @@ class MMTOWindow(MainWindow):
         self.project, self.path = project, path
         self.template = is_example(path)
         self._design, self.view, self._shown_wide = None, "setup", False    # the previous project's design goes
+        self._shown_run = None
         self.design_bars.clear()
         self._saved = self._state() if path else None
         filled = project.complete_settings()                        # a file missing settings: filled, unsaved
@@ -1628,11 +1746,13 @@ class MMTOWindow(MainWindow):
         self.plotter.render()
 
     # ------------------------------------------------------------------ Setup view and Design view
-    def set_design(self, draw, show=True, wide=False):
+    def set_design(self, draw, show=True, wide=False, run=None):
         """draw(window) draws a design (design.py); it is kept for the Design view until another is set
         (the next run) or the project changes. Shown now when show, or when the Design view is on.
-        wide: it reaches beyond the part (two designs side by side), so the view is fitted to it."""
+        wide: it reaches beyond the part (two designs side by side), so the view is fitted to it.
+        run: (folder, run, mesh) of the finished run of this project it is the design of, for Export STL."""
         self._design, self._wide = draw, wide
+        self._shown_run = run if draw is not None else None
         if show or self.view == "design":
             self.show_design_view()
         else:
@@ -1825,7 +1945,7 @@ class MMTOWindow(MainWindow):
             if self.own_folder():                                   # the new part goes into the project folder
                 from lsr_mmto.problem.project_folder import PART, copy_in
                 self.project.stl = copy_in(self.project.stl, self.project.base_dir, PART)
-            self._design = None                                     # a design of the old part no longer fits
+            self._design, self._shown_run = None, None              # a design of the old part no longer fits
             self.view = "setup"
             self._view_changed()
             self.draw_ruler()
