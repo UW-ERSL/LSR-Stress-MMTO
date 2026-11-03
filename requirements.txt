@@ -19,6 +19,7 @@ numba
 pyamg
 pypardiso                  # direct linear solver
 mmapy                      # MMA optimizer
+threadpoolctl              # keeps NumPy's own threads to one, so they do not slow torch down
 absl-py
 
 # --- geometry and meshing ---
