@@ -39,19 +39,26 @@ def material_volume_fraction(xb, z, z_real, material_id, tau):
 #   help         what it is, in plain words: the app's tooltip and the settings page
 #   unit         the unit of a bound on it, as the app shows it: names of the unit system in braces are
 #                filled in ("{force}*{length}"); text without braces is shown as it is ("no units")
+#   scales_with  how its value follows a database column given in the wrong unit: {column: power}; a column
+#                whose numbers are k times what they should be makes the value k**power times its own
+#                (mass {"Density": 1}, compliance {"Youngs_Modulus": -1}); the project's unit warnings read it
 #   arguments    what its formula takes, in order, as (name, type, default): type "material" (a material's
 #                row in the database, a whole number) or "number"; one without a default is required and
 #                written by position, one with a default may be written by name: Name(2, tau=0.5)
+#   sets_start_density  True for a constraint whose bound is the density every element starts the run at
+#                (the volume fraction); the first such constraint sets it, else every element starts at 0.5
 
 
 class Quantity:
     __slots__ = ("name", "objective", "constraint", "physics", "needs", "fn", "doc", "shown", "help", "unit",
-                 "arguments")
+                 "arguments", "scales_with", "sets_start_density")
 
-    def __init__(self, name, objective, constraint, physics, needs, fn, doc, shown, help, unit="", arguments=()):
+    def __init__(self, name, objective, constraint, physics, needs, fn, doc, shown, help, unit="", arguments=(),
+                 scales_with=None, sets_start_density=False):
         self.name, self.objective, self.constraint = name, objective, constraint
         self.physics, self.needs, self.fn, self.doc = frozenset(physics), tuple(needs), fn, doc
         self.shown, self.help, self.unit, self.arguments = shown, help, unit, tuple(arguments)
+        self.scales_with, self.sets_start_density = dict(scales_with or {}), bool(sets_start_density)
 
     def takes(self, argument):
         """True when the formula takes the argument of that name or type ("material", "tau")."""
@@ -82,13 +89,15 @@ def _material_volume_fraction(m, opt):
 QUANTITIES = [Quantity(physics=[m.NAME], **q) for m in MODULES for q in m.QUANTITIES] + [
     Quantity("Mass", True, True, [], ["Density"],
              _mass, "sum of density * x_phys * element volume", "Mass",
-             "The mass of the part, from each material's density.", "{mass}"),
+             "The mass of the part, from each material's density.", "{mass}", scales_with={"Density": 1}),
     Quantity("Cost", False, True, [], ["Density", "Cost"],
              _cost, "sum of density * cost * x_phys * element volume", "Cost",
-             "The cost of the part, from each material's density and cost per mass.", "USD"),
+             "The cost of the part, from each material's density and cost per mass.", "USD",
+             scales_with={"Cost": 1, "Density": 1}),
     Quantity("VolumeFraction", False, True, [], [],
              _volume_fraction, "mean of x_phys", "Volume fraction",
-             "The share of the design space filled with material, 0 to 1.", "fraction of the design domain"),
+             "The share of the design space filled with material, 0 to 1.", "fraction of the design domain",
+             sets_start_density=True),
     Quantity("MaterialVolumeFraction", False, True, [], [],
              _material_volume_fraction, "volume fraction of one database material, softmax weights",
              "Material volume fraction", "The share of the design space filled with one chosen material, 0 to 1.",

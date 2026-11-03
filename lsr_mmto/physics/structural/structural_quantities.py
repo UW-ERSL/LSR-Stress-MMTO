@@ -33,7 +33,7 @@ def _failure_factor_pnorm(m, opt):
 QUANTITIES = [
     dict(name="Compliance", objective=True, constraint=True, needs=[], fn=_compliance, doc="F . u",
          shown="Compliance", help="How much the part gives under the loads. Lower is stiffer.",
-         unit="{force}*{length}"),
+         unit="{force}*{length}", scales_with={"Youngs_Modulus": -1}),
     dict(name="StressPNorm", objective=True, constraint=False, needs=[], fn=_stress_pnorm,
          doc="p-norm of the relaxed von Mises stress, no 1/N", shown="Stress (p-norm)",
          help="One value close to the highest von Mises stress in the part.", unit="{stress}"),
@@ -41,7 +41,7 @@ QUANTITIES = [
          fn=_failure_factor_pnorm, doc="mean p-norm of von Mises / yield strength, per element",
          shown="Failure factor (p-norm)",
          help="One value close to the highest stress / yield strength in the part. Above 1 means some element "
-              "yields.", unit="no units"),
+              "yields.", unit="no units", scales_with={"Yield_Strength": -1}),
 ]
 
 

@@ -51,6 +51,7 @@ from lsr_mmto.design.latent_to_properties import decode
 from lsr_mmto.optimize.design_model import MMTOModelAD
 from lsr_mmto.problem.settings import BetaScheduleScheme, Z0InitMethod
 from lsr_mmto.optimize.filters import create_density_and_material_filters
+from lsr_mmto.formulation.quantities import find_quantity
 from lsr_mmto.optimize.history import (
     compute_domain_volume,
     constraints_over_limit,
@@ -440,9 +441,9 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
                     print(f"[PROJ] Updated beta -> {beta_proj:.4g} (eta={s.eta_proj}, scheme={s.beta_schedule_scheme.value})")
         return np.array([[float(obj)]]), grad_obj, cons, grad_cons
 
-    initialDensity = 0.5
+    initialDensity = 0.5                       # or the bound of the first constraint that sets it
     for name, _, bound in to_params.Constraints:
-        if name == "VolumeFraction":
+        if find_quantity(name).sets_start_density:
             initialDensity = bound
             break
 

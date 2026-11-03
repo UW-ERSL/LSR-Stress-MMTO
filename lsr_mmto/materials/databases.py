@@ -87,14 +87,22 @@ class Attribute:
     """One material attribute a database may hold. measures: what it is, one of UNITS
     (stress, density, ratio, ...); its units are those of UNITS[measures], and "ratio"
     means dimensionless (its units cell may be left blank). low, high: the allowed range,
-    each end open unless named in closed. shown: its name as a user reads it."""
+    each end open unless named in closed. shown: its name as a user reads it.
+    wrong_unit_effect: what a column in the wrong unit does to the results, beyond the quantities
+    (whose own scales_with say that), with {times} for how many times too large its numbers are:
+    shown in the project's unit warning. log_scaled: the network learns log10 of its values (for a
+    column spanning several orders of magnitude). legend_symbol, legend_rank: a symbol for the
+    materials' legend of a design plot ("E"), which shows the attribute of lowest rank the run has."""
 
-    def __init__(self, name, measures, doc, shown, low=None, high=None, closed=(), aliases=()):
+    def __init__(self, name, measures, doc, shown, low=None, high=None, closed=(), aliases=(),
+                 wrong_unit_effect="", log_scaled=False, legend_symbol=None, legend_rank=None):
         if measures not in UNITS:
             raise ValueError(f"attribute {name}: measures must be one of {', '.join(UNITS)}")
         self.name, self.measures, self.doc, self.shown = name, measures, doc, shown
         self.low, self.high, self.closed = low, high, tuple(closed)
         self.units, self.aliases = tuple(UNITS[measures]), tuple(aliases)
+        self.wrong_unit_effect, self.log_scaled = wrong_unit_effect, bool(log_scaled)
+        self.legend_symbol, self.legend_rank = legend_symbol, legend_rank
 
     def in_range(self, v):
         if self.low is not None and (v < self.low or (v == self.low and "low" not in self.closed)):
@@ -114,11 +122,15 @@ class Attribute:
 ATTRIBUTES = {a.name: a for a in [
     Attribute("Density", "density", "mass per unit volume", "Density", low=0),
     Attribute("Youngs_Modulus", "stress", "Young's modulus, the stiffness", "Young's modulus", low=0,
-              aliases=("Youngs Modulus", "Young_Modulus", "E")),
+              aliases=("Youngs Modulus", "Young_Modulus", "E"),
+              wrong_unit_effect="Displacement and compliance come out {times} times too small; stress and "
+                                "failure factor are unaffected.",
+              legend_symbol="E", legend_rank=2),
     Attribute("Poissons_Ratio", "ratio", "Poisson's ratio", "Poisson's ratio", low=-1, high=0.5,
               aliases=("Poisson_Ratio", "Poissons Ratio", "nu")),
     Attribute("Yield_Strength", "stress", "yield strength, the stress at which the material yields",
-              "Yield strength", low=0, aliases=("Yield Strength", "Yield")),
+              "Yield strength", low=0, aliases=("Yield Strength", "Yield"),
+              legend_symbol=r"\sigma_Y", legend_rank=1),
     Attribute("Cost", "cost per mass", "price per unit mass", "Cost", low=0, closed=("low",)),
 ]}
 # each attribute's name as a user reads it, from its entry
@@ -173,7 +185,7 @@ def _read(path):
 
 
 def normalize(values, attribute_names):
-    """Each column scaled to [0, 1] (log10 first for the columns named E0..E3, Y0..Y3):
+    """Each column scaled to [0, 1] (log10 first for an attribute that says log_scaled):
     the normalized data, and each column's minimum and maximum before scaling."""
     import numpy as np
     normalized = np.zeros_like(values)
@@ -181,7 +193,7 @@ def normalize(values, attribute_names):
     scale_max = np.zeros(values.shape[1])
     for i, name in enumerate(attribute_names):
         col = values[:, i]
-        if name in ['E0', 'E1', 'E2', 'E3', 'Y0', 'Y1', 'Y2', 'Y3']:
+        if name in ATTRIBUTES and ATTRIBUTES[name].log_scaled:
             col = np.log10(col)
         scale_min[i] = col.min()
         scale_max[i] = col.max()

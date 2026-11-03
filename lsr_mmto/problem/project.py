@@ -395,7 +395,7 @@ class Project:
             e = np.log10(r)
             return f"10^{int(round(e))}" if abs(e - round(e)) < 1e-9 else f"{r:.4g}"
 
-        out = []
+        out, at = [], {}                     # at: the warning of each column, by its name
         for name, r in ratio.items():
             if abs(r - 1.0) < 1e-12:
                 continue
@@ -403,30 +403,31 @@ class Project:
             say = (f"the database gives {name.replace('_', ' ')} in {units[name]}, but the project's units "
                    f"({self.units}) expect {system[a.measures]}: its numbers are {times(r)} times what they "
                    f"should be.")
-            if name == "Youngs_Modulus":
-                say += (f" Displacement and compliance come out {times(r)} times too small; stress and "
-                        f"failure factor are unaffected.")
-            elif name == "Yield_Strength":
-                if "FailureFactorPNorm" in bounds:
-                    say += (f" The failure factor comes out {times(1 / r)} times its value, so the constraint "
-                            f"FailureFactorPNorm() <= {bounds['FailureFactorPNorm'][0]:g} is a different "
-                            f"problem: it allows a true failure factor of "
-                            f"{bounds['FailureFactorPNorm'][0] * r:g}.")
-                elif objective == "FailureFactorPNorm":
-                    say += (f" The failure factor is reported {times(1 / r)} times its value; the design is "
-                            f"unaffected, since the objective is only scaled.")
-            elif name == "Density" and "Mass" in bounds:
-                say += (f" Mass comes out {times(r)} times its value in {system['mass']}: the bound "
-                        f"{bounds['Mass'][0]:g} means {bounds['Mass'][0] / r:g} {system['mass']}.")
+            if a.wrong_unit_effect:
+                say += " " + a.wrong_unit_effect.format(times=times(r))
+            at[name] = len(out)
             out.append(say)
-        if "Cost" in bounds and "Cost" in ratio and "Density" in ratio:
-            r = ratio["Cost"] * ratio["Density"]
-            if abs(r - 1.0) > 1e-12:            # said once, under Cost if it is off, else under Density
-                k = [i for i, w in enumerate(out) if w.startswith("the database gives Cost ")] or \
-                    [i for i, w in enumerate(out) if w.startswith("the database gives Density ")]
-                out[k[0]] += (f" Cost() is density * cost per mass * volume: with these units it comes out "
-                              f"{times(r)} times its value in USD, so the bound {bounds['Cost'][0]:g} means "
-                              f"{bounds['Cost'][0] / r:g} USD.")
+        # what the wrong units do to each quantity the project uses, from the quantity's own scales_with,
+        # said once, under the first of its columns that is off
+        by_name = {q.name: q for q in QUANTITIES}
+        used = [(n, bs[0]) for n, bs in bounds.items()] + ([] if objective in bounds else [(objective, None)])
+        for name, bound in used:
+            q = by_name.get(name)
+            if q is None:
+                continue
+            factor = float(np.prod([ratio[c] ** k for c, k in q.scales_with.items() if c in ratio]))
+            off = [c for c in q.scales_with if c in at]
+            if abs(factor - 1.0) < 1e-12 or not off:
+                continue
+            unit = q.unit.format(**system) if "{" in q.unit else q.unit
+            unit = "" if unit == "no units" or unit.startswith("fraction") else f" {unit}"
+            if bound is None:
+                out[at[off[0]]] += (f" {name}() comes out {times(factor)} times its value; the design is "
+                                    f"unaffected, since the objective is only scaled.")
+            else:
+                out[at[off[0]]] += (f" {name}() comes out {times(factor)} times its value, so the constraint "
+                                    f"{name}() <= {bound:g} is a different problem: the bound {bound:g} means "
+                                    f"{bound / factor:g}{unit}.")
         return out
 
     def warnings(self):

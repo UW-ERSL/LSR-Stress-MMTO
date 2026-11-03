@@ -52,6 +52,9 @@ def _diffusion_compliance(m, opt):
 #   help        one plain sentence for a user
 #   unit        its unit, with unit kinds in braces filled in from the project's unit system
 #               ("{force}*{length}"), or text shown as it is ("no units")
+#   scales_with how the value follows a database column given in the wrong unit, {column: power}: the
+#               value of f . c goes as 1 / coefficient, so a coefficient 1000 times too large makes it
+#               1000 times too small (optional; the project's unit warnings read it)
 QUANTITIES = [
     dict(name="DiffusionCompliance",                          # FILL
          objective=True, constraint=True,
@@ -60,7 +63,8 @@ QUANTITIES = [
          doc="f . c",
          shown="Diffusion compliance",                        # FILL
          help="How hard the sources push the value up. Lower means the part carries it away better.",
-         unit="no units"),
+         unit="no units",
+         scales_with={COEFFICIENT: -1}),
 ]
 
 

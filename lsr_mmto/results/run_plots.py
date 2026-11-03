@@ -65,12 +65,13 @@ def _legend_beside(ax, run: Run):
     names, colours = run.material_labels, run.material_colors
     used = sorted(run.materials_used().tolist())
 
+    from lsr_mmto.materials.databases import ATTRIBUTES
     available = set((run.config.get("materials") or {})
                     .get("real_material_properties", {}))
-    for key, sym in (("Yield_Strength", r"\sigma_Y"), ("Youngs_Modulus", "E")):
-        if key in available:
-            vals, symbol = run.material_property(key), sym
-            break
+    shown = sorted((a for a in ATTRIBUTES.values() if a.legend_symbol and a.name in available),
+                   key=lambda a: a.legend_rank)
+    if shown:
+        vals, symbol = run.material_property(shown[0].name), shown[0].legend_symbol
     else:
         vals, symbol = None, None
 

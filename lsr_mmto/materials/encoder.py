@@ -506,7 +506,7 @@ class MaterialEncoder:
             decoded = self.vaeNet.decoder(z_real)
             decoded_properties = self.getMaterialProperties(decoded)
 
-        density_values = decoded_properties['Density'].detach().cpu().numpy().flatten()
+        density_values = decoded_properties[_density_column(decoded_properties)].detach().cpu().numpy().flatten()
         heaviest_idx = np.argmax(density_values)
         heaviest_z = z_real[heaviest_idx].detach().cpu().numpy()
         return heaviest_z
@@ -517,7 +517,17 @@ class MaterialEncoder:
             decoded = self.vaeNet.decoder(z_real)
             decoded_properties = self.getMaterialProperties(decoded)
 
-        density_values = decoded_properties['Density'].detach().cpu().numpy().flatten()
+        density_values = decoded_properties[_density_column(decoded_properties)].detach().cpu().numpy().flatten()
         lightest_idx = np.argmin(density_values)
         lightest_z = z_real[lightest_idx].detach().cpu().numpy()
         return lightest_z
+
+
+def _density_column(properties):
+    """The column the lightest and heaviest starts compare: the first one that measures density."""
+    from lsr_mmto.materials.databases import ATTRIBUTES
+    for name in properties:
+        if name in ATTRIBUTES and ATTRIBUTES[name].measures == "density":
+            return name
+    raise ValueError("starting from the lightest or the heaviest material needs a database column that "
+                     "measures density")
