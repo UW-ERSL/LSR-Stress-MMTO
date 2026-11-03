@@ -37,8 +37,8 @@ from .materials_panel import MaterialsPanel
 from .panel_widgets import GREY, Info, ok_cancel
 from .settings_panel import SettingsPanel
 from .supports_and_loads_panel import KEEP_COLOUR, LOAD_COLOUR, OTHER_COLOUR, SUPPORT_COLOUR, SupportsPanel, bc_name, bc_value
-from .pyto_ad_imports import (FILE_DIALOG_OPTIONS, UNIT_SYSTEMS, GeometryWindow, MainWindow, ProjectsWindow,
-                      StructuralLoadsWindow, UnitsWindow)
+from .pyto_ad_imports import (FILE_DIALOG_OPTIONS, MATERIAL_COLOR, UNIT_SYSTEMS, GeometryWindow, MainWindow,
+                              ProjectsWindow, STLGeom, StructuralLoadsWindow, UnitsWindow)
 
 APP = "LSR MMTO"
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -196,6 +196,67 @@ class PickWindow(StructuralLoadsWindow):
         hint.setWordWrap(True)
         self.layout().insertWidget(0, hint)
         self.layout().addStretch()
+
+
+def part_mass_properties(stl_geom):
+    """The part's surface area, volume, centre of mass and inertia tensor, as STLGeom.compute_mass_properties
+    gives them, with the same Gauss points, for all triangles at once: on a part of 100 000 triangles a
+    fraction of a second instead of 20 s. Computed once per part and kept on it."""
+    kept = getattr(stl_geom, "_mass_properties", None)
+    if kept is not None:
+        return kept
+    v = stl_geom.mesh.vectors
+    n = np.asarray(stl_geom.tri_normals, dtype=float)
+    area = np.asarray(stl_geom.tri_areas, dtype=float)
+    d1, d2 = v[:, 1] - v[:, 0], v[:, 2] - v[:, 0]
+
+    def at(points, weights):                                    # the Gauss points mapped onto every triangle
+        g = np.asarray(points)
+        x = v[:, None, 0, :] + g[None, :, 0, None] * d1[:, None, :] + g[None, :, 1, None] * d2[:, None, :]
+        return x, np.asarray(weights)
+
+    def integral(x, w, a, b, c):                                # x^a y^b z^c over each triangle
+        return np.sum(w * x[..., 0] ** a * x[..., 1] ** b * x[..., 2] ** c, axis=1) * area
+
+    x1, w1 = at([[0.333333333333333, 0.333333333333333]], [1.0])
+    x3, w3 = at([[0.166666666666667, 0.166666666666667], [0.166666666666667, 0.666666666666667],
+                 [0.666666666666667, 0.166666666666667]], [0.333333333333333] * 3)
+    volume = float(np.sum(n[:, 0] * integral(x1, w1, 1, 0, 0)))
+    centre = np.array([np.sum(0.5 * n[:, 0] * integral(x1, w1, 2, 0, 0)),
+                       np.sum(0.5 * n[:, 1] * integral(x1, w1, 0, 2, 0)),
+                       np.sum(0.5 * n[:, 2] * integral(x1, w1, 0, 0, 2))]) / volume
+    xyz = integral(x3, w3, 1, 1, 1)
+    c = np.zeros((3, 3))
+    for k, e in enumerate([(3, 0, 0), (0, 3, 0), (0, 0, 3)]):
+        c[k, k] = np.sum(n[:, k] * integral(x3, w3, *e)) / 3.0
+    c[0, 1], c[0, 2], c[1, 2] = np.sum(n[:, 2] * xyz), np.sum(n[:, 1] * xyz), np.sum(n[:, 0] * xyz)
+    inertia = np.array([[c[1, 1] + c[2, 2], -c[0, 1], -c[0, 2]],
+                        [-c[0, 1], c[0, 0] + c[2, 2], -c[1, 2]],
+                        [-c[0, 2], -c[1, 2], c[0, 0] + c[1, 1]]])
+    stl_geom._mass_properties = (float(np.sum(area)), volume, centre, inertia)
+    return stl_geom._mass_properties
+
+
+class PartLoader(ProjectsWindow):
+    """PyTO-AD's load_geometry for a project's part, less what LSR MMTO shows elsewhere: the text over
+    the 3D view (the part's facts are behind the (i) in the status bar), and with it the slow volume
+    sum it needed."""
+
+    def load_geometry(self, file_path):
+        window = self.parent
+        window.plotter.clear_actors()
+        window.plotter.reset_camera()
+        stl_geom = STLGeom(file_path)
+        stl_geom.plotGeometry(show_edges=False, show_axes=True, show_bounding_box=False, plotter=window.plotter,
+                              color=MATERIAL_COLOR)
+        window.stl_geom = stl_geom
+        window.plotter.disable_picking()
+        window.plotter.enable_point_picking(callback=window.on_left_button_press, use_picker=True, picker="cell",
+                                            show_message=False, left_clicking=True, show_point=False)
+        window.plotter.iren.add_observer("RightButtonPressEvent", window.on_right_button_press)
+        window.update_LivVar("geometry_loaded", True)
+        window.set_sidebar_icon("Geometry", "check")
+        window.set_sidebar_icon("Material", "arrow")
 
 
 def mmto_file_error(path):
@@ -419,7 +480,7 @@ class MMTOWindow(MainWindow):
         f = self.length_format(float(np.max(size)))
         lines = [f"Part: {os.path.basename(self.project.stl_path())}"]
         try:
-            volume = self.stl_geom.compute_mass_properties()[1]
+            volume = part_mass_properties(self.stl_geom)[1]
             lines.append(f"Volume: {volume:.4g} {unit}³".rstrip())
         except Exception:                                           # noqa: BLE001
             pass
@@ -902,11 +963,10 @@ class MMTOWindow(MainWindow):
             self.plotter.remove_actor(actor, reset_camera=False)
         self._rulers = []
         if os.path.isfile(project.stl_path()):
-            loader = ProjectsWindow(self)                           # its load_geometry draws the STL, picking on
+            loader = PartLoader(self)                               # draws the STL, picking on
             loader.load_geometry(project.stl_path())
             loader.deleteLater()
-            self.plotter.remove_actor("geometry_info", reset_camera=False)    # its text over the view: the
-        else:                                                                # facts are behind the (i)
+        else:
             self.plotter.clear_actors()
         self.draw_ruler()
         self._view_changed()

@@ -9,6 +9,8 @@ the GUI.
     UnitsWindow        the unit system dialog, editing MainWindow.settings
     GeometryWindow     loading an STL (also from SolidWorks)
     ProjectsWindow     its load_geometry draws an STL and turns picking on
+    STLGeom            an STL read in: its triangles, normals, areas and neighbours
+    MATERIAL_COLOR     the colour a part is drawn in
     StructuralLoadsWindow   picking supports and loads with the mouse
     StructuralTopOptWindow  running an optimization: its worker thread, signals, live plot and log
     FILE_DIALOG_OPTIONS
@@ -17,7 +19,9 @@ Also used, as MainWindow's own methods: update_LivVar (told when a pick is appli
 _raise_if_open; and the Structural Loads window's redraw_loads and refresh_applied_list.
 """
 import lsr_mmto.pyto_ad_imports  # noqa: F401  # puts PyTO-AD on sys.path
-from pyto.gui.PyTOGUI import (FILE_DIALOG_OPTIONS, GeometryWindow, MainWindow,  # noqa: F401  # type: ignore
-                              ProjectsWindow, StructuralLoadsWindow, StructuralTopOptWindow, UnitsWindow)
+from pyto.gui.PyTOGUI import (FILE_DIALOG_OPTIONS, MATERIAL_COLOR, GeometryWindow,  # noqa: F401  # type: ignore
+                              MainWindow, ProjectsWindow, StructuralLoadsWindow, StructuralTopOptWindow,
+                              UnitsWindow)
+from pyto.io.stl_reader import STLGeom  # noqa: F401  # type: ignore
 
 UNIT_SYSTEMS = ("MKS", "mmKS", "IPS")          # the choices of UnitsWindow
