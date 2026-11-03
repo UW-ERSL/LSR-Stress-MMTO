@@ -15,13 +15,12 @@ edited. PyTO-AD sets torch's default dtype to float64 on import; everything here
 import numpy as np
 import torch
 
-import lsr_mmto.pyto_ad_imports  # noqa: F401  puts PyTO-AD on sys.path
-import pyto.physics.hex_element_stiffness as _hex_ek
-import pyto.autodiff.material_model as ad_mm
-from pyto.physics.structural.hex_structural_fea import HexStructuralFEA as _HexStructuralFEA_AD
+from lsr_mmto.pyto_ad_imports import hex_element_stiffness as _hex_ek, hex_structural_fea, mat_lib
+from lsr_mmto.pyto_ad_imports import topopt_material_model as ad_mm
 
 from lsr_mmto.elements.hex_element import lame_basis, lame_parameters, structural_B_matrix
 
+_HexStructuralFEA_AD = hex_structural_fea.HexStructuralFEA
 _DTYPE = torch.float64
 
 
@@ -37,7 +36,6 @@ class MultiMaterialHexFEA(_HexStructuralFEA_AD):
 
     def __init__(self, mesh, bc, solver, mat_prop=None, **kwargs):
         if mat_prop is None:
-            import pyto.core.mat_lib as mat_lib
             mat_prop = mat_lib.create_material_with_defaults(name="unit", youngs_modulus=1.0)
         super().__init__(mesh=mesh, mat_prop=mat_prop, bc=bc, solver=solver, **kwargs)
         es = mesh.elem_size

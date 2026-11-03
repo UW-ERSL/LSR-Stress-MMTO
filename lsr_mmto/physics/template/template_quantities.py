@@ -26,7 +26,7 @@ import numpy as np
 import torch
 
 import lsr_mmto.pyto_ad_imports  # noqa: F401  # keep as is
-import pyto.autodiff.material_model as ad_mm
+from lsr_mmto.pyto_ad_imports import topopt_material_model as ad_mm
 
 from lsr_mmto.physics.template.template_physics import COEFFICIENT
 

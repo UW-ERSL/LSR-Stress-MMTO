@@ -110,8 +110,8 @@ def _vtu(mesh, density):
 
 def whole_part(run, mesh):
     """PyTO-AD's STL recovery of the run's design: (part, design volume)."""
-    import lsr_mmto.pyto_ad_imports  # noqa: F401  # PyTO-AD on sys.path
-    from pyto.io.topopt_stl_recovery import extract_isosurface, subtract_voids_from_stl  # type: ignore
+    from lsr_mmto.pyto_ad_imports import stl_recovery
+    extract_isosurface, subtract_voids_from_stl = stl_recovery().extract_isosurface, stl_recovery().subtract_voids_from_stl
     stl = mesh.stlMesh.triangulate().compute_normals()
     voids = extract_isosurface(_vtu(mesh, run.x_cont), isovalue=0.5, method="gaussian", sigma=SIGMA)
     part = subtract_voids_from_stl(stl, voids)

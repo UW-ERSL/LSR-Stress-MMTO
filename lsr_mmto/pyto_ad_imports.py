@@ -57,3 +57,13 @@ from pyto.topopt.drivers.mmaWrapper import runMMA
 from pyto.autodiff.material_model import MaterialModel, get_pNorm_exponent
 from pyto.autodiff.material_model import initialize_SIMP_STRUCTURAL_PENALTY, initialize_SIMP_THERMAL_PENALTY
 from pyto.autodiff.material_model import increment_SIMP_THERMAL_PENALTY, increment_SIMP_STRUCTURAL_PENALTY
+
+import pyto
+PYTO_AD_DIR = os.path.dirname(os.path.abspath(pyto.__file__))   # the PyTO-AD package in use, for the run record
+
+
+def stl_recovery():
+    """PyTO-AD's STL recovery (pyto.io.topopt_stl_recovery), imported when first asked for: it takes
+    a third of a second and only Export STL needs it."""
+    from pyto.io import topopt_stl_recovery
+    return topopt_stl_recovery

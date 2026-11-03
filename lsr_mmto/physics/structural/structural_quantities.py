@@ -10,7 +10,7 @@ import numpy as np
 import torch
 
 import lsr_mmto.pyto_ad_imports  # noqa: F401  puts PyTO-AD on sys.path
-import pyto.autodiff.material_model as ad_mm
+from lsr_mmto.pyto_ad_imports import topopt_material_model as ad_mm
 from lsr_mmto.optimize.history import _property_to_numpy, compute_mass_from_x_and_z
 from lsr_mmto.physics.structural.structural_physics import pnorm
 

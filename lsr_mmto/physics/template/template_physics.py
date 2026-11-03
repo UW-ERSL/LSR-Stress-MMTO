@@ -34,8 +34,8 @@ import numpy as np
 import torch
 
 import lsr_mmto.pyto_ad_imports  # noqa: F401  # keep as is: puts PyTO-AD on sys.path, float64 default
-import pyto.physics.hex_element_stiffness as _hex_ek
-import pyto.autodiff.material_model as ad_mm
+from lsr_mmto.pyto_ad_imports import hex_element_stiffness as _hex_ek, mat_lib
+from lsr_mmto.pyto_ad_imports import topopt_material_model as ad_mm
 from lsr_mmto.pyto_ad_imports import hex_thermal_fea
 
 _DTYPE = torch.float64
@@ -60,7 +60,7 @@ class DiffusionHexFEA(hex_thermal_fea.HexThermalFEA):
 
     def __init__(self, mesh, bc, solver, mat_prop=None, **kwargs):
         if mat_prop is None:                                   # PyTO-AD's constructor wants a material;
-            import pyto.core.mat_lib as mat_lib                # the real values come in set_coefficient
+                                                               # the real values come in set_coefficient
             mat_prop = mat_lib.create_material_with_defaults(name="unit", thermal_conductivity=1.0)
         # PyTO-AD's thermal solver makes the mesh's one-dof-per-node table (mesh.edofMatThermal) itself,
         # and points mesh.edofMat at it.

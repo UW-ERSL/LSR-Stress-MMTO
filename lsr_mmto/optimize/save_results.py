@@ -230,8 +230,8 @@ def provenance():
     try:
         out["repository"] = git_state(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
         try:
-            import pyto
-            out["pyto_ad"] = git_state(os.path.dirname(os.path.abspath(pyto.__file__)))
+            from lsr_mmto.pyto_ad_imports import PYTO_AD_DIR
+            out["pyto_ad"] = git_state(PYTO_AD_DIR)
         except Exception:
             out["pyto_ad"] = {"commit": "unknown", "branch": "unknown", "changed_files": "unknown"}
         out["python"] = sys.version.split()[0]
