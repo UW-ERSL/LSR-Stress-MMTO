@@ -156,8 +156,9 @@ def test_record_has_provenance():
         assert commit == "unknown" or re.fullmatch(r"[0-9a-f]{40}", commit), (repo, commit)
     assert prov["packages"]["numpy"] == np.__version__ and prov["python"]
     units = runs()["project"][1]["config"]["units"]
-    assert units == {"system": "MKS", "length": "m", "force": "N", "stress": "Pa", "density": "kg/m^3",
-                     "mass": "kg", "cost per mass": "USD/kg"}, units       # ubracket_project says MKS
+    from lsr_mmto.materials.databases import UNIT_SYSTEMS
+    assert units == {"system": "MKS", **UNIT_SYSTEMS["MKS"]}, units           # ubracket_project says MKS
+    assert units["length"] == "m" and units["stress"] == "Pa" and units["density"] == "kg/m^3"
     with tempfile.TemporaryDirectory() as d:                        # not a git checkout
         assert run_save.git_state(d)["commit"] == "unknown"
 

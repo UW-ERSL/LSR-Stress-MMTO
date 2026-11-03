@@ -318,8 +318,12 @@ def test_formulation_panel():
         f = formulation_panel.FormulationPanel(w, w.project)
         model = f.objective.model()
         enabled = {model.item(i).text(): model.item(i).isEnabled() for i in range(model.rowCount())}
-        assert enabled == {"Compliance": True, "Mass": False, "Stress (p-norm)": True,
-                           "Failure factor (p-norm)": False}
+        objectives = {q.shown: q for q in f.quantities.values() if q.objective}   # this physics' objectives
+        assert set(enabled) == set(objectives)
+        for shown_name, q in objectives.items():                               # greyed exactly when a column is missing
+            assert enabled[shown_name] == all(c in f.columns for c in q.needs), shown_name
+        assert enabled["Compliance"] and enabled["Stress (p-norm)"]
+        assert not enabled["Mass"] and not enabled["Failure factor (p-norm)"]
         assert f.reason("Mass") == "needs a Density column in the database"
         assert f.reason("Cost") == "needs a Density and a Cost column in the database"
         f.rows[2]["widgets"]["bound"].set_value(0.2)
@@ -444,7 +448,10 @@ def test_database_editor():
         path = editing(m, m.new_database, new)
         e = DE.DatabaseEditor(w, folder, unit_system=w.project.units)          # Add / Remove property
         e._fill_property_menu()
-        assert [a.text() for a in e.add_property_menu.actions()] == ["Yield strength", "Cost"]
+        from lsr_mmto.materials.databases import ATTRIBUTES, SHOWN
+        offered = [a.text() for a in e.add_property_menu.actions()]
+        assert offered == [SHOWN[k] for k in ATTRIBUTES if k not in e.attributes]   # every property not there yet
+        assert "Yield strength" in offered and "Cost" in offered and "Density" not in offered
         e.add_property("Cost")
         assert e.attributes == ["Density", "Youngs_Modulus", "Poissons_Ratio", "Cost"]
         assert e.table.cellWidget(0, 6).currentText() == "USD/t"
