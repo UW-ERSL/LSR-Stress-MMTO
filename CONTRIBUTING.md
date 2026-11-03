@@ -41,8 +41,10 @@ in one line what is in the file. `structural_supports_and_loads.py` passes; `loo
 ## Checking a change
 
 - `python -m pytest tests -q` passes.
-- A change that moves code or renames things changes no number: a short run of every shipped project
-  gives the same history, to the last digit, before and after.
+- A change that moves code or renames things changes no number: the first iterations of the shipped
+  projects give the same objective and constraints, to 1 part in a million, before and after
+  (`tests/test_regression.py` checks it). Later iterations drift by tiny amounts from one run to the
+  next even with no change, because the solver adds numbers in a different order on several threads.
 - Text the GUI shows is written for someone who has never seen the code: plain words, the labels
   the form itself shows, and the details behind an (i).
 - After a change to a list (settings, quantities, supports and loads), run
