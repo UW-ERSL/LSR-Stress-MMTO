@@ -45,13 +45,20 @@ as torch from the model's state; autograd gives the gradient.
 
 ## A selection type
 
-`lsr_mmto/problem/selections.py`. Subclass `Selection`, give it a `TYPE` and a `fields` tuple, and
-write `_mask` (a True/False per point) or `evaluate` (indices). Saving and loading find it by
-`TYPE`; the docstring becomes its line in the reference page.
+`lsr_mmto/problem/selections.py`. Subclass `Selection`, give it a `TYPE`, a `fields` tuple and
+`field_kinds`, how each field is given (a `Field`: a length, a point, a choice, a tick, a file, a
+number or a list of numbers; optional or not), and write `_mask` (a True/False per point) or
+`evaluate` (indices). Saving and loading find it by `TYPE`; the docstring becomes its line in the
+reference page.
 
     class face(Selection):
         """The plane at the mesh's extreme on one side: xmin, xmax, ymin, ymax, zmin or zmax."""
         TYPE, fields = "face", ("side", "pad")
+        field_kinds = {"side": SIDE, "pad": PAD}
+
+The selection form makes each field's box from its `Field`: a length or a point gets the project's
+length unit beside it, a choice a list, a tick a checkbox, a file a Browse button. Before adding a
+type, look at the existing ones: a tube, for example, is a `cylinder` with an `inner_radius`.
 
 The code line in the GUI picks it up by itself. For the selection form, add it to `FORM` in
 `gui/supports_and_loads_panel.py`: the name the form shows, a plain description, and a label for each field

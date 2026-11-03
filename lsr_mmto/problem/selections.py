@@ -51,7 +51,8 @@ files with function selections only from people you trust.
 Lengths (radius, inner_radius, along, distance, pad) are numbers in model units, or
 "<k>h" for k times the largest element size, e.g. near_face("zmin", "1.5h").
 
-To add a type: subclass Selection, give it a TYPE and a fields tuple, write _mask or
+To add a type: subclass Selection, give it a TYPE, a fields tuple and, for each field, how
+it is given (field_kinds: a Field each, which the GUI's form is made from), write _mask or
 evaluate, and add it to tests/test_selections.py. from_dict finds it by TYPE.
 """
 import importlib.util
@@ -112,10 +113,34 @@ def _axis_vector(axis):
     return v / np.linalg.norm(v)
 
 
+class Field:
+    """How one field of a selection type is given; the GUI's form is made from it. kind is "length"
+    (a length, shown beside the project's length unit), "point" (x, y, z, in that unit), "choice"
+    (one of choices), "tick" (true or false), "file" (a file; files: the kinds of file offered),
+    "number", "numbers" (a list of numbers) or "limits" (the from and to of other directions).
+    choices: (shown, value) pairs offered in a list, for any kind; editable: a value of your own may
+    be typed too. optional: may be left empty, which means None."""
+    __slots__ = ("kind", "choices", "editable", "optional", "files")
+
+    def __init__(self, kind, choices=(), editable=False, optional=False, files=None):
+        self.kind, self.choices, self.editable = kind, tuple(choices), editable
+        self.optional, self.files = optional, files
+
+
+SIDES = (("Left (x min)", "xmin"), ("Right (x max)", "xmax"), ("Bottom (y min)", "ymin"),
+         ("Top (y max)", "ymax"), ("Back (z min)", "zmin"), ("Front (z max)", "zmax"))
+XYZ = (("x", "x"), ("y", "y"), ("z", "z"))
+PAD = Field("length", choices=(("Automatic", "auto"),), editable=True)      # or a length
+SIDE = Field("choice", SIDES)
+AXIS = Field("choice", XYZ, editable=True)                                 # also a direction, e.g. 1, 1, 0
+LENGTH, POINT = Field("length"), Field("point")
+
+
 class Selection:
     """A region; evaluate(mesh, on) gives sorted unique indices."""
     TYPE = None
     fields = ()
+    field_kinds = {}                                # {field: Field}, one for each of fields
 
     def __init_subclass__(cls, **kw):
         super().__init_subclass__(**kw)
@@ -158,6 +183,7 @@ class box(Selection):
     """Points with lo <= p <= hi; the corners may come in any order. By default pad is half the element
     size along each axis, so a box thinner than an element still catches the nearest layer."""
     TYPE, fields = "box", ("lo", "hi", "pad")
+    field_kinds = {"lo": POINT, "hi": POINT, "pad": PAD}
 
     def __init__(self, lo, hi, pad="auto"):
         a, b = np.asarray(lo, dtype=float), np.asarray(hi, dtype=float)
@@ -171,6 +197,8 @@ class box(Selection):
 class cylinder(Selection):
     """Points whose distance to the axis is in [inner_radius, radius]; along = (t0, t1) limits (p - center) . axis."""
     TYPE, fields = "cylinder", ("center", "axis", "radius", "inner_radius", "along", "pad")
+    field_kinds = {"center": POINT, "axis": AXIS, "radius": LENGTH, "inner_radius": LENGTH,
+                   "along": Field("length", optional=True), "pad": PAD}
 
     def __init__(self, center, axis, radius, inner_radius=0.0, along=None, pad="auto"):
         self.center = list(map(float, center))
@@ -204,6 +232,7 @@ class cylinder(Selection):
 class sphere(Selection):
     """Points within radius of center."""
     TYPE, fields = "sphere", ("center", "radius", "pad")
+    field_kinds = {"center": POINT, "radius": LENGTH, "pad": PAD}
 
     def __init__(self, center, radius, pad="auto"):
         self.center, self.radius, self.pad = list(map(float, center)), _keep(radius), pad
@@ -218,6 +247,7 @@ class plane(Selection):
     limits, e.g. {"y": [100, 120]}, keeps only the part of the cut between those values of the
     other axes (each widened by pad along its own axis)."""
     TYPE, fields = "plane", ("axis", "value", "pad", "limits")
+    field_kinds = {"axis": AXIS, "value": LENGTH, "pad": PAD, "limits": Field("limits", optional=True)}
 
     def __init__(self, axis, value, pad="auto", limits=None):
         self.axis, self.value, self.pad = axis, float(value), pad
@@ -253,6 +283,7 @@ def _side(side):
 class face(Selection):
     """The plane at the mesh's extreme on one side: xmin, xmax, ymin, ymax, zmin or zmax."""
     TYPE, fields = "face", ("side", "pad")
+    field_kinds = {"side": SIDE, "pad": PAD}
 
     def __init__(self, side, pad="auto"):
         _side(side)
@@ -267,6 +298,7 @@ class face(Selection):
 class near_face(Selection):
     """Points strictly within distance of the mesh's extreme on one side."""
     TYPE, fields = "near_face", ("side", "distance")
+    field_kinds = {"side": SIDE, "distance": LENGTH}
 
     def __init__(self, side, distance):
         _side(side)
@@ -284,6 +316,7 @@ class nearest(Selection):
     """The single node or element closest to point; boundary=True only looks at nodes on
     the mesh boundary, as the PyTO-AD GUI does for a picked point."""
     TYPE, fields = "nearest", ("point", "boundary")
+    field_kinds = {"point": POINT, "boundary": Field("tick")}
 
     def __init__(self, point, boundary=False):
         self.point = list(map(float, point))
@@ -304,6 +337,7 @@ class nearest(Selection):
 class ids(Selection):
     """Explicit node or element numbers; tied to one mesh."""
     TYPE, fields = "ids", ("indices",)
+    field_kinds = {"indices": Field("numbers")}
 
     def __init__(self, indices):
         self.indices = sorted(set(int(i) for i in np.asarray(indices).ravel()))
@@ -321,6 +355,7 @@ class stl_faces(Selection):
     smallest element size of a triangle. tol None is PyTO-AD's own lookup (0.707); the
     PyTO-AD GUI uses 0.8."""
     TYPE, fields = "stl_faces", ("triangles", "tol")
+    field_kinds = {"triangles": Field("numbers"), "tol": Field("number", optional=True)}
 
     def __init__(self, triangles, tol=None):
         self.triangles = [int(t) for t in triangles]
@@ -350,6 +385,7 @@ class halfspaces(Selection):
     origin o. A box dragged in the PyTO-AD GUI is six such planes. boundary=True keeps only
     nodes on the mesh boundary, as the GUI does."""
     TYPE, fields = "halfspaces", ("normals", "origins", "boundary")
+    field_kinds = {"normals": Field("numbers"), "origins": Field("numbers"), "boundary": Field("tick")}
 
     def __init__(self, normals, origins, boundary=True):
         self.normals = [list(map(float, n)) for n in normals]
@@ -372,6 +408,8 @@ class rows(Selection):
     """The n outermost node rows of a face, counted along an axis: e.g. the 8 highest rows
     of the right face. Rows are node layers, so their height is n element sizes."""
     TYPE, fields = "rows", ("face", "axis", "n", "end")
+    field_kinds = {"face": SIDE, "axis": AXIS, "n": Field("number"),
+                   "end": Field("choice", (("High end", "max"), ("Low end", "min")))}
 
     def __init__(self, face, axis, n, end="max"):
         _side(face)
@@ -401,6 +439,7 @@ def _resolve(path, base_dir):
 class inside_stl(Selection):
     """Points inside a closed STL surface."""
     TYPE, fields = "inside_stl", ("path",)
+    field_kinds = {"path": Field("file", files="STL files (*.stl *.STL)")}
 
     def __init__(self, path):
         self.path = path
@@ -418,6 +457,7 @@ class inside_stl(Selection):
 class function(Selection):
     """Whatever a Python function name(mesh, on) in file.py returns."""
     TYPE, fields = "function", ("ref",)
+    field_kinds = {"ref": Field("file", files="Python files (*.py)")}
 
     def __init__(self, ref):
         if ":" not in ref:
@@ -481,6 +521,7 @@ class selection(Selection):
     """Another selection of the project, by name. Only a project can evaluate it: Project.evaluate puts
     the named selection in (resolved) each time, so a combination follows later edits of its parts."""
     TYPE, fields = "selection", ("name",)
+    field_kinds = {"name": Field("choice")}
 
     def __init__(self, name):
         self.name = name

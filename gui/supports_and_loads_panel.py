@@ -84,19 +84,13 @@ PLACES_HELP = ("A selection is the part of the model a support or load acts on: 
                "selection. Open Selections to rename a selection, change it, or tick Keep solid so the "
                "optimization never removes it.")
 MOUSE_HINT = "Hover over the part to read its coordinates; click it to copy the point."
-LENGTHS = {"radius", "inner_radius", "distance", "value", "pad", "along"}   # a length unit beside them
-POINTS = {"center", "lo", "hi", "point"}                    # x, y, z
-OPTIONAL = {"along", "tol"}                                 # empty means None
 
-# Fields with a fixed set of values: a dropdown of (shown, value); editable: a value of your own may be typed
-SIDES = [("Left (x min)", "xmin"), ("Right (x max)", "xmax"), ("Bottom (y min)", "ymin"),
-         ("Top (y max)", "ymax"), ("Back (z min)", "zmin"), ("Front (z max)", "zmax")]
-XYZ = [("x", "x"), ("y", "y"), ("z", "z")]
-CHOICES = {"side": (SIDES, False), "face": (SIDES, False), "end": ([("High end", "max"), ("Low end", "min")], False),
-           "axis": (XYZ, True),                             # cylinder: also a direction, e.g. 1, 1, 0
-           "pad": ([("Automatic", "auto")], True)}          # or a length
-TICKS = {"boundary"}                                        # True or False
-FILES = {"path": "STL files (*.stl *.STL)"}
+
+def field_kind(cls, field):
+    """How a field of a selection type is given (its Field: a length, a point, a choice...), as the
+    type itself declares it; a plain text box for one it does not declare."""
+    from lsr_mmto.problem.selections import Field
+    return getattr(cls, "field_kinds", {}).get(field) or Field("text")
 
 
 # ---------------------------------------------------------------------- regions as text
@@ -153,9 +147,10 @@ def field_label(kind, field):
     return " / ".join(label) if isinstance(label, tuple) else label
 
 
-def show_value(field, value):
-    """A field's value as the form and the tables show it: sides by name, points without brackets."""
-    for shown, v in CHOICES.get(field, ([], False))[0]:
+def show_value(value, choices=()):
+    """A field's value as the form and the tables show it: a choice by its name (a side as Right (x max)),
+    points without brackets."""
+    for shown, v in choices:
         if value == v:
             return shown
     if value is None:
@@ -187,11 +182,11 @@ def describe(selection):
             axis = getattr(selection, "axis", None)
             if isinstance(axis, str) and axis in "xyz" and all(isinstance(v, (int, float)) for v in value):
                 c = selection.center["xyz".index(axis)]
-                parts.append(f"{axis} from {show_value('', c + value[0])} to {show_value('', c + value[1])}")
+                parts.append(f"{axis} from {show_value(c + value[0])} to {show_value(c + value[1])}")
             else:
-                parts.append(f"from {show_value('', value[0])} to {show_value('', value[1])} along the axis")
+                parts.append(f"from {show_value(value[0])} to {show_value(value[1])} along the axis")
         else:
-            parts.append(f"{field_label(kind, field)} {show_value(field, value)}")
+            parts.append(f"{field_label(kind, field)} {show_value(value, field_kind(type(selection), field).choices)}")
     return f"{shown_name(kind)}: " + ", ".join(parts)
 
 
@@ -329,7 +324,7 @@ class RegionDialog(QtWidgets.QDialog):
                 box = {}
                 for a in "xyz":
                     ends = (value or {}).get(a, ("", ""))
-                    pair = tuple(QtWidgets.QLineEdit("" if e == "" else show_value("", e)) for e in ends)
+                    pair = tuple(QtWidgets.QLineEdit("" if e == "" else show_value(e)) for e in ends)
                     row = QtWidgets.QWidget()
                     row_layout = QtWidgets.QHBoxLayout(row)
                     row_layout.setContentsMargins(0, 0, 0, 0)
@@ -354,7 +349,7 @@ class RegionDialog(QtWidgets.QDialog):
                         all(isinstance(e, (int, float)) for e in ends):     # shown as coordinates
                     c = selection.center["xyz".index(axis)]
                     ends = [c + e for e in ends]
-                box = tuple(QtWidgets.QLineEdit(show_value("", e) if e != "" else "") for e in ends)
+                box = tuple(QtWidgets.QLineEdit(show_value(e) if e != "" else "") for e in ends)
                 self._along_rows = []
                 for b, label in zip(box, FORM[kind][2]["along"]):
                     b.setPlaceholderText("optional")
@@ -367,38 +362,39 @@ class RegionDialog(QtWidgets.QDialog):
                 self.inputs["axis"].currentTextChanged.connect(self._label_along)
                 self._label_along()
                 continue
-            if field in CHOICES:
-                options, editable = CHOICES[field]
+            how = field_kind(cls, field)
+            if how.choices:
+                options = how.choices
                 box = QtWidgets.QComboBox()
-                box.setEditable(editable)
+                box.setEditable(how.editable)
                 for shown, v in options:
                     box.addItem(shown, v)
-                text = show_value(field, value if value is not None else options[0][1])
+                text = show_value(value if value is not None else options[0][1], options)
                 if box.findText(text) < 0:
                     box.addItem(text, None)
                 box.setCurrentIndex(box.findText(text))
                 widget = box
-            elif field in TICKS:
+            elif how.kind == "tick":
                 box = QtWidgets.QCheckBox()
                 box.setChecked(bool(value))
                 widget = box
-            elif field in FILES:
+            elif how.kind == "file":
                 box = QtWidgets.QLineEdit("" if value is None else str(value))
                 widget = QtWidgets.QWidget()
                 row = QtWidgets.QHBoxLayout(widget)
                 row.setContentsMargins(0, 0, 0, 0)
                 row.addWidget(box)
                 browse = QtWidgets.QPushButton("Browse...")
-                browse.clicked.connect(lambda _=False, b=box, f=FILES[field]: self._browse(b, f))
+                browse.clicked.connect(lambda _=False, b=box, f=how.files: self._browse(b, f))
                 row.addWidget(browse)
             else:
-                box = QtWidgets.QLineEdit(show_value(field, value))
+                box = QtWidgets.QLineEdit(show_value(value))
                 widget = box
-                if field in POINTS:
+                if how.kind == "point":
                     box.setPlaceholderText("x, y, z")
-                if field in OPTIONAL:
+                if how.optional:
                     box.setPlaceholderText("automatic")
-            unit = self.length_unit if field in LENGTHS | POINTS else ""
+            unit = self.length_unit if how.kind in ("length", "point") else ""
             if unit or field == "pad":
                 widget = self._beside(widget, unit, TOLERANCE[1] if field == "pad" else None)
             self.form.addRow(field_label(kind, field), widget)
@@ -545,16 +541,17 @@ class RegionDialog(QtWidgets.QDialog):
                     continue
             else:
                 text = box.text().strip()
-            if field in FILES:
+            how = field_kind(cls, field)
+            if how.kind == "file":
                 kwargs[field] = text
                 continue
             if not text:
-                if field in OPTIONAL:
+                if how.optional:
                     kwargs[field] = None
                     continue
                 raise ValueError(f"{label}: no value")
             kwargs[field] = self._value(label, text)
-            if field in ("triangles", "indices") and isinstance(kwargs[field], int):
+            if how.kind == "numbers" and isinstance(kwargs[field], int):        # one number: a list of one
                 kwargs[field] = [kwargs[field]]
         try:
             return cls(**kwargs)
@@ -638,7 +635,7 @@ def bc_values(bc, units=None):
         elif typ.get(k) == "area" and v == "bbox":
             text = "from the selection"
         else:
-            text = show_value("", v)
+            text = show_value(v)
         out.append(f"{labels.get(k, k)} {text}")
     return "; ".join(out)
 
@@ -654,9 +651,9 @@ def bc_value(bc, units=None):
         if k in ("kind", "on") or typ == "area":
             continue
         if typ == "vector" and measures is None:
-            along.append(f"along {show_value('', v)}")
+            along.append(f"along {show_value(v)}")
             continue
-        text = ", ".join(v) if typ == "dofs" else show_value("", v)
+        text = ", ".join(v) if typ == "dofs" else show_value(v)
         unit = field_unit(measures, units)
         parts.append(text + (f" {unit}" if unit else ""))
     return "; ".join(parts + along)
