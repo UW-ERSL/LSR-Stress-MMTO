@@ -61,6 +61,17 @@ def point_text(p):
     return ", ".join(format(float(v), ".6g") for v in p)
 
 
+def load_direction(bc):
+    """The arrow of a load: its kind's first vector value (a force's total, a pressure's direction), or None
+    for a support or a load with no vector."""
+    from lsr_mmto.problem.boundary_conditions import BC_KINDS
+    kind = BC_KINDS.get(bc.get("kind"))
+    if kind is None or kind.role != "load":
+        return None
+    v = next((bc.get(name) for name, typ, _, _ in kind.fields if typ == "vector"), None)
+    return None if v is None else np.asarray(v, dtype=float)
+
+
 class Strip(QtWidgets.QDockWidget):
     """A non-modal dialog docked on the right edge of the window, so it does not cover the 3D view.
     Its own Close, or the strip's x, closes both; dragging the strip's title bar floats it."""
@@ -1278,10 +1289,9 @@ class MMTOWindow(MainWindow):
         self.draw_points(f"mmto_{name}", xyz[nodes], colour)
         self.draw_outline("mmto_outline", p.selections[name], colour)
         bc = p.bcs[bc_index] if bc_index is not None else None
-        if bc is not None and bc.get("kind") in ("force", "traction") and len(nodes):
-            d = np.asarray(bc.get("total") or bc.get("direction"), dtype=float)
-            if np.linalg.norm(d) > 0:
-                self._arrow(bc_index, d, xyz[nodes], float(np.linalg.norm(np.ptp(xyz, axis=0))))
+        d = load_direction(bc) if bc is not None else None
+        if d is not None and len(nodes) and np.linalg.norm(d) > 0:
+            self._arrow(bc_index, d, xyz[nodes], float(np.linalg.norm(np.ptp(xyz, axis=0))))
         self.plotter.render()
         return len(nodes)
 
@@ -1317,9 +1327,9 @@ class MMTOWindow(MainWindow):
                 lines.append(f"<span style='color:#b00000'>{name} has no nodes on this mesh</span>")
         size = float(np.linalg.norm(np.ptp(xyz, axis=0)))
         for i, bc in enumerate(p.bcs):
-            if bc.get("kind") not in ("force", "traction") or bc.get("on") not in p.selections:
+            d = load_direction(bc)
+            if d is None or bc.get("on") not in p.selections:
                 continue
-            d = np.asarray(bc.get("total") or bc.get("direction"), dtype=float)
             nodes = p.evaluate(bc["on"], mesh, "nodes")
             if np.linalg.norm(d) == 0 or len(nodes) == 0:
                 continue

@@ -612,34 +612,30 @@ class RegionDialog(QtWidgets.QDialog):
 
 
 # ---------------------------------------------------------------------- a support or load
-# What the support or load dialog shows for each kind: its name, what it is, and a label per value.
-BC_FORM = {
-    "fixed": ("Fixed support", "Holds the selection still in the ticked directions.", {"dofs": "Held in"}),
-    "displacement": ("Moved support", "Moves the selection by a set distance in the ticked directions.",
-                     {"dofs": "Moved in", "value": "Distance"}),
-    "force": ("Force", "A total force on the selection, shared equally by its nodes.", {"total": "Total force"}),
-    "traction": ("Pressure", "A pressure on the selection, turned into a force: Pressure times Area, pushing "
-                 "along Direction, shared equally by its nodes. Tick Area from the selection to use the "
-                 "selection's size "
-                 "across the direction (Direction must then be along x, y or z).",
-                 {"pressure": "Pressure", "direction": "Direction", "area": "Area"}),
-}
+# What the support or load dialog shows for each kind (its name, what it is, a label per value) is the
+# kind's own: BCKind.shown, help and labels, given by its physics.
+def _kind(kind):
+    from lsr_mmto.problem.boundary_conditions import BC_KINDS
+    return BC_KINDS.get(kind)
 
 
 def bc_name(kind):
-    return BC_FORM[kind][0] if kind in BC_FORM else kind
+    k = _kind(kind)
+    return k.shown if k is not None and k.shown else kind
 
 
 def bc_values(bc, units=None):
     """A support or load's values in words, for the table: e.g. Held in x, y, z."""
     out = []
-    labels = BC_FORM.get(bc["kind"], ("", "", {}))[2]
+    kind = _kind(bc["kind"])
+    labels = kind.labels if kind is not None else {}
+    typ = {name: t for name, t, _, _ in kind.fields} if kind is not None else {}
     for k, v in bc.items():
         if k in ("kind", "on"):
             continue
-        if k == "dofs":
+        if typ.get(k) == "dofs":
             text = ", ".join(v)
-        elif v == "bbox":
+        elif typ.get(k) == "area" and v == "bbox":
             text = "from the selection"
         else:
             text = show_value("", v)
@@ -648,20 +644,22 @@ def bc_values(bc, units=None):
 
 
 def bc_value(bc, units=None):
-    """A support or load's value, short, for the table: x, y, z / 0, -4, 0 N / 75 MPa."""
-    from lsr_mmto.problem.boundary_conditions import BC_KINDS
-    fields = {name: measures for name, _, measures, _ in BC_KINDS[bc["kind"]].fields} if bc["kind"] in BC_KINDS \
-        else {}
-    parts = []
+    """A support or load's value, short, for the table: x, y, z / 0, -4, 0 N / 75 MPa. A vector that
+    measures nothing is a direction (along ...), last; an area is left out."""
+    kind = _kind(bc["kind"])
+    fields = {name: (typ, measures) for name, typ, measures, _ in kind.fields} if kind is not None else {}
+    parts, along = [], []
     for k, v in bc.items():
-        if k in ("kind", "on") or k == "direction" or k == "area":
+        typ, measures = fields.get(k, (None, None))
+        if k in ("kind", "on") or typ == "area":
             continue
-        text = ", ".join(v) if k == "dofs" else show_value("", v)
-        unit = field_unit(fields.get(k), units)
+        if typ == "vector" and measures is None:
+            along.append(f"along {show_value('', v)}")
+            continue
+        text = ", ".join(v) if typ == "dofs" else show_value("", v)
+        unit = field_unit(measures, units)
         parts.append(text + (f" {unit}" if unit else ""))
-    if "direction" in bc:
-        parts.append(f"along {show_value('', bc['direction'])}")
-    return "; ".join(parts)
+    return "; ".join(parts + along)
 
 
 def _clear_label(page, name):
@@ -695,8 +693,11 @@ class BCDialog(QtWidgets.QDialog):
         layout = QtWidgets.QVBoxLayout(self)
         top = QtWidgets.QFormLayout()
         self.kind = QtWidgets.QComboBox()
-        for k in BC_KINDS:
-            self.kind.addItem(bc_name(k), k)
+        from lsr_mmto.physics.available_physics import PHYSICS
+        fields = PHYSICS[project.physics].FIELDS if project.physics in PHYSICS else {}
+        for k, kind in BC_KINDS.items():
+            if kind.field in fields:                                # the kinds of the project's physics
+                self.kind.addItem(bc_name(k), k)
         self.kind_info = Info("")
         self.on = QtWidgets.QComboBox()
         self.on.addItems(list(project.selections))
@@ -733,7 +734,7 @@ class BCDialog(QtWidgets.QDialog):
     def _fill(self, kind, bc):
         while self.form.rowCount():
             self.form.removeRow(0)
-        self.kind_info.setToolTip(BC_FORM[kind][1] if kind in BC_FORM else self.kinds[kind].doc)
+        self.kind_info.setToolTip(self.kinds[kind].help or self.kinds[kind].doc)
         self.inputs = {}
         for name, typ, measures, doc in self.kinds[kind].fields:
             value = (bc or {}).get(name)
@@ -765,7 +766,7 @@ class BCDialog(QtWidgets.QDialog):
                 u = QtWidgets.QLabel(unit)
                 u.setStyleSheet(GREY)
                 row.addWidget(u)
-            label = QtWidgets.QLabel(BC_FORM.get(kind, ("", "", {}))[2].get(name, name))
+            label = QtWidgets.QLabel(self.kinds[kind].labels.get(name, name))
             self.form.addRow(label, row)
             self.inputs[name] = (typ, widget)
 
@@ -811,7 +812,7 @@ class BCDialog(QtWidgets.QDialog):
         out = []
         if not self.on.currentText():
             out.append("Where: choose a selection, or make one with New selection")
-        labels = BC_FORM.get(self.kind.currentData(), ("", "", {}))[2]
+        labels = self.kinds[self.kind.currentData()].labels
         for name, (typ, widget) in self.inputs.items():
             name = labels.get(name, name)
             boxes = widget if typ == "vector" else [widget[1]] if typ == "area" and not widget[0].isChecked() \

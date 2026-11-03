@@ -14,17 +14,15 @@ TAU_DOC = ("How sharply each element counts as its nearest material when a mater
 
 
 def bound_unit(name, units):
-    """The unit a bound on the quantity is in, in the project's unit system ('' when none declared)."""
+    """The unit a bound on the quantity is in, in the project's unit system (its Quantity.unit)."""
+    from lsr_mmto.formulation.quantities import QUANTITIES
     from lsr_mmto.materials.databases import UNIT_SYSTEMS
-    if name in ("VolumeFraction", "MaterialVolumeFraction"):
-        return "fraction of the design domain"
-    if name == "FailureFactorPNorm":
-        return "no units"
+    unit = next((q.unit for q in QUANTITIES if q.name == name), "")
+    if "{" not in unit:
+        return unit
     if units not in UNIT_SYSTEMS:
         return "no unit system declared"
-    s = UNIT_SYSTEMS[units]
-    return {"Mass": s["mass"], "Cost": "USD", "Compliance": f"{s['force']}*{s['length']}",
-            "StressPNorm": s["stress"]}.get(name, "")
+    return unit.format(**UNIT_SYSTEMS[units])
 
 
 def database_columns(project):
@@ -48,7 +46,7 @@ class FormulationPanel(QtWidgets.QDialog):
         self.resize(760, 420)
         self.original = project.formulation
         self.units = project.units
-        self.quantities = {q.name: q for q in QUANTITIES}
+        self.quantities = {q.name: q for q in QUANTITIES if q.applies_to(project.physics)}   # this physics
         self.columns, self.labels, self.colours = database_columns(project)
         layout = QtWidgets.QVBoxLayout(self)
 

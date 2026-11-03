@@ -32,15 +32,16 @@ def _failure_factor_pnorm(m, opt):
 # the structural objectives and constraints, as the arguments of a Quantity (formulation/quantities.py)
 QUANTITIES = [
     dict(name="Compliance", objective=True, constraint=True, needs=[], fn=_compliance, doc="F . u",
-         shown="Compliance", help="How much the part gives under the loads. Lower is stiffer."),
+         shown="Compliance", help="How much the part gives under the loads. Lower is stiffer.",
+         unit="{force}*{length}"),
     dict(name="StressPNorm", objective=True, constraint=False, needs=[], fn=_stress_pnorm,
          doc="p-norm of the relaxed von Mises stress, no 1/N", shown="Stress (p-norm)",
-         help="One value close to the highest von Mises stress in the part."),
+         help="One value close to the highest von Mises stress in the part.", unit="{stress}"),
     dict(name="FailureFactorPNorm", objective=True, constraint=True, needs=["Yield_Strength"],
          fn=_failure_factor_pnorm, doc="mean p-norm of von Mises / yield strength, per element",
          shown="Failure factor (p-norm)",
          help="One value close to the highest stress / yield strength in the part. Above 1 means some element "
-              "yields."),
+              "yields.", unit="no units"),
 ]
 
 

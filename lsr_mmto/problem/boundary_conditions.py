@@ -17,12 +17,15 @@ class BCKind:
     fields: its values, as (name, kind, measures, doc); kind is "dofs" (some of x, y, z),
     "number", "vector" (three numbers) or "area" (a number or "bbox"); measures is what
     the number is (one of UNITS, or "area"), for its unit. The GUI's form is made from them.
-    picks: {type in the picking window: its values from the window's entry}, for a kind that can be
-    picked on the part (None is an entry with no type)."""
+    shown, help and labels are what the GUI's form says: the kind's name, what it does, and a label
+    for each value. picks: {type in the picking window: its values from the window's entry}, for a
+    kind that can be picked on the part (None is an entry with no type)."""
 
-    def __init__(self, doc, role, field, check, apply, script, fields=(), picks=None):
+    def __init__(self, doc, role, field, check, apply, script, fields=(), shown=None, help="", labels=None,
+                 picks=None):
         self.doc, self.role, self.field, self.check, self.apply, self.script = doc, role, field, check, apply, script
         self.fields, self.picks = tuple(fields), dict(picks or {})
+        self.shown, self.help, self.labels = shown, help, dict(labels or {})
 
 
 BC_KINDS = {name: BCKind(**args) for m in MODULES for name, args in m.SUPPORT_AND_LOAD_KINDS.items()}

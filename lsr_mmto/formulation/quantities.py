@@ -37,15 +37,21 @@ def material_volume_fraction(xb, z, z_real, material_id, tau):
 #   doc          what fn computes, for the settings page
 #   shown        its name in the app
 #   help         what it is, in plain words: the app's tooltip and the settings page
+#   unit         the unit of a bound on it, as the app shows it: names of the unit system in braces are
+#                filled in ("{force}*{length}"); text without braces is shown as it is ("no units")
 
 
 class Quantity:
-    __slots__ = ("name", "objective", "constraint", "physics", "needs", "fn", "doc", "shown", "help")
+    __slots__ = ("name", "objective", "constraint", "physics", "needs", "fn", "doc", "shown", "help", "unit")
 
-    def __init__(self, name, objective, constraint, physics, needs, fn, doc, shown, help):
+    def __init__(self, name, objective, constraint, physics, needs, fn, doc, shown, help, unit=""):
         self.name, self.objective, self.constraint = name, objective, constraint
         self.physics, self.needs, self.fn, self.doc = frozenset(physics), tuple(needs), fn, doc
-        self.shown, self.help = shown, help
+        self.shown, self.help, self.unit = shown, help, unit
+
+    def applies_to(self, physics):
+        """True for a quantity of that physics, or one every physics has."""
+        return not self.physics or physics in self.physics
 
 
 def _mass(m, opt):
@@ -68,16 +74,17 @@ def _material_volume_fraction(m, opt):
 QUANTITIES = [Quantity(physics=[m.NAME], **q) for m in MODULES for q in m.QUANTITIES] + [
     Quantity("Mass", True, True, [], ["Density"],
              _mass, "sum of density * x_phys * element volume", "Mass",
-             "The mass of the part, from each material's density."),
+             "The mass of the part, from each material's density.", "{mass}"),
     Quantity("Cost", False, True, [], ["Density", "Cost"],
              _cost, "sum of density * cost * x_phys * element volume", "Cost",
-             "The cost of the part, from each material's density and cost per mass."),
+             "The cost of the part, from each material's density and cost per mass.", "USD"),
     Quantity("VolumeFraction", False, True, [], [],
              _volume_fraction, "mean of x_phys", "Volume fraction",
-             "The share of the design space filled with material, 0 to 1."),
+             "The share of the design space filled with material, 0 to 1.", "fraction of the design domain"),
     Quantity("MaterialVolumeFraction", False, True, [], [],
              _material_volume_fraction, "volume fraction of one database material, softmax weights",
-             "Material volume fraction", "The share of the design space filled with one chosen material, 0 to 1."),
+             "Material volume fraction", "The share of the design space filled with one chosen material, 0 to 1.",
+             "fraction of the design domain"),
 ]
 
 

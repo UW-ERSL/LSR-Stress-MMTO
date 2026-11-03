@@ -26,10 +26,10 @@ def _dofs(dofs):
     return [_AXES[c] for c in sorted(dofs, key="xyz".index)]
 
 
-def _kind(doc, role, check, apply, script, fields=(), picks=None):
-    """The arguments of one BCKind, in its order; every structural kind acts on the displacement u."""
+def _kind(doc, role, check, apply, script, fields, shown, help, labels, picks=None):
+    """The arguments of one BCKind; every structural kind acts on the displacement u."""
     return {"doc": doc, "role": role, "field": "u", "check": check, "apply": apply, "script": script,
-            "fields": fields, "picks": picks or {}}
+            "fields": fields, "shown": shown, "help": help, "labels": labels, "picks": picks or {}}
 
 
 def _picked_force(f):
@@ -106,15 +106,19 @@ SUPPORT_AND_LOAD_KINDS = {
         "the given dofs (x, y, z) held at 0", "support", _check_dofs, _apply_support,
         lambda bc, on: f"p.add_support({on}, dofs={bc['dofs']!r})",
         [("dofs", "dofs", None, "the directions held")],
+        "Fixed support", "Holds the selection still in the ticked directions.", {"dofs": "Held in"},
         {t: (lambda c, d=d: {"dofs": d}) for t, d in _PICKED_SUPPORTS.items()}),
     "displacement": _kind(
         "the given dofs held at a nonzero value", "support", _check_dofs, _apply_support,
         lambda bc, on: f"p.add_support({on}, dofs={bc['dofs']!r}, value={bc['value']!r})",
-        [("dofs", "dofs", None, "the directions moved"), ("value", "number", "length", "the displacement")]),
+        [("dofs", "dofs", None, "the directions moved"), ("value", "number", "length", "the displacement")],
+        "Moved support", "Moves the selection by a set distance in the ticked directions.",
+        {"dofs": "Moved in", "value": "Distance"}),
     "force": _kind(
         "a total force [Fx, Fy, Fz], split equally over the nodes", "load", _check_force, _apply_force,
         lambda bc, on: f"p.add_force({on}, total={bc['total']!r})",
         [("total", "vector", "force", "the total force, split equally over the nodes")],
+        "Force", "A total force on the selection, shared equally by its nodes.", {"total": "Total force"},
         {"force_xyz": _picked_force, None: _picked_force}),
     "traction": _kind(
         "pressure * area along a direction, split equally over the nodes; area a number or 'bbox'",
@@ -122,5 +126,9 @@ SUPPORT_AND_LOAD_KINDS = {
         lambda bc, on: f"p.add_traction({on}, pressure={bc['pressure']!r}, "
                        f"direction={bc['direction']!r}, area={bc['area']!r})",
         [("pressure", "number", "stress", "the pressure"), ("direction", "vector", None, "the direction it pushes"),
-         ("area", "area", "area", "the area it acts on, or bbox: the selection's extent across the direction")]),
+         ("area", "area", "area", "the area it acts on, or bbox: the selection's extent across the direction")],
+        "Pressure", "A pressure on the selection, turned into a force: Pressure times Area, pushing along Direction, "
+        "shared equally by its nodes. Tick Area from the selection to use the selection's size across the "
+        "direction (Direction must then be along x, y or z).",
+        {"pressure": "Pressure", "direction": "Direction", "area": "Area"}),
 }
