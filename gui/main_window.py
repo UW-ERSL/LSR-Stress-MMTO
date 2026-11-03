@@ -504,9 +504,12 @@ class ProjectFolderDialog(QtWidgets.QDialog):
         form.addRow("Name", self.name)
         form.addRow("Location", self._with_browse(self.location, self._browse_location))
         self.stl = None
+        self.physics = None
         if stl is not None:
             self.stl = QtWidgets.QLineEdit(stl)
             form.addRow("Part (STL)", self._with_browse(self.stl, self._browse_stl))
+            self.physics = physics_choice()
+            form.addRow("Physics", self.physics)
         layout.addLayout(form)
         row = QtWidgets.QHBoxLayout()
         self.where = QtWidgets.QLabel("")
@@ -551,6 +554,10 @@ class ProjectFolderDialog(QtWidgets.QDialog):
     def stl_path(self):
         return self.stl.text().strip() if self.stl is not None else None
 
+    def physics_name(self):
+        """The physics chosen for a new project (its name in the project file), or None."""
+        return self.physics.currentData() if self.physics is not None else None
+
     def _show_where(self):
         self.where.setText(f"The project folder: {self.folder()}" if self.name.text().strip() else "")
 
@@ -576,6 +583,16 @@ class ProjectFolderDialog(QtWidgets.QDialog):
             QtWidgets.QMessageBox.warning(self, self.windowTitle(), "\n".join(problems))
             return
         super().accept()
+
+
+def physics_choice():
+    """A list of the physics a new project can have, each shown by its name with what it is beside it
+    ("Structural: linear elasticity, small strain"); the first is chosen."""
+    from lsr_mmto.physics.available_physics import PHYSICS
+    box = QtWidgets.QComboBox()
+    for name, module in PHYSICS.items():
+        box.addItem(f"{name.capitalize()}: {module.DOC}", name)
+    return box
 
 
 class MMTOWindow(MainWindow):
@@ -1310,9 +1327,11 @@ class MMTOWindow(MainWindow):
             dialog = ProjectFolderDialog(self, "New project", self._location(), stl=stl or "")
             if not dialog.exec_():
                 return False
-            folder, stl = dialog.folder(), dialog.stl_path()
+            folder, stl, physics = dialog.folder(), dialog.stl_path(), dialog.physics_name()
+        else:
+            physics = None
         try:
-            p, path = project_folder.create(folder, stl)
+            p, path = project_folder.create(folder, stl, physics=physics)
             project_folder.write_setup_script(p)
         except (OSError, ValueError) as e:
             QtWidgets.QMessageBox.warning(self, "New project", f"The project was not made: {e}")

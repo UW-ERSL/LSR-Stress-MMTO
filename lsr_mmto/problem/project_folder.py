@@ -164,9 +164,10 @@ def _bring_in_files(selection, old_base, folder):
             selection.ref = f"{copy_in(os.path.abspath(path), folder, PART)}:{name}"
 
 
-def create(folder, stl):
-    """A new project in a new folder, named after the folder, with the STL copied into it and
-    every setting at its default; saved as folder/<name>.mmto. Returns (project, its path)."""
+def create(folder, stl, physics=None):
+    """A new project in a new folder, named after the folder, with the STL copied into it, the physics
+    given (the first of the list when None) and every setting at its default; saved as
+    folder/<name>.mmto. Returns (project, its path)."""
     from lsr_mmto.problem.project import Project
     problem = folder_problem(folder)
     if problem:
@@ -177,6 +178,8 @@ def create(folder, stl):
     name = os.path.basename(folder)
     os.makedirs(folder, exist_ok=True)
     p = Project(name, stl=copy_in(os.path.abspath(stl), folder, PART), base_dir=folder)
+    if physics is not None:
+        p.physics = physics
     p.complete_settings()
     path = os.path.join(folder, f"{name}.mmto")
     p.save(path)
