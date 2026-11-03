@@ -29,7 +29,7 @@ except ImportError:                         # run directly, without pytest
     pass
 
 TOL = 1e-5
-STEPS = (1e-3, 1e-4, 1e-5)                # as physics/gradcheck.py; below 1e-5 round-off in the solve takes over
+STEPS = (1e-3, 1e-4, 1e-5)                # as optimize/gradient_check.py; below 1e-5 round-off in the solve takes over
 N_DOF = 3000
 
 # (name, objective, constraint): the objective or the constraint is checked

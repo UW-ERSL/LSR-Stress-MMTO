@@ -8,12 +8,15 @@ up and run with:
     p = Project.load("my project.mmto")
     run(p)
 
-    problem/     a project: the part, its regions, supports and loads, settings, run(p)
-    materials/   material databases and the material network
-    physics/     one iteration's physics: solve, stress, objective, gradients
-    optimize/    the optimization loop, its history, the final check, saving a run
-    results/     a saved run read back: tables, figures, 3D views, STL export
-    pyto_ad.py   every name taken from PyTO-AD
+    problem/      a project: the part, its selections, supports and loads, settings, run(p)
+    materials/    material databases and the material network
+    elements/     the finite element: strain matrix and Lame parameters
+    design/       density filter and projection, latent space to properties, latent penalties
+    formulation/  the quantities an objective or constraint can name, and the formula text
+    physics/      the physics a project may name, one folder each (structural/)
+    optimize/     the optimization loop, its history, the final design analysis, saving a run
+    results/      a saved run read back: tables, figures, 3D views, STL export
+    pyto_ad_imports.py   every name taken from PyTO-AD
 """
 from lsr_mmto.problem.project import Project, run
 from lsr_mmto.problem.selections import (box, cylinder, difference, face, function, halfspaces, ids, inside_stl,

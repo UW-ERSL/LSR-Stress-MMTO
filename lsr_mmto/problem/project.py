@@ -47,7 +47,7 @@ material database.
 
 Objective and constraints are written as PyTO-AD stores them: an expression, a sense
 (minimize) or an operator (<=) and a bound. An expression is exactly one quantity of the
-registry in physics/structural.py, e.g. "Mass()", "FailureFactorPNorm()",
+registry in formulation/quantities.py, e.g. "Mass()", "FailureFactorPNorm()",
 "MaterialVolumeFraction(2, tau=0.5)".
 """
 import json

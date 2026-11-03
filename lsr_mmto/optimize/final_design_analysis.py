@@ -111,7 +111,7 @@ def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
         prefix="[FINAL STRESS DIAG]",
     )
 
-    # --- persist everything for offline postprocessing (results/records.py, results/run_plots.py) ---
+    # --- persist everything for offline postprocessing (results/load_results.py, results/run_plots.py) ---
     material_indices = matEncoder.getClosestRealMaterialIndex(zOptimalPts)
     if hasattr(material_indices, "cpu"):
         material_indices = material_indices.cpu().numpy()

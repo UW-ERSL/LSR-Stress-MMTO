@@ -2,7 +2,7 @@
 test_extending.py
 =================
 A new setting is one entry of SETTINGS (lsr_mmto/problem/settings.py), and a new objective or
-constraint is one entry of QUANTITIES (lsr_mmto/physics/structural.py): nothing else is written by
+constraint is one entry of QUANTITIES (lsr_mmto/formulation/quantities.py): nothing else is written by
 hand. One made-up setting and one made-up quantity are added here, and each must reach every place
 that uses it: the defaults, the settings page, the app's panel, the settings a run gets.
 

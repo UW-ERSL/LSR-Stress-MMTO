@@ -63,7 +63,7 @@ def compute_mass_from_x_and_z(
 
 # ============================================================================
 # RUN I/O + PER-ITERATION DIAGNOSTICS + POST-PROCESSING
-# Extracted from the driver (optimize/run.py) so it stays optimization-only.
+# Extracted from the driver (optimize/optimization_loop.py) so it stays optimization-only.
 # History is recorded in all modes; `verbose` gates console output only.
 # ============================================================================
 

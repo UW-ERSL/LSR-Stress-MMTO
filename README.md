@@ -89,7 +89,7 @@ To use a PyTO-AD you already have instead, it must sit next to this folder and b
 | | `main` | `autodiff` |
 |---|---|---|
 | Solver library | PyTO | PyTO-AD only (PyTO is not used) |
-| Gradients | hand-derived adjoints, `SensitivitiesPureStructural.py` | autograd through the forward pass, `lsr_mmto/physics/structural.py` |
+| Gradients | hand-derived adjoints, `SensitivitiesPureStructural.py` | autograd through the forward pass, `lsr_mmto/physics/structural/` |
 | Environment | `lsr-stress-mmto` | `lsr-stress-mmto-ad` |
 
 Everything else (examples, material databases, VAEs, optimizer settings, schedules) is the same, so a run on either branch can be compared one to one.
@@ -116,15 +116,21 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 | File | Purpose |
 |---|---|
 | `main_window.py` | the window: New, Open and Save of .mmto projects, units, geometry |
-| `panels.py` | the Materials, Formulation and Settings panels |
-| `supports.py` | the Supports and loads panel: regions, supports, loads, keep solid, preview |
-| `pyto_ad.py` | everything the GUI takes from the PyTO-AD GUI |
+| `materials_panel.py` | the Materials panel |
+| `formulation_panel.py` | the Formulation panel: objective and constraints |
+| `settings_panel.py` | the Settings panel |
+| `supports_and_loads_panel.py` | the Supports and loads panel: selections, supports, loads, keep solid, preview |
 | `database_editor.py` | making and changing a material database in the app |
+| `run_panel.py` | the Run panel: starts and stops a run, shows its progress |
+| `results_panel.py` | the Results panel: a finished run's tables, plots and 3D design |
+| `draw_design.py` | draws a design in the 3D view |
+| `panel_widgets.py` | the small pieces every panel shares: number box, (i) button, OK and Cancel, colour swatch |
+| `pyto_ad_imports.py` | everything the GUI takes from the PyTO-AD GUI |
 | `assets/` | the app's icon |
 
 ### `lsr_mmto/`
 
-The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad.py` imports PyTO-AD: finite element analysis, filters and the MMA optimizer.
+The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad_imports.py` imports PyTO-AD: finite element analysis, filters and the MMA optimizer.
 
 #### `lsr_mmto/problem/`
 
@@ -132,7 +138,8 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad.py`
 |---|---|
 | `project.py` | a project: saves and loads it, checks it, builds the problem, runs it (`run(p)`) |
 | `settings.py` | every setting, one entry each: its default, label, help and place in the Settings panel |
-| `selections.py` | named regions of the mesh that supports, loads and keep-solid regions act on |
+| `selections.py` | named selections of the mesh that supports, loads and keep-solid regions act on |
+| `boundary_conditions.py` | what a kind of support or load is (`BCKind`), and the list of kinds |
 | `project_folder.py` | keeps everything a project uses in its folder |
 | `mesh.py` | turns the part's STL into the voxel mesh |
 
@@ -143,38 +150,61 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad.py`
 | `databases.py` | the attributes a material database may hold, the check of a database, the colour and label of each material, the VAE settings of each shipped database |
 | `encoder.py` | reads a material database, trains or loads the VAE |
 | `networks.py` | the VAE network |
-| `colors.py` | the default colours, for materials the database's Display sheet gives none |
+
+#### `lsr_mmto/elements/`
+
+| File | Purpose |
+|---|---|
+| `hex_element.py` | the hexahedral element: Lame parameters and the strain matrix at its centre |
+
+#### `lsr_mmto/design/`
+
+| File | Purpose |
+|---|---|
+| `density_filter_and_projection.py` | the density filter and the Heaviside projection |
+| `latent_to_properties.py` | each element's material properties from its point in the latent space |
+| `latent_penalties.py` | the distance penalty and latent smoothing |
+
+#### `lsr_mmto/formulation/`
+
+| File | Purpose |
+|---|---|
+| `quantities.py` | every objective and constraint a formula can name, as differentiable functions; autograd gives their gradients |
+| `formulation_text.py` | reads the formula text of the objective and the constraints |
 
 #### `lsr_mmto/physics/`
 
 | File | Purpose |
 |---|---|
-| `__init__.py` | the list of physics a project may name, and the file of each |
-| `structural.py` | the objective and constraints as differentiable functions; autograd gives their gradients |
-| `gradcheck.py` | the autodiff gradient against central finite differences |
+| `available_physics.py` | the list of physics a project may name, and the module of each |
+| `structural/structural_module.py` | what the structural module offers the optimization |
+| `structural/structural_physics.py` | the finite element solve, element stress, von Mises, p-norm |
+| `structural/structural_supports_and_loads.py` | the structural supports and loads: fixed, displacement, force, traction |
+| `structural/structural_quantities.py` | compliance, stress and failure factor, and the structural measurements of each iteration and of the final design |
 
 #### `lsr_mmto/optimize/`
 
 | File | Purpose |
 |---|---|
-| `run.py` | the optimization loop; internal, a project runs it only through `run(p)` |
-| `parameters.py` | the parameter container shared by the examples |
+| `optimization_loop.py` | the optimization loop; internal, a project runs it only through `run(p)` |
+| `design_model.py` | one iteration: design, properties, physics, objective and constraints |
+| `mmto_to_params.py` | the parameter container the loop reads |
 | `filters.py` | the density and material filters |
-| `history.py` | what each iteration records and prints: history, log, stress diagnostics |
-| `final_check.py` | the final design analysed three ways, and the run saved |
-| `save.py` | saves a finished run to disk |
+| `history.py` | what each iteration records and prints |
+| `final_design_analysis.py` | the final design analysed three ways, and the run saved |
+| `save_results.py` | saves a finished run to disk |
+| `gradient_check.py` | the autodiff gradient against central finite differences |
 
 #### `lsr_mmto/results/`
 
 | File | Purpose |
 |---|---|
-| `records.py` | a finished run, read back for plotting |
+| `load_results.py` | a finished run, read back for plotting |
 | `run_plots.py` | design, latent space, convergence, boundary conditions |
-| `tables.py` | run summary and material database tables |
-| `render.py` | 2D panels and 3D voxel renders |
+| `tables.py` | run summary and material database tables, formatted for the notebook |
+| `design_3d.py` | 2D panels and 3D voxel renders |
 | `stl_export.py` | a run's design as STL files |
 | `compare.py` | two runs side by side |
-| `display.py` | tables formatted for the notebook |
 
 ### `data/`
 

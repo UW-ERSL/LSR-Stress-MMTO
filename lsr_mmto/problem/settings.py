@@ -7,7 +7,7 @@ page), and the group of the Settings panel it sits in. Everything else is made f
 DEFAULT_SETTINGS, the Settings panel, docs/project_file_reference.md, and the settings object s the
 optimization reads (s.gamma_factor).
 
-A new setting is one Setting here, plus the line in optimize/run.py that reads s.<name>. A setting
+A new setting is one Setting here, plus the line in optimize/optimization_loop.py that reads s.<name>. A setting
 PyTO-AD's TOParams already has a field for names it (pyto_ad_field): build() copies it there, and
 the run reads it from there (to_params.MaxIterations), so the two never disagree.
 

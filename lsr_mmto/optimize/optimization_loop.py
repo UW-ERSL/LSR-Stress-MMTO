@@ -7,7 +7,7 @@ PIPELINE:
       x_filt -> x_phys = Heaviside(x_filt) optional projection (density only)
       z  -> decode (VAE) -> E, Y, mass_density  per-element material properties
     FEA solve(x_phys) -> von Mises stress (relaxed) -> objective/constraints
-    all of the above is one torch tree (physics/structural.py, MMTOModelAD);
+    all of the above is one torch tree (optimize/design_model.py, MMTOModelAD);
     gradients by autograd, through PyTO-AD's solve
     optional penalties (latent z-smoothing, distance-to-real-material) added here
     gradient carried back through Heaviside + density filter by autograd -> w.r.t. x
