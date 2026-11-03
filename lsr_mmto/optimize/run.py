@@ -244,7 +244,6 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
                 camera_position="iso",
                 save_path=None,          # interactive window, no file
             )
-    APPLY_DENSITY_FILTER = True
     APPLY_LATENT_SENS_FILTER = False  # (H_material@g)/Hs smoothing of latent
                                       # gradient blocks; set False.
     MMA_MOVE_LIMIT, MMA_KKT_TOL = 0.05, 1e-6
@@ -339,8 +338,8 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
         # ============ DECODE + MAIN FEA: one torch tree (AD model) ============
         # zeta -> x_phys, decoded properties -> PyTO-AD solve -> stress -> J, constraints
         J_t, cons_t = ad_model.evaluate(zeta, beta_proj, s.eta_proj,
-                                        use_heaviside=s.use_heaviside_projection,
-                                        apply_density_filter=APPLY_DENSITY_FILTER)
+                                        use_heaviside=to_params.HeavisideProjection,
+                                        apply_density_filter=to_params.APPLY_FILTER_TO_DENSITY)
 
         # x_phys and the decoded properties for logging and diagnostics: the same numbers, detached
         x_phys = ad_model.x_phys.detach().numpy().copy()
@@ -417,7 +416,7 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
                     _K, _rel_tol, _min_iter = DYN_GAMMA["window"], DYN_GAMMA["rel_tol"], DYN_GAMMA["min_iter"]
                     _n_ramp = int(np.ceil(np.log(max(s.gamma_max / s.gamma_init, 1 + 1e-9))
                                           / np.log(max(s.gamma_factor, 1 + 1e-9))))
-                    _deadline = int(s.maxIterations) - _n_ramp - DYN_GAMMA["end_margin"]
+                    _deadline = int(to_params.MaxIterations) - _n_ramp - DYN_GAMMA["end_margin"]
                     _settled = (mmaIterations >= _min_iter and len(_J_hist) > _K and
                                 abs(_J_hist[-1] - _J_hist[-1 - _K])
                                 <= _rel_tol * max(abs(_J_hist[-1 - _K]), 1e-12))
@@ -457,7 +456,7 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
         if s.use_continuation and (mmaIterations % 10 == 0):
             increment_SIMP_THERMAL_PENALTY(0.25)
             increment_SIMP_STRUCTURAL_PENALTY(0.25)
-        if s.use_heaviside_projection:
+        if to_params.HeavisideProjection:
             beta_new, beta_updated = update_beta(
                 beta_proj=beta_proj,
                 mmaIterations=mmaIterations,
@@ -523,7 +522,7 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
             zeta0.reshape(-1, 1),
             lowerBound,
             upperBound,
-            maxIterations=s.maxIterations,
+            maxIterations=to_params.MaxIterations,
             timeLimitSecs=s.timeLimit,
             move_limit=MMA_MOVE_LIMIT,
             kktTol=MMA_KKT_TOL,
@@ -565,7 +564,6 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
     run_config["fixed_in_code"] = {
         "mma_move_limit": MMA_MOVE_LIMIT, "mma_kkt_tol": MMA_KKT_TOL,
         "dynamic_gamma": dict(DYN_GAMMA),
-        "apply_density_filter": APPLY_DENSITY_FILTER,
         "apply_latent_sensitivity_filter": APPLY_LATENT_SENS_FILTER,
         "initial_density": float(initialDensity),
         "simp_structural_penalty_at_end": float(topopt_material_model._SIMP_STRUCTURAL_PENALTY),
@@ -581,7 +579,8 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
         mat_lib=mat_lib,
         MaterialModel=MaterialModel,
         physical_density=lambda x: ad_model.physical_density(x, beta_proj, s.eta_proj,
-                                                             s.use_heaviside_projection, APPLY_DENSITY_FILTER),
+                                                             to_params.HeavisideProjection,
+                                                             to_params.APPLY_FILTER_TO_DENSITY),
         zRealPoints=zRealPoints,
         material_colors=material_colors,
         material_labels=material_labels,

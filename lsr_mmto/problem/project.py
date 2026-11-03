@@ -61,7 +61,8 @@ from lsr_mmto.materials.databases import (ATTRIBUTES, DATABASE_DIR, DATABASE_VAE
                                          check_database, database_attributes, database_units, in_shipped_folder,
                                          recommended_latent_dim, unit_ratio)
 from lsr_mmto.physics import PHYSICS
-from lsr_mmto.problem.settings import BY_KEY, DEFAULT_SETTINGS, MESH_DEFAULTS, VAE_PARAMS, run_settings
+from lsr_mmto.problem.settings import (BY_KEY, DEFAULT_SETTINGS, MESH_DEFAULTS, SETTINGS, VAE_PARAMS, pyto_ad_value,
+                                       run_settings)
 
 SCHEMA_VERSION = 1
 # _UPGRADES[n] turns an mmto section of version n into version n + 1. When the format
@@ -701,12 +702,11 @@ class Project:
         common = self.settings.get("common", {})
         to_params = MMTOParams()
         to_params.Comment = self.comment or self.name
-        to_params.ExtrudeZ = self.single_layer
         to_params.KeepFixedElems = self.keep_support_elements
-        to_params.nDOFDesired = self.n_dof
-        to_params.RelativeFilterRadius = float(common["relative_filter_radius"])
-        if common["material_filter_radius"] is not None:
-            to_params.MaterialFilterRadius = float(common["material_filter_radius"])
+        for e in SETTINGS:                                          # every setting TOParams has a field for
+            if e.pyto_ad_field is not None:
+                value = getattr(self, e.key) if e.section == "mesh" else self.settings[e.section][e.key]
+                setattr(to_params, e.pyto_ad_field, pyto_ad_value(e, value))
         topopt_material_model._PNORM_EXPONENT = float(common["pnorm_exponent"])
         xlsx, _ = self.database_paths()
         to_params.MaterialsExcelFile = xlsx

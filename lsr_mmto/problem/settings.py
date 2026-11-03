@@ -7,7 +7,9 @@ page), and the group of the Settings panel it sits in. Everything else is made f
 DEFAULT_SETTINGS, the Settings panel, docs/project_reference.md, and the settings object s the
 optimization reads (s.gamma_factor).
 
-A new setting is one Setting here, plus the line in optimize/run.py that reads s.<name>.
+A new setting is one Setting here, plus the line in optimize/run.py that reads s.<name>. A setting
+PyTO-AD's TOParams already has a field for names it (pyto_ad_field): build() copies it there, and
+the run reads it from there (to_params.MaxIterations), so the two never disagree.
 
 Sections: "mesh" is Project.n_dof and Project.single_layer; "common", "advanced" and "vae" are
 project.settings[section]. A VAE setting whose default is FROM_DATABASE starts from the database's
@@ -34,12 +36,16 @@ OPTIMIZATION, VAE = "Optimization", "VAE"                 # the Settings panel's
 
 class Setting:
     """One setting. none_means: what an empty value (None) means, for a setting that may be empty;
-    integer: a whole number; choices: the Enum whose member names are its only values."""
-    __slots__ = ("section", "key", "default", "label", "help", "group", "none_means", "integer", "choices")
+    integer: a whole number; choices: the Enum whose member names are its only values; pyto_ad_field:
+    the field of the optimization parameters (TOParams) that holds it during a run."""
+    __slots__ = ("section", "key", "default", "label", "help", "group", "none_means", "integer", "choices",
+                 "pyto_ad_field")
 
-    def __init__(self, section, key, default, label, help, group, none_means=None, integer=False, choices=None):
+    def __init__(self, section, key, default, label, help, group, none_means=None, integer=False, choices=None,
+                 pyto_ad_field=None):
         self.section, self.key, self.default, self.label, self.help = section, key, default, label, help
         self.group, self.none_means, self.integer, self.choices = group, none_means, integer, choices
+        self.pyto_ad_field = pyto_ad_field
 
     @property
     def tab(self):
@@ -53,17 +59,19 @@ SETTINGS = [
     # ---- Main
     Setting("mesh", "n_dof", 30000, "Mesh dofs",
             "How fine the mesh is: the number of unknowns it is built for. More is finer, and slower.",
-            "Main", integer=True),
+            "Main", integer=True, pyto_ad_field="nDOFDesired"),
     Setting("mesh", "single_layer", False, "Single element layer (2D)",
-            "One element through the thickness, for a flat (2D) part.", "Main"),
+            "One element through the thickness, for a flat (2D) part.", "Main", pyto_ad_field="ExtrudeZ"),
     Setting("common", "maxIterations", 300, "Max iterations",
-            "The optimization stops after this many iterations.", "Main", integer=True),
+            "The optimization stops after this many iterations.", "Main", integer=True,
+            pyto_ad_field="MaxIterations"),
     Setting("common", "relative_filter_radius", 2.5, "Density filter radius",
             "The smallest feature the design may have, in element sizes. Larger gives smoother, simpler designs.",
-            "Main"),
+            "Main", pyto_ad_field="RelativeFilterRadius"),
     Setting("common", "material_filter_radius", None, "Latent smoothing radius",
             "How far material choices are smoothed between neighbouring elements, in element sizes. Ticked: "
-            "the same as the density filter radius.", "Main", none_means="same as density filter"),
+            "the same as the density filter radius.", "Main", none_means="same as density filter",
+            pyto_ad_field="MaterialFilterRadius"),
     Setting("common", "pnorm_exponent", 6.0, "p-norm exponent",
             "How closely the single stress value follows the highest stress in the part. Larger is closer, but "
             "harder to optimize.", "Main"),
@@ -79,7 +87,8 @@ SETTINGS = [
             "iterations, and every constraint is met to within this.", "Run length"),
     # ---- Projection
     Setting("advanced", "use_heaviside_projection", True, "Heaviside projection",
-            "Pushes each element towards fully solid or fully empty.", "Projection"),
+            "Pushes each element towards fully solid or fully empty.", "Projection",
+            pyto_ad_field="HeavisideProjection"),
     Setting("advanced", "eta_proj", 0.5, "Projection threshold",
             "The density at which that push splits solid from empty.", "Projection"),
     # ---- Distance penalty
@@ -182,6 +191,15 @@ class RunSettings:
 
     def __repr__(self):
         return f"RunSettings({self.as_dict()!r})"
+
+
+def pyto_ad_value(setting, value):
+    """A setting's value as its TOParams field holds it: a whole number, a float, or as it is."""
+    if value is None or isinstance(value, bool):
+        return value
+    if setting.integer:
+        return int(value)
+    return float(value) if isinstance(value, (int, float)) else value
 
 
 def run_settings(project):

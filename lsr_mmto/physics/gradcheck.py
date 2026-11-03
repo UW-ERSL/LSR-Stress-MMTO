@@ -58,7 +58,7 @@ def check(project, n_x=3, n_z=3, steps=(1e-3, 1e-4, 1e-5), seed=0):
         run_args = _run_arguments(_prepared(project), save_dir=scratch, verbose=False)
         s = _model_from_setup(run_args)
     model, beta, eta, lb, ub = s["model"], s["beta"], s["eta"], s["lb"], s["ub"]
-    heaviside = run_args["s"].use_heaviside_projection
+    heaviside, filtered = model.to_params.HeavisideProjection, model.to_params.APPLY_FILTER_TO_DENSITY
     n = model.N
 
     rng = np.random.default_rng(seed)
@@ -66,12 +66,12 @@ def check(project, n_x=3, n_z=3, steps=(1e-3, 1e-4, 1e-5), seed=0):
     zeta[:n] = rng.uniform(0.05, 1.0, n)
     zeta[n:] = rng.uniform(lb[n:], ub[n:])
 
-    J, cons = model.evaluate(zeta, beta, eta, use_heaviside=heaviside)
+    J, cons = model.evaluate(zeta, beta, eta, use_heaviside=heaviside, apply_density_filter=filtered)
     gJ = model.chain_to_x(model.grad_phys(J))
     gC = model.chain_to_x(model.grad_phys(cons[0])) if cons else None
 
     def values(z):
-        Jz, cz = model.evaluate(z, beta, eta, use_heaviside=heaviside)
+        Jz, cz = model.evaluate(z, beta, eta, use_heaviside=heaviside, apply_density_filter=filtered)
         return float(Jz.detach()), (float(cz[0].detach()) if cz else np.nan)
 
     # variables with a sizeable gradient, so the comparison is not lost in noise
