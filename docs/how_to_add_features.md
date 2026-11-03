@@ -1,7 +1,7 @@
 # How to add features
 
 Most additions are one entry in a list. `docs/how_the_code_works.md` says where each part of the
-code is. The tests listed under each one fail when the entry is incomplete. After any addition, run
+code is, and `docs/code_map.md` leads from what you want to add to the section of this page to follow. The tests listed under each one fail when the entry is incomplete. After any addition, run
 
     python docs/make_project_file_reference.py
     python -m gui.user_guide_window --write
