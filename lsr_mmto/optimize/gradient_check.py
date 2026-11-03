@@ -98,7 +98,7 @@ def check(project, n_x=3, n_z=3, steps=(1e-3, 1e-4, 1e-5), seed=0):
     headers = ["variable", "h", "dJ, FD", "dJ, autodiff", "rel. diff"]
     if gC is not None:
         headers += ["dg1, FD", "dg1, autodiff", "rel. diff"]
-    from lsr_mmto.results.display import Table
+    from lsr_mmto.results.tables import Table
     return Table(rows, headers=headers,
                  title="Gradient check: central differences against autodiff",
                  note=f"random design, beta = {beta:g}; J = {float(J.detach()):.6g}")

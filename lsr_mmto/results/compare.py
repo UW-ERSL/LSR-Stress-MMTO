@@ -23,7 +23,7 @@ def _arguments(run):
 
 def settings(runs):
     """Run arguments, one column per run; a row is marked where they differ."""
-    from .display import Table
+    from .tables import Table
     names = list(runs)
     args = {k: _arguments(r) for k, r in runs.items()}
     keys = sorted(set().union(*[a.keys() for a in args.values()]) - _IGNORE - _SWITCHED)
@@ -53,7 +53,7 @@ def _iterations(run):
 
 def table(runs):
     """Final values and run times, one column per run."""
-    from .display import Table
+    from .tables import Table
     names = list(runs)
     rs = [runs[n] for n in names]
 
