@@ -37,6 +37,7 @@ from .materials_panel import MaterialsPanel
 from .panel_widgets import GREY, Info, ok_cancel
 from .settings_panel import SettingsPanel
 from .supports_and_loads_panel import KEEP_COLOUR, LOAD_COLOUR, OTHER_COLOUR, SUPPORT_COLOUR, SupportsPanel, bc_name, bc_value
+from .user_guide_window import open_user_guide
 from .pyto_ad_imports import (FILE_DIALOG_OPTIONS, UNIT_SYSTEMS, GeometryWindow, MainWindow, ProjectsWindow,
                       StructuralLoadsWindow, UnitsWindow)
 
@@ -618,6 +619,9 @@ class MMTOWindow(MainWindow):
         file_menu.addSeparator()
         file_menu.addAction("E&xit").triggered.connect(self.close)
         help_menu = self.menuBar().addMenu("&Help")
+        guide = help_menu.addAction("&User guide")
+        guide.setShortcut(QKeySequence.HelpContents)                # F1
+        guide.triggered.connect(lambda: open_user_guide(self))
         help_menu.addAction(f"About {APP}").triggered.connect(self._about)
 
     def _about(self):
