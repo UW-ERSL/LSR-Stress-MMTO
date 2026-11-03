@@ -403,6 +403,13 @@ class MMTOModelAD:
         self.cons = [self._constraint(qoi, opt, limit) for qoi, opt, limit in self.to_params.Constraints]
         return self.J, self.cons
 
+    def physical_density(self, x, beta, eta, use_heaviside=True, apply_density_filter=True):
+        """x_phys of a raw density x, numpy in and out: the filter and projection evaluate uses."""
+        with torch.no_grad():
+            x = torch.as_tensor(np.asarray(x, dtype=float).ravel(), dtype=_DTYPE)
+            x_filt = density_filter(x, self.H, self.Hs) if apply_density_filter else x
+            return (heaviside(x_filt, beta, eta) if use_heaviside else x_filt).numpy().copy()
+
     def _value(self, q, opt):
         """q.fn at the current state, after checking the database has the columns it reads."""
         missing = [c for c in q.needs if c not in self.props]

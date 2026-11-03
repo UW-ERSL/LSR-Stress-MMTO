@@ -98,17 +98,17 @@ def eval_stress_compliance_metrics(
 
 
 def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
-                       MaterialModel, heaviside_projection, H_density, Hs_density,
+                       MaterialModel, physical_density,
                        zRealPoints, material_colors, num_elems, latentDim,
-                       beta_proj, eta_proj, elem_volume, design_domain_volume,
-                       apply_density_filter, use_heaviside_projection,
+                       elem_volume, design_domain_volume,
                        binarize_topology, snap_to_real_material, save_dir=None,
                        run_config=None, example_name=None, material_labels=None, decode=None):
     """Reconstruct the optimal fields, evaluate stress/compliance metrics at the
     continuous / binarized / snapped designs, and draw the final plots.
 
     decode(z) -> (E, nu, properties) is the optimization's own decode, so the final check analyses
-    the design with the same materials (a decoded or constant Poisson's ratio) as the optimization."""
+    the design with the same materials (a decoded or constant Poisson's ratio) as the optimization;
+    physical_density(x) -> x_phys is its own density filter and projection, at the last beta."""
     if decode is None:
         raise ValueError("run_postprocessing needs decode: the optimization's E, nu for latent points")
     import os
@@ -122,11 +122,7 @@ def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
     xOptimal_raw = zetaOptimal[0:num_elems].copy()
     zOptimal = zetaOptimal[num_elems:].reshape(latentDim, -1).T   # numpy, element-major
 
-    xOptimal_filt = (H_density @ xOptimal_raw) / Hs_density if apply_density_filter else xOptimal_raw.copy()
-    if use_heaviside_projection:
-        xOptimal_cont, _ = heaviside_projection(xOptimal_filt, beta_proj, eta_proj)
-    else:
-        xOptimal_cont = xOptimal_filt.copy()
+    xOptimal_cont = physical_density(xOptimal_raw)   # the optimization's own filter and projection
 
     eval_stress_compliance_metrics(
         x_vec=xOptimal_cont,

@@ -269,18 +269,6 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
         initialize_SIMP_STRUCTURAL_PENALTY(3)
         initialize_SIMP_THERMAL_PENALTY(1)
 
-    def heaviside_projection(x_filt: np.ndarray, beta: float, eta: float):
-        """Smoothed Heaviside projection x_phys(x_filt) and derivative dx_phys/dx_filt.
-
-        x_phys = (tanh(b*eta) + tanh(b*(x_filt-eta))) / (tanh(b*eta) + tanh(b*(1-eta))).
-        Larger beta -> sharper (more 0/1) projection.
-        """
-        x_filt = np.asarray(x_filt, dtype=float).reshape(-1)
-        denom = np.tanh(beta * eta) + np.tanh(beta * (1.0 - eta))
-        x = (np.tanh(beta * eta) + np.tanh(beta * (x_filt - eta))) / denom
-        dxphys_dxfilt = (beta * (1.0 - np.tanh(beta * (x_filt - eta)) ** 2)) / denom
-        return x, dxphys_dxfilt
-
     def _smooth_latent_gradient_inplace(vec: np.ndarray):
         """Sensitivity-filter (in place) each latent block of an objective gradient.
 
@@ -310,8 +298,9 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
 
         Steps:
           1. split zeta into density x and latents z
-          2. density filter x -> x_filt, Heaviside x_filt -> x_phys (numpy, for logging)
-          3. AD model: decode z -> material properties and solve, in one torch tree
+          2. AD model: density filter and Heaviside x -> x_phys, decode z -> material properties,
+             and solve, in one torch tree
+          3. x_phys and the decoded properties, detached, for logging and diagnostics
           4. postprocess the solve; record stress-violation diagnostics into history
           5. obj/cons values from the AD model; their gradients w.r.t. (x_phys, z) by autograd
           6. normalize obj by obj0; add optional z-smoothing and distance penalties (autograd)
@@ -345,25 +334,16 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
         zeta = np.asarray(zeta).flatten()
 
         # ===================== SPLIT DESIGN VECTOR =====================
-        x = zeta[:num_elems].copy()
         z = zeta[num_elems:].reshape(latentDim, -1).T   # numpy, element-major (N, latentDim)
-
-        # ============== DENSITY FILTER + HEAVISIDE PROJECTION ==========
-        x_filt = (H_density @ x) / Hs_density if APPLY_DENSITY_FILTER else x.copy()
-
-        if s.use_heaviside_projection:
-            x_phys, _ = heaviside_projection(x_filt, beta_proj, s.eta_proj)
-        else:
-            x_phys = x_filt
 
         # ============ DECODE + MAIN FEA: one torch tree (AD model) ============
         # zeta -> x_phys, decoded properties -> PyTO-AD solve -> stress -> J, constraints
-        to_params.current_major_iter = int(mmaIterations)
         J_t, cons_t = ad_model.evaluate(zeta, beta_proj, s.eta_proj,
                                         use_heaviside=s.use_heaviside_projection,
                                         apply_density_filter=APPLY_DENSITY_FILTER)
 
-        # the decoded properties for logging and diagnostics: the same numbers, detached
+        # x_phys and the decoded properties for logging and diagnostics: the same numbers, detached
+        x_phys = ad_model.x_phys.detach().numpy().copy()
         material_properties = {k: v.detach() for k, v in ad_model.props.items()}
         zTorch = ad_model.z.detach()
         log_design_state(history, mmaIterations, x_phys, z, material_properties,
@@ -600,20 +580,15 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
         matEncoder=matEncoder,
         mat_lib=mat_lib,
         MaterialModel=MaterialModel,
-        heaviside_projection=heaviside_projection,
-        H_density=H_density,
-        Hs_density=Hs_density,
+        physical_density=lambda x: ad_model.physical_density(x, beta_proj, s.eta_proj,
+                                                             s.use_heaviside_projection, APPLY_DENSITY_FILTER),
         zRealPoints=zRealPoints,
         material_colors=material_colors,
         material_labels=material_labels,
         num_elems=num_elems,
         latentDim=latentDim,
-        beta_proj=beta_proj,
-        eta_proj=s.eta_proj,
         elem_volume=elem_volume,
         design_domain_volume=design_domain_volume,
-        apply_density_filter=APPLY_DENSITY_FILTER,
-        use_heaviside_projection=s.use_heaviside_projection,
         binarize_topology=s.binarize_topology,
         snap_to_real_material=s.snap_to_real_material,
         save_dir=save_dir,
