@@ -84,20 +84,23 @@ class FormulationPanel(QtWidgets.QDialog):
 
     def _stored_tau(self):
         """The tau of the project's material volume fraction constraints (the first, if they differ)."""
-        from lsr_mmto.formulation.quantities import DEFAULT_TAU
+        from lsr_mmto.formulation.quantities import DEFAULT_TAU, default_of, takes
         from lsr_mmto.formulation.formulation_text import parse_expression
         for c in self.original.get("constraints", []):
             try:
                 name, _, kwargs = parse_expression(c.get("expression"))
             except ValueError:
                 continue
-            if name == "MaterialVolumeFraction":
-                return kwargs.get("tau", DEFAULT_TAU)
+            if takes(name, "tau"):
+                return kwargs.get("tau", default_of(name, "tau"))
         return DEFAULT_TAU
 
     def _show_tau(self):
-        self.tau_box.setVisible(any(e["widgets"]["quantity"].currentData() == "MaterialVolumeFraction"
-                                    for e in self.rows))
+        self.tau_box.setVisible(any(self._takes(e["widgets"]["quantity"].currentData(), "tau") for e in self.rows))
+
+    def _takes(self, name, argument):
+        """True when the quantity's formula takes the argument (a material, tau)."""
+        return name in self.quantities and self.quantities[name].takes(argument)
 
     def reason(self, name):
         """Why the quantity cannot be used with this database, or None."""
@@ -139,7 +142,7 @@ class FormulationPanel(QtWidgets.QDialog):
         combo.setCurrentIndex(combo.findData(name) if name else -1)
 
     def add_row(self, constraint):
-        """A constraint row: quantity, material (MaterialVolumeFraction only), <=, bound, unit."""
+        """A constraint row: quantity, material (a quantity that takes one), <=, bound, unit."""
         from lsr_mmto.formulation.formulation_text import parse_expression
         row = QtWidgets.QHBoxLayout()
         widgets = {"quantity": self._quantity_combo("constraint"), "material": QtWidgets.QComboBox(),
@@ -161,7 +164,7 @@ class FormulationPanel(QtWidgets.QDialog):
             widgets["bound"].set_value(constraint.get("bound") or 0.0)
             try:
                 name, args, kwargs = parse_expression(constraint["expression"])
-                if name == "MaterialVolumeFraction" and args:
+                if self._takes(name, "material") and args:
                     i = int(args[0])
                     if i >= widgets["material"].count():
                         widgets["material"].addItem(f"material {i}", i)
@@ -178,7 +181,7 @@ class FormulationPanel(QtWidgets.QDialog):
     def _update_row(self, entry):
         w = entry["widgets"]
         name = w["quantity"].currentData()
-        w["material"].setVisible(name == "MaterialVolumeFraction")
+        w["material"].setVisible(self._takes(name, "material"))
         unit = bound_unit(name, self.units) if name else ""
         w["unit"].setText("" if unit in ("fraction of the design domain", "no units") else unit)
         w["why"].setText(self.reason(name) or "" if name else "")
@@ -228,10 +231,9 @@ class FormulationPanel(QtWidgets.QDialog):
         for e in self.rows:
             w, old = e["widgets"], e["original"] or {}
             name = w["quantity"].currentData()
-            if name == "MaterialVolumeFraction":
-                expression = f"MaterialVolumeFraction({w['material'].currentData() or 0}, tau={self.tau.value():g})"
-            else:
-                expression = f"{name}()"
+            given = ([str(w["material"].currentData() or 0)] if self._takes(name, "material") else []) + \
+                ([f"tau={self.tau.value():g}"] if self._takes(name, "tau") else [])
+            expression = f"{name}({', '.join(given)})"
             new = {"expression": expression, "op": "<=", "bound": w["bound"].value()}
             if old and self._same_expression(old.get("expression"), expression):
                 new["expression"] = old["expression"]
@@ -266,9 +268,9 @@ def formulation_lines(f, project):
             name, args, _ = parse_expression(expression)
         except ValueError:
             return expression
-        from lsr_mmto.formulation.quantities import QUANTITIES
+        from lsr_mmto.formulation.quantities import QUANTITIES, takes
         shown = next((q.shown for q in QUANTITIES if q.name == name), name)
-        if name == "MaterialVolumeFraction" and args:
+        if takes(name, "material") and args:
             i = int(args[0])
             shown += f" of {labels[i] if labels and i < len(labels) else f'material {i}'}"
         return shown

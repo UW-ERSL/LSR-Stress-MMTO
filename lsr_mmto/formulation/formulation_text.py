@@ -31,8 +31,9 @@ def parse_expression(text):
 
 def to_params_form(text, role, bound=None):
     """What to_params holds for an expression: (name, options) for the objective, (name, options,
-    bound) for a constraint; name is the quantity's, options None or {"material_id", "tau"}."""
-    from lsr_mmto.formulation.quantities import DEFAULT_TAU, QUANTITIES
+    bound) for a constraint; name is the quantity's, options None for a quantity that takes no
+    arguments, else {argument: value} in the order the quantity declares them."""
+    from lsr_mmto.formulation.quantities import QUANTITIES
     name, args, kwargs = parse_expression(text)
     by_name = {q.name: q for q in QUANTITIES}
     if name not in by_name:
@@ -41,12 +42,16 @@ def to_params_form(text, role, bound=None):
     q = by_name[name]
     if not (q.objective if role == "objective" else q.constraint):
         raise ValueError(f"{name} cannot be the {role}")
-    if name == "MaterialVolumeFraction":
-        if len(args) != 1 or set(kwargs) - {"tau"}:
-            raise ValueError(f"expression {text!r}: write MaterialVolumeFraction(material, tau=...)")
-        opt = {"material_id": int(args[0]), "tau": float(kwargs.get("tau", DEFAULT_TAU))}
-    else:
+    if not q.arguments:
         if args or kwargs:
             raise ValueError(f"expression {text!r}: {name} takes no arguments")
         opt = None
+    else:
+        required = [a for a in q.arguments if a[2] is None]
+        optional = [a for a in q.arguments if a[2] is not None]
+        if len(args) != len(required) or set(kwargs) - {a[0] for a in optional}:
+            form = ", ".join([a[0] for a in required] + [f"{a[0]}=..." for a in optional])
+            raise ValueError(f"expression {text!r}: write {name}({form})")
+        given = dict(zip((a[0] for a in required), args), **kwargs)
+        opt = {a: (int if typ == "material" else float)(given.get(a, default)) for a, typ, default in q.arguments}
     return (name, opt) if role == "objective" else (name, opt, float(bound))

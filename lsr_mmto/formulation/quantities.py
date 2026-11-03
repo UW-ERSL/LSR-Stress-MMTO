@@ -39,15 +39,23 @@ def material_volume_fraction(xb, z, z_real, material_id, tau):
 #   help         what it is, in plain words: the app's tooltip and the settings page
 #   unit         the unit of a bound on it, as the app shows it: names of the unit system in braces are
 #                filled in ("{force}*{length}"); text without braces is shown as it is ("no units")
+#   arguments    what its formula takes, in order, as (name, type, default): type "material" (a material's
+#                row in the database, a whole number) or "number"; one without a default is required and
+#                written by position, one with a default may be written by name: Name(2, tau=0.5)
 
 
 class Quantity:
-    __slots__ = ("name", "objective", "constraint", "physics", "needs", "fn", "doc", "shown", "help", "unit")
+    __slots__ = ("name", "objective", "constraint", "physics", "needs", "fn", "doc", "shown", "help", "unit",
+                 "arguments")
 
-    def __init__(self, name, objective, constraint, physics, needs, fn, doc, shown, help, unit=""):
+    def __init__(self, name, objective, constraint, physics, needs, fn, doc, shown, help, unit="", arguments=()):
         self.name, self.objective, self.constraint = name, objective, constraint
         self.physics, self.needs, self.fn, self.doc = frozenset(physics), tuple(needs), fn, doc
-        self.shown, self.help, self.unit = shown, help, unit
+        self.shown, self.help, self.unit, self.arguments = shown, help, unit, tuple(arguments)
+
+    def takes(self, argument):
+        """True when the formula takes the argument of that name or type ("material", "tau")."""
+        return any(argument in (name, typ) for name, typ, _ in self.arguments)
 
     def applies_to(self, physics):
         """True for a quantity of that physics, or one every physics has."""
@@ -84,7 +92,7 @@ QUANTITIES = [Quantity(physics=[m.NAME], **q) for m in MODULES for q in m.QUANTI
     Quantity("MaterialVolumeFraction", False, True, [], [],
              _material_volume_fraction, "volume fraction of one database material, softmax weights",
              "Material volume fraction", "The share of the design space filled with one chosen material, 0 to 1.",
-             "fraction of the design domain"),
+             "fraction of the design domain", (("material_id", "material", None), ("tau", "number", DEFAULT_TAU))),
 ]
 
 
@@ -94,6 +102,16 @@ def find_quantity(name):
         if q.name == name:
             return q
     raise KeyError(f"unknown quantity {name!r}; known: {', '.join(q.name for q in QUANTITIES)}")
+
+
+def takes(name, argument):
+    """True when the quantity of that name takes the argument (by name or type); False for an unknown name."""
+    return any(q.name == name and q.takes(argument) for q in QUANTITIES)
+
+
+def default_of(name, argument):
+    """The default of a quantity's argument (the tau of a material volume fraction)."""
+    return next(d for q in QUANTITIES if q.name == name for a, _, d in q.arguments if a == argument)
 
 
 def quantity_label(name, opt=None, material_labels=None):

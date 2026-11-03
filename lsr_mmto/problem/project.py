@@ -60,6 +60,7 @@ from lsr_mmto.materials.databases import (ATTRIBUTES, DATABASE_DIR, DATABASE_VAE
                                          check_database, database_attributes, database_units, in_shipped_folder,
                                          recommended_latent_dim, unit_ratio)
 from lsr_mmto.formulation.formulation_text import parse_expression, to_params_form
+from lsr_mmto.formulation.quantities import default_of, takes
 from lsr_mmto.physics.available_physics import PHYSICS
 from lsr_mmto.problem.boundary_conditions import BC_KINDS
 from lsr_mmto.problem.settings import (BY_KEY, DEFAULT_SETTINGS, MESH_DEFAULTS, SETTINGS, VAE_PARAMS, pyto_ad_value,
@@ -341,9 +342,8 @@ class Project:
                 name, _, kwargs = parse_expression(c.get("expression"))
             except ValueError:
                 continue
-            if name == "MaterialVolumeFraction":
-                from lsr_mmto.formulation.quantities import DEFAULT_TAU
-                taus.add(float(kwargs.get("tau", DEFAULT_TAU)))
+            if takes(name, "tau"):                              # one tau for every material volume fraction
+                taus.add(float(kwargs.get("tau", default_of(name, "tau"))))
         if len(taus) > 1:
             listed = ", ".join(f"{t:g}" for t in sorted(taus))
             errors.append(f"the material volume fraction constraints use different tau ({listed}); one tau "
