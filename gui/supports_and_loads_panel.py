@@ -20,7 +20,7 @@ import os
 import numpy as np
 from PyQt5 import QtCore, QtWidgets
 
-from .panels import GREY, Info, NumberEdit
+from .panel_widgets import GREY, Info, NumberEdit
 
 SUPPORT_COLOUR, LOAD_COLOUR, KEEP_COLOUR, OTHER_COLOUR = "#1f5fd6", "#d62020", "#808080", "#e08a00"
 

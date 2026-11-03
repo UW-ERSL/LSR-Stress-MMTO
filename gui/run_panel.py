@@ -28,7 +28,7 @@ import numpy as np
 from PyQt5 import QtCore, QtWidgets
 
 from . import draw_design
-from .panels import Info
+from .panel_widgets import Info
 from .pyto_ad_imports import StructuralTopOptWindow
 
 DRAW_EVERY = 1.5                                            # seconds between redraws of the design

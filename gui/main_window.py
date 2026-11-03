@@ -13,13 +13,14 @@ chosen from elsewhere is copied in. Every save also writes the project's setup s
 asks for a folder of your own, so the examples never change.
 
 The 3D view shows either the part (the Setup view: supports, loads, previews) or a design (the
-Design view: a run's result, drawn by design.py). Anything about the setup switches to the
+Design view: a run's result, drawn by draw_design.py). Anything about the setup switches to the
 Setup view; the design is kept until the next run, so Show design always brings it back.
 
     python run_gui.py [project.mmto]        (from the repository folder)
 
 The sidebar keeps PyTO-AD's Units, Geometry and Display Options, and adds Materials,
-Formulation and Settings (panels.py) and Supports and loads (supports.py). Picking with the
+Formulation and Settings (materials_panel.py, formulation_panel.py, settings_panel.py) and
+Supports and loads (supports_and_loads_panel.py). Picking with the
 mouse is PyTO-AD's Structural Loads window; each Apply in it is adopted into the project.
 """
 import json
@@ -31,7 +32,10 @@ import numpy as np
 from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtGui import QKeySequence
 
-from .panels import GREY, FormulationPanel, Info, MaterialsPanel, SettingsPanel, ok_cancel
+from .formulation_panel import FormulationPanel
+from .materials_panel import MaterialsPanel
+from .panel_widgets import GREY, Info, ok_cancel
+from .settings_panel import SettingsPanel
 from .supports_and_loads_panel import KEEP_COLOUR, LOAD_COLOUR, OTHER_COLOUR, SUPPORT_COLOUR, SupportsPanel, bc_name, bc_value
 from .pyto_ad_imports import (FILE_DIALOG_OPTIONS, UNIT_SYSTEMS, GeometryWindow, MainWindow, ProjectsWindow,
                       StructuralLoadsWindow, UnitsWindow)

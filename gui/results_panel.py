@@ -16,7 +16,7 @@ import os
 from PyQt5 import QtCore, QtWidgets
 
 from . import draw_design
-from .panels import GREY, Info
+from .panel_widgets import GREY, Info
 from .run_panel import ask_delete_run, open_folder, result_tabs, table_view
 
 RESULTS_HELP = ("Each run of the project is listed here, newest first. Click one to see its design on the part "

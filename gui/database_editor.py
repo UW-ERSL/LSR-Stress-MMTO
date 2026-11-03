@@ -12,7 +12,7 @@ import os
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-from .panels import GREY, Info, ok_cancel
+from .panel_widgets import GREY, Info, ok_cancel
 
 # the properties a new database starts with; Add property... lists every property of the registry
 # (databases.ATTRIBUTES)

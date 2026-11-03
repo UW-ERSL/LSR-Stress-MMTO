@@ -230,7 +230,7 @@ def test_triangle_selections():
 
 
 # ---------------------------------------------------------------------- Materials, Formulation, Settings
-from gui import panels  # noqa: E402
+from gui import formulation_panel, materials_panel, settings_panel  # noqa: E402
 
 
 def opened(name, d):
@@ -246,7 +246,7 @@ def test_panels_with_no_edits_change_nothing():
     with scratch() as d:
         for name in NAMES:
             w = opened(name, d)
-            for cls in (panels.MaterialsPanel, panels.FormulationPanel, panels.SettingsPanel):
+            for cls in (materials_panel.MaterialsPanel, formulation_panel.FormulationPanel, settings_panel.SettingsPanel):
                 assert cls(w, w.project).apply(w.project) == [], (name, cls.__name__)
             assert not w.is_dirty(), name
         real = QtWidgets.QDialog.exec_
@@ -266,7 +266,7 @@ def test_cancel_changes_nothing():
         real = QtWidgets.QDialog.exec_
         try:
             def edit_then_cancel(self):
-                if isinstance(self, panels.SettingsPanel):
+                if isinstance(self, settings_panel.SettingsPanel):
                     self.rows[("common", "maxIterations")][0].set(5)
                 return 0
             QtWidgets.QDialog.exec_ = edit_then_cancel
@@ -279,7 +279,7 @@ def test_cancel_changes_nothing():
 def test_settings_panel_covers_every_setting():
     from lsr_mmto.problem import settings
     from lsr_mmto.problem.settings import DEFAULT_SETTINGS, VAE_PARAMS
-    keys = panels.all_setting_keys()
+    keys = settings_panel.all_setting_keys()
     want = {(s, k) for s, v in DEFAULT_SETTINGS.items() for k in v} | {("vae", k) for k in VAE_PARAMS} | \
         {("mesh", "n_dof"), ("mesh", "single_layer")}
     assert len(keys) == len(set(keys)) and set(keys) == want, set(keys) ^ want
@@ -289,7 +289,7 @@ def test_settings_panel_covers_every_setting():
 def test_settings_panel_edits():
     with scratch() as d:
         w = opened("L-bracket", d)
-        s = panels.SettingsPanel(w, w.project)
+        s = settings_panel.SettingsPanel(w, w.project)
         row, label, reset = s.rows[("common", "maxIterations")]
         assert not label.font().bold() and not reset.isVisibleTo(s)                # reset: only on a change
         row.set(5)
@@ -315,7 +315,7 @@ def test_settings_panel_edits():
 def test_formulation_panel():
     with scratch() as d:
         w = opened("L-bracket", d)                                            # BM1: no Density, no Yield_Strength
-        f = panels.FormulationPanel(w, w.project)
+        f = formulation_panel.FormulationPanel(w, w.project)
         model = f.objective.model()
         enabled = {model.item(i).text(): model.item(i).isEnabled() for i in range(model.rowCount())}
         assert enabled == {"Compliance": True, "Mass": False, "Stress (p-norm)": True,
@@ -335,7 +335,7 @@ def test_formulation_panel():
             ("MaterialVolumeFraction(1, tau=0.3)", 0.15), ("MaterialVolumeFraction(2, tau=0.3)", 0.2),
             ("MaterialVolumeFraction(1, tau=0.3)", 0.05)]
         assert w.project.validate() == [] and w.is_dirty()
-        f = panels.FormulationPanel(w, w.project)
+        f = formulation_panel.FormulationPanel(w, w.project)
         f.add_row(None)
         f.tau.setText("0")
         assert f.problems() == ["constraint 4: choose a quantity", "tau must be a number greater than 0"]
@@ -343,7 +343,7 @@ def test_formulation_panel():
         assert "the material volume fraction constraints use different tau (0.3, 0.7)" in w.project.validate()[0]
     with scratch() as d:
         w = opened("Airplane bracket", d)
-        f = panels.FormulationPanel(w, w.project)
+        f = formulation_panel.FormulationPanel(w, w.project)
         model = f.rows[0]["widgets"]["quantity"].model()
         assert all(model.item(i).isEnabled() for i in range(model.rowCount()))
         assert [r["widgets"]["unit"].text() for r in f.rows] == ["t", "USD"]   # the bounds 4e7 and 7.5e8, in mmKS
@@ -354,7 +354,7 @@ def test_formulation_panel():
         assert not f.tau_box.isVisibleTo(f)
     with scratch() as d:
         w = opened("U-bracket", d)                                            # bound 0.0035000000000000005
-        f = panels.FormulationPanel(w, w.project)
+        f = formulation_panel.FormulationPanel(w, w.project)
         bound = f.rows[0]["widgets"]["bound"]
         assert bound.text() == "0.0035" and bound.value() == 0.0035000000000000005
         assert f.apply(w.project) == []
@@ -362,7 +362,7 @@ def test_formulation_panel():
         assert bound.value() == 0.0035000000000000005
         bound.setText("0.00350")                                               # a typed change: replaced
         assert bound.value() == 0.0035
-    assert panels.bound_unit("Compliance", "mmKS") == "N*mm" and panels.bound_unit("Mass", "none") == \
+    assert formulation_panel.bound_unit("Compliance", "mmKS") == "N*mm" and formulation_panel.bound_unit("Mass", "none") == \
         "no unit system declared"
 
 
@@ -370,7 +370,7 @@ def test_materials_panel():
     from lsr_mmto.materials.databases import DATABASE_DIR
     with scratch() as d:
         w = opened("L-bracket", d)
-        m = panels.MaterialsPanel(w, w.project)
+        m = materials_panel.MaterialsPanel(w, w.project)
         assert m.table.rowCount() == 3 and m.table.item(0, 0).text() == "Mat1_Red"
         assert "latent dimension 2 recommended" in m.report.toPlainText()
         m.combo.setCurrentText("CustomAlloys20_3D")
@@ -379,7 +379,7 @@ def test_materials_panel():
         vae = w.project.settings["vae"]
         assert w.project.database == "CustomAlloys20_3D" and vae["latentDim"] == 3 and vae["numEpochs"] == 100000
         assert lines[0] == "Database: CustomAlloys20_3D" and "Latent dimension 2 -> 3" in lines[1]
-        m = panels.MaterialsPanel(w, w.project)
+        m = materials_panel.MaterialsPanel(w, w.project)
         m.set_database(os.path.join(ROOT, DATABASE_DIR, "BM1_3Mats_2Attr.xlsx"))     # a shipped file: by name
         assert m.project.database == "BM1_3Mats_2Attr"
         own = shutil.copy(os.path.join(ROOT, DATABASE_DIR, "BM1_3Mats_2Attr.xlsx"), os.path.join(d, "mine.xlsx"))
@@ -415,12 +415,12 @@ def test_database_editor():
 
     with scratch() as d:
         w = opened("L-bracket", d)
-        m = panels.MaterialsPanel(w, w.project)
+        m = materials_panel.MaterialsPanel(w, w.project)
         with answers():
             assert m.new_database() is None                                   # not in a folder of its own yet
         assert w.save_project_as(os.path.join(d, "P", "P.mmto")) and w.own_folder()
         folder = os.path.join(d, "P", "materials")
-        m = panels.MaterialsPanel(w, w.project)
+        m = materials_panel.MaterialsPanel(w, w.project)
         seen = {}
 
         def new(e):
@@ -515,7 +515,7 @@ def test_vae_tab():
     from lsr_mmto.materials.databases import DATABASE_DIR
     with scratch() as d:
         w = opened("L-bracket", d)
-        s = panels.SettingsPanel(w, w.project)
+        s = settings_panel.SettingsPanel(w, w.project)
         assert not (s.windowFlags() & QtCore.Qt.WindowContextHelpButtonHint)
         assert s.vae_status.text() == "Network: BM1_3Mats_2Attr.nt, shipped." and s.vae_checks.text() == ""
         latent = s.rows[("vae", "latentDim")][0]
@@ -527,20 +527,20 @@ def test_vae_tab():
         assert "latentDim is 4; the database's effective dimension" in s.vae_checks.text()
 
         w.project.settings["vae"]["latentDim"] = 4                            # a file that does not fit its network
-        s = panels.SettingsPanel(w, w.project)
+        s = settings_panel.SettingsPanel(w, w.project)
         assert s.rows[("vae", "latentDim")][0].get() == 2
         assert s.apply(w.project) == ["Settings: Latent dimension 4 -> 2",
                                       "Latent dimension: set to the trained network's"]
 
         shutil.copy(os.path.join(ROOT, DATABASE_DIR, "BM1_3Mats_2Attr.xlsx"), os.path.join(d, "ggd.xlsx"))
         w.project.database = "ggd.xlsx"                                       # one of yours, no network yet
-        s = panels.SettingsPanel(w, w.project)
+        s = settings_panel.SettingsPanel(w, w.project)
         assert s.vae_status.text() == "Network: ggd.nt, none yet. The first run trains ggd.nt."
         use = s.rows[("vae", "use_pretrained_vae")][0].widget
         assert not use.isEnabled() and not use.isChecked()                  # shown unticked: nothing to use yet
         assert s.rows[("vae", "latentDim")][0].widget.isEnabled()
         assert s.apply(w.project) == [] and w.project.settings["vae"]["use_pretrained_vae"] is True   # kept
-    f = panels.FormulationPanel(G.MMTOWindow(), Project.load(os.path.join(PROJECTS, "beam.mmto")))
+    f = formulation_panel.FormulationPanel(G.MMTOWindow(), Project.load(os.path.join(PROJECTS, "beam.mmto")))
     f.rows[0]["widgets"]["bound"].setText("abc")
     assert f.problems() == ["constraint 1: the bound is not a number"]
 
@@ -1211,7 +1211,7 @@ def test_examples_open_as_templates():
                                                                          "BM1_3Mats_2Attr.xlsx"]
         assert open(original).read() == before                                # the example is untouched
         assert w.database_folder() == os.path.join(folder, "materials")
-        m = panels.MaterialsPanel(w, w.project)
+        m = materials_panel.MaterialsPanel(w, w.project)
         m.combo.setCurrentText("6Materials_AF_3Attr")                         # a shipped one: copied in at OK
         w.apply_panel(m)
         assert w.project.database == "materials/6Materials_AF_3Attr.xlsx"
@@ -1235,7 +1235,7 @@ def test_part_facts_pca_live_colours_training():
         assert facts[0] == "Part: LBracket_BM1.STL" and facts[1].startswith("Volume: ")
         assert facts[2].startswith("Size: ") and facts[3] == "Material database: BM1_3Mats_2Attr"
 
-        tip = panels.MaterialsPanel(w, w.project).latent_info.toolTip()
+        tip = materials_panel.MaterialsPanel(w, w.project).latent_info.toolTip()
         assert "direction 1: " in tip and "The recommended latent dimension is the smallest whole number" in tip
 
         w.project.n_dof, w.project.single_layer = 3000, True
@@ -1344,7 +1344,7 @@ def test_stop_while_training():
         w = opened("L-bracket", d)
         w.show()
         from lsr_mmto.materials.databases import write_database
-        m = panels.MaterialsPanel(w, w.project)
+        m = materials_panel.MaterialsPanel(w, w.project)
         path = write_database(os.path.join(d, "fresh.xlsx"), ["Youngs_Modulus", "Poissons_Ratio"], ["Pa", "-"],
                               ["Soft", "Mid", "Stiff"], [None] * 3, ["#ff0000", "#00ff00", "#0000ff"],
                               [[1e6, 0.30], [2e6, 0.32], [4e6, 0.35]])

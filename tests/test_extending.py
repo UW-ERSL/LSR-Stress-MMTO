@@ -53,11 +53,11 @@ def test_one_entry_makes_a_setting():
         with tempfile.TemporaryDirectory() as d:
             assert _run_arguments(p, save_dir=d, verbose=False)["s"].my_knob == 0.25
 
-        from gui import panels
-        w = panels.SettingsPanel(None, p)
+        from gui import settings_panel
+        w = settings_panel.SettingsPanel(None, p)
         row, label, _ = w.rows[("advanced", "my_knob")]
         assert label.text() == "My knob" and row.get() == 0.25
-        assert ("advanced", "my_knob") in panels.all_setting_keys()
+        assert ("advanced", "my_knob") in settings_panel.all_setting_keys()
         w.close()
     assert "my_knob" not in settings.DEFAULT_SETTINGS["advanced"]
 
@@ -68,9 +68,9 @@ def test_one_entry_makes_a_quantity():
                             lambda m, opt: m.x_phys.mean(), "mean of x_phys", "My quantity",
                             "What my quantity is.")
     with one_more(quantities.QUANTITIES, q, lambda: None):
-        from gui import panels
+        from gui import formulation_panel
         p = Project.load(os.path.join(ROOT, "projects", "U-bracket.mmto"))
-        f = panels.FormulationPanel(None, p)
+        f = formulation_panel.FormulationPanel(None, p)
         model = f._quantity_combo("constraint").model()
         items = {model.item(i).data(0x0100): model.item(i) for i in range(model.rowCount())}
         assert items["MyQuantity"].text() == "My quantity"
