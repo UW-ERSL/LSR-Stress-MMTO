@@ -9,7 +9,7 @@ import matplotlib.cm as cm
 import os
 import sys
 import warnings
-from lsr_mmto.materials.databases import SHOWN, attribute_name, normalize, participation_ratio
+from lsr_mmto.materials.databases import SHOWN, once_per_file_version, attribute_name, normalize, participation_ratio
 
 STOP_CHECK_EVERY = 100            # epochs between two asks of trainAutoencoder's should_stop
 
@@ -37,6 +37,7 @@ def network_warning(errors, limit):
             f"{listed} (each the largest error over the materials, in % of the property's range)")
 
 
+@once_per_file_version
 def network_reconstruction(xlsx, nt):
     """MaterialEncoder.reconstruction() of the network saved in nt for the database xlsx, its shape read
     from the file; None when nt is not a network for this database."""

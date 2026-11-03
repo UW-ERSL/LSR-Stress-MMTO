@@ -308,6 +308,31 @@ def test_vae_check():
         assert p.vae_check()[0] == ["ggd.nt could not be read as a VAE network"]
 
 
+
+def test_read_once_per_file_version():
+    """A database is read once for each version of its file: looked at again it is not read again, a
+    copy is handed back each time, and once the file is saved again it is read again."""
+    import time
+    from lsr_mmto.materials import databases
+    calls = []
+
+    @databases.once_per_file_version
+    def rows(path):
+        calls.append(path)
+        return [list(r) for r in load_workbook(path).active.iter_rows(values_only=True)]
+
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "db.xlsx")
+        write(path, GOOD)
+        first = rows(path)
+        first[2][1] = "changed by the caller"
+        assert rows(path)[2][1] == 1.0 and len(calls) == 1          # kept, and a copy each time
+        time.sleep(0.01)
+        write(path, GOOD[:-1])                                       # saved again: read again
+        assert len(rows(path)) == 4 and len(calls) == 2
+        assert check_database(path) == check_database(path)
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in [(k, v) for k, v in list(globals().items()) if k.startswith("test_")]:

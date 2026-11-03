@@ -132,6 +132,38 @@ def attribute_name(name):
 
 
 # ---------------------------------------------------------------------- reading and checking
+_READ_CACHE = {}                 # once_per_file_version: (function, files, arguments) -> result
+
+
+def once_per_file_version(read):
+    """read(path, ...) done once for each version of the file (and of any other file named in its
+    arguments): the result is kept, keyed by each file's path, modification time and size, and a copy
+    of it handed back, so a panel that looks at a database several times reads it once, and a file
+    saved again is read again."""
+    import copy
+    import functools
+    import os
+
+    def version(a):
+        st = os.stat(a)
+        return os.path.abspath(a), st.st_mtime_ns, st.st_size
+
+    @functools.wraps(read)
+    def wrapper(path, *args):
+        try:
+            files = [version(path)] + [version(a) for a in args if isinstance(a, str) and os.path.isfile(a)]
+        except OSError:
+            return read(path, *args)
+        key = (read.__module__, read.__name__, tuple(files), repr(args))
+        if key not in _READ_CACHE:
+            if len(_READ_CACHE) > 64:
+                _READ_CACHE.clear()
+            _READ_CACHE[key] = read(path, *args)
+        return copy.deepcopy(_READ_CACHE[key])
+    return wrapper
+
+
+@once_per_file_version
 def _read(path):
     import warnings
     import pandas as pd
@@ -387,6 +419,7 @@ def default_colours(n):
     return out
 
 
+@once_per_file_version
 def _linked_names(path, sheet, column):
     """{row index, as pandas reads the sheet: material name} for the Material cells that are a formula
     pointing at one cell of a sheet, as the template's =Main!A3. The name is read from that cell, so
@@ -412,6 +445,7 @@ def _linked_names(path, sheet, column):
     return out
 
 
+@once_per_file_version
 def _display(path, names):
     """(colours, labels, errors, warnings) for the materials named, in that order."""
     import math
