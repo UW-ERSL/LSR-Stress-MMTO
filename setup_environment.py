@@ -327,7 +327,9 @@ import numpy, numba
 print(f"      numpy {numpy.__version__}, numba {numba.__version__}", flush=True)
 
 check("LSR MMTO is installed in the environment", lambda: version("lsr_mmto"))
-for m in ("records", "render", "figures", "tables", "display"):
+import pkgutil
+import lsr_mmto.results
+for m in sorted(i.name for i in pkgutil.iter_modules(lsr_mmto.results.__path__)):   # every file there, by itself
     check(f"lsr_mmto.results.{m} imports", lambda m=m: importlib.import_module(f"lsr_mmto.results.{m}"))
 check("PyTO-AD and the projects import", lambda: importlib.import_module("lsr_mmto.problem.project"))
 check("optimizer driver imports", lambda: importlib.import_module("lsr_mmto.optimize.optimization_loop"))
