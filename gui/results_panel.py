@@ -17,7 +17,7 @@ from PyQt5 import QtCore, QtWidgets
 
 from . import draw_design
 from .panel_widgets import GREY, Info
-from .run_panel import ask_delete_run, open_folder, plot_canvas, result_tabs, table_view
+from .run_panel import ask_delete_run, open_folder, plot_canvas, result_tabs, summary_view, table_view
 
 RESULTS_HELP = ("Each run of the project is listed here, newest first. Click one to see its design on the part "
                 "and its convergence, latent space and summary in the tabs. Show chooses what the part shows: "
@@ -145,10 +145,9 @@ class CompareWindow(QtWidgets.QDialog):
             except Exception as e:                                  # noqa: BLE001
                 self.tabs.addTab(QtWidgets.QLabel(f"Could not draw: {e}"), title)
         try:
-            text = str(compare.table(runs))
+            self.tabs.addTab(summary_view(compare.table(runs)), "Summary")
         except Exception as e:                                      # noqa: BLE001
-            text = f"Could not compare: {e}"
-        self.tabs.addTab(table_view(text), "Summary")
+            self.tabs.addTab(table_view(f"Could not compare: {e}"), "Summary")
 
     def closeEvent(self, event):
         callback, self.on_close = self.on_close, None

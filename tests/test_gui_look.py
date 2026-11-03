@@ -144,6 +144,36 @@ def test_faces_picked_only_in_the_pick_strip():
     w.close()
 
 
+def test_summary_in_sections():
+    """A finished run's Summary: the run, then Result (the objective, each constraint met or not), Design,
+    Materials and Run, as tables; the comparison of two runs in the same sections."""
+    from lsr_mmto.problem.project import Project, run
+    from lsr_mmto.results import compare, tables
+    from lsr_mmto.results.load_results import load
+    from gui.run_panel import summary_view
+    with tempfile.TemporaryDirectory() as d:
+        p = Project.load(os.path.join(PROJECTS, "L-bracket.mmto"))
+        p.n_dof = 3000
+        p.settings["common"]["maxIterations"] = 2
+        run(p, save_dir=d, verbose=False)
+        r = load(os.path.join(d, "run_data"))
+    text = str(tables.summary(r))
+    for section in ("Result", "Design", "Materials", "Run"):
+        assert f"\n{section}\n" in text
+    rows = [line for line in text.splitlines() if "volume fraction" in line]
+    assert len(rows) == len(r.constraint_spec)
+    assert all(line.rstrip().endswith(("met", "NOT MET")) for line in rows)
+    assert "fraction of budget" not in text and "Mat1_Red volume fraction" in text
+    view = summary_view(tables.summary(r), tables.summary_details(r))
+    shown = view.findChild(QtWidgets.QTextBrowser).toPlainText()
+    assert shown.count("\u2713 met") + shown.count("\u2717 not met") == len(r.constraint_spec)
+    assert "Grey (in between)" in shown
+    both = str(compare.table({"one": r, "two": r}))
+    for section in ("Result", "Design", "Materials", "Run"):
+        assert f"\n{section}\n" in both
+    assert both.count(" met") + both.count("NOT MET") == 2 * len(r.constraint_spec)
+
+
 if __name__ == "__main__":
     for name, f in list(globals().items()):
         if name.startswith("test_"):

@@ -1298,7 +1298,7 @@ def test_results_compare_delete():
         assert cw.isWindow() and [cw.tabs.tabText(i) for i in range(cw.tabs.count())] == \
             ["Convergence", "Latent space", "Summary"]
         assert not any(isinstance(cw.tabs.widget(i), QtWidgets.QLabel) for i in range(cw.tabs.count()))
-        assert "iterations" in cw.tabs.widget(2).toPlainText()
+        assert "Iterations" in cw.tabs.widget(2).findChild(QtWidgets.QTextBrowser).toPlainText()
         cw.close()                                                            # closing it ends the comparison
         assert res.comparing is None and "result_design_2" not in w.plotter.actors
         assert res.compare()

@@ -111,7 +111,27 @@ def result_tabs(tabs, run, keep=0):
             tabs.addTab(plot_canvas(make()), title)
         except Exception as e:                                      # noqa: BLE001
             tabs.addTab(QtWidgets.QLabel(f"Could not draw: {e}"), title)
-    tabs.addTab(table_view(str(tables.summary(run, show=False))), "Summary")
+    tabs.addTab(summary_view(tables.summary(run, show=False), tables.summary_details(run)), "Summary")
+
+
+def summary_view(summary, details=None):
+    """A run's summary (or a comparison) as tables in sections, with what its words mean and the exact
+    numbers behind an (i) at the top."""
+    box = QtWidgets.QWidget()
+    layout = QtWidgets.QVBoxLayout(box)
+    layout.setContentsMargins(0, 0, 0, 0)
+    if details:
+        row = QtWidgets.QHBoxLayout()
+        row.addStretch()
+        row.addWidget(Info(details))
+        layout.addLayout(row)
+    view = QtWidgets.QTextBrowser()
+    view.setObjectName("summary")
+    view.setOpenLinks(False)
+    view.setHtml(summary._repr_html_())
+    layout.addWidget(view, stretch=1)
+    box.summary_text = str(summary)                                 # the same, as aligned text
+    return box
 
 
 def table_view(text):

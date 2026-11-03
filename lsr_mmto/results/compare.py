@@ -52,28 +52,33 @@ def _iterations(run):
 
 
 def table(runs):
-    """Final values and run times, one column per run."""
-    from .tables import Table
+    """The runs side by side, one column each, in the sections of a run's summary (tables.summary):
+    the result with each constraint met or not, the design, the materials and the run."""
+    from .tables import Heading, Table, Tables, _unit, constraint_name, met, met_cell
     names = list(runs)
     rs = [runs[n] for n in names]
-
-    rows = [[f"objective: {rs[0].objective_label}"] + [f"{r.final_objective:.4g}" for r in rs]]
+    r0 = rs[0]
+    obj = (r0.config or {}).get("topopt_params", {}).get("Objective") or ["objective", None]
+    unit = _unit(r0, obj[0])
+    right = tuple(range(1, len(rs) + 1))
+    result = [[f"{r0.objective_label}" + (f" ({unit})" if unit else "")] + [f"{r.final_objective:.4g}" for r in rs]]
     if any(np.isfinite(r.max_ff) for r in rs):
-        rows.append(["max failure factor"] + [f"{r.max_ff:.4f}" for r in rs])
-    rows.append(["grayness"] + [f"{100 * r.grey:.2f}%" for r in rs])
-
-    for i in range(len(rs[0].constraint_spec)):
-        rows.append([f"{rs[0].constraint_label(i)}, fraction of budget"] + [f"{r.utilisation(i):.4f}" for r in rs])
-
-    rows.append(["solid elements"] + [f"{int(r.solid.sum())}" for r in rs])
-    rows.append(["iterations"] + [f"{_iterations(r)}" for r in rs])
-    rows.append(["run time"] + [f"{_runtime(r) / 60:.1f} min" for r in rs])
-    rows.append(["time per iteration"]
-                + [f"{_runtime(r) / max(_iterations(r), 1):.2f} s" for r in rs])
-
-    return Table(rows, headers=["quantity"] + names,
-                 title=f"{rs[0].example}: final values",
-                 note="run time is the optimization only, from the run's own record")
+        result.append(["Max failure factor"] + [f"{r.max_ff:.3f}" for r in rs])
+    for i in range(len(r0.constraint_spec)):
+        result.append([f"{constraint_name(r0, i)}, used"] +
+                      [met_cell(met(r, i), f"{100 * r.utilisation(i):.1f} %") for r in rs])
+    return Tables(
+        Heading(f"{r0.example}: the runs side by side"),
+        Table(result, headers=[""] + names, title="Result", right_cols=right),
+        Table([["Elements"] + [f"{r.n_elems:,}" for r in rs],
+               ["Solid"] + [f"{int(r.solid.sum()):,} ({100 * r.solid.mean():.1f} %)" for r in rs],
+               ["Grey (in between)"] + [f"{100 * r.grey:.1f} %" for r in rs]], title="Design", right_cols=right),
+        Table([["Used"] + [f"{int(r.materials_used().size)} of {len(r.material_names)}" for r in rs],
+               ["Latent dimension"] + [str(r.n_latent) for r in rs]], title="Materials", right_cols=right),
+        Table([["Iterations"] + [f"{_iterations(r)}" for r in rs],
+               ["Run time"] + [f"{_runtime(r) / 60:.1f} min" for r in rs],
+               ["Time per iteration"] + [f"{_runtime(r) / max(_iterations(r), 1):.2f} s" for r in rs]],
+              title="Run", note="Run time is the optimization only, from the run's own record.", right_cols=right))
 
 
 def histories(runs, out=None):

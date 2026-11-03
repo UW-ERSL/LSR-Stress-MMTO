@@ -3,7 +3,7 @@ tables.py
 =========
 Tables for one run and for the material database behind it.
 
-summary(run)              setup, result and constraint utilisation
+summary(run)              the result, the design, the materials and the run, in sections
 materials(encoder)        the candidate materials, in the colours they are drawn in
 pca(encoder)              principal components, d_eff and the latent dimension
 encoding_errors(encoder)  how faithfully the decoder reproduces each material
@@ -87,7 +87,7 @@ class Table:
     """Rows of strings, with optional headers, title and footnote."""
 
     def __init__(self, rows, headers=None, title=None, note=None,
-                 scroll=None, highlight=None, symbol_cols=(0,)):
+                 scroll=None, highlight=None, symbol_cols=(0,), right_cols=None):
         self.rows = [[c if isinstance(c, Raw) else ("" if c is None else str(c))
                       for c in r] for r in rows]
         self.headers = [str(h) for h in headers] if headers else None
@@ -96,9 +96,12 @@ class Table:
         self.scroll = scroll          # max height in px; None for no scrolling
         self.highlight = highlight or (lambda row: False)
         self.symbol_cols = set(symbol_cols or ())
+        self.right_cols = None if right_cols is None else set(right_cols)
 
     def _aligns(self):
         ncol = max([len(r) for r in self.rows] + [len(self.headers or [])])
+        if self.right_cols is not None:
+            return ["right" if c in self.right_cols else "left" for c in range(ncol)]
         out = []
         for c in range(ncol):
             col = [r[c] for r in self.rows
@@ -200,6 +203,19 @@ class Note:
                 f"{symbols_html(self.text)}</div>")
 
 
+class Heading:
+    """A heading above the tables: the run they are about."""
+
+    def __init__(self, text):
+        self.text = text
+
+    def __repr__(self):
+        return self.text
+
+    def _repr_html_(self):
+        return f"<div style='font-weight:700;font-size:15px;margin:2px 0 8px 0;'>{html.escape(self.text)}</div>"
+
+
 class Tables:
     """Several tables shown one after another."""
 
@@ -222,31 +238,122 @@ def label_of(run):
     return label(run)
 
 
-def summary(run, show=True):
-    """One run at a glance: setup, result, constraint utilisation."""
-    rows = [("example", run.example), ("run", run.descriptor)]
-    units = (run.config or {}).get("units") or {}
-    if units.get("system") not in (None, "none"):
-        rows.append(("units", f"{units['system']}: {units['length']}, {units['force']}, "
-                              f"{units['stress']}, {units['mass']}"))
-    rows.append(("iterations", str(run.iterations)))     # the starting design is not counted
-    rows.append(("elements", f"{run.n_elems}"))
-    rows.append(("solid elements",
-                 f"{int(run.solid.sum())}  ({100 * run.solid.mean():.1f}%)"))
-    rows.append(("latent dimension", str(run.n_latent)))
-    rows.append(("materials available", str(len(run.material_names))))
-    rows.append(("materials used", str(int(run.materials_used().size))))
-    rows.append((f"objective: {run.objective_label}", f"{run.final_objective:.4g}"))
-    if np.isfinite(run.max_ff):
-        rows.append(("max failure factor", f"{run.max_ff:.4f}"))
-    rows.append(("grayness", f"{100 * run.grey:.2f}%"))
-    for i in range(len(run.constraint_spec)):
-        rows.append((f"{run.constraint_label(i)}, fraction of budget",
-                     f"{run.utilisation(i):.4f}"))
+def run_time_label(run):
+    """When the run was made, from its folder name: '3 Nov 2026, 03:31' for 2026-11-03_03-31-08."""
+    m = re.match(r"(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})", str(run.descriptor))
+    if not m:
+        return None
+    y, mo, d, h, mi = m.groups()
+    months = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
+    return f"{int(d)} {months[int(mo) - 1]} {y}, {h}:{mi}"
 
-    return Table([[k, v] for k, v in rows],
-                 headers=["quantity", "value"],
-                 title=f"{label_of(run)}")
+
+def run_title(run):
+    """'L-bracket \u00b7 run of 3 Nov 2026, 03:31', or the run's folder name when it is not a date."""
+    when = run_time_label(run)
+    return f"{run.example} \u00b7 " + (f"run of {when}" if when else f"run {run.descriptor}")
+
+
+def _quantity(name):
+    from lsr_mmto.formulation.quantities import QUANTITIES
+    return next((q for q in QUANTITIES if q.name == name), None)
+
+
+def _unit(run, name):
+    """The unit of a quantity in the run's unit system: 'MPa' for a stress, '' when it has none."""
+    q = _quantity(name)
+    unit = q.unit if q is not None else ""
+    if unit == "no units":
+        return ""
+    if "{" in unit:
+        units = (run.config or {}).get("units") or {}
+        try:
+            return unit.format(**units)
+        except (KeyError, IndexError):
+            return ""
+    return unit
+
+
+def _amount(run, name, value):
+    """A value of a quantity with its unit: '14.7 %' for a fraction of the design domain, '3.733 MPa'."""
+    unit = _unit(run, name)
+    if unit.startswith("fraction"):
+        return f"{100 * value:.1f} %"
+    return f"{value:.4g} {unit}".rstrip()
+
+
+def constraint_name(run, i):
+    """A constraint's short name: a quantity of one material is named by its material first,
+    'Ti-6Al-4V volume fraction'."""
+    spec = run.constraint_spec[i]
+    q = _quantity(spec[0])
+    opt = spec[1] if len(spec) > 1 and isinstance(spec[1], dict) else {}
+    if q is not None and q.takes("material") and "material_id" in opt:
+        k = int(opt["material_id"])
+        labels = run.material_labels
+        material = labels[k] if 0 <= k < len(labels) else f"material {k}"
+        words = q.shown[len("Material "):] if q.shown.startswith("Material ") else q.shown[:1].lower() + q.shown[1:]
+        return f"{material} {words}"
+    return q.shown if q is not None else str(spec[0])
+
+
+MET_TOLERANCE = 1e-3          # a constraint within 0.1 % of its limit counts as met
+
+
+def met(run, i):
+    return run.constraint(i) <= MET_TOLERANCE
+
+
+def met_cell(ok, before=""):
+    """'met' with a green check, or 'not met' with a red cross, after the text before."""
+    lead = f"{html.escape(before)} " if before else ""
+    return Raw(lead + ("<span style='color:#2b8a3e;font-weight:600'>&#10003; met</span>" if ok else
+                       "<span style='color:#c92a2a;font-weight:600'>&#10007; not met</span>"),
+               f"{before} " * bool(before) + ("met" if ok else "NOT MET"))
+
+
+def summary(run, show=True):
+    """One run at a glance, in sections: the result (objective and each constraint, met or not), the
+    design, the materials and the run."""
+    obj = (run.config or {}).get("topopt_params", {}).get("Objective") or ["objective", None]
+    result = [[run.objective_label, f"{run.final_objective:.4g}", _unit(run, obj[0])]]
+    if np.isfinite(run.max_ff):
+        result.append(["Max failure factor", f"{run.max_ff:.3f}", ""])
+    rows = []
+    for i, spec in enumerate(run.constraint_spec):
+        bound = float(spec[2]) if len(spec) > 2 else np.nan
+        rows.append([constraint_name(run, i), _amount(run, spec[0], run.utilisation(i) * bound),
+                     _amount(run, spec[0], bound), f"{100 * run.utilisation(i):.1f} %", met_cell(met(run, i))])
+    units = (run.config or {}).get("units") or {}
+    run_rows = [["Iterations", str(run.iterations)]]
+    if units.get("system") not in (None, "none"):
+        run_rows.append(["Units", f"{units['system']}: {units['length']}, {units['force']}, "
+                                  f"{units['stress']}, {units['mass']}"])
+    return Tables(
+        Heading(run_title(run)),
+        Table(result, title="Result", right_cols=(1,)),
+        Table(rows, headers=["Constraint", "Value", "Limit", "Used", ""], right_cols=(1, 2, 3)) if rows else None,
+        Table([["Elements", f"{run.n_elems:,}", ""],
+               ["Solid", f"{int(run.solid.sum()):,}", f"{100 * run.solid.mean():.1f} % of the elements"],
+               ["Grey (in between)", f"{100 * run.grey:.1f} %", ""]], title="Design", right_cols=(1,)),
+        Table([["Used", f"{int(run.materials_used().size)} of {len(run.material_names)}"],
+               ["Latent dimension", str(run.n_latent)]], title="Materials", right_cols=(1,)),
+        Table(run_rows, title="Run", right_cols=(1,)))
+
+
+def summary_details(run):
+    """What the summary's words mean, and each constraint's exact value and limit: the text behind its (i)."""
+    obj = (run.config or {}).get("topopt_params", {}).get("Objective") or ["objective", None]
+    q = _quantity(obj[0])
+    lines = [f"{run.objective_label}: {q.help}" if q is not None else run.objective_label]
+    for i, spec in enumerate(run.constraint_spec):
+        bound = float(spec[2]) if len(spec) > 2 else np.nan
+        lines.append(f"{constraint_name(run, i)}: {run.utilisation(i) * bound:.6g} against a limit of {bound:.6g} "
+                     f"({100 * run.utilisation(i):.2f} % of it). Met means at most 0.1 % over the limit.")
+    lines.append("Solid: elements with a density of 0.5 or more.")
+    lines.append("Grey (in between): how much of the design is neither solid nor empty; 0 % is a clean design.")
+    lines.append("Latent dimension: the number of coordinates of the learned material space.")
+    return "\n".join(lines)
 
 
 # --------------------------------------------------------------------------- #
