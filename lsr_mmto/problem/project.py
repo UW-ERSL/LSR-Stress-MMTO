@@ -684,9 +684,9 @@ class Project:
                 for w in shown:
                     print(f"[{self.name}] warning: {w}")
                 self._shown_warnings = shown
-        from lsr_mmto.pyto_ad import (mat_lib, topopt_material_model,
+        from lsr_mmto.pyto_ad_imports import (mat_lib, topopt_material_model,
                                       find_elements_with_fixedDOF)
-        from lsr_mmto.optimize.parameters import MMTOParams
+        from lsr_mmto.optimize.mmto_to_params import MMTOParams
         from lsr_mmto.problem.mesh import make_mesh
 
         mesh = make_mesh(self.stl_path(), self.n_dof, self.single_layer)
@@ -738,7 +738,7 @@ class Project:
     def supports_and_loads(self, mesh):
         """(PyTO-AD BC, {selection name: its nodes}): the supports, then the loads (BC_KINDS), on mesh.
         ValueError for a selection with no nodes or a dof given two values."""
-        from lsr_mmto.pyto_ad import bound_cond
+        from lsr_mmto.pyto_ad_imports import bound_cond
         nodes_of = {}
 
         def nodes(name, where):
@@ -763,7 +763,7 @@ class Project:
     @staticmethod
     def rigid_body_error(mesh, bc):
         """Why the supports let the part move where the loads push, or None (PyTO-AD's check)."""
-        from lsr_mmto.pyto_ad import bound_cond
+        from lsr_mmto.pyto_ad_imports import bound_cond
         well_posed, worst = bound_cond.check_rigid_body_constraint(mesh, bc)
         if well_posed:
             return None
@@ -968,5 +968,5 @@ def _prepared(project):
 def run(project, save_dir=None, **run_options):
     """Optimize the project with _run_topopt. The run's record keeps the project as it was run
     (Project.from_record rebuilds it)."""
-    from lsr_mmto.optimize.run import _run_topopt
+    from lsr_mmto.optimize.optimization_loop import _run_topopt
     return _run_topopt(**_run_arguments(_prepared(project), save_dir, **run_options))

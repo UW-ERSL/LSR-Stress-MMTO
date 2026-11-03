@@ -80,7 +80,7 @@ def histories(runs, out=None):
     """Objective, constraints (fraction of budget) and grayness, all runs overlaid,
     and the relative difference of each objective history from the first run's."""
     import matplotlib.pyplot as plt
-    from .figures import _save
+    from .run_plots import _save
 
     names = list(runs)
     styles = ["-", "--", ":", "-."]
@@ -129,13 +129,13 @@ def histories(runs, out=None):
 def designs(runs, out=None, *, size=(1000, 800), view="iso"):
     """The optimized designs side by side, coloured by material, one shared legend.
 
-    The same raw drawing as figures.design: one quad per element in 2D, one voxel
+    The same raw drawing as run_plots.design: one quad per element in 2D, one voxel
     face per element in 3D. No smoothing.
     """
     import matplotlib.pyplot as plt
     from matplotlib.patches import Patch
-    from .figures import _panel_image, _save, is_3d
-    from .render import draw_panel, mesh_for
+    from .run_plots import _panel_image, _save, is_3d
+    from .design_3d import draw_panel, mesh_for
 
     names = list(runs)
     rs = [runs[n] for n in names]

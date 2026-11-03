@@ -1,6 +1,6 @@
 """
-run.py
-======
+run_panel.py
+============
 The Run strip: an optimization of the project, started from the window.
 
 RunWindow is PyTO-AD's Optimize window (StructuralTopOptWindow): its worker thread, its Qt
@@ -27,9 +27,9 @@ import time
 import numpy as np
 from PyQt5 import QtCore, QtWidgets
 
-from . import design
+from . import draw_design
 from .panels import Info
-from .pyto_ad import StructuralTopOptWindow
+from .pyto_ad_imports import StructuralTopOptWindow
 
 DRAW_EVERY = 1.5                                            # seconds between redraws of the design
 LATENT_POINTS = 5000                                        # the most elements the live latent space draws
@@ -81,11 +81,11 @@ def ask_delete_run(parent, folder):
 def result_tabs(tabs, run, keep=0):
     """Convergence, Latent space and Summary tabs of a saved run, after the first keep tabs."""
     from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
-    from lsr_mmto.results import figures, tables
+    from lsr_mmto.results import run_plots, tables
     while tabs.count() > keep:
         tabs.removeTab(keep)
-    for title, make in (("Convergence", lambda: figures.convergence(run)),
-                        ("Latent space", lambda: figures.latent_scatter(run))):
+    for title, make in (("Convergence", lambda: run_plots.convergence(run)),
+                        ("Latent space", lambda: run_plots.latent_scatter(run))):
         try:
             tabs.addTab(FigureCanvasQTAgg(make()), title)
         except Exception as e:                                      # noqa: BLE001
@@ -354,9 +354,9 @@ class RunWindow(StructuralTopOptWindow):
     def update_visualization(self, frame, iteration):
         """The design so far (main thread), as the window's design: shown at the first frame of a run,
         later only while the Design view is on (Show setup keeps the part in view)."""
-        mesh = design.mesh_of(self.window, self.project)           # the run's own copy: edits wait
+        mesh = draw_design.mesh_of(self.window, self.project)           # the run's own copy: edits wait
         x, material, colours = np.asarray(frame["x"]), np.asarray(frame["material"]), self.colours
-        self.window.set_design(lambda w: design.live(w, mesh, x, material, colours), show=self.first_frame)
+        self.window.set_design(lambda w: draw_design.live(w, mesh, x, material, colours), show=self.first_frame)
         self.first_frame = False
 
     # ------------------------------------------------------------------ the live latent space
@@ -396,7 +396,7 @@ class RunWindow(StructuralTopOptWindow):
         Above three latent dimensions the projection is fitted once, on the real materials, and the axes
         only ever widen, so the picture does not jump; a 3D view keeps the angle it was turned to, and
         is not redrawn while the mouse is turning it."""
-        from lsr_mmto.results import figures
+        from lsr_mmto.results import run_plots
         if self.tabs.indexOf(self.latent_canvas) < 0:
             return
         if self.latent_dragging:
@@ -404,7 +404,7 @@ class RunWindow(StructuralTopOptWindow):
             return
         z, zr = frame["z"], frame["z_real"]
         if self.latent_pca is None and zr.shape[1] > 3:
-            self.latent_pca = figures.latent_projection(zr)
+            self.latent_pca = run_plots.latent_projection(zr)
         pca = self.latent_pca
         drawn = np.vstack([pca.transform(z) if pca is not None and len(z) else z.reshape(-1, zr.shape[1])[:, :3],
                            pca.transform(zr) if pca is not None else zr])
@@ -418,10 +418,10 @@ class RunWindow(StructuralTopOptWindow):
         view = (old[0].elev, old[0].azim) if old and hasattr(old[0], "elev") else None
         self.latent_figure.clear()
         names = self.latent_names + [str(i) for i in range(len(self.latent_names), zr.shape[0])]
-        ax = figures.latent_axes(self.latent_figure, z, zr, names[:zr.shape[0]], pca=pca, small=True,
+        ax = run_plots.latent_axes(self.latent_figure, z, zr, names[:zr.shape[0]], pca=pca, small=True,
                                  limits=list(zip(lo, hi)), view=view)
-        agreement = figures.latent_agreement(pca, z, zr) if pca is not None else None
-        ax.set_title(f"Iteration {frame['iteration']}: " + figures.latent_title(zr.shape[1], agreement), fontsize=9)
+        agreement = run_plots.latent_agreement(pca, z, zr) if pca is not None else None
+        ax.set_title(f"Iteration {frame['iteration']}: " + run_plots.latent_title(zr.shape[1], agreement), fontsize=9)
         self.latent_figure.tight_layout()
         self.latent_canvas.draw_idle()
 
@@ -475,15 +475,15 @@ class RunWindow(StructuralTopOptWindow):
 
     def show_results(self, save_dir):
         """The final design on the part, and tabs for the convergence, the latent space, the summary."""
-        from lsr_mmto.results import records
+        from lsr_mmto.results import load_results
         try:
-            run = records.load(os.path.join(save_dir, "run_data"))
+            run = load_results.load(os.path.join(save_dir, "run_data"))
         except Exception as e:                                      # noqa: BLE001
             self.status.setText(self.status.text() + f"<br>The results could not be read: {e}")
             return
-        mesh = design.mesh_of(self.window, self.project)
+        mesh = draw_design.mesh_of(self.window, self.project)
         if int(mesh.num_elems) == int(run.n_elems):
-            self.window.set_design(lambda w: design.record(w, run, mesh, "Material"))
+            self.window.set_design(lambda w: draw_design.record(w, run, mesh, "Material"))
         result_tabs(self.tabs, run, keep=2)                        # Progress and Log stay
 
     def open_folder(self):

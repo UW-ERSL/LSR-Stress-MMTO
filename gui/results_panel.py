@@ -1,6 +1,6 @@
 """
-results.py
-==========
+results_panel.py
+================
 The Results strip: the project's runs, newest first. A run clicked is drawn on the part (the
 window's Design view) as Material, Density, Stress or Solid, with tabs for its convergence,
 its latent space and its summary. Open other results... shows any run folder, also another
@@ -15,9 +15,9 @@ import os
 
 from PyQt5 import QtCore, QtWidgets
 
-from . import design
+from . import draw_design
 from .panels import GREY, Info
-from .run import ask_delete_run, open_folder, result_tabs, table_view
+from .run_panel import ask_delete_run, open_folder, result_tabs, table_view
 
 RESULTS_HELP = ("Each run of the project is listed here, newest first. Click one to see its design on the part "
                 "and its convergence, latent space and summary in the tabs. Show chooses what the part shows: "
@@ -86,13 +86,13 @@ def latent_side_by_side(runs, max_points=20000):
     elements sit compares directly."""
     import numpy as np
     from matplotlib.figure import Figure
-    from lsr_mmto.results import figures
+    from lsr_mmto.results import run_plots
     names, rs = list(runs), list(runs.values())
     shared = same_network(*rs)
     dims = {np.asarray(r.z_real).shape[1] for r in rs}
     three_d = dims == {3}
     fig = Figure(figsize=(10.0, 5.0))
-    pca = figures.latent_projection(rs[0].z_real) if shared else None
+    pca = run_plots.latent_projection(rs[0].z_real) if shared else None
     axes = []
     for k, (name, run) in enumerate(zip(names, rs)):
         zr = np.asarray(run.z_real, float)
@@ -100,8 +100,8 @@ def latent_side_by_side(runs, max_points=20000):
         if z.shape[0] > max_points:
             z = z[np.random.default_rng(0).choice(z.shape[0], max_points, replace=False)]
         labels = list(run.material_labels) + [str(i) for i in range(len(run.material_labels), zr.shape[0])]
-        p = pca if shared else figures.latent_projection(zr)
-        ax = figures.latent_axes(fig, z, zr, labels, where=(1, 2, k + 1), pca=p, small=True)
+        p = pca if shared else run_plots.latent_projection(zr)
+        ax = run_plots.latent_axes(fig, z, zr, labels, where=(1, 2, k + 1), pca=p, small=True)
         ax.set_title(name, fontsize=10, color=RUN_COLOURS[k])
         axes.append(ax)
     if shared and not three_d:
@@ -198,7 +198,7 @@ class ResultsWindow(QtWidgets.QDialog):
         show = QtWidgets.QHBoxLayout()
         show.addWidget(QtWidgets.QLabel("Show"))
         self.field = QtWidgets.QComboBox()
-        self.field.addItems(design.FIELDS)
+        self.field.addItems(draw_design.FIELDS)
         self.field.currentTextChanged.connect(lambda _: self.redraw())
         show.addWidget(self.field)
         show.addStretch()
@@ -288,7 +288,7 @@ class ResultsWindow(QtWidgets.QDialog):
 
     def open_other(self):
         """Any run folder, also another project's, shown here for looking only."""
-        from .pyto_ad import FILE_DIALOG_OPTIONS
+        from .pyto_ad_imports import FILE_DIALOG_OPTIONS
         folder = QtWidgets.QFileDialog.getExistingDirectory(self, "A run's folder (it holds run_data.npz)",
                                                             os.path.dirname(self.current or self.window._folder()),
                                                             options=FILE_DIALOG_OPTIONS)
@@ -311,9 +311,9 @@ class ResultsWindow(QtWidgets.QDialog):
 
     # ------------------------------------------------------------------ one run
     def record(self, folder):
-        from lsr_mmto.results import records
+        from lsr_mmto.results import load_results
         if folder not in self.records:
-            self.records[folder] = records.load(os.path.join(folder, "run_data"))
+            self.records[folder] = load_results.load(os.path.join(folder, "run_data"))
         return self.records[folder]
 
     def _loaded(self, folder):
@@ -322,7 +322,7 @@ class ResultsWindow(QtWidgets.QDialog):
         try:
             QtWidgets.QApplication.processEvents()
             run = self.record(folder)
-            return run, design.run_mesh(self.window, folder, run)
+            return run, draw_design.run_mesh(self.window, folder, run)
         except Exception as e:                                      # noqa: BLE001
             self.status.setText(f"<span style='color:#b00000'>This run cannot be shown: {e}</span>")
             return None
@@ -359,7 +359,7 @@ class ResultsWindow(QtWidgets.QDialog):
             return
         run, mesh = loaded
         field = self.field.currentText()
-        self.window.set_design(lambda w: design.record(w, run, mesh, field))
+        self.window.set_design(lambda w: draw_design.record(w, run, mesh, field))
 
     # ------------------------------------------------------------------ STL
     def export_stl(self):
@@ -413,11 +413,11 @@ class ResultsWindow(QtWidgets.QDialog):
         folder, report = self.smooth
         run = self.records[folder]
         colours = {lab: run.material_colors[i] for i, lab in enumerate(run.material_labels)}
-        pieces = [(p.path, colours.get(p.label, design.SOLID_COLOUR)) for p in report.pieces]
+        pieces = [(p.path, colours.get(p.label, draw_design.SOLID_COLOUR)) for p in report.pieces]
         if not pieces and report.whole_path:
-            pieces = [(report.whole_path, design.SOLID_COLOUR)]
+            pieces = [(report.whole_path, draw_design.SOLID_COLOUR)]
         apart = self.apart.isChecked()
-        self.window.set_design(lambda w: design.smooth(w, pieces, apart), wide=apart)
+        self.window.set_design(lambda w: draw_design.smooth(w, pieces, apart), wide=apart)
 
     def delete_run(self):
         if self.current is None or self.current in self.others:
@@ -484,10 +484,10 @@ class ResultsWindow(QtWidgets.QDialog):
     def _draw_compare(self):
         field = self.field.currentText()
         (_, (run1, mesh1)), (_, (run2, mesh2)) = self.comparing
-        clim = design.field_range([run1, run2], field)
-        gap = design.width(mesh1) * 1.1
+        clim = draw_design.field_range([run1, run2], field)
+        gap = draw_design.width(mesh1) * 1.1
 
         def draw(w):
-            design.record(w, run1, mesh1, field, clim=clim, name="design")
-            design.record(w, run2, mesh2, field, shift=gap, clim=clim, name="design_2")
+            draw_design.record(w, run1, mesh1, field, clim=clim, name="design")
+            draw_design.record(w, run2, mesh2, field, shift=gap, clim=clim, name="design_2")
         self.window.set_design(draw, wide=True)

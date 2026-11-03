@@ -1,6 +1,6 @@
 """
-pyto_ad.py
-==========
+pyto_ad_imports.py
+==================
 Every name LSR MMTO takes from PyTO-AD, in one place. PyTO-AD is the folder PyTO-AD beside
 this repository; importing this module puts its src folder on sys.path, and warns about what
 is known to cause trouble (PyTO-AD missing, numpy too new, torch missing). It never stops

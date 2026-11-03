@@ -20,7 +20,7 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from lsr_mmto.physics.gradcheck import _model_from_setup  # noqa: E402
+from lsr_mmto.optimize.gradient_check import _model_from_setup  # noqa: E402
 
 try:                                        # about a minute: skipped by  pytest -m "not slow"
     import pytest

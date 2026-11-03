@@ -1,6 +1,6 @@
 """
-figures.py
-==========
+run_plots.py
+============
 Figures for one optimization run.
 
 design                the optimized design: a 2D panel or a 3D voxel render
@@ -16,8 +16,8 @@ import os
 
 import numpy as np
 
-from .records import Run
-from .render import MIRROR_AXES, RenderError, draw_panel, mesh_for, screenshot, voxel_surface
+from .load_results import Run
+from .design_3d import MIRROR_AXES, RenderError, draw_panel, mesh_for, screenshot, voxel_surface
 
 FS_LEGEND = 11
 DPI = 400
@@ -88,7 +88,7 @@ def _legend_beside(ax, run: Run):
 def _panel_image(run, mesh, camera, size, png_path, view="iso", angles=(0, 0, 0, 1)):
     """One 3D panel as an RGB array, optionally also written to disk."""
     import pyvista as pv
-    from .render import _set_view, _rotate
+    from .design_3d import _set_view, _rotate
     az, el, roll, zoom = angles
     if png_path is not None:
         screenshot(run, png_path, mesh=mesh, camera=camera, view=view,
@@ -363,7 +363,7 @@ def boundary_conditions(problem, out=None, *, size=(1400, 1050), zoom=0.82):
     the view and then applies zoom(1.25), which crops the load arrow and the
     clamped face. zoom < 1 here undoes that.
     """
-    from lsr_mmto.pyto_ad import hex_structural_fea, linear_solvers, deflation
+    from lsr_mmto.pyto_ad_imports import hex_structural_fea, linear_solvers, deflation
     import pyvista as pv
 
     mesh, mat_prop, bc, body_force, to_params, _ = problem.build()

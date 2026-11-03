@@ -26,7 +26,7 @@ import shutil
 import sys
 
 from lsr_mmto.materials.databases import in_shipped_folder, material_display
-from lsr_mmto.pyto_ad import (
+from lsr_mmto.pyto_ad_imports import (
     deflation,
     linear_solvers,
     hex_structural_fea,
@@ -51,7 +51,7 @@ from lsr_mmto.optimize.history import (
     record_fea_diagnostics,
     log_objective_and_constraints,
 )
-from lsr_mmto.optimize.final_check import run_postprocessing
+from lsr_mmto.optimize.final_design_analysis import run_postprocessing
 def get_beta_schedule(scheme: BetaScheduleScheme):
     """Return the Heaviside beta-continuation parameters (PAPER scheme).
 
@@ -117,7 +117,7 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
                           plot_progress=plot_progress, plot_bcs=plot_bcs, plotter=plotter)   # what the run records
     saveNet = s.saveNet                                     # resolved below: None is the .nt beside the database
     use_z_smoothing, use_penalization = s.use_z_smoothing, s.use_penalization      # switched off during the run
-    from lsr_mmto.optimize import save as _save
+    from lsr_mmto.optimize import save_results as _save
     _provenance = _save.provenance()   # the code as it is when the run starts
 
     history = init_run_history()
@@ -192,7 +192,7 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
     #     MMTO driver uses the same tested iterative path as single-material.
     #     The adjoint solve in PyTO-AD's differentiable solve reuses fe_solver.solver
     #     and fe_solver.dsolver, so it follows this choice automatically.
-    from lsr_mmto.pyto_ad import DIRECT_SOLVER_DOF_CUTOFF    # dof limit for the direct solver; above it, DPCG
+    from lsr_mmto.pyto_ad_imports import DIRECT_SOLVER_DOF_CUTOFF    # dof limit for the direct solver; above it, DPCG
 
     solver = linear_solvers.Solvers.PARDISO
     dsolver = deflation.DeflationSolver()
@@ -559,7 +559,7 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
     run_config["network_reconstruction"] = matEncoder.reconstruction()   # and per material: database vs network
     run_config["provenance"] = _provenance
     run_config["units"] = to_problem.unit_record()
-    from lsr_mmto.pyto_ad import topopt_material_model
+    from lsr_mmto.pyto_ad_imports import topopt_material_model
     run_config["fixed_in_code"] = {
         "mma_move_limit": MMA_MOVE_LIMIT, "mma_kkt_tol": MMA_KKT_TOL,
         "apply_latent_sensitivity_filter": APPLY_LATENT_SENS_FILTER,

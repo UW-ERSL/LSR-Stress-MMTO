@@ -24,7 +24,7 @@ import torch
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from lsr_mmto.optimize import final_check as U  # noqa: E402
+from lsr_mmto.optimize import final_design_analysis as U  # noqa: E402
 from lsr_mmto.problem.project import Project, run  # noqa: E402
 
 N_DOF, ITERATIONS = 3000, 2

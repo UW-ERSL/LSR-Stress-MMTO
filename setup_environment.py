@@ -330,7 +330,7 @@ check("LSR MMTO is installed in the environment", lambda: version("lsr_mmto"))
 for m in ("records", "render", "figures", "tables", "display"):
     check(f"lsr_mmto.results.{m} imports", lambda m=m: importlib.import_module(f"lsr_mmto.results.{m}"))
 check("PyTO-AD and the projects import", lambda: importlib.import_module("lsr_mmto.problem.project"))
-check("optimizer driver imports", lambda: importlib.import_module("lsr_mmto.optimize.run"))
+check("optimizer driver imports", lambda: importlib.import_module("lsr_mmto.optimize.optimization_loop"))
 
 def pyto_ad_only():
     import pyto

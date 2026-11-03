@@ -16,7 +16,7 @@ import numpy as np
 
 
 def label_of(run):
-    from .records import label
+    from .load_results import label
     return label(run)
 
 

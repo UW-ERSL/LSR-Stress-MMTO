@@ -7,7 +7,7 @@ meshes its part with it.
 """
 import numpy as np
 
-from lsr_mmto.pyto_ad import hex_mesher
+from lsr_mmto.pyto_ad_imports import hex_mesher
 
 
 def make_mesh(stl_path, nDOFDesired, single_layer=False):

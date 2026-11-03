@@ -213,7 +213,7 @@ class MaterialsPanel(QtWidgets.QDialog):
 
     def _browse(self):
         from lsr_mmto.materials.databases import DATABASE_DIR
-        from .pyto_ad import FILE_DIALOG_OPTIONS
+        from .pyto_ad_imports import FILE_DIALOG_OPTIONS
         path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Material database", DATABASE_DIR,
                                                         "Excel files (*.xlsx)", options=FILE_DIALOG_OPTIONS)
         if path:

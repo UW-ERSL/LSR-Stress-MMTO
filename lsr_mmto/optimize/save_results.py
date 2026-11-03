@@ -1,6 +1,6 @@
 """
-save.py
-=======
+save_results.py
+===============
 Persistence layer for MMTO runs.
 
 Writes into save_dir:
@@ -103,7 +103,7 @@ def _read_pnorm_exponent():
     """The p-norm exponent is a module global on topopt_material_model."""
     for getter in (
         lambda: importlib.import_module("topopt_material_model"),
-        lambda: __import__("lsr_mmto.pyto_ad", fromlist=["topopt_material_model"]).topopt_material_model,
+        lambda: __import__("lsr_mmto.pyto_ad_imports", fromlist=["topopt_material_model"]).topopt_material_model,
     ):
         try:
             m = getter()

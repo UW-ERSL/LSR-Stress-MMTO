@@ -104,9 +104,9 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 | `run_gui.py` | starts the LSR MMTO GUI: `python run_gui.py`, or `python run_gui.py projects/beam.mmto` |
 | `make_shortcut.py` | adds LSR MMTO to the Start menu and the desktop (Windows); the setup runs it, and running it again (`python make_shortcut.py`, with the environment active) repairs the shortcuts after the folder moves |
 | `projects/` | the four examples as project files: geometry, supports, loads, materials, objective, constraints, settings |
-| `docs/project_reference.md` | everything a project file can hold, generated from the code |
-| `docs/extending.md` | how to add a quantity, a selection type, a boundary condition, a setting, a material attribute or a database |
-| `docs/make_reference.py` | writes `docs/project_reference.md` from the code |
+| `docs/project_file_reference.md` | everything a project file can hold, generated from the code |
+| `docs/how_to_add_features.md` | how to add a quantity, a selection type, a boundary condition, a setting, a material attribute or a database |
+| `docs/make_project_file_reference.py` | writes `docs/project_file_reference.md` from the code |
 | `setup_environment.py` | installs everything; see Installation |
 | `requirements.txt` | Python packages the setup installs |
 | `pyproject.toml` | makes this folder installable as the package `lsr_mmto` (`pip install -e .`) |
@@ -169,7 +169,7 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad.py`
 | File | Purpose |
 |---|---|
 | `records.py` | a finished run, read back for plotting |
-| `figures.py` | design, latent space, convergence, boundary conditions |
+| `run_plots.py` | design, latent space, convergence, boundary conditions |
 | `tables.py` | run summary and material database tables |
 | `render.py` | 2D panels and 3D voxel renders |
 | `stl_export.py` | a run's design as STL files |

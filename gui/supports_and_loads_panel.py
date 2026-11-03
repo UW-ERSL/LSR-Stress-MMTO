@@ -1,6 +1,6 @@
 """
-supports.py
-===========
+supports_and_loads_panel.py
+===========================
 The Supports and loads panel: the project's regions (selections), its supports and loads,
 and which regions are kept solid, with a preview on the mesh the run will use.
 
@@ -468,7 +468,7 @@ class RegionDialog(QtWidgets.QDialog):
         return box
 
     def _browse(self, box, pattern):
-        from .pyto_ad import FILE_DIALOG_OPTIONS
+        from .pyto_ad_imports import FILE_DIALOG_OPTIONS
         path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Choose a file", self.project.base_dir, pattern,
                                                         options=FILE_DIALOG_OPTIONS)
         if path:

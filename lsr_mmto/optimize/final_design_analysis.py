@@ -1,6 +1,6 @@
 """
-final_check.py
-==============
+final_design_analysis.py
+========================
 The final design analysed three ways (continuous, binarized, binarized with snapped materials),
 its stress diagnostics printed, and the run saved for later postprocessing.
 """
@@ -113,7 +113,7 @@ def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
         raise ValueError("run_postprocessing needs decode: the optimization's E, nu for latent points")
     import os
     if save_dir is not None:
-        pass  # plot autosave disabled; figures are drawn by results/figures.py from the saved record
+        pass  # plot autosave disabled; figures are drawn by results/run_plots.py from the saved record
 
     def _p(name):
         return os.path.join(save_dir, name) if save_dir else None
@@ -196,7 +196,7 @@ def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
         prefix="[FINAL STRESS DIAG]",
     )
 
-    # --- persist everything for offline postprocessing (results/records.py, results/figures.py) ---
+    # --- persist everything for offline postprocessing (results/records.py, results/run_plots.py) ---
     material_indices = matEncoder.getClosestRealMaterialIndex(zOptimalPts)
     if hasattr(material_indices, "cpu"):
         material_indices = material_indices.cpu().numpy()
@@ -204,7 +204,7 @@ def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
                       for i in range(len(matEncoder.materialNames))]
 
     if save_dir is not None:
-        from lsr_mmto.optimize import save as run_save
+        from lsr_mmto.optimize import save_results as run_save
         _zreal = (zRealPoints.detach().cpu().numpy()
                   if hasattr(zRealPoints, "detach") else np.asarray(zRealPoints))
         run_save.save_run_data(

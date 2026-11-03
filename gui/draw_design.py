@@ -1,6 +1,6 @@
 """
-design.py
-=========
+draw_design.py
+==============
 An optimized design on the 3D view: one block per element, drawn in place of the part.
 
     live(window, mesh, x, material, colours)    while a run goes: density and material

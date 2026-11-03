@@ -3,10 +3,10 @@
 Most additions are one entry in a registry. The tests listed under each one fail when the
 entry is incomplete. After any addition, run
 
-    python docs/make_reference.py
+    python docs/make_project_file_reference.py
     python -m pytest tests -q
 
-The first rewrites `docs/project_reference.md`; `tests/test_reference.py` fails until it is
+The first rewrites `docs/project_file_reference.md`; `tests/test_reference.py` fails until it is
 rewritten.
 
 ## A quantity (an objective or a constraint)

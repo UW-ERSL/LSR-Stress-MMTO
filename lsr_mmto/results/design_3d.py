@@ -1,6 +1,6 @@
 """
-render.py
-=========
+design_3d.py
+============
 Raw element-level rendering.
 
 draw_panel(ax, run, field)   2D: one matplotlib quad per element
@@ -17,7 +17,7 @@ import os
 
 import numpy as np
 
-from .records import Run
+from .load_results import Run
 
 
 class RenderError(RuntimeError):

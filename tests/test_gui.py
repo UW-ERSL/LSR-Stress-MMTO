@@ -77,13 +77,13 @@ def scratch():
 
 
 def test_what_it_takes_from_pyto_ad():
-    from gui import pyto_ad
-    assert hasattr(pyto_ad.ProjectsWindow, "load_geometry") and hasattr(pyto_ad.MainWindow, "init_state")
-    assert {c["name"] for c in pyto_ad.MainWindow.BUTTON_CONFIG} >= set(G.SIDEBAR) - set(G.PANELS) - \
+    from gui import pyto_ad_imports
+    assert hasattr(pyto_ad_imports.ProjectsWindow, "load_geometry") and hasattr(pyto_ad_imports.MainWindow, "init_state")
+    assert {c["name"] for c in pyto_ad_imports.MainWindow.BUTTON_CONFIG} >= set(G.SIDEBAR) - set(G.PANELS) - \
         {"Supports and loads", "Run", "Results"}
-    assert all(hasattr(pyto_ad.MainWindow, m) for m in ("update_LivVar", "_raise_if_open",
+    assert all(hasattr(pyto_ad_imports.MainWindow, m) for m in ("update_LivVar", "_raise_if_open",
                                                          "start_box_node_selection"))
-    assert all(hasattr(pyto_ad.StructuralLoadsWindow, m) for m in ("redraw_loads", "refresh_applied_list"))
+    assert all(hasattr(pyto_ad_imports.StructuralLoadsWindow, m) for m in ("redraw_loads", "refresh_applied_list"))
     w = G.MMTOWindow()
     assert list(w.sidebar_buttons) == list(G.SIDEBAR) and w.windowTitle() == "LSR MMTO"
     assert [m.title() for m in (a.menu() for a in w.menuBar().actions())] == ["&File", "&Help"]
@@ -546,7 +546,7 @@ def test_vae_tab():
 
 
 # ---------------------------------------------------------------------- supports and loads
-from gui import supports as SP  # noqa: E402
+from gui import supports_and_loads_panel as SP  # noqa: E402
 
 
 def test_code_line():
@@ -968,8 +968,8 @@ def test_run():
         assert r.status.text().startswith("Run finished after 3 iterations"), r.status.text()
         assert os.path.isfile(os.path.join(r.save_dir, "run_data.npz"))
         assert sorted(os.listdir(r.save_dir)) == ["run_config.yaml", "run_data.config.json", "run_data.npz"]
-        from lsr_mmto.results import records
-        rec = records.load(os.path.join(r.save_dir, "run_data"))             # each element's material is the
+        from lsr_mmto.results import load_results
+        rec = load_results.load(os.path.join(r.save_dir, "run_data"))             # each element's material is the
         z, zr = rec.z_solid(), np.asarray(rec.z_real)                         # real one nearest its latent point
         nearest = np.argmin(((z[:, None, :] - zr[None, :, :]) ** 2).sum(-1), axis=1)
         assert np.array_equal(nearest, rec.material_indices[rec.solid])
@@ -1106,16 +1106,16 @@ def test_latent_views():
     1D as counts along the line with every name readable, 4D through a fixed projection whose title
     says for how many elements it shows the right nearest material; the live axes only widen."""
     from types import SimpleNamespace
-    from gui import results as R
-    from gui import run as RN
-    from lsr_mmto.results import figures
+    from gui import results_panel as R
+    from gui import run_panel as RN
+    from lsr_mmto.results import run_plots
     rng = np.random.default_rng(0)
     for n_z in (1, 2, 3, 4):
         zr = rng.normal(size=(6, n_z)) * 2
         z = zr[rng.integers(0, 6, 800)] + rng.normal(size=(800, n_z)) * 0.2
         run = SimpleNamespace(z_solid=lambda z=z: z, z_real=zr, material_labels=list("ABCDEF"),
                               material_names=list("ABCDEF"))
-        fig = figures.latent_scatter(run)
+        fig = run_plots.latent_scatter(run)
         ax = fig.axes[0]
         if n_z == 1:
             assert ax.get_ylabel() == "elements" and sum(p.get_height() for p in ax.patches) == 800
@@ -1223,10 +1223,10 @@ def test_examples_open_as_templates():
 def test_part_facts_pca_live_colours_training():
     """The part's facts behind the (i), not over the 3D view; the PCA breakdown behind the Materials
     panel's (i); the live design by density; the training's epochs in the Run status line."""
-    from gui import design
-    s = design.strength([0.1, 0.55, 1.0])
+    from gui import draw_design
+    s = draw_design.strength([0.1, 0.55, 1.0])
     assert np.allclose(s, [0.25, 0.625, 1.0])                                # pale to full colour
-    assert design.faded(np.array([[255.0, 0, 0]] * 3), s).tolist() == [[255, 191, 191], [255, 96, 96],
+    assert draw_design.faded(np.array([[255.0, 0, 0]] * 3), s).tolist() == [[255, 191, 191], [255, 96, 96],
                                                                          [255, 0, 0]]
     with scratch() as d:
         w = opened("L-bracket", d)
@@ -1243,7 +1243,7 @@ def test_part_facts_pca_live_colours_training():
         n = int(mesh.num_elems)
         x = np.full(n, 0.5)
         x[:10] = 0.05                                                         # almost empty: not drawn
-        w.set_design(lambda win: design.live(win, mesh, x, np.zeros(n, dtype=int), ["#ff0000"]))
+        w.set_design(lambda win: draw_design.live(win, mesh, x, np.zeros(n, dtype=int), ["#ff0000"]))
         blocks = w.plotter.actors["result_design"].GetMapper().GetInput()
         assert blocks.n_cells == 6 * (n - 10) and not w.part_actor().GetVisibility()
 
@@ -1263,7 +1263,7 @@ def test_results_compare_delete():
     """Results: the project's runs, newest first; a run shown as each of Material, Density, Stress and
     Solid; two runs compared side by side; another place's run opened for looking only; Delete, in
     Results and in the Run strip, removes a run's folder."""
-    from gui import design
+    from gui import draw_design
     with scratch() as d:
         w = opened("L-bracket", d)
         w.show()
@@ -1285,7 +1285,7 @@ def test_results_compare_delete():
         assert res.folders() == folders[::-1] and res.current == folders[1]
         assert [res.tabs.tabText(i) for i in range(res.tabs.count())] == ["Convergence", "Latent space",
                                                                           "Summary"]
-        for field in design.FIELDS:
+        for field in draw_design.FIELDS:
             res.field.setCurrentText(field)
             assert "result_design" in w.plotter.actors and w.view == "design", field
             assert bool(w.design_bars) == (field in ("Density", "Stress")), (field, w.design_bars)

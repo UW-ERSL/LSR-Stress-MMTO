@@ -4,7 +4,7 @@ settings.py
 Every setting of a project, each in one entry of SETTINGS: its section, its name, the value a new
 project starts from, the label the app shows, its one help text (the app's (i) and the settings
 page), and the group of the Settings panel it sits in. Everything else is made from this list:
-DEFAULT_SETTINGS, the Settings panel, docs/project_reference.md, and the settings object s the
+DEFAULT_SETTINGS, the Settings panel, docs/project_file_reference.md, and the settings object s the
 optimization reads (s.gamma_factor).
 
 A new setting is one Setting here, plus the line in optimize/run.py that reads s.<name>. A setting

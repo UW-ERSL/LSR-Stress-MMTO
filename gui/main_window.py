@@ -32,8 +32,8 @@ from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtGui import QKeySequence
 
 from .panels import GREY, FormulationPanel, Info, MaterialsPanel, SettingsPanel, ok_cancel
-from .supports import KEEP_COLOUR, LOAD_COLOUR, OTHER_COLOUR, SUPPORT_COLOUR, SupportsPanel, bc_name, bc_value
-from .pyto_ad import (FILE_DIALOG_OPTIONS, UNIT_SYSTEMS, GeometryWindow, MainWindow, ProjectsWindow,
+from .supports_and_loads_panel import KEEP_COLOUR, LOAD_COLOUR, OTHER_COLOUR, SUPPORT_COLOUR, SupportsPanel, bc_name, bc_value
+from .pyto_ad_imports import (FILE_DIALOG_OPTIONS, UNIT_SYSTEMS, GeometryWindow, MainWindow, ProjectsWindow,
                       StructuralLoadsWindow, UnitsWindow)
 
 APP = "LSR MMTO"
@@ -365,7 +365,7 @@ class MMTOWindow(MainWindow):
 
     # ------------------------------------------------------------------ scale: the ruler and the mouse
     def length_unit(self):
-        from .supports import field_unit
+        from .supports_and_loads_panel import field_unit
         return field_unit("length", self.project.units) if self.project is not None else ""
 
     def part_bounds(self):
@@ -998,7 +998,7 @@ class MMTOWindow(MainWindow):
             QtWidgets.QMessageBox.information(self, APP, "Start a project first: File > New or File > Open.")
             return None
         if not self._raise_if_open("run_window"):
-            from .run import RunWindow
+            from .run_panel import RunWindow
             self.run_window = RunWindow(self)
             self._dock_beside(Strip(self.run_window, self, "run_window"))
         return self.run_window
@@ -1010,7 +1010,7 @@ class MMTOWindow(MainWindow):
             QtWidgets.QMessageBox.information(self, APP, "Start a project first: File > New or File > Open.")
             return None
         if not self._raise_if_open("results_window"):
-            from .results import ResultsWindow
+            from .results_panel import ResultsWindow
             self.results_window = ResultsWindow(self)
             self._dock_beside(Strip(self.results_window, self, "results_window"))
         else:
@@ -1159,7 +1159,7 @@ class MMTOWindow(MainWindow):
             self._view_changed()
 
     def _remove_design(self):
-        from .design import PREFIX
+        from .draw_design import PREFIX
         for name in [n for n in list(self.plotter.actors) if str(n).startswith(PREFIX)]:
             self.plotter.remove_actor(name, reset_camera=False)
         for title in list(self.design_bars):

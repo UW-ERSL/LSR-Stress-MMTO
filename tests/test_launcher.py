@@ -79,7 +79,7 @@ def test_run_record_starts_git_without_a_window():
     the shortcut, each git call otherwise flashes a black window up)."""
     import subprocess
     sys.path.insert(0, ROOT)
-    from lsr_mmto.optimize import save as run_save
+    from lsr_mmto.optimize import save_results as run_save
     seen = []
     real = subprocess.run
 

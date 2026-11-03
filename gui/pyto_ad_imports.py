@@ -1,6 +1,6 @@
 """
-pyto_ad.py
-==========
+pyto_ad_imports.py
+==================
 Every name the LSR MMTO GUI takes from the PyTO-AD GUI, in one place. A new PyTO-AD pin that
 renames or removes one of them fails here, and in tests/test_gui.py, rather than deep inside
 the GUI.
@@ -16,7 +16,7 @@ the GUI.
 Also used, as MainWindow's own methods: update_LivVar (told when a pick is applied) and
 _raise_if_open; and the Structural Loads window's redraw_loads and refresh_applied_list.
 """
-import lsr_mmto.pyto_ad  # noqa: F401  # puts PyTO-AD on sys.path
+import lsr_mmto.pyto_ad_imports  # noqa: F401  # puts PyTO-AD on sys.path
 from pyto.gui.PyTOGUI import (FILE_DIALOG_OPTIONS, GeometryWindow, MainWindow,  # noqa: F401  # type: ignore
                               ProjectsWindow, StructuralLoadsWindow, StructuralTopOptWindow, UnitsWindow)
 

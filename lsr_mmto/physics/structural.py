@@ -38,7 +38,7 @@ PyTO-AD sets torch's default dtype to float64 on import; everything here is floa
 import numpy as np
 import torch
 
-import lsr_mmto.pyto_ad  # noqa: F401  puts PyTO-AD on sys.path
+import lsr_mmto.pyto_ad_imports  # noqa: F401  puts PyTO-AD on sys.path
 import pyto.physics.hex_element_stiffness as _hex_ek
 import pyto.autodiff.material_model as ad_mm
 from pyto.physics.structural.hex_structural_fea import HexStructuralFEA as _HexStructuralFEA_AD

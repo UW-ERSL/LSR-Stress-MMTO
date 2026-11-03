@@ -21,8 +21,8 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from lsr_mmto.optimize import run as M  # noqa: E402
-from lsr_mmto.optimize import save as run_save  # noqa: E402
+from lsr_mmto.optimize import optimization_loop as M  # noqa: E402
+from lsr_mmto.optimize import save_results as run_save  # noqa: E402
 from lsr_mmto.problem.project import Project, _run_arguments  # noqa: E402
 from lsr_mmto.problem.settings import DEFAULT_SETTINGS, RUN_KEYS, SETTINGS  # noqa: E402
 
@@ -167,17 +167,17 @@ def test_record_rebuilds_the_project():
     rec = json.loads(json.dumps(out["config"]["arguments_resolved"]["to_problem"]))
     q = Project.from_record(rec)
     assert q.to_dict() == p.to_dict()
-    from lsr_mmto.results import render
+    from lsr_mmto.results import design_3d
 
     class FakeRun:
         config, path = {"arguments_resolved": {"to_problem": rec}}, os.path.join(ROOT, "nowhere", "run_data.npz")
-    assert render._problem(FakeRun()).to_dict() == p.to_dict()
+    assert design_3d._problem(FakeRun()).to_dict() == p.to_dict()
 
 
 def test_record_stores_display():
     """The run takes its colours and labels from the database; the record stores them."""
     from lsr_mmto.materials.databases import default_colours
-    from lsr_mmto.results import records
+    from lsr_mmto.results import load_results
     colours, labels = runs()["project"][1]["display"]
     assert colours == default_colours(6) and labels == list("ABCDEF")     # 6Materials: no Display sheet
     assert runs()["project"][1]["config"]["materials"]["material_labels"] == labels
@@ -193,7 +193,7 @@ def test_record_stores_display():
                                  ["m1", "m2", "m3"], 2, n, 9, material_labels=["one", "two", "three"])
         finally:
             run_save.WRITE_FILES = saved
-        run = records.load(os.path.join(d, "run_data.npz"))
+        run = load_results.load(os.path.join(d, "run_data.npz"))
     assert run.material_colors == ["#010203", "#040506", "#070809"] and run.material_labels == ["one", "two", "three"]
 
 
@@ -205,7 +205,7 @@ def test_script_run_lands_in_the_project_results():
     import shutil
     from lsr_mmto import run
     from lsr_mmto.problem import project_folder as F
-    from lsr_mmto.results import records, render
+    from lsr_mmto.results import load_results, design_3d
     p = ubracket_project()
     p.settings["common"]["maxIterations"] = 1
     here = os.getcwd()
@@ -224,8 +224,8 @@ def test_script_run_lands_in_the_project_results():
         assert len(os.path.basename(listed[0])) == 19 and os.listdir(elsewhere) == []
         assert sorted(os.listdir(listed[0])) == ["run_config.yaml", "run_data.config.json", "run_data.npz"]
         moved = shutil.move(os.path.join(d, "ub"), os.path.join(d, "sent"))
-        rec = records.load(os.path.join(moved, "results", os.path.basename(listed[0]), "run_data"))
-        part = render._problem(rec).stl_path()
+        rec = load_results.load(os.path.join(moved, "results", os.path.basename(listed[0]), "run_data"))
+        part = design_3d._problem(rec).stl_path()
         assert os.path.isfile(part) and part.startswith(moved), part
 
 

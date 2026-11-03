@@ -1,6 +1,6 @@
 """
-records.py
-==========
+load_results.py
+===============
 An optimization run, read back for plotting.
 
 load(path)        a run saved to disk, as a Run.

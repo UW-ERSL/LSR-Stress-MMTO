@@ -20,7 +20,7 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from lsr_mmto.pyto_ad import topopt_material_model  # noqa: E402
+from lsr_mmto.pyto_ad_imports import topopt_material_model  # noqa: E402
 from lsr_mmto.problem.project import Project, _run_arguments  # noqa: E402
 from lsr_mmto.problem.settings import VAE_PARAMS  # noqa: E402
 

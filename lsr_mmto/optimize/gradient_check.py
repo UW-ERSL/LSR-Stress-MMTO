@@ -1,6 +1,6 @@
 """
-gradcheck.py
-============
+gradient_check.py
+=================
 The autodiff gradient against central finite differences.
 
 check(p)          sets the project p up as run(p) does, then, at a random design,
@@ -25,7 +25,7 @@ class _Stop(Exception):
 
 def _model_from_setup(run_args):
     """Run _run_topopt's setup and hand back the autodiff model, before MMA starts."""
-    from lsr_mmto.optimize import run as M
+    from lsr_mmto.optimize import optimization_loop as M
     found = {}
 
     def intercept(nVar, nCon, fn, x0, lb, ub, **kw):
