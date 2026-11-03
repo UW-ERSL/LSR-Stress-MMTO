@@ -1,7 +1,7 @@
-# Extending the code
+# How to add features
 
-Most additions are one entry in a registry. The tests listed under each one fail when the
-entry is incomplete. After any addition, run
+Most additions are one entry in a list. `docs/how_the_code_works.md` says where each part of the
+code is. The tests listed under each one fail when the entry is incomplete. After any addition, run
 
     python docs/make_project_file_reference.py
     python -m pytest tests -q
@@ -11,23 +11,30 @@ rewritten.
 
 ## A quantity (an objective or a constraint)
 
-One entry in `QUANTITIES` in `lsr_mmto/formulation/quantities.py`, with the function that computes it
+A quantity every physics has (mass, cost, a volume fraction) is one entry in `QUANTITIES` in
+`lsr_mmto/formulation/quantities.py`. A quantity of one physics is one entry in `QUANTITIES` on that
+physics' front page, given as the arguments of a `Quantity` without `physics` (the structural ones
+are in `lsr_mmto/physics/structural/structural_quantities.py`). Either way, its function computes it
 as torch from the model's state; autograd gives the gradient.
 
     def _cost(m, opt):
         return torch.sum(m.props["Density"] * m.props["Cost"] * m.x_phys) * m.elem_volume
 
-    Quantity("Cost", None, ("COST", None), [STRUCTURAL], ["Density", "Cost"],
+    Quantity("Cost", False, True, [], ["Density", "Cost"],
              _cost, "sum of density * cost * x_phys * element volume", "Cost",
-             "The cost of the part, from each material's density and cost per mass."),
+             "The cost of the part, from each material's density and cost per mass.", "USD"),
 
-- The entry holds its name in the app and its help; the Formulation panel and the reference
-  page read them from there.
+- `m` holds `x_phys`, `z` and `props` (every column of the database, decoded), and whatever the
+  physics' `analyse` left on it (the structural one leaves `u` and `svm`, the von Mises stress).
+- The entry holds its name in the app, its help and the unit of a bound on it; the Formulation
+  panel and the reference page read them from there.
 - `needs`: the database columns it reads. A database without them gives a clear error.
-- The objective and constraint forms name a member of PyTO-AD's `TO_QOI`. A quantity with no
-  `TO_QOI` counterpart also needs a change in `to_params_form` in `lsr_mmto/formulation/formulation_text.py`.
+- `arguments`: what its formula takes, e.g. `MaterialVolumeFraction(2, tau=0.5)` takes a material
+  by position and `tau` by name. The formula text, the project's checks and the Formulation panel
+  read them from there; a quantity with none is written `Name()`.
+- A project names it by its name; the objective and the constraints are kept by that name.
 - Add it to `QUANTITIES` in `tests/test_ad_quantities.py`, which checks the gradient against
-  finite differences, and the unit of its bound to `bound_unit` in `gui/formulation_panel.py`.
+  finite differences.
 
 ## A selection type
 
@@ -39,39 +46,53 @@ write `_mask` (a True/False per point) or `evaluate` (indices). Saving and loadi
         """The plane at the mesh's extreme on one side: xmin, xmax, ymin, ymax, zmin or zmax."""
         TYPE, fields = "face", ("side", "pad")
 
-The code line in the GUI picks it up by itself. For the region form, add it to `FORM` in
+The code line in the GUI picks it up by itself. For the selection form, add it to `FORM` in
 `gui/supports_and_loads_panel.py`: the name the form shows, a plain description, and a label for each field
 (the form never shows the code names).
 
 Add it to `tests/test_selections.py`, including the round trip through `to_dict`.
 
-## A kind of boundary condition
+## A kind of support or load
 
-`BC_KINDS` in `lsr_mmto/problem/boundary_conditions.py` (the structural kinds are in
-`lsr_mmto/physics/structural/structural_supports_and_loads.py`). A `BCKind` has a description, a role (`"support"` or
-`"load"`), `check(bc)` returning a list of errors, `apply(bc, nodes, mesh, state, where)`
-writing into `state["values"]` (dof to imposed value) or `state["force"]`, `script(bc, on)`
-returning the `Project` call that makes it, and `fields`, its values as
-`(name, kind, measures, doc)`, from which the GUI makes its form; give it a name, a plain
-description and labels in `BC_FORM`, `gui/supports_and_loads_panel.py`. Add an `add_...` method to `Project`
-for it.
+One entry in `SUPPORT_AND_LOAD_KINDS` on the front page of its physics (the structural ones are in
+`lsr_mmto/physics/structural/structural_supports_and_loads.py`), given as the arguments of a
+`BCKind` (`lsr_mmto/problem/boundary_conditions.py`):
+
+- `role`: `"support"` or `"load"`; supports are applied before loads, each in the order given.
+- `field`: the field it acts on, one of the physics' `FIELDS`; each field gets its own boundary
+  condition.
+- `check(bc)`: a list of errors.
+- `apply(bc, nodes, mesh, state, where)`: writes into `state["values"]` (dof to imposed value) or
+  `state["force"]`, both of its field.
+- `script(bc, on)`: the line of a setup script that makes it.
+- `fields`: its values as `(name, kind, measures, doc)`; kind is `"dofs"`, `"number"`, `"vector"`
+  or `"area"`, measures what the number is, for its unit. The GUI makes its form from them.
+- `shown`, `help`, `labels`: the name, the help and a label for each value, as the GUI shows them.
+- `picks` (optional): how one picked on the part in the Pick window becomes this kind.
+
+A project stores it as `{"kind": name, "on": selection, ...values}`. The structural kinds also have
+`add_support`, `add_force` and `add_traction` on `Project` for setup scripts.
 
 Add a build test to `tests/test_project.py`; `test_script_round_trip` checks `script`.
 
 ## A setting
 
-One entry in `SETTINGS` in `lsr_mmto/problem/settings.py`, plus the line in
-`lsr_mmto/optimize/optimization_loop.py` that reads it as `s.<name>`:
+One entry in `SETTINGS` in `lsr_mmto/problem/settings.py`, or, for a setting of one physics, one
+entry in `SETTINGS` on its front page (as the arguments of a `Setting`), plus the line that reads it
+as `s.<name>` (in `lsr_mmto/optimize/optimization_loop.py`, or in the physics' own code, which gets
+the same `s`):
 
     Setting("advanced", "gamma_factor", 1.1, "Weight growth per iteration",
             "How much stronger it gets each iteration while it ramps up.", "Distance penalty"),
 
 The entry holds its section (`common`, `advanced` or `vae`), the value a new project starts from
 (files without it are completed from it), its label and help in the app, and the group of the
-Settings panel it sits in; `none_means`, `integer` and `choices` when it needs them. The
-defaults, the Settings panel, the reference page and the settings a run gets are made from it.
-`test_settings_cover_run_topopt` in `tests/test_run_project.py` fails when `optimization_loop.py` reads a name
-that is not a setting; `tests/test_extending.py` shows one entry reaching every place.
+Settings panel it sits in; `none_means`, `integer` and `choices` when it needs them;
+`pyto_ad_field` when PyTO-AD's parameters have a field for it, `at_build` when PyTO-AD keeps it
+somewhere else (the p-norm exponent). The defaults, the Settings panel, the reference page and the
+settings a run gets are made from it. `test_settings_cover_run_topopt` in
+`tests/test_run_project.py` fails when the loop reads a name that is not a setting;
+`tests/test_extending.py` shows one entry reaching every place.
 
 ## A material attribute
 
@@ -92,12 +113,23 @@ it is used. The check, the template and the database editor follow. Add a case t
 
 ## A physics
 
-A folder in `lsr_mmto/physics/` whose `<name>_module.py` offers `Solver`, `Model`, `decode`, `distance_penalty` and
-`latent_smoothing` (as `structural/structural_module.py` does), plus one entry in `PHYSICS` in
-`lsr_mmto/physics/available_physics.py`: its name, its file, and the database columns it reads. A project
-names it with `"physics"` in its file (`p.physics` in code); the optimization builds the solver and
-the model of that physics, and an unknown name is an error before the run. Its quantities are
-entries of `QUANTITIES` that name it in their `physics`.
+A folder in `lsr_mmto/physics/`, e.g. `thermoelastic/`, with four files:
+
+| File | What goes in it |
+|---|---|
+| `thermoelastic_module.py` | the front page: every entry `MODULE_ENTRIES` lists, by name |
+| `thermoelastic_physics.py` | the solver (`make_solver`) and one iteration's solve (`analyse`) |
+| `thermoelastic_supports_and_loads.py` | its kinds of support and load, and its check that they hold the part |
+| `thermoelastic_quantities.py` | its objectives and constraints, what each iteration records, the final check's numbers |
+
+plus one line in `MODULES` in `lsr_mmto/physics/available_physics.py`. The entries are described in
+`MODULE_ENTRIES` there; `structural/structural_module.py` is a complete example, and
+`tests/test_new_physics.py` registers and runs a small made-up one. A project names its physics with
+`"physics"` in its file (`p.physics` in code); an unknown name is an error before the run.
+
+A module's files import the layers below them (`elements/`, `design/`, `pyto_ad_imports.py`), never
+the core's lists: its quantities, kinds and settings are given as plain arguments, and the core
+makes the entries.
 
 ## A material database
 
