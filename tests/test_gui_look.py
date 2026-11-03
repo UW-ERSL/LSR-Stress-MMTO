@@ -278,6 +278,31 @@ def test_message_panel_merges_repeats():
     w.close()
 
 
+def test_run_layout():
+    """While a run goes the sidebar steps aside and Current run takes about half the window; afterwards
+    both are back as they were."""
+    styled()
+    try:
+        w = window()
+        rw = w.open_run_panel()
+        settle(0.3)
+        dock = rw.parentWidget()
+        before = dock.width()
+        assert w.sidebar.isVisible()
+        rw.optimization_running = True                                    # as while a run goes
+        w.update_top_row()
+        settle(0.3)
+        assert not w.sidebar.isVisible() and abs(dock.width() - w.width() // 2) < 0.06 * w.width()
+        assert w.run_button.text() == "Stop"
+        rw.optimization_running = False
+        w.update_top_row()
+        settle(0.3)
+        assert w.sidebar.isVisible() and abs(dock.width() - before) <= 4 and w.run_button.text() == "Run"
+        w.close()
+    finally:
+        APP.setStyleSheet("")
+
+
 if __name__ == "__main__":
     for name, f in list(globals().items()):
         if name.startswith("test_"):

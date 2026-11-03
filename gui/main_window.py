@@ -752,6 +752,7 @@ class MMTOWindow(MainWindow):
         running = self.run_going_now()
         if running != self._running:
             self._running = running
+            self.run_layout(running)
             self.run_button.setText("Stop" if running else "Run")
             self.run_button.setIcon(icon("stop" if running else "run_white"))
             self.run_button.setObjectName("stopButton" if running else "runButton")
@@ -829,6 +830,30 @@ class MMTOWindow(MainWindow):
         from .run_panel import open_folder
         if self.exported_last is not None:
             open_folder(self.exported_last[0])
+
+    def run_layout(self, running):
+        """While a run goes, the sidebar steps aside and the Current run panel takes half the window, beside
+        the design growing in the 3D view (the divider between them can still be dragged); when it ends, the
+        sidebar is back and the panel has the width it had before."""
+        rw = getattr(self, "run_window", None)
+        try:
+            dock = rw.parentWidget() if rw is not None else None
+        except RuntimeError:
+            dock = None
+        if not isinstance(dock, QtWidgets.QDockWidget):
+            dock = None
+        if running:
+            self.sidebar.hide()
+            if dock is not None:
+                self._panel_width = dock.width()
+                dock.show()
+                dock.raise_()
+                QtCore.QTimer.singleShot(0, lambda: self.resizeDocks([dock], [self.width() // 2], QtCore.Qt.Horizontal))
+        else:
+            self.sidebar.show()
+            width = getattr(self, "_panel_width", None)
+            if dock is not None and width:
+                QtCore.QTimer.singleShot(0, lambda: self.resizeDocks([dock], [width], QtCore.Qt.Horizontal))
 
     def set_dark_view(self, dark):
         """The 3D view dark or light (the default), its drawings recoloured to suit; material colours stay."""
