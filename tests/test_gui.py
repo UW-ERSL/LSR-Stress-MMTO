@@ -112,6 +112,24 @@ def test_open_and_save_unchanged():
             assert open(path).read() == first, name                              # line endings aside
 
 
+def test_a_setting_missing_from_the_file_is_no_change():
+    """A project file written before a setting existed opens with that setting at its default and
+    counts as unchanged; the next save writes the setting into the file."""
+    w = G.MMTOWindow()
+    with scratch() as d:
+        path = os.path.join(d, "beam.mmto")
+        data = json.load(open(os.path.join(PROJECTS, "beam.mmto")))
+        section, key = next((s, k) for s, values in data["mmto"]["settings"].items() if isinstance(values, dict)
+                            for k in values)
+        del data["mmto"]["settings"][section][key]                         # as if the setting were new
+        json.dump(data, open(path, "w"), indent=2)
+        assert w.open_project(path)
+        assert not w.is_dirty() and "*" not in w.windowTitle(), w.windowTitle()
+        assert "settings missing from the file were set to their defaults" in w.message_text.toPlainText()
+        assert w.save_project()
+        assert key in json.load(open(path))["mmto"]["settings"][section]
+
+
 def test_only_mmto_projects_open():
     w = G.MMTOWindow()
     with answers(), scratch() as d:
@@ -318,8 +336,12 @@ def test_formulation_panel():
         f = formulation_panel.FormulationPanel(w, w.project)
         model = f.objective.model()
         enabled = {model.item(i).text(): model.item(i).isEnabled() for i in range(model.rowCount())}
-        assert enabled == {"Compliance": True, "Mass": False, "Stress (p-norm)": True,
-                           "Failure factor (p-norm)": False}
+        objectives = {q.shown: q for q in f.quantities.values() if q.objective}   # this physics' objectives
+        assert set(enabled) == set(objectives)
+        for shown_name, q in objectives.items():                               # greyed exactly when a column is missing
+            assert enabled[shown_name] == all(c in f.columns for c in q.needs), shown_name
+        assert enabled["Compliance"] and enabled["Stress (p-norm)"]
+        assert not enabled["Mass"] and not enabled["Failure factor (p-norm)"]
         assert f.reason("Mass") == "needs a Density column in the database"
         assert f.reason("Cost") == "needs a Density and a Cost column in the database"
         f.rows[2]["widgets"]["bound"].set_value(0.2)
@@ -444,7 +466,10 @@ def test_database_editor():
         path = editing(m, m.new_database, new)
         e = DE.DatabaseEditor(w, folder, unit_system=w.project.units)          # Add / Remove property
         e._fill_property_menu()
-        assert [a.text() for a in e.add_property_menu.actions()] == ["Yield strength", "Cost"]
+        from lsr_mmto.materials.databases import ATTRIBUTES, SHOWN
+        offered = [a.text() for a in e.add_property_menu.actions()]
+        assert offered == [SHOWN[k] for k in ATTRIBUTES if k not in e.attributes]   # every property not there yet
+        assert "Yield strength" in offered and "Cost" in offered and "Density" not in offered
         e.add_property("Cost")
         assert e.attributes == ["Density", "Youngs_Modulus", "Poissons_Ratio", "Cost"]
         assert e.table.cellWidget(0, 6).currentText() == "USD/t"
@@ -1383,7 +1408,7 @@ def test_load_arrow_outside_the_part():
         x_face = float(np.max(np.asarray(w.preview_mesh().node_xyz)[:, 0]))
         for fx, outside in ((5.0, lambda b: b[0] >= x_face - 1e-6), (-5.0, lambda b: b[0] >= x_face - 1e-6)):
             w.project.bcs = [bc for bc in w.project.bcs if bc.get("on") != "right end"]
-            w.project.add_force("right end", total=[fx, 0.0, 0.0])
+            w.project.add_bc("force", "right end", total=[fx, 0.0, 0.0])
             w.draw_supports_and_loads()
             i = len(w.project.bcs) - 1
             bounds = w.plotter.actors[f"mmto_arrow{i}"].GetBounds()          # xmin, xmax, ...

@@ -41,15 +41,21 @@ class Setting:
     """One setting. none_means: what an empty value (None) means, for a setting that may be empty;
     integer: a whole number; choices: the Enum whose member names are its only values; pyto_ad_field:
     the field of the optimization parameters (TOParams) that holds it during a run; at_build(value):
-    for a setting PyTO-AD keeps elsewhere, puts it there when the project is built."""
+    for a setting PyTO-AD keeps elsewhere, puts it there when the project is built. physics: the
+    physics it belongs to (set for the settings on a module's front page), None for a setting every
+    project has; the Settings panel shows a project only its own physics' settings."""
     __slots__ = ("section", "key", "default", "label", "help", "group", "none_means", "integer", "choices",
-                 "pyto_ad_field", "at_build")
+                 "pyto_ad_field", "at_build", "physics")
 
     def __init__(self, section, key, default, label, help, group, none_means=None, integer=False, choices=None,
-                 pyto_ad_field=None, at_build=None):
+                 pyto_ad_field=None, at_build=None, physics=None):
         self.section, self.key, self.default, self.label, self.help = section, key, default, label, help
         self.group, self.none_means, self.integer, self.choices = group, none_means, integer, choices
-        self.pyto_ad_field, self.at_build = pyto_ad_field, at_build
+        self.pyto_ad_field, self.at_build, self.physics = pyto_ad_field, at_build, physics
+
+    def applies_to(self, physics):
+        """True for a setting of that physics, or one every project has."""
+        return self.physics is None or self.physics == physics
 
     @property
     def tab(self):
@@ -160,7 +166,7 @@ SETTINGS = [
     Setting("vae", "numEpochs", FROM_DATABASE, "Max epochs", "Training stops after this many passes at the latest.",
             "VAE", integer=True),
 ]
-SETTINGS += [Setting(**args) for m in MODULES for args in m.SETTINGS]   # each physics' own, after the rest
+SETTINGS += [Setting(physics=m.NAME, **args) for m in MODULES for args in m.SETTINGS]   # each physics' own, after the rest
 # the views made from SETTINGS, kept in step by _make_views
 BY_KEY, DEFAULT_SETTINGS, MESH_DEFAULTS = {}, {}, {}
 VAE_PARAMS = RUN_KEYS = ()

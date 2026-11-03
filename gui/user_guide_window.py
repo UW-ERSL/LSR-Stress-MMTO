@@ -40,7 +40,7 @@ def selection_types():
 def support_and_load_kinds():
     """(name, support or load, what it does, its values) of every kind, from each physics module."""
     from lsr_mmto.problem.boundary_conditions import BC_KINDS
-    return [(k.shown, k.role.capitalize(), k.help, ", ".join(k.labels.get(f[0], f[0]) for f in k.fields))
+    return [(k.shown, k.role.capitalize(), k.help, ", ".join(v.label for v in k.values))
             for k in BC_KINDS.values()]
 
 

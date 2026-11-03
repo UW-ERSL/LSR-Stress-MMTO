@@ -41,6 +41,16 @@ def count(sel, on="nodes", **kw):
     return len(sel.evaluate(MESH, on, **kw))
 
 
+def test_every_field_says_how_it_is_given():
+    """Each selection type declares a Field for each of its fields: the GUI's form is made from them."""
+    for name, cls in S._TYPES.items():
+        assert set(cls.field_kinds) == set(cls.fields), name
+        for field, how in cls.field_kinds.items():
+            assert isinstance(how, S.Field), (name, field)
+            assert how.kind in ("length", "point", "choice", "tick", "file", "number", "numbers", "limits"), \
+                (name, field, how.kind)
+
+
 def test_box():
     assert count(S.box([0, 0, 0], [2, 2, 2])) == 27              # coordinates 0, 1, 2 in each direction
     assert count(S.box([0, 0, 0], [2, 2, 2]), "elements") == 8   # centers 0.5, 1.5; no pad on centers

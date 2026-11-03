@@ -4,10 +4,13 @@ Most additions are one entry in a list. `docs/how_the_code_works.md` says where 
 code is. The tests listed under each one fail when the entry is incomplete. After any addition, run
 
     python docs/make_project_file_reference.py
+    python -m gui.user_guide_window --write
     python -m pytest tests -q
 
-The first rewrites `docs/project_file_reference.md`; `tests/test_reference.py` fails until it is
-rewritten.
+The first rewrites `docs/project_file_reference.md`, the second the lists in `docs/user_guide.md`
+(the settings, quantities, kinds of support and load, selection types and material attributes, as
+the user guide shows them); `tests/test_reference.py` and `tests/test_user_guide.py` fail until
+they are rewritten. Each section below ends with what else to run.
 
 ## A quantity (an objective or a constraint)
 
@@ -37,23 +40,32 @@ as torch from the model's state; autograd gives the gradient.
   read them from there; a quantity with none is written `Name()`.
 - A project names it by its name; the objective and the constraints are kept by that name.
 - Add it to `QUANTITIES` in `tests/test_ad_quantities.py`, which checks the gradient against
-  finite differences.
+  finite differences. What else to run: both generators above (the reference page and the user
+  guide list every quantity).
 
 ## A selection type
 
-`lsr_mmto/problem/selections.py`. Subclass `Selection`, give it a `TYPE` and a `fields` tuple, and
-write `_mask` (a True/False per point) or `evaluate` (indices). Saving and loading find it by
-`TYPE`; the docstring becomes its line in the reference page.
+`lsr_mmto/problem/selections.py`. Subclass `Selection`, give it a `TYPE`, a `fields` tuple and
+`field_kinds`, how each field is given (a `Field`: a length, a point, a choice, a tick, a file, a
+number or a list of numbers; optional or not), and write `_mask` (a True/False per point) or
+`evaluate` (indices). Saving and loading find it by `TYPE`; the docstring becomes its line in the
+reference page.
 
     class face(Selection):
         """The plane at the mesh's extreme on one side: xmin, xmax, ymin, ymax, zmin or zmax."""
         TYPE, fields = "face", ("side", "pad")
+        field_kinds = {"side": SIDE, "pad": PAD}
+
+The selection form makes each field's box from its `Field`: a length or a point gets the project's
+length unit beside it, a choice a list, a tick a checkbox, a file a Browse button. Before adding a
+type, look at the existing ones: a tube, for example, is a `cylinder` with an `inner_radius`.
 
 The code line in the GUI picks it up by itself. For the selection form, add it to `FORM` in
 `gui/supports_and_loads_panel.py`: the name the form shows, a plain description, and a label for each field
 (the form never shows the code names).
 
-Add it to `tests/test_selections.py`, including the round trip through `to_dict`.
+Add it to `tests/test_selections.py`, including the round trip through `to_dict`. What else to run:
+both generators above (the user guide lists every selection type).
 
 ## A kind of support or load
 
@@ -65,21 +77,26 @@ One entry in `SUPPORT_AND_LOAD_KINDS` on the front page of its physics (the stru
 `BCKind` (`lsr_mmto/problem/boundary_conditions.py`):
 
 - `role`: `"support"` or `"load"`; supports are applied before loads, each in the order given.
-- `field`: the field it acts on, one of the physics' `FIELDS`; each field gets its own boundary
-  condition.
-- `check(bc)`: a list of errors.
 - `apply(bc, nodes, mesh, state, where)`: writes into `state["values"]` (dof to imposed value) or
-  `state["force"]`, both of its field.
-- `script(bc, on)`: the line of a setup script that makes it.
-- `fields`: its values as `(name, kind, measures, doc)`; kind is `"dofs"`, `"number"`, `"vector"`
-  or `"area"`, measures what the number is, for its unit. The GUI makes its form from them.
-- `shown`, `help`, `labels`: the name, the help and a label for each value, as the GUI shows them.
+  `state["force"]`, both of its field. The only physics in the entry.
+- `shown`, `help`: its name and what it does, in one plain sentence, as the GUI, the user guide and
+  the reference page show them.
+- `values`: its values, each a dict of `name`, `kind` (`"dofs"`, `"number"`, `"vector"` or
+  `"area"`), `label` (its name in the form), `measures` (what the number is, for its unit; None for
+  none) and `doc`. The form, the checks that each value is there and is what its kind says, and the
+  setup-script line are made from them.
+- `check(bc)` (optional): errors the value kinds do not catch, as a list.
+- `field` (optional): the field it acts on; left out by a physics of one field, which is then the
+  one.
 - `picks` (optional): how one picked on the part in the Pick window becomes this kind.
 
-A project stores it as `{"kind": name, "on": selection, ...values}`. The structural kinds also have
-`add_support`, `add_force` and `add_traction` on `Project` for setup scripts.
+A project stores it as `{"kind": name, "on": selection, ...values}`, and a script adds it with
+`p.add_bc(name, on, **values)`, e.g. `p.add_bc("force", "corner", total=[0, -4, 0])`; a wrong value
+is an error there, as in the project's check.
 
-Add a build test to `tests/test_project.py`; `test_script_round_trip` checks `script`.
+`test_every_kind_round_trips_through_a_setup_script` in `tests/test_project.py` adds every kind,
+writes it into a script and runs it; add a build test there for what the kind does. What else to
+run: both generators above (the reference page and the user guide list every kind).
 
 ## A setting
 
@@ -98,7 +115,8 @@ Settings panel it sits in; `none_means`, `integer` and `choices` when it needs t
 somewhere else (the p-norm exponent). The defaults, the Settings panel, the reference page and the
 settings a run gets are made from it. `test_settings_cover_run_topopt` in
 `tests/test_run_project.py` fails when the loop reads a name that is not a setting;
-`tests/test_extending.py` shows one entry reaching every place.
+`tests/test_extending.py` shows one entry reaching every place. What else to run: both generators
+above (the reference page and the user guide list every setting).
 
 ## A material attribute
 
@@ -115,7 +133,8 @@ in SI, and one in each of `UNIT_SYSTEMS`.
 
 A database column not in `ATTRIBUTES` is an error, so a new attribute is added here before
 it is used. The check, the template and the database editor follow. Add a case to
-`tests/test_databases.py`.
+`tests/test_databases.py`. What else to run: both generators above (the reference page lists the
+units, the user guide the attributes).
 
 ## A physics
 
@@ -135,7 +154,8 @@ A physics is a folder in `lsr_mmto/physics/`, e.g. `thermoelastic/`, with four f
 plus one line in `MODULES` in `lsr_mmto/physics/available_physics.py`. The entries are described in
 `MODULE_ENTRIES` there; `structural/structural_module.py` is a complete example, and
 `tests/test_template_physics.py` registers and runs the template. A project names its physics with
-`"physics"` in its file (`p.physics` in code); an unknown name is an error before the run.
+`"physics"` in its file (`p.physics` in code); an unknown name is an error before the run. What else to run: both generators
+above, since its settings, quantities and kinds join their lists.
 
 A module's files import the layers below them (`elements/`, `design/`, `pyto_ad_imports.py`), never
 the core's lists: its quantities, kinds and settings are given as plain arguments, and the core

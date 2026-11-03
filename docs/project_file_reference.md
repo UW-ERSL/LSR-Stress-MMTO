@@ -46,12 +46,14 @@ Lengths are numbers in model units, or `"<k>h"` for k times the largest element 
 
 ## Boundary conditions
 
-| kind | means |
-|---|---|
-| `fixed` | the given dofs (x, y, z) held at 0 |
-| `displacement` | the given dofs held at a nonzero value |
-| `force` | a total force [Fx, Fy, Fz], split equally over the nodes |
-| `traction` | pressure * area along a direction, split equally over the nodes; area a number or 'bbox' |
+A project file keeps each as {"kind": kind, "on": a selection's name, ...its values}; a setup script adds one with p.add_bc(kind, on, **values).
+
+| kind | values | means |
+|---|---|---|
+| `fixed` | `dofs` (the directions held) | Holds the selection still in the ticked directions. |
+| `displacement` | `dofs` (the directions moved), `value` (the displacement) | Moves the selection by a set distance in the ticked directions. |
+| `force` | `total` (the total force, split equally over the nodes) | A total force on the selection, shared equally by its nodes. |
+| `traction` | `pressure` (the pressure), `direction` (the direction it pushes), `area` (the area it acts on, or bbox: the selection's extent across the direction) | A pressure on the selection, turned into a force: Pressure times Area, pushing along Direction, shared equally by its nodes. Tick Area from the selection to use the selection's size across the direction (Direction must then be along x, y or z). |
 
 ## Material database attributes
 

@@ -176,7 +176,7 @@ def load_direction(bc):
     kind = BC_KINDS.get(bc.get("kind"))
     if kind is None or kind.role != "load":
         return None
-    v = next((bc.get(name) for name, typ, _, _ in kind.fields if typ == "vector"), None)
+    v = next((bc.get(value.name) for value in kind.values if value.kind == "vector"), None)
     return None if v is None else np.asarray(v, dtype=float)
 
 
@@ -1505,8 +1505,8 @@ class MMTOWindow(MainWindow):
         self._design, self.view, self._shown_wide = None, "setup", False    # the previous project's design goes
         self._shown_run = None
         self.design_bars.clear()
-        self._saved = self._state() if path else None
-        filled = project.complete_settings()                        # a file missing settings: filled, unsaved
+        filled = project.complete_settings()                        # a file missing settings: filled from defaults
+        self._saved = self._state() if path else None                # ... which is not a change; Save writes them
         self.init_state()                                           # PyTO-AD's own fresh state
         self._units_to_window()
         for actor in self._rulers:                                  # the old part's scales

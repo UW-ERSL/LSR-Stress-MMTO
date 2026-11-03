@@ -13,15 +13,15 @@ from lsr_mmto.problem.settings import BY_KEY, MESH_DEFAULTS, SETTINGS, VAE_PARAM
 from .panel_widgets import GREY, Info, NumberEdit, database_choice, database_errors, ok_cancel, same, with_info
 
 
-def setting_groups():
-    """(tab, group, [(section, key), ...]) in the order of SETTINGS; section "mesh" is Project.n_dof and
-    Project.single_layer."""
-    out = []
+def setting_groups(physics=None):
+    """(tab, group, [(section, key), ...]) in the order of SETTINGS, each group once: the settings every
+    project has, and those of physics (of every physics when None), which join the group of the same name.
+    Section "mesh" is Project.n_dof and Project.single_layer."""
+    out = {}
     for e in SETTINGS:
-        if not out or out[-1][:2] != (e.tab, e.group):
-            out.append((e.tab, e.group, []))
-        out[-1][2].append((e.section, e.key))
-    return out
+        if physics is None or e.applies_to(physics):
+            out.setdefault((e.tab, e.group), []).append((e.section, e.key))
+    return [(tab, group, keys) for (tab, group), keys in out.items()]
 
 
 VAE_NOTE = ("A database's network is the .nt file next to its .xlsx, with the same name (my_db.xlsx and "
@@ -131,7 +131,7 @@ class SettingsPanel(QtWidgets.QDialog):
         tabs = QtWidgets.QTabWidget()
         layout.addWidget(tabs)
         pages, advanced = {}, None
-        for tab, group, keys in setting_groups():
+        for tab, group, keys in setting_groups(project.physics):     # this project's physics only
             if tab not in pages:
                 scroll = QtWidgets.QScrollArea()
                 scroll.setWidgetResizable(True)
@@ -336,6 +336,6 @@ class SettingsPanel(QtWidgets.QDialog):
         return out
 
 
-def all_setting_keys():
-    """(section, key) of every setting the panel shows."""
-    return [sk for _, _, keys in setting_groups() for sk in keys]
+def all_setting_keys(physics=None):
+    """(section, key) of every setting the panel shows a project of that physics (of any physics: None)."""
+    return [sk for _, _, keys in setting_groups(physics) for sk in keys]

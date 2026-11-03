@@ -33,12 +33,11 @@ def registered(module):
     from lsr_mmto.problem import boundary_conditions, settings
     available_physics._checked(module)
     added_q = [quantities.Quantity(physics=[module.NAME], **q) for q in module.QUANTITIES]
-    added_s = [settings.Setting(**a) for a in module.SETTINGS]
+    added_s = [settings.Setting(physics=module.NAME, **a) for a in module.SETTINGS]
     available_physics.MODULES.append(module)
     available_physics.PHYSICS[module.NAME] = module
     quantities.QUANTITIES.extend(added_q)
-    boundary_conditions.BC_KINDS.update({k: boundary_conditions.BCKind(**a)
-                                         for k, a in module.SUPPORT_AND_LOAD_KINDS.items()})
+    boundary_conditions.BC_KINDS.update(boundary_conditions.kinds_of(module))
     settings.SETTINGS.extend(added_s)
     settings._make_views()
     try:
@@ -63,6 +62,22 @@ def _project(name, stl, base_dir, n_dof):
     p.objective("DiffusionCompliance()")
     p.constraint("VolumeFraction()", "<=", 0.5)
     return p
+
+
+def test_a_project_sees_only_its_own_physics_settings():
+    """The Settings panel shows the settings every project has and those of the project's own physics, each
+    group once; the build sets only that physics' settings that PyTO-AD keeps elsewhere."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from gui import settings_panel
+    with registered(TEMPLATE):
+        structural, template = (set(settings_panel.all_setting_keys(name)) for name in ("structural", "template"))
+        assert ("common", "pnorm_exponent") in structural and ("common", "pnorm_exponent") not in template
+        assert ("advanced", "template_coefficient_scale") in template
+        assert ("advanced", "template_coefficient_scale") not in structural
+        assert ("common", "maxIterations") in structural & template                 # every project has it
+        for name in ("structural", "template", None):
+            groups = [(tab, group) for tab, group, _ in settings_panel.setting_groups(name)]
+            assert len(groups) == len(set(groups)), groups                        # each group once
 
 
 def test_template_solver_gives_a_straight_line_along_a_bar():
@@ -103,7 +118,7 @@ def test_template_physics_runs_with_no_core_file_changed():
 
         q = _project("template", "UBracket.STL", UBRACKET, 3000)
         q.add_selection("bottom", S.face("ymin"))
-        q.add_support("bottom", dofs="xyz")                         # a structural kind: not the template's
+        q.add_bc("fixed", "bottom", dofs="xyz")                         # a structural kind: not the template's
         assert any("not a kind of template support or load" in e for e in q.validate())
 
         mesh, _, bcs, _, _, _ = p.build(verbose=False)
@@ -144,7 +159,7 @@ def test_a_template_run_with_held_values_only():
         assert np.all(np.isfinite(r.history["objective"]))
     s = Project("structural", stl="UBracket.STL", n_dof=3000, single_layer=True, base_dir=UBRACKET)
     s.add_selection("bottom", S.face("ymin"))
-    s.add_support("bottom", dofs="xyz")
+    s.add_bc("fixed", "bottom", dofs="xyz")
     assert "no loads" in s.validate()
 
 
@@ -228,8 +243,8 @@ def test_a_large_structural_problem_still_uses_dpcg(monkeypatch, capsys):
     p = Project("structural", stl="UBracket.STL", n_dof=3000, single_layer=True, base_dir=UBRACKET)
     p.add_selection("bottom", S.face("ymin"))
     p.add_selection("top_right", S.box([0.75, 0.9, -1], [1.0, 1.0, 1]))
-    p.add_support("bottom", dofs="xyz")
-    p.add_force("top_right", total=[-1.0, 0.0, 0.0])
+    p.add_bc("fixed", "bottom", dofs="xyz")
+    p.add_bc("force", "top_right", total=[-1.0, 0.0, 0.0])
     p.database = "6Materials_AF_3Attr"
     p.objective("Compliance()")
     p.constraint("VolumeFraction()", "<=", 0.5)
