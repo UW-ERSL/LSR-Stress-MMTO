@@ -123,18 +123,19 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 
 | File | Purpose |
 |---|---|
-| `main_window.py` | the window: New, Open and Save of .mmto projects, units, geometry |
+| `main_window.py` | the window: New, Open and Save of .mmto projects, units, geometry, the top row (Run, Export STL, Part and Design, light and dark) and the status bar (Snap, Measure, Ruler) |
 | `materials_panel.py` | the Materials panel |
 | `formulation_panel.py` | the Formulation panel: objective and constraints |
 | `settings_panel.py` | the Settings panel |
 | `supports_and_loads_panel.py` | the Supports and loads panel: selections, supports, loads, keep solid, preview |
 | `database_editor.py` | making and changing a material database in the app |
-| `run_panel.py` | the Run panel: starts and stops a run, shows its progress |
+| `run_panel.py` | the Current run panel: a run's progress, its live design and latent space, its log |
 | `results_panel.py` | the Results panel: a finished run's tables, plots and 3D design |
 | `draw_design.py` | draws a design in the 3D view |
+| `dark_and_light_3d_view.py` | the 3D view light or dark, and its drawings readable on either |
 | `panel_widgets.py` | the small pieces every panel shares: number box, (i) button, OK and Cancel, colour swatch |
 | `pyto_ad_imports.py` | everything the GUI takes from the PyTO-AD GUI |
-| `assets/` | the app's icon |
+| `assets/` | the app's icon, the button pictures (`icons/`) and the style sheet (`app_style.qss`) |
 
 ### `lsr_mmto/`
 
