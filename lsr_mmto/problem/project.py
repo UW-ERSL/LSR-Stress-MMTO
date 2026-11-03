@@ -194,7 +194,7 @@ BC_KINDS = {
         lambda bc, on: f"p.add_traction({on}, pressure={bc['pressure']!r}, "
                        f"direction={bc['direction']!r}, area={bc['area']!r})",
         [("pressure", "number", "stress", "the pressure"), ("direction", "vector", None, "the direction it pushes"),
-         ("area", "area", "area", "the area it acts on, or bbox: the region's extent across the direction")]),
+         ("area", "area", "area", "the area it acts on, or bbox: the selection's extent across the direction")]),
 }
 
 

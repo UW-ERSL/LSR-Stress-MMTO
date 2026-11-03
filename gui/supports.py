@@ -259,7 +259,7 @@ class RegionDialog(QtWidgets.QDialog):
         code_layout = QtWidgets.QVBoxLayout(code_page)
         self.code = QtWidgets.QLineEdit()
         code_layout.addWidget(self.code)
-        hint = QtWidgets.QLabel("For example rows(face=\"xmax\", axis=\"y\", n=8, end=\"max\"), or regions "
+        hint = QtWidgets.QLabel("For example rows(face=\"xmax\", axis=\"y\", n=8, end=\"max\"), or selections "
                                 "combined: union(face(\"xmin\"), box(lo=[0, 0, 0], hi=[2, 10, 1]))")
         hint.setStyleSheet(GREY)
         hint.setWordWrap(True)
