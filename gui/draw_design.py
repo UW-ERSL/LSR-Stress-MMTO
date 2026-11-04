@@ -8,8 +8,8 @@ An optimized design on the 3D view: one block per element, drawn in place of the
     run_mesh(window, folder, run)               the mesh a saved run was made on
 
 A drawing of materials (a run going, the Material view, the smooth pieces) also adds a column to
-window.design_legend: each material present with its colour, label and share, for the window's legend
-(one column per design drawn, so two runs compared get two).
+window.design_legend: each material of the database with its colour, label and share (none when the
+design does not use it), for the window's legend (one column per design drawn, so two runs compared get two).
 
 Every actor drawn here is named "result_...", so clearing a preview (actors named "mmto_...")
 never removes a design. The window's Setup view and Design view (main_window.py) decide
@@ -91,14 +91,14 @@ def draw(window, mesh, mask, colours=None, values=None, title=None, clim=None, s
 
 
 def legend_rows(colours, labels, shares):
-    """[(colour, label, share)] of the materials with a share, largest first; shares as fractions of the whole.
-    labels: one per material (a material without one is named by its number)."""
+    """[(colour, label, share)] of every material of the database, largest first; shares as fractions of the
+    whole (0 for a material not in the design: the legend shows only those with a share, but a database of
+    several materials keeps its legend when the design uses one). labels: one per material (a material
+    without one is named by its number)."""
     shares = np.asarray(shares, dtype=float)
     total = shares.sum()
-    if total <= 0:
-        return []
-    rows = [(colours[i % len(colours)], labels[i] if i < len(labels) else f"material {i}", shares[i] / total)
-            for i in range(len(shares)) if shares[i] > 0]
+    rows = [(colours[i % len(colours)], labels[i] if i < len(labels) else f"material {i}",
+             shares[i] / total if total > 0 else 0.0) for i in range(len(shares))]
     return sorted(rows, key=lambda r: -r[2])
 
 
@@ -166,11 +166,12 @@ def record(window, run, mesh, field="Material", shift=0.0, clim=None, name="desi
     return draw(window, mesh, run.solid, shift=shift, name=name)
 
 
-def smooth(window, pieces, apart=False):
+def smooth(window, pieces, apart=False, absent=()):
     """STL files on the part, each in its colour: [(path, colour, label)]. apart sets them side by side in a row
     along x, largest first: the k-th moved by k times the part's width along x and a gap of a tenth of it,
-    so each can be seen alone. The legend gets each piece's label and its share of the volume. Returns the
-    pieces as drawn, largest first."""
+    so each can be seen alone. The legend gets each piece's label and its share of the volume, and the
+    database's materials with no piece, absent [(colour, label)], at none. Returns the pieces as drawn,
+    largest first."""
     import pyvista as pv
     meshes = sorted([(pv.read(path), colour, label) for path, colour, label in pieces],
                     key=lambda p: -abs(p[0].volume))
@@ -185,8 +186,9 @@ def smooth(window, pieces, apart=False):
         window.plotter.add_mesh(m, color=colour, smooth_shading=True, pickable=False, name=f"{PREFIX}smooth_{k}",
                                 reset_camera=False)
         drawn.append(m)
-    add_legend(window, legend_rows([c for _, c, _ in meshes], [lab for _, _, lab in meshes],
-                                   [abs(m.volume) for m, _, _ in meshes]))
+    add_legend(window, legend_rows([c for _, c, _ in meshes] + [c for c, _ in absent],
+                                   [lab for _, _, lab in meshes] + [lab for _, lab in absent],
+                                   [abs(m.volume) for m, _, _ in meshes] + [0.0] * len(absent)))
     return drawn
 
 

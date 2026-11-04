@@ -1985,6 +1985,9 @@ def test_pieces_pulled_apart_in_a_row():
                 a, b = np.reshape(apart[i].bounds, (3, 2)), np.reshape(apart[j].bounds, (3, 2))
                 assert np.any((a[:, 1] < b[:, 0]) | (b[:, 1] < a[:, 0])), (i, j)   # apart along some axis
         assert [label for _, label, _ in window.design_legend[0]] == ["large", "small", "middle"]
+        window.design_legend.clear()                                          # one piece of two materials
+        draw_design.smooth(window, pieces[:1], absent=[("#00ff00", "other")])
+        assert [(label, share) for _, label, share in window.design_legend[0]] == [("small", 1.0), ("other", 0.0)]
         window.plotter.close()
 
 
@@ -2018,8 +2021,9 @@ def test_constraints_named_in_the_plots():
 def test_material_legend():
     """The legend at the top left of the 3D view: each material present with its share, largest first; while a
     run goes, by density among the elements drawn; on a finished run's Material view, by solid elements; two
-    runs compared, a left and a right column. Hidden on the Part view, on Density, and for one material; it
-    follows the light and dark view."""
+    runs compared, a left and a right column. The database decides whether it shows: a database of several
+    materials keeps it when the design settles on one of them ("Red  100%"), a database of one material has
+    none. Hidden on the Part view and on Density; it follows the light and dark view."""
     import types
     from gui import draw_design
     with scratch() as d:
@@ -2037,8 +2041,8 @@ def test_material_legend():
         APP.processEvents()
         assert w.legend.isVisible() and w.legend.geometry().topLeft() == QtCore.QPoint(12, 12)
         (column,) = w.design_legend
-        assert [r[:2] for r in column] == [("#ff0000", "Red"), ("#0000ff", "Blue")]
-        assert np.allclose([r[2] for r in column], [100 / 140, 40 / 140])
+        assert [r[:2] for r in column] == [("#ff0000", "Red"), ("#0000ff", "Blue"), ("#00ff00", "Green")]
+        assert np.allclose([r[2] for r in column], [100 / 140, 40 / 140, 0])
         text = w.legend.text()
         assert "Red" in text and "71%" in text and "29%" in text and "Green" not in text
         assert text.index("Red") < text.index("Blue")
@@ -2048,7 +2052,10 @@ def test_material_legend():
         w.show_setup_view()
         assert not w.legend.isVisible()                                       # the Part view
         w.set_design(lambda win: draw_design.live(win, mesh, x, np.zeros(n, dtype=int), colours, labels))
-        assert not w.legend.isVisible()                                       # one material
+        assert w.legend.isVisible()                                           # settled on one material
+        assert "Red" in w.legend.text() and "100%" in w.legend.text() and "Blue" not in w.legend.text()
+        w.set_design(lambda win: draw_design.live(win, mesh, x, np.zeros(n, dtype=int), colours[:1], labels[:1]))
+        assert not w.legend.isVisible()                                       # a database of one material
         solid = np.zeros(n, dtype=bool)
         solid[:30] = True
         indices = np.where(np.arange(n) < 10, 1, 0)

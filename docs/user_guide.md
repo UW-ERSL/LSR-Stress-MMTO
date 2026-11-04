@@ -491,7 +491,7 @@ The buttons on the right step aside, and the **Current run** panel takes half th
 2. *Training the material network: epoch 4,000 / 30,000*, only when the database has no trained network yet. This can take a few minutes.
 3. *Iteration 12 / 300 · 0:41 so far · about 16:20 left*: the optimization itself.
 
-The 3D view shows the design as it grows: each element in its material's colour, pale while it is half solid and in full colour once solid. Elements that are almost empty are not drawn. At the top left, a legend gives each material's colour and its share of the design, largest first (counted by how solid each element is). **Part**, at the top, shows the part again without stopping the run; **Design** brings the growing design back. Untick **Show the design while it runs** to leave the 3D view alone.
+The 3D view shows the design as it grows: each element in its material's colour, pale while it is half solid and in full colour once solid. Elements that are almost empty are not drawn. At the top left, a legend gives each material's colour and its share of the design, largest first (counted by how solid each element is). It shows whenever the database has more than one material, also while the design uses only one of them. **Part**, at the top, shows the part again without stopping the run; **Design** brings the growing design back. Untick **Show the design while it runs** to leave the 3D view alone.
 
 The panel's tabs:
 
@@ -530,7 +530,7 @@ How long a run takes depends mostly on Mesh dofs and Max iterations: a few minut
 
 **Show** chooses what the part shows:
 
-- **Material**: each element in its material's colour, with a legend at the top left: each material and its share of the solid elements, largest first. Two runs compared get a column each, left and right. The legend shows only for a design of more than one material.
+- **Material**: each element in its material's colour, with a legend at the top left: each material and its share of the solid elements, largest first. Two runs compared get a column each, left and right. The legend shows whenever the database has more than one material (a design of one of them reads 100%), and not for a database of one material.
 - **Density**: how solid each element is, from empty to solid.
 - **Stress**: the stress in each element.
 - **Solid**: only which elements are solid, in one colour.

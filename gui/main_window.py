@@ -2062,10 +2062,12 @@ class MMTOWindow(MainWindow):
     def show_legend(self):
         """The design's materials at the top left of the 3D view: a swatch, the label and the share of each,
         largest first, from what the drawing put in design_legend (two columns, left and right, for two
-        runs side by side). Shown only on the Design view, and only for a design of more than one material."""
+        runs side by side). Shown only on the Design view, and only for a database of more than one material,
+        also when the design uses one of them; it lists the materials the design uses."""
         from .draw_design import rgb
-        columns = self.design_legend
-        if self.view != "design" or not any(len(c) >= 2 for c in columns):
+        several = any(len(column) >= 2 for column in self.design_legend)
+        columns = [[row for row in column if row[2] > 0] for column in self.design_legend]
+        if self.view != "design" or not several or not any(columns):
             self.legend.hide()
             return
         labels = list(dict.fromkeys(label for column in columns for _, label, _ in column))
