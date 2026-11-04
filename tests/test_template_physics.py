@@ -140,7 +140,9 @@ def test_template_physics_runs_with_no_core_file_changed():
 
 def test_a_template_run_with_held_values_only():
     """The physics says what a project must have (NEEDS): the template needs a support and no load, so a
-    run with two held values and no source goes through; the structural physics still needs a load."""
+    run with two held values and no source goes through, and its save gives no RuntimeWarning (no load
+    nodes, so no load centroid in the record); the structural physics still needs a load."""
+    import warnings
     from lsr_mmto.problem import selections as S
     from lsr_mmto.problem.project import Project, run
     from lsr_mmto.results import load_results
@@ -153,10 +155,15 @@ def test_a_template_run_with_held_values_only():
         p.objective("Mass()")                                       # f . c is zero with no source
         p.settings["common"]["maxIterations"] = 2
         assert p.validate() == []
-        with tempfile.TemporaryDirectory() as d:
+        with tempfile.TemporaryDirectory() as d, warnings.catch_warnings(record=True) as heard:
+            warnings.simplefilter("always")
             run(p, save_dir=d, verbose=False)
             r = load_results.load(os.path.join(d, "run_data.npz"))
         assert np.all(np.isfinite(r.history["objective"]))
+        runtime = [f"{w.filename}:{w.lineno} {w.message}" for w in heard if issubclass(w.category, RuntimeWarning)]
+        assert runtime == [], runtime
+        summary = r.config["fea"]["loading_and_bc"]["c"]
+        assert summary["load_node_count"] == 0 and "load_centroid_xyz" not in summary
     s = Project("structural", stl="UBracket.STL", n_dof=3000, single_layer=True, base_dir=UBRACKET)
     s.add_selection("bottom", S.face("ymin"))
     s.add_bc("fixed", "bottom", dofs="xyz")
