@@ -341,6 +341,26 @@ def test_a_physics_penalty_keeps_its_history_and_its_schedule(monkeypatch):
     assert all(len(r.history[k]) == len(values) for k in ("P", "Pn", "Pz_n"))
 
 
+def test_a_quantity_of_another_physics_is_refused():
+    """The project's check refuses a quantity of another physics, as the objective or as a constraint (the
+    structural Compliance in a template project), and keeps the quantities every physics has and the
+    template's own; a structural project may still name Compliance."""
+    with registered(TEMPLATE):
+        p = _held_and_sourced("other physics")
+        p.complete_settings()
+        assert p.validate() == []                           # DiffusionCompliance and VolumeFraction
+        p.objective("Compliance()")
+        p.constraint("Compliance()", "<=", 2.0)
+        errors = [e for e in p.validate() if "quantity" in e]
+        assert errors == ["objective: Compliance is not a template quantity",
+                          "constraint 2: Compliance is not a template quantity"], errors
+        assert all(e.step == "formulation" for e in p.validate() if "quantity" in e)
+    from lsr_mmto.problem.project import Project
+    s = Project.load(os.path.join(ROOT, "projects", "U-bracket.mmto"))
+    s.objective("Compliance()")
+    assert not any("is not a structural quantity" in e for e in s.validate())
+
+
 def test_a_penalty_must_state_its_scale(monkeypatch):
     """A penalty entry without its scale, or with one that is not "raw" or "first value", is refused when the
     core's lists are made (at start-up), and nothing of it is added."""

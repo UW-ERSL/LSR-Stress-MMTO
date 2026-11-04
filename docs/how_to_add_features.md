@@ -49,7 +49,8 @@ as torch from the model's state; autograd gives the gradient.
 - `start_bound` (optional): the limit a new constraint row in the Formulation panel starts at, a
   number or a function of the project (the fractions give 0.4, the failure factor 1, Mass 0.4 times
   the part solid in the lightest material). Without it a new row starts at 0.
-- A project names it by its name; the objective and the constraints are kept by that name.
+- A project names it by its name; the objective and the constraints are kept by that name. A
+  quantity of one physics is refused by the project's check in a project of another physics.
 - Add it to `QUANTITIES` in `tests/test_ad_quantities.py`, which checks the gradient against
   finite differences. What else to run: both generators above (the reference page and the user
   guide list every quantity).

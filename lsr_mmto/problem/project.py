@@ -54,7 +54,7 @@ from lsr_mmto.materials.databases import (ATTRIBUTES, DATABASE_DIR, DATABASE_VAE
                                          check_database, database_attributes, database_units, in_shipped_folder,
                                          recommended_latent_dim, unit_ratio)
 from lsr_mmto.formulation.formulation_text import parse_expression, to_params_form
-from lsr_mmto.formulation.quantities import default_of, takes
+from lsr_mmto.formulation.quantities import default_of, find_quantity, takes
 from lsr_mmto.physics.available_physics import PHYSICS
 from lsr_mmto.problem.boundary_conditions import BC_KINDS
 from lsr_mmto.problem.settings import (BY_KEY, DEFAULT_SETTINGS, MESH_DEFAULTS, SETTINGS, VAE_PARAMS, pyto_ad_value,
@@ -375,6 +375,15 @@ class Project:
                 to_params_form(c.get("expression"), "constraint", c.get("bound") or 1.0)
             except ValueError as e:
                 errors.append(Problem("formulation", f"constraint {i}: {e}"))
+        named = [("objective", obj or {})] + [(f"constraint {i}", c)
+                                               for i, c in enumerate(self.formulation.get("constraints", []), 1)]
+        for where, c in named:                                     # each quantity of this physics or of every one
+            try:
+                q = find_quantity(parse_expression(c.get("expression"))[0])
+            except (ValueError, KeyError):                         # an unknown or unreadable one: said above
+                continue
+            if self.physics in PHYSICS and not q.applies_to(self.physics):
+                errors.append(Problem("formulation", f"{where}: {q.shown} is not a {self.physics} quantity"))
         return errors
 
     def set_up(self, step):
