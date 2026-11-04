@@ -270,6 +270,8 @@ Most types have a **Tolerance**: how far outside the selection a node may sit an
 
 The **Code line** tab shows the same selection as one line of text, for example `rows(face="xmax", axis="y", n=8, end="max")`. You can type a selection there instead of filling in the form.
 
+A number can be typed as plain arithmetic, in the Selection form, on the Code line and in the support or load form: for example 38/2, 0.5*76 or 2*pi*5, also inside a point (0, 38/2, 0). You can use + - * / ** ( ) and pi. The project keeps the number it comes to.
+
 Every selection type at a glance:
 
 <!-- list: selection_types -->

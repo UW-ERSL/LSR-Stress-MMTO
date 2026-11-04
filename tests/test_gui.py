@@ -628,13 +628,60 @@ def test_code_line():
     for bad, says in (('__import__("os").system("dir")', "is not a selection type"),
                       ('box(lo=[0, 0, 0], hi=open("x"))', "open is not a selection type"),
                       ('face(**{"side": "xmin"})', "** arguments"), ('function("f.py:g")', "not a selection type"),
-                      ("2 + 2", "only numbers, text, lists and selections"), ("face(", "not a selection")):
+                      ("2 + 2", "write a selection"), ("face(", "not a selection"),
+                      ("sphere([0, 0, 0], radius=r)", "only numbers, text, lists and selections"),
+                      ("sphere([0, 0, 0], radius=math.pi)", "only numbers, text, lists and selections"),
+                      ("sphere([0, 0, 0], radius=abs(-2))", "abs is not a selection type"),
+                      ("sphere([0, 0, 0], radius=9**9**9)", "only numbers, text, lists and selections")):
         try:
             SP.parse_selection(bad)
         except ValueError as e:
             assert says in str(e), (bad, e)
         else:
             raise AssertionError(f"accepted {bad}")
+
+
+def test_arithmetic_in_number_boxes():
+    """Every number of the Selection form, the Code line and the support or load form takes plain
+    arithmetic (38/2, 0.5*76, 2*pi*5, inside a point too); the selection or value keeps the number."""
+    import math
+    from lsr_mmto.problem import selections as S
+    from gui.panel_widgets import number
+    assert number("38/2") == 19 and number("0.5*76") == 38 and number("2*pi*5") == 10 * math.pi
+    assert number("-(1 + 2)**2") == -9 and number(" 4 ") == 4
+    for bad in ("x", "pi()", "math.pi", "1/0", "[1, 2]", "'5'", "True", "9**9**9", "1e999", ""):
+        try:
+            number(bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"accepted {bad!r}")
+    assert SP.parse_selection("sphere(center=[0, 38/2, 0], radius=2*pi*5)").to_dict() == \
+        S.sphere([0, 19.0, 0], 10 * math.pi).to_dict()
+    assert SP.parse_selection("plane('y', 76/2, limits={'x': [0, 80/2]})").to_dict() == \
+        S.plane("y", 38.0, limits={"x": [0, 40.0]}).to_dict()
+    assert SP.RegionDialog._value("At", "38/2") == 19 and SP.RegionDialog._value("Point", "0, 38/2, 0") == [0, 19, 0]
+    assert SP.RegionDialog._value("Radius", "1.5h") == "1.5h" and SP.RegionDialog._value("Side", "xmax") == "xmax"
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        r = SP.RegionDialog(w, w.project)
+        r.type.setCurrentText("Cylinder")
+        r.inputs["center"].setText("52, 228/2, 1")
+        r.inputs["axis"].setCurrentText("x")
+        r.inputs["radius"].setText("10/2")
+        r.inputs["along"][0].setText("44/2")
+        r.inputs["along"][1].setText("61")
+        assert r.selection().to_dict() == S.cylinder([52, 114.0, 1], "x", 5.0, along=[-30.0, 9]).to_dict()
+        r.tabs.setCurrentIndex(1)                                             # the Code line keeps the numbers
+        assert "114.0" in r.code.text() and "/" not in r.code.text()
+        r.code.setText("box(lo=[0, 0, 0], hi=[200/10, 2*10, 1])")
+        assert r.problems() == [] and r.selection().to_dict() == S.box([0, 0, 0], [20.0, 20, 1]).to_dict()
+        b = SP.BCDialog(w, w.project)
+        b.kind.setCurrentText("Force")
+        b.inputs["total"][1][1].setText("-100/4")
+        assert b.problems() == [] and b.bc()["total"] == [0.0, -25.0, 0.0]
+        b.inputs["total"][1][1].setText("-100/x")
+        assert b.problems() == ["Total force is not a number"]
 
 
 def test_region_and_bc_forms():

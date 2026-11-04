@@ -8,7 +8,7 @@ A region is made three ways: picked with the mouse in PyTO-AD's Structural Loads
 Apply is adopted into the project at once, by Project.adopt_picks), filled in on a form made
 from the selection type's own fields, or typed as a code line, e.g.
 rows(face="xmax", axis="y", n=8, end="max"). A code line is read, never run: only selection
-types with plain numbers, text and lists are accepted.
+types with plain numbers, text and lists are accepted; a number may be plain arithmetic (38/2, 2*pi*5).
 
 The panel works on the project directly (it stays open while you pick); File > Save keeps the
 changes, and closing without saving drops them.
@@ -20,7 +20,7 @@ import os
 import numpy as np
 from PyQt5 import QtCore, QtWidgets
 
-from .panel_widgets import GREY, Info, NumberEdit
+from .panel_widgets import GREY, Info, NumberEdit, plain_value
 
 SUPPORT_COLOUR, LOAD_COLOUR, KEEP_COLOUR, OTHER_COLOUR = "#1f5fd6", "#d62020", "#808080", "#e08a00"
 
@@ -103,7 +103,8 @@ def selection_types():
 
 def parse_selection(text):
     """A Selection from a code line such as box(lo=[0, 0, 0], hi=[1, 2, 1]). Only selection types,
-    with numbers, text, lists and other selections as arguments; anything else is refused."""
+    with numbers (plain arithmetic too: 38/2), text, lists and other selections as arguments; anything
+    else is refused."""
     types = selection_types()
     try:
         tree = ast.parse(text.strip(), mode="eval").body
@@ -124,7 +125,7 @@ def parse_selection(text):
             except TypeError as e:
                 raise ValueError(f"{node.func.id}: {e}") from None
         try:
-            return ast.literal_eval(node)
+            return plain_value(node)
         except ValueError:
             raise ValueError(f"{ast.unparse(node)!r}: only numbers, text, lists and selections are "
                              f"accepted") from None
@@ -484,9 +485,10 @@ class RegionDialog(QtWidgets.QDialog):
 
     @staticmethod
     def _value(label, text):
-        """A typed value: a number, a point (0, 38, 0, brackets optional), a list, or a word such as 1.5h."""
+        """A typed value: a number, a point (0, 38, 0, brackets optional), a list, or a word such as 1.5h;
+        a number may be plain arithmetic (38/2, 2*pi*5, also inside a point: 0, 38/2, 0)."""
         try:
-            value = ast.literal_eval(text)
+            value = plain_value(ast.parse(text, mode="eval").body)
         except (ValueError, SyntaxError):
             if text.endswith("h") or text.replace("_", "").isalnum():         # "1.5h", xmax without quotes
                 return text
@@ -745,20 +747,20 @@ class BCDialog(QtWidgets.QDialog):
                     row.addWidget(b)
                 widget = boxes
             elif typ == "vector":
-                widget = [NumberEdit((value or [0.0, 0.0, 0.0])[i]) for i in range(3)]
+                widget = [NumberEdit((value or [0.0, 0.0, 0.0])[i], arithmetic=True) for i in range(3)]
                 for label, w in zip("xyz", widget):
                     row.addWidget(QtWidgets.QLabel(label))
                     row.addWidget(w)
             elif typ == "area":
                 widget = (QtWidgets.QCheckBox("from the selection"),
-                          NumberEdit(0.0 if value in (None, "bbox") else value))
+                          NumberEdit(0.0 if value in (None, "bbox") else value, arithmetic=True))
                 widget[0].setChecked(value in (None, "bbox"))
                 widget[1].setEnabled(value not in (None, "bbox"))
                 widget[0].toggled.connect(lambda on, w=widget[1]: w.setEnabled(not on))
                 row.addWidget(widget[0])
                 row.addWidget(widget[1])
             else:
-                widget = NumberEdit(0.0 if value is None else value)
+                widget = NumberEdit(0.0 if value is None else value, arithmetic=True)
                 row.addWidget(widget)
             if unit:
                 u = QtWidgets.QLabel(unit)
