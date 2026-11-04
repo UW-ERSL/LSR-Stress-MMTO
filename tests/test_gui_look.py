@@ -9,6 +9,7 @@ were made at, so the panels holding them do not creep wider.
 """
 import glob
 import os
+import re
 import sys
 import tempfile
 import time
@@ -22,7 +23,7 @@ if sys.platform.startswith("win"):                         # off-screen Qt on Wi
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from PyQt5 import QtCore, QtWidgets  # noqa: E402
+from PyQt5 import QtCore, QtGui, QtWidgets  # noqa: E402
 
 APP = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
@@ -243,6 +244,50 @@ def test_top_row_and_bottom_buttons():
         APP.setStyleSheet("")
 
 
+def test_every_tab_text_fits_its_tab():
+    """The tab shown is marked by a line along its top, not bold text, so Qt's tab sizes (worked out with
+    the plain font) hold its text: in the Settings window and Results (and the strips' own tabs) every
+    tab's text and padding fit inside its tab, whichever tab is shown."""
+    from gui import settings_panel
+    styled()
+    try:
+        w = window()
+        settings = settings_panel.SettingsPanel(w, w.project)
+        settings.show()
+        w.open_supports_and_loads_panel()
+        w.open_run_panel()
+        res = w.open_results_panel()
+        for title in ("Convergence", "Latent space", "Summary"):           # the tabs a run shows
+            res.tabs.addTab(QtWidgets.QLabel(title), title)
+        settle(0.2)
+        bars = settings.findChildren(QtWidgets.QTabBar) + w.findChildren(QtWidgets.QTabBar)
+        assert any(b.count() >= 2 for b in settings.findChildren(QtWidgets.QTabBar))
+        assert res.tabs.tabBar() in bars
+        with open(G.STYLE, encoding="utf-8") as f:
+            selected = re.search(r"QTabBar::tab:selected\s*\{([^}]*)\}", f.read()).group(1)
+        assert "border-top: 2px solid #2f5fe0" in selected                  # the mark of the tab shown
+        checked = 0
+        for bar in bars:
+            if not bar.isVisible():
+                continue
+            shown = QtGui.QFont(bar.font())                                # the font the tab shown is drawn in
+            shown.setBold("font-weight" in selected and "normal" not in selected)
+            for current in range(bar.count()):
+                bar.setCurrentIndex(current)
+                settle()
+                for i in range(bar.count()):
+                    text = bar.tabText(i).replace("&", "")
+                    font = QtGui.QFontMetrics(shown) if i == current else bar.fontMetrics()
+                    need = font.horizontalAdvance(text) + 2 * 14 + 2 * 1 + 2       # padding, borders, margin
+                    assert need <= bar.tabRect(i).width(), (text, need, bar.tabRect(i).width())
+                    checked += 1
+        assert checked > 20
+        settings.close()
+        w.close()
+    finally:
+        APP.setStyleSheet("")
+
+
 def test_light_by_default_and_dark_on_the_switch():
     """The 3D view starts light. In the dark view the window's own drawings are drawn light from the
     first frame (the Measure line here), and back in the light view they are dark again; the part keeps
@@ -302,6 +347,39 @@ def test_message_panel_merges_repeats():
     w.message_text.append("Done.")
     assert w.message_text.toPlainText().splitlines() == ["Saved.  (\u00d73)", "Done."]
     assert "-0 " not in w.extent.text() and "-0." not in w.extent.text()
+    w.close()
+
+
+def test_message_panel_problems_then_log():
+    """The message panel: the project's errors (red) and warnings (amber) as they are now at the top, a
+    thin line, then what happened. A problem fixed disappears, and shows again when it comes back; with no
+    problems only the log is there. Clear empties the log and keeps the problems; the panel keeps its
+    height."""
+    w = window()
+    height = w.message_frame.height()
+    young = "Warning: the database gives Young's modulus"
+    assert w.problems.isVisible() and w.problems_line.isVisible()
+    assert young in w.problems.toPlainText() and young not in w.message_text.toPlainText()
+    assert "#9a5b00" in w.problems.toHtml()                               # amber
+    w.project.units = "MKS"                                               # fixed: the database is in MKS
+    w._refresh_title()
+    settle()
+    assert not w.problems.isVisible() and not w.problems_line.isVisible() and w.message_text.isVisible()
+    w.project.units = "no such units"                                     # an error
+    w._refresh_title()
+    assert w.problems.toPlainText().startswith("Error: units") and "#b00000" in w.problems.toHtml()
+    w.project.units = "mmKS"                                              # broken again: shown again
+    w._refresh_title()
+    settle()
+    assert w.problems.isVisible() and w.problems.toPlainText().count(young) == 1
+    assert "Error" not in w.problems.toPlainText()
+    w.message_text.append("Saved.")
+    assert "Saved." in w.message_text.toPlainText()
+    assert w.clear_log.toolTip() and not w.clear_log.icon().isNull()
+    w.clear_log.click()
+    assert w.message_text.toPlainText() == "" and young in w.problems.toPlainText()
+    assert w.problems.height() < w.message_text.height() + w.problems.height() <= w.message_frame.height()
+    assert w.message_frame.height() == height
     w.close()
 
 

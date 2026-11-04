@@ -420,10 +420,13 @@ class ResultsWindow(QtWidgets.QDialog):
             return
         whole, files = found
         pieces = [(path, run.material_colors[m], run.material_labels[m]) for m, path in files]
+        exported = {m for m, _ in files}
+        absent = [(c, label) for m, (c, label) in enumerate(zip(run.material_colors, run.material_labels))
+                  if m not in exported] if pieces else []
         if not pieces:
             pieces = [(whole, draw_design.SOLID_COLOUR, "")]
         apart = self.apart.isChecked()
-        self.window.set_design(lambda w: draw_design.smooth(w, pieces, apart), wide=apart, run=mine)
+        self.window.set_design(lambda w: draw_design.smooth(w, pieces, apart, absent), wide=apart, run=mine)
 
     def delete_run(self):
         if self.current is None or self.current in self.others:

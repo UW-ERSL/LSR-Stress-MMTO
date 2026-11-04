@@ -63,7 +63,7 @@ A click on the part selects nothing, unless one of these is open:
 
 ### 2.4 The messages
 
-Under the 3D view, three lines of messages: what was opened and saved, what a run is doing, and any errors and warnings about the project. A message repeated at once is shown once, with how many times, for example *(×3)*. Scroll up to read earlier ones.
+Under the 3D view, three lines of messages. At the top, the project's errors (red) and warnings (amber) as they are now, with a thin line under them: one you put right goes at once, and shows again if it comes back. With none, they take no room. Under them, what happened: what was opened and saved, what a run is doing. A message repeated at once is shown once, with how many times, for example *(×3)*. Scroll up to read earlier ones. The bin at the top right clears what happened; the errors and warnings stay.
 
 An **Error** stops a run from starting until it is put right. A **Warning** lets the run go, but says something is probably not what you meant. Section 14 lists the common ones.
 
@@ -71,7 +71,7 @@ An **Error** stops a run from starting until it is put right. A **Warning** lets
 
 - On the left, the part's size, for example *Part: x 0 to 200 · y 0 to 200 · z 0 to 1 mm*. The (i) next to it gives the part's file, volume, size and material database.
 - In the middle, the point under the mouse on the part, and what Measure has measured.
-- **Snap**: rounds the point under the mouse, a copied point and Measure to a step (off, 0.1, 1, 5 or 10, in the project's length unit). With Snap: 1, a point at x 37.62 reads 38.
+- **Snap**: rounds the point under the mouse, a copied point and Measure to a step. The steps follow the part's size: a round number near a thousandth, a hundredth and a tenth of its largest extent, in the project's length unit (on a 200 mm part 0.2, 2 and 20 mm). With Snap: 2 mm, a point at x 37.62 reads 38.
 - **Measure**: click it, then click two points on the part to see the distance between them, and its x, y and z parts. A third click starts again. The line and its points are dark in the light 3D view and white in the dark one. Press Esc, or click Measure again, to stop.
 - **Ruler**: shows scales along the part, in the project's length unit. Click it again to hide them.
 
@@ -109,7 +109,7 @@ Zip the folder to send the whole project to someone else.
 | mmKS | mm | N | MPa | t/mm^3 | t |
 | IPS | in | lbf | psi | lbf*s^2/in^4 | lbf*s^2/in |
 
-Press **Apply**. The messages say *Project units: mmKS. Numbers are not converted.*
+Press **Apply**. The messages say *Project units: mmKS. Numbers are not converted.* The part's size at the bottom left, the ruler and the Snap steps show the new length unit at once.
 
 Nothing is converted. The numbers you typed stay as they are, and only their unit changes. Choose the unit system first, then type the numbers in it: the part's size, forces, pressures and distances, and the bounds of the constraints. The units show beside every field that has one.
 
@@ -491,7 +491,7 @@ The buttons on the right step aside, and the **Current run** panel takes half th
 2. *Training the material network: epoch 4,000 / 30,000*, only when the database has no trained network yet. This can take a few minutes.
 3. *Iteration 12 / 300 · 0:41 so far · about 16:20 left*: the optimization itself.
 
-The 3D view shows the design as it grows: each element in its material's colour, pale while it is half solid and in full colour once solid. Elements that are almost empty are not drawn. At the top left, a legend gives each material's colour and its share of the design, largest first (counted by how solid each element is). **Part**, at the top, shows the part again without stopping the run; **Design** brings the growing design back. Untick **Show the design while it runs** to leave the 3D view alone.
+The 3D view shows the design as it grows: each element in its material's colour, pale while it is half solid and in full colour once solid. Elements that are almost empty are not drawn. At the top left, a legend gives each material's colour and its share of the design, largest first (counted by how solid each element is). It shows whenever the database has more than one material, also while the design uses only one of them. **Part**, at the top, shows the part again without stopping the run; **Design** brings the growing design back. Untick **Show the design while it runs** to leave the 3D view alone.
 
 The panel's tabs:
 
@@ -530,7 +530,7 @@ How long a run takes depends mostly on Mesh dofs and Max iterations: a few minut
 
 **Show** chooses what the part shows:
 
-- **Material**: each element in its material's colour, with a legend at the top left: each material and its share of the solid elements, largest first. Two runs compared get a column each, left and right. The legend shows only for a design of more than one material.
+- **Material**: each element in its material's colour, with a legend at the top left: each material and its share of the solid elements, largest first. Two runs compared get a column each, left and right. The legend shows whenever the database has more than one material (a design of one of them reads 100%), and not for a database of one material.
 - **Density**: how solid each element is, from empty to solid.
 - **Stress**: the stress in each element.
 - **Solid**: only which elements are solid, in one colour.
