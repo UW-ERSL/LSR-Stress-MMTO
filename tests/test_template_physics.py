@@ -303,7 +303,7 @@ def test_a_physics_penalty_is_added_with_its_gradient(monkeypatch):
         zeta[:n] = rng.uniform(0.2, 0.8, n)
         zeta[n:] = rng.uniform(state.lower.ravel()[n:], state.upper.ravel()[n:]) * 0.5
         f, g, _, _ = M.evaluate(state, zeta)              # the first: mass 1 (its first value), penalty 5
-        assert np.isclose(float(f), 6.0)
+        assert np.isclose(f.item(), 6.0)
         assert state.history["template_test_penalty"] == [5.0]
         assert state.history["Pz_n"] == state.history["Pn"] == state.history["P"] == [0.0]
 
@@ -317,7 +317,7 @@ def test_a_physics_penalty_is_added_with_its_gradient(monkeypatch):
                 plus, minus = zeta.copy(), zeta.copy()
                 plus[i] += h
                 minus[i] -= h
-                fd = (float(M.evaluate(state, plus)[0]) - float(M.evaluate(state, minus)[0])) / (2 * h)
+                fd = (M.evaluate(state, plus)[0].item() - M.evaluate(state, minus)[0].item()) / (2 * h)
                 assert abs(fd - g[i, 0]) <= 1e-5 * abs(g[i, 0]), (i, fd, g[i, 0])
             share = np.abs(g[block, 0] - g_mass[block, 0]).sum() / np.abs(g[block, 0]).sum()
             assert share > 0.1, share                     # the penalty's part of the gradient is not lost in it
