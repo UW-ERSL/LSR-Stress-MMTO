@@ -10,6 +10,9 @@ The window's own drawings take their colour for the current view when they are d
     colour = colour_for("#222222", dark)          the colour to draw with
     mark(actor.GetProperty(), "#222222", dark)    and what it is in the light view, for a later switch
 
+A drawing may also carry its own colour for the dark view (dark_colour="#ffffff"), in place of the
+lightened one.
+
 Drawings made elsewhere (the part, its bounding box, the axes, PyTO-AD's highlights) are themed by
 apply(), which install() runs at the start of every frame, so none shows in the wrong colour first.
 """
@@ -19,6 +22,7 @@ DARK_BACKGROUND, DARK_TOP = "#161d2b", "#3b4762"
 LIGHT_TEXT = "#d7dce3"
 _light = {}               # colour property's address -> its colour in the light view
 _set = {}                 # colour property's address -> (dark?, the colour set here), to see it is still ours
+_dark = {}                # colour property's address -> its own colour in the dark view, where it has one
 
 
 def _unit(c):
@@ -38,10 +42,13 @@ def _lum(c):
     return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
 
 
-def colour_for(colour, dark, text=False):
+def colour_for(colour, dark, text=False, dark_colour=None):
     """The colour a drawing of this light-view colour is drawn with: unchanged in the light view; in the
-    dark view a dark line or point lightened, a dark text made light grey."""
+    dark view its own dark_colour when it has one, else a dark line or point lightened, a dark text made
+    light grey."""
     c = _rgb(colour)
+    if dark and dark_colour is not None:
+        return _rgb(dark_colour)
     if not dark or _lum(c) >= (0.6 if text else 0.2):
         return c
     return _rgb(LIGHT_TEXT) if text else tuple(x + (1 - x) * 0.75 for x in c)
@@ -57,10 +64,14 @@ def _note(prop, light, dark):
     _set[key] = (dark, tuple(round(x, 6) for x in prop.GetColor()))
 
 
-def mark(prop, colour, dark, text=False):
-    """A drawing made with colour_for(colour, dark): its colour set for the view, and its light-view colour
-    kept, so a switch of the view recolours it and apply() leaves it alone meanwhile."""
-    prop.SetColor(*colour_for(colour, dark, text))
+def mark(prop, colour, dark, text=False, dark_colour=None):
+    """A drawing made with colour_for(colour, dark, text, dark_colour): its colour set for the view, and its
+    colours kept, so a switch of the view recolours it and apply() leaves it alone meanwhile."""
+    prop.SetColor(*colour_for(colour, dark, text, dark_colour))
+    if dark_colour is None:
+        _dark.pop(_key(prop), None)
+    else:
+        _dark[_key(prop)] = dark_colour
     _note(prop, _rgb(colour), dark)
 
 
@@ -75,7 +86,8 @@ def _theme(prop, dark, text):
             return
     else:
         _light[key] = prop.GetColor()
-    prop.SetColor(*colour_for(_light[key], dark, text))
+        _dark.pop(key, None)
+    prop.SetColor(*colour_for(_light[key], dark, text, _dark.get(key)))
     _note(prop, _light[key], dark)
 
 

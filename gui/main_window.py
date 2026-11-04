@@ -12,6 +12,9 @@ chosen from elsewhere is copied in. Every save also writes the project's setup s
 <name>_setup.py, again, so it always matches the project. The example projects in projects/ open as templates: Save
 asks for a folder of your own, so the examples never change.
 
+While no project is open, the 3D view holds the start page (StartPage): New, Open, the examples and the
+projects opened or saved last; the side buttons, Run, Export STL and Part / Design wait for a project.
+
 The 3D view shows either the part (the Setup view: supports, loads, previews) or a design (the
 Design view: a run's result, drawn by draw_design.py). Anything about the setup switches to the
 Setup view; the design is kept until the next run, so Design in the top row always brings it back.
@@ -20,7 +23,7 @@ view; Snap, Measure and Ruler are in the status bar.
 
     python run_gui.py [project.mmto]        (from the repository folder)
 
-The sidebar keeps PyTO-AD's Units, Geometry and Display Options, and adds Materials,
+The sidebar keeps PyTO-AD's Units and Display Options, and adds Materials,
 Formulation and Settings (materials_panel.py, formulation_panel.py, settings_panel.py) and
 Supports and loads (supports_and_loads_panel.py). Picking with the
 mouse is PyTO-AD's Structural Loads window; each Apply in it is adopted into the project.
@@ -43,14 +46,14 @@ from .panel_widgets import GREY, Info, ok_cancel
 from .settings_panel import SettingsPanel
 from .supports_and_loads_panel import KEEP_COLOUR, LOAD_COLOUR, OTHER_COLOUR, SUPPORT_COLOUR, SupportsPanel, bc_name, bc_value
 from .pyto_ad_imports import (FILE_DIALOG_OPTIONS, MATERIAL_COLOR, UNIT_SYSTEMS, DisplayOptionsWindow,
-                              GeometryWindow, MainWindow,
-                              ProjectsWindow, STLGeom, StructuralLoadsWindow, UnitsWindow)
+                              MainWindow, ProjectsWindow, STLGeom, StructuralLoadsWindow, UnitsWindow)
 from .user_guide_window import open_user_guide
 
 APP = "LSR MMTO"
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXAMPLES = os.path.join(REPO, "projects")   # the example projects: opened as templates, never changed
 OUTLINE_COLOUR = "#c400c4"                  # selection shapes: magenta, unlike the part, supports, loads
+MEASURE_COLOURS = ("#222222", "#ffffff")    # Measure's line and points: in the light view, in the dark view
 SNAPS = [("Snap: off", 0.0), ("Snap: 0.1", 0.1), ("Snap: 1", 1.0), ("Snap: 5", 5.0), ("Snap: 10", 10.0)]
 PROJECT_FILTER = "LSR MMTO project (*.mmto)"
 SCRIPT_FILTER = "Python script (*.py)"
@@ -59,16 +62,22 @@ ICON = os.path.join(ASSETS, "lsr_mmto.ico")
 STYLE = os.path.join(ASSETS, "app_style.qss")           # the window's colours and shapes
 ICONS = os.path.join(ASSETS, "icons")                    # the buttons' pictures
 SIDEBAR_WORDS = {"Run": "Current run"}                   # a sidebar button's text, where not its name
-SIDEBAR_ICONS = {"Units": "units", "Geometry": "geometry", "Materials": "materials", "Supports and loads": "supports",
+SIDEBAR_STEPS = {"Units": "units", "Materials": "materials", "Supports and loads": "supports and loads",
+                 "Formulation": "formulation"}           # the buttons marked by their step's check (Project.STEPS)
+SIDEBAR_ICONS = {"Units": "units", "Materials": "materials", "Supports and loads": "supports",
                  "Formulation": "formulation", "Settings": "settings", "Run": "run", "Results": "results",
                  "Display Options": "display"}
 MESSAGE_LINES = 3                                        # the message panel shows the last three lines
-SIDEBAR = ("Units", "Geometry", "Materials", "Supports and loads", "Formulation", "Settings", "Run",
+SIDEBAR = ("Units", "Materials", "Supports and loads", "Formulation", "Settings", "Run",
            "Results", "Display Options")
 FOLDER_HELP = ("A project keeps everything it uses in its own folder: the project file, the part (in part), "
                "the material database and its trained network (in materials), and the results of every run "
                "(in results). Zip the folder to send the whole project.")
 PANELS = {"Materials": MaterialsPanel, "Formulation": FormulationPanel, "Settings": SettingsPanel}
+NO_PROJECT = "Open or start a project first"            # the tip of what waits for a project
+START_EXAMPLES = (("L-bracket", "L-bracket.mmto"), ("U-bracket", "U-bracket.mmto"), ("Beam", "beam.mmto"),
+                  ("Airplane bracket", "Airplane bracket.mmto"))        # the start page's examples, in projects/
+RECENT = 5                                               # projects listed under Recent on the start page
 
 
 def icon(name):
@@ -162,6 +171,150 @@ class Banner(QtWidgets.QLabel):
         self.fade.setStartValue(1.0)
         self.fade.setEndValue(0.0)
         self.fade.start()
+
+
+def recent_store():
+    """Where the projects opened or saved last are kept for the start page (a settings file of the user's)."""
+    return QtCore.QSettings(QtCore.QSettings.IniFormat, QtCore.QSettings.UserScope, APP, APP)
+
+
+def recent_projects():
+    """The projects opened or saved last, newest first, those no longer there left out."""
+    paths = recent_store().value("recent", []) or []
+    paths = [paths] if isinstance(paths, str) else list(paths)
+    return [p for p in paths if os.path.isfile(p)][:RECENT]
+
+
+def remember_project(path):
+    """path first in the start page's Recent list (an example is not listed: it has its own button)."""
+    if not path or is_example(path):
+        return
+    path = os.path.abspath(path)
+    kept = [p for p in recent_projects() if os.path.normcase(p) != os.path.normcase(path)]
+    recent_store().setValue("recent", [path] + kept[:RECENT - 1])
+
+
+class RecentRow(QtWidgets.QFrame):
+    """One recent project on the start page: its name, and its folder under it. A click opens it."""
+
+    def __init__(self, path, open_it):
+        super().__init__()
+        self.setObjectName("recent")
+        self.path, self.open_it = path, open_it
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 9, 0, 9)
+        layout.setSpacing(2)
+        for text, name in ((os.path.splitext(os.path.basename(path))[0], "recentName"),
+                           (os.path.dirname(path), "recentPath")):
+            label = QtWidgets.QLabel(text)
+            label.setObjectName(name)
+            layout.addWidget(label)
+        self.setCursor(QtCore.Qt.PointingHandCursor)
+        self.setToolTip(path)
+
+    def mousePressEvent(self, event):
+        self.open_it(self.path)
+
+
+class StartPage(QtWidgets.QFrame):
+    """Over the empty 3D view while no project is open: New project, Open, the examples, and the projects
+    opened or saved last. It covers the view whatever its size."""
+
+    WIDTH = 600                                              # one column, every edge on it
+
+    def __init__(self, window):
+        super().__init__(window.pv_frame)
+        self.setObjectName("startPage")
+        self.window_ = window
+        outer = QtWidgets.QVBoxLayout(self)
+        outer.addStretch(2)
+        row = QtWidgets.QHBoxLayout()
+        outer.addLayout(row)
+        outer.addStretch(3)
+        row.addStretch(1)
+        body = QtWidgets.QWidget()
+        body.setFixedWidth(self.WIDTH)
+        row.addWidget(body)
+        row.addStretch(1)
+        col = QtWidgets.QVBoxLayout(body)
+        col.setContentsMargins(0, 0, 0, 0)
+        col.setSpacing(0)
+        col.addWidget(self._label("Start a project", "h1"))
+        col.addSpacing(6)
+        sub = self._label("A project keeps the part, its materials, supports, loads and runs in one folder.", "sub")
+        sub.setWordWrap(True)
+        col.addWidget(sub)
+        col.addSpacing(24)
+        self.new_button = self._button("New project from an STL...", "primary", window.new_project)
+        self.open_button = self._button("Open a project...", "secondary", window.open_project)
+        col.addWidget(self.new_button)
+        col.addSpacing(10)
+        col.addWidget(self.open_button)
+        col.addSpacing(36)
+        col.addWidget(self._label("Try an example", "h2"))
+        col.addSpacing(10)
+        grid = QtWidgets.QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(10)
+        self.examples = {}
+        shown = [(name, os.path.join(EXAMPLES, f)) for name, f in START_EXAMPLES]
+        for k, (name, path) in enumerate([(n, f) for n, f in shown if os.path.isfile(f)]):
+            self.examples[name] = self._button(name, "example", lambda p=path: window.open_project(p))
+            grid.addWidget(self.examples[name], k // 2, k % 2)
+        col.addLayout(grid)
+        self.recent_box = QtWidgets.QWidget()
+        self.recent_rows = QtWidgets.QVBoxLayout(self.recent_box)
+        self.recent_rows.setContentsMargins(0, 36, 0, 0)
+        self.recent_rows.setSpacing(0)
+        self.recent_rows.addWidget(self._label("Recent", "h2"))
+        self.recent_rows.addSpacing(4)
+        col.addWidget(self.recent_box)
+        window.pv_frame.installEventFilter(self)
+        self.hide()
+
+    @staticmethod
+    def _label(text, name):
+        label = QtWidgets.QLabel(text)
+        label.setObjectName(name)
+        return label
+
+    @staticmethod
+    def _button(text, name, slot):
+        b = QtWidgets.QPushButton(text)
+        b.setObjectName(name)
+        b.setCursor(QtCore.Qt.PointingHandCursor)
+        b.clicked.connect(lambda _=False: slot())
+        return b
+
+    def recent(self):
+        """The paths of the Recent rows shown."""
+        return [self.recent_rows.itemAt(i).widget().path for i in range(self.recent_rows.count())
+                if isinstance(self.recent_rows.itemAt(i).widget(), RecentRow)]
+
+    def fill_recent(self):
+        """The Recent rows from recent_projects(); the section hidden when there are none."""
+        for i in reversed(range(self.recent_rows.count())):
+            row = self.recent_rows.itemAt(i).widget()
+            if isinstance(row, RecentRow):
+                self.recent_rows.removeWidget(row)
+                row.deleteLater()
+        paths = recent_projects()
+        for path in paths:
+            self.recent_rows.addWidget(RecentRow(path, self.window_.open_project))
+        self.recent_box.setVisible(bool(paths))
+
+    def cover(self):
+        """Shown over the whole 3D view, its Recent list up to date."""
+        self.fill_recent()
+        self.setGeometry(self.parentWidget().rect().adjusted(1, 1, -1, -1))
+        self.show()
+        self.raise_()
+
+    def eventFilter(self, obj, event):
+        if obj is self.parentWidget() and event.type() == QtCore.QEvent.Resize:
+            self.setGeometry(obj.rect().adjusted(1, 1, -1, -1))
+        return False
 
 
 def point_text(p):
@@ -486,8 +639,6 @@ class PartLoader(ProjectsWindow):
                                             show_message=False, left_clicking=True, show_point=False)
         window.plotter.iren.add_observer("RightButtonPressEvent", window.on_right_button_press)
         window.update_LivVar("geometry_loaded", True)
-        window.set_sidebar_icon("Geometry", "check")
-        window.set_sidebar_icon("Material", "arrow")
 
 
 def mmto_file_error(path):
@@ -644,6 +795,7 @@ class MMTOWindow(MainWindow):
         self.project, self.path, self._saved = None, None, None
         self._mesh, self._mesh_key, self.preview_on = None, None, False
         self.design_bars = set()                                    # colour scales of the design
+        self.design_legend = []                                     # its materials: a column per design drawn
         self._said = set()                                          # errors and warnings already shown
         self.message_text.setText(f"{APP}. File > New starts a project from an STL; File > Open opens a "
                                   f".mmto project.")
@@ -655,6 +807,8 @@ class MMTOWindow(MainWindow):
         self._build_menu()
         self._build_top_row()
         self.set_dark_view(False)
+        self.start_page = StartPage(self)
+        self._project_or_not()
         self._refresh_title()
 
     def create_button(self, config, style):
@@ -666,10 +820,36 @@ class MMTOWindow(MainWindow):
         return btn
 
     def set_sidebar_icon(self, button_text, icon_type):
-        """A done step shows a check; otherwise the button keeps its own picture."""
-        btn = self.sidebar_buttons.get(button_text)
-        if btn is not None:
-            btn.setIcon(icon("check") if icon_type == "check" else icon(SIDEBAR_ICONS.get(button_text, "units")))
+        """PyTO-AD's own marks (its Units dialog ticks Units) give way to update_side_marks."""
+        self.update_side_marks()
+
+    def update_side_marks(self):
+        """The buttons of SIDEBAR_STEPS marked by the run's own check (Project.validate, as Run uses it): a
+        tick once the step is set up and the check finds nothing wrong in it, a red mark when it finds an
+        error in it, and the button's own picture while the step is not set up yet. Warnings mark nothing."""
+        p = getattr(self, "project", None)                          # (PyTO-AD may ask before there is one)
+        wrong = {e.step for e in p.validate()} if p is not None else set()
+        for name, step in SIDEBAR_STEPS.items():
+            btn = getattr(self, "sidebar_buttons", {}).get(name)
+            if btn is None:
+                continue
+            mark = "plain" if p is None or not p.set_up(step) else "error" if step in wrong else "check"
+            btn.setIcon(icon(SIDEBAR_ICONS[name] if mark == "plain" else mark))
+            btn.setProperty("mark", mark)
+
+    def _project_or_not(self):
+        """With no project open, the start page over the 3D view, and the side buttons, Run, Export STL and
+        Part / Design greyed; with one, the page hidden and they work."""
+        none = self.project is None
+        if none:
+            self.start_page.cover()
+        else:
+            self.start_page.hide()
+        for b in self.sidebar_buttons.values():
+            b.setEnabled(not none)
+            b.setToolTip(NO_PROJECT if none else "")
+        self.update_top_row()
+        self._view_changed()
 
     def create_message_frame(self):
         """PyTO-AD's message panel, three lines high, with a repeated line shown once (MessageLog)."""
@@ -746,7 +926,6 @@ class MMTOWindow(MainWindow):
             b.setCheckable(True)
             group.addButton(b)
             two.addWidget(b)
-        self.part_button.setToolTip("Show the part, with its supports and loads")
         self.part_button.clicked.connect(lambda: self.show_setup_view())
         self.design_button.clicked.connect(lambda: self.show_design_view())
         row.addWidget(switch)
@@ -757,6 +936,11 @@ class MMTOWindow(MainWindow):
         self.export_button.setEnabled(False)
         self.export_button.clicked.connect(self.export_stl)
         row.addWidget(self.export_button)
+        self.legend = QtWidgets.QLabel(self.pv_frame)              # the design's materials, top left
+        self.legend.setObjectName("legend")
+        self.legend.setTextFormat(QtCore.Qt.RichText)
+        self.legend.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
+        self.legend.hide()
         self.banner = Banner(self.pv_frame)
         self.banner.linkActivated.connect(lambda _: self._open_exported_folder())
         self.stl_done.connect(self._stl_done, QtCore.Qt.QueuedConnection)
@@ -813,12 +997,13 @@ class MMTOWindow(MainWindow):
             self.run_button.setEnabled(not getattr(rw, "stop_requested", False))
             self.progress_text.setText(re.sub(r"<[^>]+>", " ", rw.status.text()))
         else:
-            self.run_button.setEnabled(True)
+            self.run_button.setEnabled(self.project is not None)
             self.progress_text.setText("")
+        self.run_button.setToolTip("" if self.project is not None else NO_PROJECT)
         shown = self.shown_run()
         self.export_button.setEnabled(shown is not None and not self.exporting)
         self.export_button.setToolTip(
-            "Exporting..." if self.exporting else
+            NO_PROJECT if self.project is None else "Exporting..." if self.exporting else
             "Write the design shown as smooth STL files into its run's folder: the whole part, and one file "
             "per material" if shown is not None else "Show a finished run's design to export it")
         if self.banner.isVisible():
@@ -872,7 +1057,7 @@ class MMTOWindow(MainWindow):
         results = getattr(self, "results_window", None)
         if results is not None:
             try:
-                results.show_exported(folder, report)
+                results.exported(folder)
             except RuntimeError:                                    # its strip was closed
                 pass
 
@@ -909,9 +1094,10 @@ class MMTOWindow(MainWindow):
         """The 3D view dark or light (the default), its drawings recoloured to suit; material colours stay."""
         self.dark_view = bool(dark)
         view_mode.set_background(self.plotter, self.dark_view)
-        self.pv_frame.setProperty("dark", self.dark_view)
-        self.pv_frame.style().unpolish(self.pv_frame)
-        self.pv_frame.style().polish(self.pv_frame)
+        for widget in (self.pv_frame, self.legend):
+            widget.setProperty("dark", self.dark_view)
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
         self.theme_button.setIcon(icon("sun" if self.dark_view else "moon"))
         self.theme_button.setToolTip("Light 3D view" if self.dark_view else "Dark 3D view")
         try:
@@ -921,13 +1107,15 @@ class MMTOWindow(MainWindow):
         view_mode.apply(self.plotter, self.dark_view)
         self.plotter.render()
 
-    def view_colour(self, colour, text=False):
-        """The colour to draw one of the window's own drawings with, in the current 3D view."""
-        return view_mode.colour_for(colour, self.dark_view, text)
+    def view_colour(self, colour, text=False, dark_colour=None):
+        """The colour to draw one of the window's own drawings with, in the current 3D view (dark_colour: its
+        own colour in the dark view, if it has one)."""
+        return view_mode.colour_for(colour, self.dark_view, text, dark_colour)
 
-    def mark_drawing(self, prop, colour, text=False):
-        """A drawing of the window's own, drawn with view_colour(colour): kept in step with the view."""
-        view_mode.mark(prop, colour, self.dark_view, text)
+    def mark_drawing(self, prop, colour, text=False, dark_colour=None):
+        """A drawing of the window's own, drawn with view_colour(colour, text, dark_colour): kept in step with
+        the view."""
+        view_mode.mark(prop, colour, self.dark_view, text, dark_colour)
 
     def open_display_options_window(self):
         if self._raise_if_open("_display_options_dialog"):
@@ -1259,16 +1447,17 @@ class MMTOWindow(MainWindow):
         for name in [n for n in self.plotter.actors if str(n).startswith("measure_")]:
             self.plotter.remove_actor(name, reset_camera=False)
         pts = self._measure_points
+        light, dark = MEASURE_COLOURS
+        colour = self.view_colour(light, dark_colour=dark)
         drawn = []
         if pts:
-            drawn.append(self.plotter.add_mesh(pv.PolyData(np.vstack(pts)), color=self.view_colour("#222222"),
-                                               point_size=12, render_points_as_spheres=True, pickable=False,
-                                               name="measure_points"))
+            drawn.append(self.plotter.add_mesh(pv.PolyData(np.vstack(pts)), color=colour, point_size=12,
+                                               render_points_as_spheres=True, pickable=False, name="measure_points"))
         if len(pts) == 2:
-            drawn.append(self.plotter.add_mesh(pv.Line(pts[0], pts[1]), color=self.view_colour("#222222"),
-                                               line_width=3, pickable=False, name="measure_line"))
+            drawn.append(self.plotter.add_mesh(pv.Line(pts[0], pts[1]), color=colour, line_width=3, pickable=False,
+                                               name="measure_line"))
         for actor in drawn:
-            self.mark_drawing(actor.GetProperty(), "#222222")
+            self.mark_drawing(actor.GetProperty(), light, dark_colour=dark)
         self.plotter.render()
 
     def _build_menu(self):
@@ -1280,6 +1469,8 @@ class MMTOWindow(MainWindow):
             action = file_menu.addAction(text)
             action.setShortcut(key)
             action.triggered.connect(lambda _=False, s=slot: s())
+        file_menu.addSeparator()
+        file_menu.addAction("Replace &part...").triggered.connect(lambda: self.replace_part())
         file_menu.addSeparator()
         file_menu.addAction("&Export as script").triggered.connect(lambda: self.export_script())
         file_menu.addAction("&Run script...").triggered.connect(lambda: self.run_script())
@@ -1306,6 +1497,8 @@ class MMTOWindow(MainWindow):
         return self.project is not None and (self.path is None or self._state() != self._saved)
 
     def _refresh_title(self):
+        """The title, and the side buttons' marks, after any change of the project."""
+        self.update_side_marks()
         if self.project is None:
             self.setWindowTitle(APP)
             return
@@ -1545,6 +1738,7 @@ class MMTOWindow(MainWindow):
             QtWidgets.QMessageBox.warning(self, "Save project", f"Not saved: {e}")
             return False
         self.path, self._saved = os.path.abspath(path), self._state()
+        remember_project(self.path)
         self.message_text.append(f"Saved {self.path}")
         try:
             write_setup_script(self.project)
@@ -1596,6 +1790,8 @@ class MMTOWindow(MainWindow):
         self._said = set()
         self._say_checks()
         self._refresh_title()
+        remember_project(path)
+        self._project_or_not()
 
     def _say_checks(self):
         """The project's errors and warnings in the message panel, each once: a later change repeats none."""
@@ -1860,6 +2056,35 @@ class MMTOWindow(MainWindow):
             except (KeyError, ValueError, TypeError):
                 pass
         self.design_bars.clear()
+        self.design_legend.clear()
+        self.show_legend()
+
+    def show_legend(self):
+        """The design's materials at the top left of the 3D view: a swatch, the label and the share of each,
+        largest first, from what the drawing put in design_legend (two columns, left and right, for two
+        runs side by side). Shown only on the Design view, and only for a design of more than one material."""
+        from .draw_design import rgb
+        columns = self.design_legend
+        if self.view != "design" or not any(len(c) >= 2 for c in columns):
+            self.legend.hide()
+            return
+        labels = list(dict.fromkeys(label for column in columns for _, label, _ in column))
+        colour = {label: c for column in reversed(columns) for c, label, _ in column}
+        shares = [{label: share for _, label, share in column} for column in columns]
+        two = len(columns) > 1
+        rows = ["<tr><td></td><td></td>" + "".join(f"<td align='right'><i>{side}</i></td>" for side in
+                                                    ("left", "right")[:len(columns)]) + "</tr>"] if two else []
+        for label in labels:
+            r, g, b = (int(v) for v in rgb(colour[label]))
+            rows.append(f"<tr><td><span style='color:#{r:02x}{g:02x}{b:02x}; font-size:13pt'>&#9632;</span></td>"
+                        f"<td style='padding-left:6px; padding-right:12px'>{html_escape(label)}</td>" +
+                        "".join(f"<td align='right' style='padding-left:10px'>{s.get(label, 0) * 100:.0f}%</td>"
+                                for s in shares) + "</tr>")
+        self.legend.setText(f"<table cellspacing='0' cellpadding='1'>{''.join(rows)}</table>")
+        self.legend.adjustSize()
+        self.legend.move(12, 12)
+        self.legend.show()
+        self.legend.raise_()
 
     def show_design_view(self):
         """The design in place of the part; previews are cleared. False when there is no design."""
@@ -1875,6 +2100,7 @@ class MMTOWindow(MainWindow):
             self._design(self)
         except Exception as e:                                      # noqa: BLE001
             self.message_text.append(f"The design could not be drawn: {e}")
+        self.show_legend()
         wide = getattr(self, "_wide", False)
         if wide or getattr(self, "_shown_wide", False):             # into or out of two designs: fit the view
             self.plotter.reset_camera()
@@ -1903,9 +2129,12 @@ class MMTOWindow(MainWindow):
         """The Part / Design switch follows the view; Design is greyed while there is no design."""
         if not hasattr(self, "design_button"):
             return
+        self.part_button.setEnabled(self.project is not None)
+        self.part_button.setToolTip("Show the part, with its supports and loads" if self.project is not None else
+                                    NO_PROJECT)
         self.design_button.setEnabled(self._design is not None)
-        self.design_button.setToolTip("Show the design" if self._design is not None else
-                                      "A design shows here once a run has made one")
+        self.design_button.setToolTip(NO_PROJECT if self.project is None else "Show the design" if
+                                      self._design is not None else "A design shows here once a run has made one")
         (self.design_button if self.view == "design" and self._design is not None else self.part_button).setChecked(True)
 
     def _arrow(self, i, direction, points, size):
@@ -2012,41 +2241,52 @@ class MMTOWindow(MainWindow):
         self.plotter.render()
         return lines, counts
 
-    # ------------------------------------------------------------------ geometry
-    def open_geometry_window(self):
-        """With no project, a new one. Otherwise PyTO-AD's Geometry dialog changes the project's STL,
-        after a warning when selections are triangle numbers of the current one."""
+    # ------------------------------------------------------------------ the part
+    def replace_part(self, stl=None):
+        """File > Replace part: the project's STL changed to another one, after a warning when selections are
+        triangle numbers of the current one. stl: the new STL, or None to choose it in a dialog. In a
+        project folder of its own, the new STL is copied into its part folder. True when it was replaced."""
         if self.project is None:
-            self.new_project()
-            return
+            return False
         self.show_setup_view()
         names = triangle_selections(self.project)
         if names:
             answer = QtWidgets.QMessageBox.question(
-                self, "Change the STL",
+                self, "Replace part",
                 f"These selections are triangle numbers of the current STL: {', '.join(names)}. On another "
-                f"STL the same numbers are other triangles. Change the STL anyway?")
+                f"STL the same numbers are other triangles. Replace the part anyway?")
             if answer != QtWidgets.QMessageBox.Yes:
-                return
-        before = self.stl_geom.file_path if self.stl_geom else None
-        dialog = GeometryWindow(self)
-        dialog.exec_()
-        after = self.stl_geom.file_path if self.stl_geom else None
-        self.plotter.remove_actor("geometry_info", reset_camera=False)
-        if after and after != before:
-            self.project.stl = os.path.abspath(after)
-            if self.own_folder():                                   # the new part goes into the project folder
-                from lsr_mmto.problem.project_folder import PART, copy_in
-                self.project.stl = copy_in(self.project.stl, self.project.base_dir, PART)
-            self._design, self._shown_run = None, None              # a design of the old part no longer fits
-            self.view = "setup"
-            self._view_changed()
-            self.draw_ruler()
-            if names:
-                self.message_text.append(f"Check the selections {', '.join(names)}: they are triangle numbers "
-                                         f"of the old STL.")
-            self._refresh_title()
-
+                return False
+        if stl is None:
+            here = os.path.dirname(self.project.stl_path())
+            stl, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Replace part", here, "STL Files (*.stl *.STL)",
+                                                           options=FILE_DIALOG_OPTIONS)
+            if not stl:
+                return False
+        stl = os.path.abspath(stl)
+        if os.path.normcase(stl) == os.path.normcase(os.path.abspath(self.project.stl_path())):
+            return False
+        if self.own_folder():                                       # the new part goes into the project folder
+            from lsr_mmto.problem.project_folder import PART, copy_in
+            stl = copy_in(stl, self.project.base_dir, PART)
+        self.project.stl = stl
+        self.constrained_triangles.clear()                          # picks on the old part
+        self.constraint_data, self.force_data, self.selected_points, self.selected_regions = [], [], [], []
+        loader = PartLoader(self)                                   # draws the new STL, picking on
+        loader.load_geometry(self.project.stl_path())
+        loader.deleteLater()
+        self.preview_on = False                                     # the old drawings went with the old part
+        self._design, self._shown_run = None, None                  # a design of the old part no longer fits
+        self.view = "setup"
+        self._view_changed()
+        self.draw_ruler()
+        self.message_text.append(f"Part replaced: {os.path.basename(self.project.stl_path())}")
+        if names:
+            self.message_text.append(f"Check the selections {', '.join(names)}: they are triangle numbers "
+                                     f"of the old STL.")
+        self._say_checks()
+        self._refresh_title()
+        return True
 
 def install_error_handler(window):
     """An error inside the app (in what a button or a field does) shown in a message box and written to the

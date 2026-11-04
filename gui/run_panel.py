@@ -268,6 +268,7 @@ class RunWindow(StructuralTopOptWindow):
         self.max_iterations = int(self.project.settings["common"]["maxIterations"])
         self.epochs = int(self.project.settings["vae"].get("numEpochs") or 0)
         self.colours = self._material_colours()
+        self.constraint_names = self._constraint_names()
         self.optimization_running = True
         for widget in self.run_buttons:
             widget.setVisible(False)
@@ -366,11 +367,13 @@ class RunWindow(StructuralTopOptWindow):
         cons = np.array(history["constraints"], dtype=float)
         if cons.size:
             ax2 = ax.twinx()
+            names = getattr(self, "constraint_names", [])
             for k in range(cons.shape[1]):
-                ax2.plot(cons[:, k], linestyle=":", label=f"constraint {k + 1}")
+                ax2.plot(cons[:, k], linestyle=":", label=names[k] if k < len(names) else f"constraint {k + 1}")
             ax2.axhline(0.0, color="grey", linewidth=0.8)
             ax2.set_ylabel("constraint (met at or below 0)")
-            ax2.legend(loc="center right", fontsize=8)
+            # under the plot: the names are long, and there they never cover the curves
+            ax2.legend(loc="upper center", bbox_to_anchor=(0.5, -0.16), fontsize=8, frameon=False)
         self.history_canvas.draw_idle()
         i = history.get("iteration", 0)                            # 0 is the starting design
         elapsed = time.time() - self.started
@@ -384,8 +387,10 @@ class RunWindow(StructuralTopOptWindow):
         """The design so far (main thread), as the window's design: shown at the first frame of a run,
         later only while the Design view is on (Part, in the top row, keeps the part in view)."""
         mesh = draw_design.mesh_of(self.window, self.project)           # the run's own copy: edits wait
-        x, material, colours = np.asarray(frame["x"]), np.asarray(frame["material"]), self.colours
-        self.window.set_design(lambda w: draw_design.live(w, mesh, x, material, colours), show=self.first_frame)
+        x, material, colours, labels = np.asarray(frame["x"]), np.asarray(frame["material"]), self.colours, \
+            list(self.latent_names)
+        self.window.set_design(lambda w: draw_design.live(w, mesh, x, material, colours, labels),
+                               show=self.first_frame)
         self.first_frame = False
 
     # ------------------------------------------------------------------ the live latent space
@@ -453,6 +458,15 @@ class RunWindow(StructuralTopOptWindow):
         ax.set_title(f"Iteration {frame['iteration']}: " + run_plots.latent_title(zr.shape[1], agreement), fontsize=9)
         self.latent_figure.tight_layout()
         self.latent_canvas.draw_idle()
+
+    def _constraint_names(self):
+        """The run's constraints in the Formulation panel's words, with their limits: Mass <= 0.4 t."""
+        from .formulation_panel import formulation_lines
+        try:
+            lines = formulation_lines(self.project.formulation, self.project)[1:]
+        except Exception:                                           # noqa: BLE001
+            return []
+        return [line.split(": ", 1)[1] if line.startswith("Constraint: ") else line for line in lines]
 
     def _material_colours(self):
         from lsr_mmto.materials.databases import material_display

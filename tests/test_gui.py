@@ -242,9 +242,105 @@ def test_triangle_selections():
     with scratch() as d:
         assert w.open_project(shutil.copy(os.path.join(PROJECTS, "L-bracket.mmto"), d))
         stl = w.project.stl
+        other = os.path.join(ROOT, "data", "models", "Beam_Liao", "Ex1_Beam_design.stl")
         with answers(Box.No):
-            w.open_geometry_window()                                           # warned, and declined
+            assert not w.replace_part(other)                                   # warned, and declined
         assert w.project.stl == stl and not w.is_dirty()
+
+
+def test_replace_part():
+    """File > Replace part changes the project's STL (copied into the part folder of a project of its own),
+    draws the new part and drops the design of the old one. There is no Geometry button."""
+    assert "Geometry" not in G.SIDEBAR
+    w = G.MMTOWindow()
+    entry = [a for m in w.menuBar().actions() if m.menu() for a in m.menu().actions()
+             if a.text().replace("&", "") == "Replace part..."]
+    assert len(entry) == 1
+    other = os.path.join(ROOT, "data", "models", "Beam_Liao", "Ex1_Beam_design.stl")
+    with scratch() as d:
+        assert w.open_project(shutil.copy(os.path.join(PROJECTS, "L-bracket.mmto"), d))
+        assert w.save_project_as(os.path.join(d, "P", "P.mmto"))
+        w.set_design(lambda _: None, show=True)
+        with answers(Box.Yes):
+            assert w.replace_part(other)                                       # warned (clamp), and accepted
+        assert w.project.stl == "part/Ex1_Beam_design.stl" and os.path.isfile(w.project.stl_path())
+        assert os.path.normcase(w.stl_geom.file_path) == os.path.normcase(w.project.stl_path())
+        assert w._design is None and w.view == "setup" and w.is_dirty()
+        assert any(line.startswith("Part replaced") for line in w.message_text.toPlainText().splitlines())
+
+
+def test_start_page():
+    """With no project open the start page covers the 3D view, and the side buttons, Run, Export STL and Part /
+    Design are greyed with a tip; opening a project hides the page and they work. Recent lists the projects
+    opened or saved last, newest first, and drops one that is gone; an example is not listed."""
+    G.recent_store().clear()
+    w = G.MMTOWindow()
+    w.show()
+    APP.processEvents()
+    page = w.start_page
+    assert page.isVisible() and page.geometry().width() >= w.pv_frame.width() - 2
+    assert list(page.examples) == ["L-bracket", "U-bracket", "Beam", "Airplane bracket"]
+    assert page.recent_box.isHidden() and page.recent() == []
+    waiting = list(w.sidebar_buttons.values()) + [w.run_button, w.export_button, w.part_button, w.design_button]
+    assert not any(b.isEnabled() for b in waiting)
+    assert all(b.toolTip() == G.NO_PROJECT for b in waiting)
+    with scratch() as d:
+        first = shutil.copy(os.path.join(PROJECTS, "beam.mmto"), os.path.join(d, "first.mmto"))
+        second = shutil.copy(os.path.join(PROJECTS, "beam.mmto"), os.path.join(d, "second.mmto"))
+        assert w.open_project(os.path.join(PROJECTS, "L-bracket.mmto"))      # an example: not in Recent
+        assert page.isHidden() and G.recent_projects() == []
+        assert all(b.isEnabled() for b in w.sidebar_buttons.values()) and w.run_button.isEnabled()
+        assert w.part_button.isEnabled() and not w.export_button.isEnabled() and w.sidebar_buttons["Units"].toolTip() == ""
+        assert w.open_project(first) and w.open_project(second)
+        assert G.recent_projects() == [os.path.abspath(second), os.path.abspath(first)]
+        os.remove(second)
+        w2 = G.MMTOWindow()
+        assert w2.start_page.recent() == [os.path.abspath(first)] and not w2.start_page.recent_box.isHidden()
+        row = w2.start_page.recent_rows.itemAt(w2.start_page.recent_rows.count() - 1).widget()
+        assert [lab.text() for lab in row.findChildren(QtWidgets.QLabel)] == ["first", os.path.abspath(d)]
+        row.mousePressEvent(None)                                              # a click opens it
+        assert w2.path == os.path.abspath(first) and w2.start_page.isHidden()
+        w2.close()
+    w.close()
+
+
+def test_side_marks():
+    """Units, Materials, Supports and loads and Formulation: a tick once set up and the run's check finds nothing
+    wrong there, a red mark for an error of that step, plain while not set up (never red then); a warning marks
+    nothing; the other buttons have no mark. The marks follow every change."""
+    from lsr_mmto.problem.project import Project as P
+    marks = lambda w: {n: w.sidebar_buttons[n].property("mark") for n in G.SIDEBAR}       # noqa: E731
+    w = G.MMTOWindow()
+    assert set(marks(w).values()) <= {"plain", None}
+    with scratch() as d:
+        assert w.open_project(shutil.copy(os.path.join(PROJECTS, "L-bracket.mmto"), d))
+        assert w.project.validate() == [] and w.project.warnings()                # warnings: still ticked
+        assert marks(w) == {"Units": "check", "Materials": "check", "Supports and loads": "check",
+                            "Formulation": "check", "Settings": None, "Run": None, "Results": None,
+                            "Display Options": None}
+        w.project.bcs.append({"kind": "fixed", "on": "nowhere", "dofs": "xyz"})
+        w.project_changed()                                                    # as Supports and loads says
+        assert marks(w)["Supports and loads"] == "error" and marks(w)["Formulation"] == "check"
+        w.project.bcs.pop()
+        w.project.formulation["constraints"][0]["bound"] = 0.0
+        w.project_changed()
+        assert marks(w)["Supports and loads"] == "check" and marks(w)["Formulation"] == "error"
+        w.project.formulation["constraints"][0]["bound"] = 0.15
+        w.project.settings["vae"]["latentDim"] += 1                            # an error of Settings: no mark
+        w.project_changed()
+        assert any(e.step == "settings" for e in w.project.validate())
+        assert all(m in ("check", None) for m in marks(w).values()), marks(w)
+        with answers(Box.Discard):
+            assert w.open_project(shutil.copy(os.path.join(PROJECTS, "U-bracket.mmto"), d))
+        assert w.project.units == "none" and marks(w)["Units"] == "plain"         # not set up yet
+        empty = P("empty", stl=w.project.stl, base_dir=w.project.base_dir)
+        assert {"no supports", "no loads", "no material database", "no objective"} <= set(empty.validate())
+        with answers(Box.Discard):
+            w._show(empty, None)
+        assert {n: marks(w)[n] for n in G.SIDEBAR_STEPS} == dict.fromkeys(G.SIDEBAR_STEPS, "plain")
+        empty.bcs.append({"kind": "fixed", "on": "nowhere", "dofs": "xyz"})       # begun, and wrong: red
+        w.project_changed()
+        assert marks(w)["Supports and loads"] == "error"
 
 
 # ---------------------------------------------------------------------- Materials, Formulation, Settings
@@ -620,6 +716,48 @@ def test_import_database():
         open(table, "w").write("Alloy,Price\nA,1\nB,2\n")                    # nothing LSR MMTO knows
         with answers():
             assert m.import_database(table) is None
+
+
+def test_edit_a_database_with_an_unknown_column():
+    """A database with a column LSR MMTO does not know (E0): the check says so in plain words, and Edit...
+    opens it with that column left out and named in a note, and saves it without the column."""
+    import openpyxl
+    from lsr_mmto.materials.databases import check_database, database_table, write_database
+    from gui import database_editor as DE
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        assert w.save_project_as(os.path.join(d, "P", "P.mmto")) and w.own_folder()
+        path = write_database(os.path.join(d, "P", "materials", "extra.xlsx"), ["Density", "Youngs_Modulus"],
+                              ["t/mm^3", "MPa"], ["A", "B"], [None, None], ["#ff0000", "#0000ff"],
+                              [[7.8e-9, 200000.0], [2.7e-9, 70000.0]])
+        book = openpyxl.load_workbook(path)
+        sheet = book.worksheets[0]
+        for row, value in enumerate(("E0", "-", 1.0, 2.0), start=1):
+            sheet.cell(row=row, column=4, value=value)
+        book.save(path)
+        errors = check_database(path)[0]
+        assert len(errors) == 1 and errors[0].startswith("D1: 'E0' is not a property LSR MMTO knows (Density, "
+                                                         "Young's modulus, "), errors
+        assert errors[0].endswith("Rename the column to one of them, or use Import..., which leaves out the "
+                                  "columns it does not know.") and "lsr_mmto" not in errors[0]
+        m = materials_panel.MaterialsPanel(w, w.project)
+        m.set_database(path)
+        seen = {}
+
+        def look(e):
+            seen["heads"] = [e.table.horizontalHeaderItem(c).text() for c in range(e.table.columnCount())]
+            seen["note"] = e.left_out_note.text() if not e.left_out_note.isHidden() else ""
+            return 1
+        real = DE.DatabaseEditor.exec_
+        try:
+            DE.DatabaseEditor.exec_ = look
+            assert m.edit_database() == path
+        finally:
+            DE.DatabaseEditor.exec_ = real
+        assert seen["heads"] == ["Name", "Shown as", "Colour", "Density", "Young's modulus"]
+        assert seen["note"] == ("Left out, as LSR MMTO has no property of that name: E0. Save writes the "
+                                "database without them.")
+        assert check_database(path)[0] == [] and database_table(path)[1] == ["Density", "Youngs_Modulus"]
 
 
 def test_error_in_the_app_keeps_it_running():
@@ -1661,8 +1799,9 @@ def test_results_compare_delete():
         assert [res.tabs.tabText(i) for i in range(res.tabs.count())] == ["Convergence", "Latent space",
                                                                           "Summary"]
         shown = [res.field.itemText(i) for i in range(res.field.count())]
-        assert shown == ["Material", "Density", "Stress", "Solid"], shown     # the views a structural run saved
-        for field in shown:
+        assert shown == ["Material", "Density", "Stress", "Solid", "Smooth (exported)"], shown   # the views a
+        assert not res.field.model().item(4).isEnabled()                      # structural run saved; not exported
+        for field in shown[:-1]:
             res.field.setCurrentText(field)
             assert "result_design" in w.plotter.actors and w.view == "design", field
             assert bool(w.design_bars) == (field in ("Density", "Stress")), (field, w.design_bars)
@@ -1744,8 +1883,13 @@ def test_stop_while_training():
 
 def test_export_stl():
     """Export STL of the design shown: design.stl and a file per material used, in the run's folder, all closed;
-    the pieces add up to their whole; they are drawn on the part, and can be pulled apart."""
+    the pieces add up to their whole. Results' Show list has Smooth (exported), greyed with a tip until the
+    run's folder holds the files; after the export it is chosen and the pieces are drawn, and can be pulled
+    apart. What the folder holds decides: a Results panel opened later finds the files, and finds none once
+    they are gone."""
     import trimesh
+    from gui import results_panel
+    from gui.results_panel import SMOOTH
     with scratch() as d:
         w = opened("L-bracket", d)
         w.show()
@@ -1757,10 +1901,12 @@ def test_export_stl():
         res = w.open_results_panel(r.save_dir)
         w.update_top_row()
         assert res.current == r.save_dir and w.shown_run()[0] == r.save_dir and w.export_button.isEnabled()
+        smooth = res.field.model().item(res.field.findText(SMOOTH))
+        assert not smooth.isEnabled() and smooth.toolTip() == "Export STL first" and not res.apart.isVisible()
         assert w.export_stl()                                                 # Export STL, in the top row
         assert _wait(lambda: not w.exporting, 300)
         assert "STL files saved" in w.banner.text() and "Open folder" in w.banner.text()
-        folder, report = res.smooth
+        folder, report = w.exported_last
         assert folder == r.save_dir and not report.whole_error, report.whole_error
         assert os.path.isfile(os.path.join(folder, "design.stl")) and report.whole_closed
         assert report.pieces and all(p.closed and os.path.isfile(p.path) for p in report.pieces), report.lines()
@@ -1769,9 +1915,134 @@ def test_export_stl():
         for p in report.pieces:
             t = trimesh.load(p.path, force="mesh")
             assert t.is_watertight and t.volume > 0, p.label
+        assert res.field.currentText() == SMOOTH and smooth.isEnabled() and res.apart.isVisible()
         assert any(str(n).startswith("result_smooth") for n in w.plotter.actors)
         res.apart.setChecked(True)
         assert w.view == "design" and any(str(n).startswith("result_smooth") for n in w.plotter.actors)
+        assert w.shown_run()[0] == r.save_dir                                 # Export STL works on this view too
+        res.close()
+        res = results_panel.ResultsWindow(w)                                  # a new panel: the folder decides
+        res.select(r.save_dir)
+        smooth = res.field.model().item(res.field.findText(SMOOTH))
+        assert smooth.isEnabled() and res.field.currentText() == "Material"
+        res.field.setCurrentText(SMOOTH)
+        assert any(str(n).startswith("result_smooth") for n in w.plotter.actors)
+        res.field.setCurrentText("Material")
+        for f in os.listdir(folder):
+            if f.lower().endswith(".stl"):
+                os.remove(os.path.join(folder, f))
+        res.select(r.save_dir)
+        assert not res.field.model().item(res.field.findText(SMOOTH)).isEnabled()
+
+
+def test_pieces_pulled_apart_in_a_row():
+    """Pull the material pieces apart: the pieces side by side along x, largest first and in place, each next
+    one moved by the part's width and a tenth more, so no two overlap; the legend names them."""
+    import types
+    import pyvista as pv
+    from gui import draw_design
+    with scratch() as d:
+        boxes = {"small": (0, 4, 0, 10, 0, 1), "large": (0, 10, 0, 6, 0, 1), "middle": (4, 10, 6, 10, 0, 1)}
+        pieces = []
+        for k, (label, bounds) in enumerate(boxes.items()):
+            path = os.path.join(d, f"design_{label}.stl")
+            pv.Box(bounds=bounds).triangulate().save(path)
+            pieces.append((path, ["#ff0000", "#00ff00", "#0000ff"][k], label))
+        window = types.SimpleNamespace(plotter=pv.Plotter(off_screen=True), design_legend=[])
+        together = draw_design.smooth(window, pieces)
+        assert [m.bounds for m in together] == [pv.read(p).bounds for p in (pieces[1][0], pieces[0][0], pieces[2][0])]
+        window.design_legend.clear()
+        apart = draw_design.smooth(window, pieces, apart=True)
+        xs = [(m.bounds[0], m.bounds[1]) for m in apart]
+        assert xs[0] == (0.0, 10.0)                                           # the largest stays in place
+        assert np.allclose([lo for lo, _ in xs[1:]], [11.0, 26.0])            # moved by 1 x 11 and 2 x 11
+        for i in range(len(apart)):
+            for j in range(i + 1, len(apart)):
+                a, b = np.reshape(apart[i].bounds, (3, 2)), np.reshape(apart[j].bounds, (3, 2))
+                assert np.any((a[:, 1] < b[:, 0]) | (b[:, 1] < a[:, 0])), (i, j)   # apart along some axis
+        assert [label for _, label, _ in window.design_legend[0]] == ["large", "small", "middle"]
+        window.plotter.close()
+
+
+def test_constraints_named_in_the_plots():
+    """The Progress plot of Current run names each constraint in the Formulation panel's words with its
+    limit; the two-run plot of Results names them as the runs do (both names when the runs differ)."""
+    import types
+    from gui import results_panel
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        r = w.open_run_panel()
+        r.project = w.project
+        r.constraint_names = r._constraint_names()
+        assert r.constraint_names[0].startswith("Material volume fraction of ") and \
+            r.constraint_names[0].endswith("<= 0.15"), r.constraint_names
+        r.max_iterations, r.started = 10, 0.0
+        r.update_history_plot({"objective": [1.0, 0.9], "constraints": [[0.1, 0.2, 0.3], [0.0, 0.1, 0.2]],
+                               "iteration": 1})
+        legend = [t.get_text() for t in r.history_figure.axes[1].get_legend().get_texts()]
+        assert legend == r.constraint_names
+        r.close()
+
+    def run(labels):
+        return types.SimpleNamespace(history={"J_phys": [1.0, 0.5], "constraints": [[0.0] * len(labels)] * 2},
+                                     constraint_spec=[[k] for k in labels], constraint_label=lambda i: labels[i])
+    fig = results_panel.convergence_overlaid({"a": run(["Mass", "Cost"]), "b": run(["Mass", "Volume"])})
+    texts = [t.get_text() for t in fig.legends[0].get_texts()]
+    assert texts == ["a", "b", "Mass", "Cost / Volume"], texts
+
+
+def test_material_legend():
+    """The legend at the top left of the 3D view: each material present with its share, largest first; while a
+    run goes, by density among the elements drawn; on a finished run's Material view, by solid elements; two
+    runs compared, a left and a right column. Hidden on the Part view, on Density, and for one material; it
+    follows the light and dark view."""
+    import types
+    from gui import draw_design
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        w.show()
+        w.project.n_dof, w.project.single_layer = 3000, True
+        mesh = w.preview_mesh()
+        n = int(mesh.num_elems)
+        x = np.zeros(n)
+        x[:100], x[100:150], x[150:160] = 1.0, 0.8, 0.05                      # the last ones too faint to count
+        material = np.zeros(n, dtype=int)
+        material[100:] = 2
+        colours, labels = ["#ff0000", "#00ff00", "#0000ff"], ["Red", "Green", "Blue"]
+        w.set_design(lambda win: draw_design.live(win, mesh, x, material, colours, labels))
+        APP.processEvents()
+        assert w.legend.isVisible() and w.legend.geometry().topLeft() == QtCore.QPoint(12, 12)
+        (column,) = w.design_legend
+        assert [r[:2] for r in column] == [("#ff0000", "Red"), ("#0000ff", "Blue")]
+        assert np.allclose([r[2] for r in column], [100 / 140, 40 / 140])
+        text = w.legend.text()
+        assert "Red" in text and "71%" in text and "29%" in text and "Green" not in text
+        assert text.index("Red") < text.index("Blue")
+        w.set_dark_view(True)
+        assert w.legend.property("dark") is True
+        w.set_dark_view(False)
+        w.show_setup_view()
+        assert not w.legend.isVisible()                                       # the Part view
+        w.set_design(lambda win: draw_design.live(win, mesh, x, np.zeros(n, dtype=int), colours, labels))
+        assert not w.legend.isVisible()                                       # one material
+        solid = np.zeros(n, dtype=bool)
+        solid[:30] = True
+        indices = np.where(np.arange(n) < 10, 1, 0)
+        run = types.SimpleNamespace(material_colors=colours, material_labels=labels, material_indices=indices,
+                                    solid=solid, x_cont=x, result_info={})
+        w.set_design(lambda win: draw_design.record(win, run, mesh, "Material"))
+        assert w.legend.isVisible() and w.design_legend[0][0][1] == "Red" and np.isclose(w.design_legend[0][0][2], 2 / 3)
+        w.set_design(lambda win: draw_design.record(win, run, mesh, "Density"))
+        assert not w.legend.isVisible()
+        other = types.SimpleNamespace(**{**vars(run), "material_indices": np.full(n, 2)})
+
+        def both(win):
+            draw_design.record(win, run, mesh, "Material", name="design")
+            draw_design.record(win, other, mesh, "Material", shift=100.0, name="design_2")
+        w.set_design(both, wide=True)
+        assert w.legend.isVisible() and len(w.design_legend) == 2
+        assert "<i>left</i>" in w.legend.text() and "<i>right</i>" in w.legend.text() and "Blue" in w.legend.text()
+
 
 if __name__ == "__main__":
     failed = 0

@@ -335,8 +335,9 @@ def check_database(path):
             continue
         name = attribute_name(raw)
         if name not in ATTRIBUTES:
-            errors.append(f"{cell(0, c)}: {raw!r} is not a known attribute ({', '.join(ATTRIBUTES)}); "
-                          f"to use a new one, add it to ATTRIBUTES in lsr_mmto/materials/databases.py")
+            errors.append(f"{cell(0, c)}: {str(raw).strip()!r} is not a property LSR MMTO knows "
+                          f"({', '.join(SHOWN.values())}). Rename the column to one of them, or use Import..., "
+                          f"which leaves out the columns it does not know.")
             continue
         if name in names.values():
             errors.append(f"{cell(0, c)}: {name} appears twice")

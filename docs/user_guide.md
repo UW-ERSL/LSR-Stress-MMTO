@@ -10,7 +10,7 @@ LSR MMTO designs a part made of several materials. You give it the shape the par
 
 The work always goes in the same order, and the buttons on the right of the window follow it from top to bottom:
 
-1. **The part.** File > New makes a project from an STL file of the space the part may fill. See Geometry, section 5.
+1. **The part.** File > New makes a project from an STL file of the space the part may fill. See The part, section 5.
 2. **The units.** The unit system all your numbers are in. See Units, section 4.
 3. **The materials.** A material database: one row per material, with its properties. See Materials, section 6.
 4. **Supports and loads.** Where the part is held, and where and how hard it is pushed. See section 7.
@@ -23,9 +23,11 @@ Settings (section 9) has everything else, and most projects can leave it as it i
 
 Next to most fields there is a small (i). Click it, or rest the mouse on it, to see what that field means and what its numbers are. When a field puzzles you, the (i) is the quickest answer. This guide gives the bigger picture.
 
-To try LSR MMTO before making a project of your own, open one of the examples with File > Open: the beam, the L-bracket, the U-bracket and the airplane bracket. They are complete, so you can press Run at once. An example never changes: when you save it, or run it, LSR MMTO asks for a folder of your own and saves a copy there.
+To try LSR MMTO before making a project of your own, open one of the examples: click it under **Try an example** on the start page, or use File > Open. The examples are the L-bracket, the U-bracket, the beam and the airplane bracket. They are complete, so you can press Run at once. An example never changes: when you save it, or run it, LSR MMTO asks for a folder of your own and saves a copy there.
 
 ## 2. The window
+
+While no project is open, the 3D view shows the start page: **New project from an STL...** (the same as File > New), **Open a project...** (File > Open), four examples under **Try an example**, and under **Recent** the last five projects you opened or saved, each with its folder under its name. Click one to open it. Until a project is open, the buttons on the right, Run, Export STL and Part / Design are greyed.
 
 ### 2.1 The top row
 
@@ -39,9 +41,9 @@ From left to right:
 
 ### 2.2 The buttons on the right
 
-**Units**, **Geometry**, **Materials**, **Supports and loads**, **Formulation**, **Settings**, **Current run**, **Results** and **Display Options**. Geometry shows a green tick once the part is loaded, and Units once the units are applied.
+**Units**, **Materials**, **Supports and loads**, **Formulation**, **Settings**, **Current run**, **Results** and **Display Options**. Units, Materials, Supports and loads and Formulation show how far each step is: a green tick once it is set up and nothing in it stops a run, a red mark when something in it would stop a run (the messages say what, as an **Error**), and the button's own picture while it is not set up yet. A warning does not change the mark.
 
-Units, Geometry, Materials, Formulation, Settings and Display Options open as windows with OK and Cancel (or Apply and Close): OK puts your changes into the project, and Cancel leaves the project as it was.
+Units, Materials, Formulation, Settings and Display Options open as windows with OK and Cancel (or Apply and Close): OK puts your changes into the project, and Cancel leaves the project as it was.
 
 Supports and loads, Current run and Results open as panels beside the 3D view, so you can work on the part while they are open. When more than one is open they share the space as tabs. A panel can be made wider or narrower by dragging its edge.
 
@@ -70,7 +72,7 @@ An **Error** stops a run from starting until it is put right. A **Warning** lets
 - On the left, the part's size, for example *Part: x 0 to 200 · y 0 to 200 · z 0 to 1 mm*. The (i) next to it gives the part's file, volume, size and material database.
 - In the middle, the point under the mouse on the part, and what Measure has measured.
 - **Snap**: rounds the point under the mouse, a copied point and Measure to a step (off, 0.1, 1, 5 or 10, in the project's length unit). With Snap: 1, a point at x 37.62 reads 38.
-- **Measure**: click it, then click two points on the part to see the distance between them, and its x, y and z parts. A third click starts again. Press Esc, or click Measure again, to stop.
+- **Measure**: click it, then click two points on the part to see the distance between them, and its x, y and z parts. A third click starts again. The line and its points are dark in the light 3D view and white in the dark one. Press Esc, or click Measure again, to stop.
 - **Ruler**: shows scales along the part, in the project's length unit. Click it again to hide them.
 
 ## 3. File menu
@@ -79,6 +81,7 @@ An **Error** stops a run from starting until it is put right. A **Warning** lets
 - **Open...** opens a project, a file ending in .mmto. Only LSR MMTO projects open here.
 - **Save** saves the project in its file. A project never saved, or an example, is saved with Save As instead.
 - **Save As...** saves the project as a new one, in a new folder, with everything it uses copied in. The new project takes the new name; the runs made so far stay with the old one.
+- **Replace part...** changes the project's STL for another one. See section 5.
 - **Export as script** writes the project as a short Python script, *name*_setup.py, in the project's folder. Every save writes it again, so it always matches the project; this entry saves first if needed and says where the script is. Open it in any text editor to see the whole project written out, or to change it.
 - **Run script...** runs a Python script, such as one written by Export as script and then changed. What the script prints goes to the messages. When the script saves a project in its folder, that project opens in the window.
 - **Exit** closes LSR MMTO.
@@ -114,11 +117,11 @@ The material database has its own units, in its second row. When they do not mat
 
 **Temperature Unit** and **Angle Unit** are in the same window; LSR MMTO does not use them yet.
 
-## 5. Geometry
+## 5. The part
 
 The part is an STL file of the space the part may fill: the design domain. The optimization decides where, inside it, material goes. The surface of the STL is the outside of that space.
 
-The part comes in when you make the project (File > New). To use a different STL, open **Geometry** and press **Load STL Geometry**. If some selections are faces you picked on the old STL, LSR MMTO says so first: picked faces are stored by triangle number, and on another STL the same numbers are other faces. Pick them again afterwards. In a project folder of its own, the new STL is copied into the part folder.
+The part comes in when you make the project (File > New). To use a different STL, choose File > **Replace part...** and choose the new STL. If some selections are faces you picked on the old STL, LSR MMTO says so first: picked faces are stored by triangle number, and on another STL the same numbers are other faces. Pick them again afterwards. In a project folder of its own, the new STL is copied into the part folder.
 
 The STL should be closed (watertight) and in the project's length unit. The size in the bottom bar (section 2.5) is a quick check: a part that should be 200 mm long and reads *x 0 to 0.2 mm* was drawn in metres.
 
@@ -150,7 +153,7 @@ The buttons next to the list:
 
 - **New database...** opens the database editor (section 6.3) on an empty database, to type or paste your materials in.
 - **Import...** makes a database from a table of materials you already have, in Excel (.xlsx or .xls) or CSV. The first column holds the material names and the first row the properties. A property can be written under any of the names LSR MMTO knows it by (for example Young's modulus as Youngs_Modulus, Youngs Modulus or E), and a unit may follow in brackets, as in *Density [kg/m^3]*. A second row of units, as in an LSR MMTO database, is read too. Columns that are not a property LSR MMTO knows are left out, and one message lists them. The database editor then opens with what was read, for you to check and save.
-- **Edit...** opens the database in the editor. One of your own is changed in place. One that comes with LSR MMTO is saved as a copy in your project's folder, and the project then uses the copy.
+- **Edit...** opens the database in the editor. One of your own is changed in place. One that comes with LSR MMTO is saved as a copy in your project's folder, and the project then uses the copy. A column that is not a property LSR MMTO knows is left out, and a note over the table names it; Save writes the database without it.
 - **Browse...** chooses a database file (.xlsx) from anywhere.
 - **Open in Excel** opens the database file in Excel, or whatever opens .xlsx files on your computer.
 - **Check again** reads the database again, for example after you changed it in Excel.
@@ -486,11 +489,11 @@ The buttons on the right step aside, and the **Current run** panel takes half th
 2. *Training the material network: epoch 4,000 / 30,000*, only when the database has no trained network yet. This can take a few minutes.
 3. *Iteration 12 / 300 · 0:41 so far · about 16:20 left*: the optimization itself.
 
-The 3D view shows the design as it grows: each element in its material's colour, pale while it is half solid and in full colour once solid. Elements that are almost empty are not drawn. **Part**, at the top, shows the part again without stopping the run; **Design** brings the growing design back. Untick **Show the design while it runs** to leave the 3D view alone.
+The 3D view shows the design as it grows: each element in its material's colour, pale while it is half solid and in full colour once solid. Elements that are almost empty are not drawn. At the top left, a legend gives each material's colour and its share of the design, largest first (counted by how solid each element is). **Part**, at the top, shows the part again without stopping the run; **Design** brings the growing design back. Untick **Show the design while it runs** to leave the 3D view alone.
 
 The panel's tabs:
 
-- **Progress**: the objective, as a solid line, and each constraint, as a dotted line. A constraint is met at or below the grey line at 0.
+- **Progress**: the objective, as a solid line, and each constraint, as a dotted line named as in Formulation with its limit, for example *Mass <= 0.4 t*. A constraint is met at or below the grey line at 0.
 - **Latent space**: where the elements' materials are heading on the material map. Red points are the elements, black stars the database's materials. As the run goes on, the points usually gather on the stars.
 - **Log**: everything the run writes, line by line.
 
@@ -525,10 +528,11 @@ How long a run takes depends mostly on Mesh dofs and Max iterations: a few minut
 
 **Show** chooses what the part shows:
 
-- **Material**: each element in its material's colour.
+- **Material**: each element in its material's colour, with a legend at the top left: each material and its share of the solid elements, largest first. Two runs compared get a column each, left and right. The legend shows only for a design of more than one material.
 - **Density**: how solid each element is, from empty to solid.
 - **Stress**: the stress in each element.
 - **Solid**: only which elements are solid, in one colour.
+- **Smooth (exported)**: the STL files of the run, once it has been exported (section 12). Greyed until then.
 
 **Open folder** opens the run's folder. **Delete this run** removes it, after asking.
 
@@ -545,7 +549,7 @@ The (i) at the top of the Summary says what each word means, and gives each cons
 
 ### 11.2 Comparing two runs
 
-Tick two runs and press **Compare**. A Compare window opens with their convergence on one plot, their latent spaces side by side, and their summaries in two columns. The 3D view shows both designs side by side, the first on the left. Close the Compare window, or click a run, to stop comparing.
+Tick two runs and press **Compare**. A Compare window opens with their convergence on one plot (each constraint by its name in the legend), their latent spaces side by side, and their summaries in two columns. The 3D view shows both designs side by side, the first on the left. Close the Compare window, or click a run, to stop comparing.
 
 ### 11.3 Results from elsewhere
 
@@ -564,7 +568,7 @@ The files are smoothed, so they do not show the staircase of the elements. Smoot
 
 While it works, a note at the top of the 3D view says it is exporting. When it is done, the note says how many files were saved, with a link, **Open folder**. The messages list every file with its volume next to the design's, and say whether each file is closed. *NOT closed* after a file means it has holes, which some printers and CAD programs refuse; a finer mesh usually helps.
 
-After an export, Results shows the smooth pieces on the part, each in its material's colour. Tick **Pull the material pieces apart** to see each piece on its own.
+After an export, Results shows the smooth pieces on the part, each in its material's colour: **Show** turns to **Smooth (exported)**. It is there for every run whose folder holds the exported files, also later, and greyed for a run not exported yet. Beside it, tick **Pull the material pieces apart** to set the pieces side by side in a row along x, the largest first, so each can be seen on its own. The legend at the top left names each piece, with its share of the volume.
 
 ## 13. Display options
 
@@ -591,11 +595,12 @@ These appear in the messages as **Error:** lines, and under *Cannot start:* in t
 - **boundary condition 2 (force): no selection named 'corner'**: a support or load acts on a selection that no longer exists. Edit it under Supports and loads and choose a selection under Where.
 - **selection clamp: ...**: a selection cannot be made as it is written, for example a file it needs is missing. Open it under Selections and correct it.
 - **material database: the structural model needs a Youngs_Modulus column**, or **material database: FailureFactorPNorm needs a Yield_Strength column**: the database lacks a property the problem needs (FailureFactorPNorm is the Failure factor (p-norm); Youngs_Modulus is Young's modulus). Add the column in the database editor, or choose another database or objective.
+- **material database my_materials.xlsx: D1: 'E0' is not a property LSR MMTO knows ...**: a column of the database has a name LSR MMTO does not know. Rename the column to one of the properties listed, or open the database with Edit..., which leaves the column out, and save it.
 - **material database my_materials.xlsx: ...**: a problem in the database itself, with the cell it is in, for example *C5 (Steel, Density): 'abc' is not a number*, *... is outside the allowed range*, *no units for Density*, or *Steel, Steel2 have the same value in every attribute, so the VAE cannot tell them apart*. Correct it in the database editor.
 - **constraint 1: the bound must be a nonzero number**: a constraint's limit is 0 or empty. Give it a limit under Formulation.
 - Warning **constraint 1 (Mass <= 0.0035): This limit allows at most 0.027% of the part even in the lightest material.**: the mass limit is less than 1 % of what the whole part weighs solid in the lightest material of the database, so almost no material can be used. Often the limit is in another unit than meant (g for kg, say). Check it under Formulation, and the project's units (section 4).
 - **the material volume fraction constraints use different tau (0.5, 1)**: give them all the same Material sharpness.
-- **STL file ... does not exist**: the part's file has moved or been deleted. Load it again under Geometry (section 5).
+- **STL file ... does not exist**: the part's file has moved or been deleted. Choose it again with File > Replace part... (section 5).
 
 ### 14.2 The material network
 
@@ -626,7 +631,7 @@ These appear in the messages as **Error:** lines, and under *Cannot start:* in t
 
 ### 14.6 Opening and saving
 
-- **STL not found: ...**, when a project opens: the part's file is not where the project says. Load it again under Geometry.
+- **STL not found: ...**, when a project opens: the part's file is not where the project says. Choose it again with File > Replace part... (section 5).
 - **3 settings missing from the file were set to their defaults; Save writes them.**: the project was made by an older version. Nothing to do; save to keep the values.
 - **Not saved: ...**: the project could not be written, for example the folder is read-only or the file is open elsewhere. Save it somewhere else with Save As.
 - **Start a project first: File > New or File > Open.**: the panel needs a project. Make or open one.

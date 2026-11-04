@@ -75,6 +75,7 @@ class DatabaseEditor(QtWidgets.QDialog):
         self.folder, self.path, self.unit_system = folder, path, unit_system
         self.copy = path is not None and in_shipped_folder(path)
         self.saved_path, self.network_set_aside, self.loaded = None, None, None
+        self.left_out = []                                          # the file's columns of no known property
         self.setWindowTitle("New database" if path is None else "Database")
         self.resize(900, 520)
         layout = QtWidgets.QVBoxLayout(self)
@@ -88,6 +89,11 @@ class DatabaseEditor(QtWidgets.QDialog):
         top.addWidget(self.where, stretch=2)
         top.addWidget(Info(HELP))
         layout.addLayout(top)
+        self.left_out_note = QtWidgets.QLabel()                     # columns of the file it does not know
+        self.left_out_note.setWordWrap(True)
+        self.left_out_note.setStyleSheet(GREY)
+        self.left_out_note.setVisible(False)
+        layout.addWidget(self.left_out_note)
 
         self.table = _Table()
         self.table.parent_editor = self
@@ -144,9 +150,18 @@ class DatabaseEditor(QtWidgets.QDialog):
         return name
 
     def _load(self, path):
-        from lsr_mmto.materials.databases import database_table, material_display
+        """The database at path in the table. Columns of no property LSR MMTO knows are left out and named
+        in a note over the table, so that Save writes the database without them."""
+        from lsr_mmto.materials.databases import ATTRIBUTES, database_table, material_display
         names, attributes, units, values = database_table(path)
         colours, labels = material_display(path)
+        known = [j for j, key in enumerate(attributes) if key in ATTRIBUTES]
+        self.left_out = [str(key).strip() for key in attributes if key not in ATTRIBUTES]
+        attributes, units, values = [attributes[j] for j in known], [units[j] for j in known], values[:, known]
+        if self.left_out:
+            self.left_out_note.setText(f"Left out, as LSR MMTO has no property of that name: "
+                                       f"{', '.join(self.left_out)}. Save writes the database without them.")
+            self.left_out_note.setVisible(True)
         self.loaded = (list(attributes), list(units), values.tolist())
         stem = os.path.splitext(os.path.basename(path))[0]
         self.name.setText(self._free_name(f"{stem} copy") if self.copy else stem)

@@ -66,7 +66,7 @@ def test_shipped_databases():
 def test_errors_name_the_cell():
     assert errors_of(GOOD) == ([], [])
     cases = [
-        (lambda r: r[0].__setitem__(2, "Youngs_Modulous"), "C1: 'Youngs_Modulous' is not a known attribute"),
+        (lambda r: r[0].__setitem__(2, "Youngs_Modulous"), "C1: 'Youngs_Modulous' is not a property LSR MMTO knows"),
         (lambda r: r[0].__setitem__(3, "E"), "D1: Youngs_Modulus appears twice"),
         (lambda r: r[0].__setitem__(1, None), "B1: no attribute name"),
         (lambda r: r[3].__setitem__(2, -5.0), "C4 (B, Youngs_Modulus): -5 is outside the allowed range"),
@@ -98,8 +98,10 @@ def test_errors_name_the_cell():
                       "names, row 2 the units, and the materials start in row 3"], errors
     errors, _ = errors_of([["Attributes", "Poissons_Ratio"], ["Material/Units", "-"], ["A", 0.3], ["B", 0.6]])
     assert "-1 < value < 0.5" in errors[0], errors
-    assert "ATTRIBUTES in lsr_mmto/materials/databases.py" in errors_of([["Attributes", "Colour"], ["u", "-"],
-                                                               ["A", 1], ["B", 2]])[0][0]
+    unknown = errors_of([["Attributes", "Colour"], ["u", "-"], ["A", 1], ["B", 2]])[0][0]
+    assert unknown.startswith("B1: 'Colour' is not a property LSR MMTO knows (Density, ") and \
+        unknown.endswith("Rename the column to one of them, or use Import..., which leaves out the columns it does "
+                         "not know.") and "lsr_mmto" not in unknown, unknown
 
 
 def test_warnings_and_aliases():

@@ -266,6 +266,33 @@ def test_light_by_default_and_dark_on_the_switch():
     w.close()
 
 
+def test_measure_white_in_the_dark_view():
+    """Measure's line and points are bright white in the dark view and #222222 in the light view, drawn in
+    either view and after a switch both ways; another dark drawing of the same colour is only lightened."""
+    import pyvista as pv
+    from gui import dark_and_light_3d_view as view_mode
+    w = window()
+    w._measure_points = [np.zeros(3), np.array([10.0, 0.0, 0.0])]
+    dark_grey = view_mode._rgb("#222222")
+
+    def colours():
+        return [tuple(round(c, 6) for c in w.plotter.actors[n].GetProperty().GetColor())
+                for n in ("measure_line", "measure_points")]
+    w._draw_measure()
+    assert colours() == [tuple(round(c, 6) for c in dark_grey)] * 2       # light view
+    w.theme_button.click()
+    assert colours() == [(1.0, 1.0, 1.0)] * 2                             # switched to dark
+    other = w.plotter.add_mesh(pv.Line((0, 0, 0), (0, 5, 0)), color="#222222", name="plain_dark_line")
+    w.plotter.render()
+    view_mode.apply(w.plotter, True)
+    assert 0.7 < max(other.GetProperty().GetColor()) < 1.0                # not white: no colour matching
+    w._draw_measure()
+    assert colours() == [(1.0, 1.0, 1.0)] * 2                             # drawn in the dark view
+    w.theme_button.click()
+    assert colours() == [tuple(round(c, 6) for c in dark_grey)] * 2       # and back
+    w.close()
+
+
 def test_message_panel_merges_repeats():
     """A line repeated at once is shown once, with how many times."""
     w = window()
