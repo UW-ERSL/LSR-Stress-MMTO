@@ -7,6 +7,9 @@ supports and loads, material attributes, quantities, settings) are made from the
 when the guide opens, with the same words the forms and their (i) buttons show, so they never fall
 behind the code.
 
+Help > Researcher guide shows, in the same window, the pages for changing the code (RESEARCHER_GUIDE,
+read from their files when it opens), one chapter each.
+
     python -m gui.user_guide_window --write     writes the lists into docs/user_guide.md as well,
                                                 for reading it outside the window
 """
@@ -16,7 +19,11 @@ import sys
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-GUIDE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs", "user_guide.md")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+GUIDE = os.path.join(ROOT, "docs", "user_guide.md")
+RESEARCHER_GUIDE = [os.path.join(ROOT, f) for f in ("docs/how_the_code_works.md", "docs/how_to_add_features.md",
+                                                  "docs/code_map.md", "docs/project_file_reference.md",
+                                                  "CONTRIBUTING.md")]           # its chapters, in this order
 LIST = re.compile(r"(<!-- list: (\w+) -->\n\n)(.*?)(<!-- end of list -->)", re.S)
 
 
@@ -82,6 +89,16 @@ def guide_text(path=GUIDE):
     return LIST.sub(lambda m: m.group(1) + list_text(m.group(2)) + m.group(4), text)
 
 
+def chapters_text(paths=RESEARCHER_GUIDE):
+    """The files as one text, each a chapter: its # title a ## section, its ## parts ### parts (every heading
+    one level down)."""
+    text = []
+    for path in paths:
+        with open(path, encoding="utf-8") as fh:
+            text.append(re.sub(r"^(#+) ", r"#\1 ", fh.read(), flags=re.M))
+    return "\n\n".join(text)
+
+
 def sections(text):
     """[(level, title, markdown)] of the guide: one entry per ## section and per ### part of one."""
     out, current = [], None
@@ -101,13 +118,13 @@ class UserGuideWindow(QtWidgets.QDialog):
     section at that part. The search lists the sections that hold every word typed and marks the
     words on the page."""
 
-    def __init__(self, parent=None, path=GUIDE):
+    def __init__(self, parent=None, title="User guide", text=None):
         super().__init__(parent)
         self.setWindowFlag(QtCore.Qt.WindowContextHelpButtonHint, False)
         self.setWindowFlag(QtCore.Qt.WindowMaximizeButtonHint, True)
-        self.setWindowTitle("User guide")
+        self.setWindowTitle(title)
         self.resize(1100, 760)
-        self.parts = sections(guide_text(path))
+        self.parts = sections(guide_text() if text is None else text)
         layout = QtWidgets.QVBoxLayout(self)
         self.search = QtWidgets.QLineEdit()
         self.search.setPlaceholderText("Search the guide")
@@ -206,9 +223,19 @@ class UserGuideWindow(QtWidgets.QDialog):
 
 def open_user_guide(window):
     """The guide, one window kept open beside the main window: Help > User guide and F1."""
-    guide = getattr(window, "_user_guide", None)
+    return _kept_open(window, "_user_guide", lambda: UserGuideWindow(window))
+
+
+def open_researcher_guide(window):
+    """The pages for changing the code, one window kept open beside the main window: Help > Researcher guide."""
+    return _kept_open(window, "_researcher_guide", lambda: UserGuideWindow(window, "Researcher guide", chapters_text()))
+
+
+def _kept_open(window, attr, make):
+    guide = getattr(window, attr, None)
     if guide is None:
-        guide = window._user_guide = UserGuideWindow(window)
+        guide = make()
+        setattr(window, attr, guide)
     guide.show()
     guide.raise_()
     guide.activateWindow()

@@ -48,7 +48,7 @@ from .supports_and_loads_panel import (KEEP_COLOUR, LOAD_COLOUR, OTHER_COLOUR, S
                                        bc_name, bc_value)
 from .pyto_ad_imports import (FILE_DIALOG_OPTIONS, MATERIAL_COLOR, UNIT_SYSTEMS, DisplayOptionsWindow,
                               MainWindow, ProjectsWindow, STLGeom, StructuralLoadsWindow, UnitsWindow)
-from .user_guide_window import open_user_guide
+from .user_guide_window import open_researcher_guide, open_user_guide
 
 APP = "LSR MMTO"
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -1591,6 +1591,7 @@ class MMTOWindow(MainWindow):
         guide = help_menu.addAction("&User guide")
         guide.setShortcut(QKeySequence.HelpContents)                # F1
         guide.triggered.connect(lambda: open_user_guide(self))
+        help_menu.addAction("&Researcher guide").triggered.connect(lambda: open_researcher_guide(self))
         help_menu.addAction(f"About {APP}").triggered.connect(self._about)
 
     def _about(self):

@@ -33,7 +33,7 @@ While no project is open, the 3D view shows the start page: **New project from a
 
 From left to right:
 
-- **LSR MMTO**, and the **File** and **Help** menus. File is described in section 3. Help has this **User guide** (also F1) and **About LSR MMTO**.
+- **LSR MMTO**, and the **File** and **Help** menus. File is described in section 3. Help has this **User guide** (also F1), the **Researcher guide** (how the code works and how to add to it, for changing LSR MMTO itself) and **About LSR MMTO**.
 - **Part** and **Design**, a two-way switch for the 3D view. **Part** shows the part, with its supports, loads and previews. **Design** shows the design of the last run you made or opened. Design is greyed until there is a design to show.
 - The **moon** button switches the 3D view to dark; it then shows a **sun**, which switches it back to light. The 3D view starts light. Only the background and the window's own drawings (the ruler, Measure, labels) change colour; the materials keep the colours the database gives them.
 - **Export STL** writes the design on the screen as STL files. It is greyed while there is no finished design on the screen. See section 12.
