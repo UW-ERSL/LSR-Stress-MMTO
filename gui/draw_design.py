@@ -167,16 +167,27 @@ def record(window, run, mesh, field="Material", shift=0.0, clim=None, name="desi
 
 
 def smooth(window, pieces, apart=False):
-    """STL files on the part, each in its colour: [(path, colour, label)]. apart moves each piece away from the
-    middle by a quarter of its distance from it, so each can be seen alone."""
+    """STL files on the part, each in its colour: [(path, colour, label)]. apart sets them side by side in a row
+    along x, largest first: the k-th moved by k times the part's width along x and a gap of a tenth of it,
+    so each can be seen alone. The legend gets each piece's label and its share of the volume. Returns the
+    pieces as drawn, largest first."""
     import pyvista as pv
-    meshes = [(pv.read(path), colour) for path, colour, _ in pieces]
-    middle = np.mean([m.center for m, _ in meshes], axis=0) if meshes else np.zeros(3)
-    for k, (m, colour) in enumerate(meshes):
-        if apart:
-            m = m.translate(0.25 * (np.asarray(m.center) - middle), inplace=False)
+    meshes = sorted([(pv.read(path), colour, label) for path, colour, label in pieces],
+                    key=lambda p: -abs(p[0].volume))
+    if not meshes:
+        return []
+    lo = min(m.bounds[0] for m, _, _ in meshes)
+    step = 1.1 * (max(m.bounds[1] for m, _, _ in meshes) - lo)
+    drawn = []
+    for k, (m, colour, _) in enumerate(meshes):
+        if apart and k:
+            m = m.translate((k * step, 0.0, 0.0), inplace=False)
         window.plotter.add_mesh(m, color=colour, smooth_shading=True, pickable=False, name=f"{PREFIX}smooth_{k}",
                                 reset_camera=False)
+        drawn.append(m)
+    add_legend(window, legend_rows([c for _, c, _ in meshes], [lab for _, _, lab in meshes],
+                                   [abs(m.volume) for m, _, _ in meshes]))
+    return drawn
 
 
 class MeshError(RuntimeError):

@@ -1640,6 +1640,35 @@ def test_export_stl():
         assert not res.field.model().item(res.field.findText(SMOOTH)).isEnabled()
 
 
+def test_pieces_pulled_apart_in_a_row():
+    """Pull the material pieces apart: the pieces side by side along x, largest first and in place, each next
+    one moved by the part's width and a tenth more, so no two overlap; the legend names them."""
+    import types
+    import pyvista as pv
+    from gui import draw_design
+    with scratch() as d:
+        boxes = {"small": (0, 4, 0, 10, 0, 1), "large": (0, 10, 0, 6, 0, 1), "middle": (4, 10, 6, 10, 0, 1)}
+        pieces = []
+        for k, (label, bounds) in enumerate(boxes.items()):
+            path = os.path.join(d, f"design_{label}.stl")
+            pv.Box(bounds=bounds).triangulate().save(path)
+            pieces.append((path, ["#ff0000", "#00ff00", "#0000ff"][k], label))
+        window = types.SimpleNamespace(plotter=pv.Plotter(off_screen=True), design_legend=[])
+        together = draw_design.smooth(window, pieces)
+        assert [m.bounds for m in together] == [pv.read(p).bounds for p in (pieces[1][0], pieces[0][0], pieces[2][0])]
+        window.design_legend.clear()
+        apart = draw_design.smooth(window, pieces, apart=True)
+        xs = [(m.bounds[0], m.bounds[1]) for m in apart]
+        assert xs[0] == (0.0, 10.0)                                           # the largest stays in place
+        assert np.allclose([lo for lo, _ in xs[1:]], [11.0, 26.0])            # moved by 1 x 11 and 2 x 11
+        for i in range(len(apart)):
+            for j in range(i + 1, len(apart)):
+                a, b = np.reshape(apart[i].bounds, (3, 2)), np.reshape(apart[j].bounds, (3, 2))
+                assert np.any((a[:, 1] < b[:, 0]) | (b[:, 1] < a[:, 0])), (i, j)   # apart along some axis
+        assert [label for _, label, _ in window.design_legend[0]] == ["large", "small", "middle"]
+        window.plotter.close()
+
+
 def test_constraints_named_in_the_plots():
     """The Progress plot of Current run names each constraint in the Formulation panel's words with its
     limit; the two-run plot of Results names them as the runs do (both names when the runs differ)."""

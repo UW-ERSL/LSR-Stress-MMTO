@@ -562,7 +562,7 @@ The files are smoothed, so they do not show the staircase of the elements. Smoot
 
 While it works, a note at the top of the 3D view says it is exporting. When it is done, the note says how many files were saved, with a link, **Open folder**. The messages list every file with its volume next to the design's, and say whether each file is closed. *NOT closed* after a file means it has holes, which some printers and CAD programs refuse; a finer mesh usually helps.
 
-After an export, Results shows the smooth pieces on the part, each in its material's colour: **Show** turns to **Smooth (exported)**. It is there for every run whose folder holds the exported files, also later, and greyed for a run not exported yet. Beside it, tick **Pull the material pieces apart** to see each piece on its own.
+After an export, Results shows the smooth pieces on the part, each in its material's colour: **Show** turns to **Smooth (exported)**. It is there for every run whose folder holds the exported files, also later, and greyed for a run not exported yet. Beside it, tick **Pull the material pieces apart** to set the pieces side by side in a row along x, the largest first, so each can be seen on its own. The legend at the top left names each piece, with its share of the volume.
 
 ## 13. Display options
 
