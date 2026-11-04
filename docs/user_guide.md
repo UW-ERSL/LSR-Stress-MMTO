@@ -151,7 +151,7 @@ The buttons next to the list:
 
 - **New database...** opens the database editor (section 6.3) on an empty database, to type or paste your materials in.
 - **Import...** makes a database from a table of materials you already have, in Excel (.xlsx or .xls) or CSV. The first column holds the material names and the first row the properties. A property can be written under any of the names LSR MMTO knows it by (for example Young's modulus as Youngs_Modulus, Youngs Modulus or E), and a unit may follow in brackets, as in *Density [kg/m^3]*. A second row of units, as in an LSR MMTO database, is read too. Columns that are not a property LSR MMTO knows are left out, and one message lists them. The database editor then opens with what was read, for you to check and save.
-- **Edit...** opens the database in the editor. One of your own is changed in place. One that comes with LSR MMTO is saved as a copy in your project's folder, and the project then uses the copy.
+- **Edit...** opens the database in the editor. One of your own is changed in place. One that comes with LSR MMTO is saved as a copy in your project's folder, and the project then uses the copy. A column that is not a property LSR MMTO knows is left out, and a note over the table names it; Save writes the database without it.
 - **Browse...** chooses a database file (.xlsx) from anywhere.
 - **Open in Excel** opens the database file in Excel, or whatever opens .xlsx files on your computer.
 - **Check again** reads the database again, for example after you changed it in Excel.
@@ -586,6 +586,7 @@ These appear in the messages as **Error:** lines, and under *Cannot start:* in t
 - **boundary condition 2 (force): no selection named 'corner'**: a support or load acts on a selection that no longer exists. Edit it under Supports and loads and choose a selection under Where.
 - **selection clamp: ...**: a selection cannot be made as it is written, for example a file it needs is missing. Open it under Selections and correct it.
 - **material database: the structural model needs a Youngs_Modulus column**, or **material database: FailureFactorPNorm needs a Yield_Strength column**: the database lacks a property the problem needs (FailureFactorPNorm is the Failure factor (p-norm); Youngs_Modulus is Young's modulus). Add the column in the database editor, or choose another database or objective.
+- **material database my_materials.xlsx: D1: 'E0' is not a property LSR MMTO knows ...**: a column of the database has a name LSR MMTO does not know. Rename the column to one of the properties listed, or open the database with Edit..., which leaves the column out, and save it.
 - **material database my_materials.xlsx: ...**: a problem in the database itself, with the cell it is in, for example *C5 (Steel, Density): 'abc' is not a number*, *... is outside the allowed range*, *no units for Density*, or *Steel, Steel2 have the same value in every attribute, so the VAE cannot tell them apart*. Correct it in the database editor.
 - **constraint 1: the bound must be a nonzero number**: a constraint's limit is 0 or empty. Give it a limit under Formulation.
 - **the material volume fraction constraints use different tau (0.5, 1)**: give them all the same Material sharpness.

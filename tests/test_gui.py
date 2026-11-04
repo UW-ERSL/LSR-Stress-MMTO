@@ -581,6 +581,48 @@ def test_import_database():
             assert m.import_database(table) is None
 
 
+def test_edit_a_database_with_an_unknown_column():
+    """A database with a column LSR MMTO does not know (E0): the check says so in plain words, and Edit...
+    opens it with that column left out and named in a note, and saves it without the column."""
+    import openpyxl
+    from lsr_mmto.materials.databases import check_database, database_table, write_database
+    from gui import database_editor as DE
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        assert w.save_project_as(os.path.join(d, "P", "P.mmto")) and w.own_folder()
+        path = write_database(os.path.join(d, "P", "materials", "extra.xlsx"), ["Density", "Youngs_Modulus"],
+                              ["t/mm^3", "MPa"], ["A", "B"], [None, None], ["#ff0000", "#0000ff"],
+                              [[7.8e-9, 200000.0], [2.7e-9, 70000.0]])
+        book = openpyxl.load_workbook(path)
+        sheet = book.worksheets[0]
+        for row, value in enumerate(("E0", "-", 1.0, 2.0), start=1):
+            sheet.cell(row=row, column=4, value=value)
+        book.save(path)
+        errors = check_database(path)[0]
+        assert len(errors) == 1 and errors[0].startswith("D1: 'E0' is not a property LSR MMTO knows (Density, "
+                                                         "Young's modulus, "), errors
+        assert errors[0].endswith("Rename the column to one of them, or use Import..., which leaves out the "
+                                  "columns it does not know.") and "lsr_mmto" not in errors[0]
+        m = materials_panel.MaterialsPanel(w, w.project)
+        m.set_database(path)
+        seen = {}
+
+        def look(e):
+            seen["heads"] = [e.table.horizontalHeaderItem(c).text() for c in range(e.table.columnCount())]
+            seen["note"] = e.left_out_note.text() if not e.left_out_note.isHidden() else ""
+            return 1
+        real = DE.DatabaseEditor.exec_
+        try:
+            DE.DatabaseEditor.exec_ = look
+            assert m.edit_database() == path
+        finally:
+            DE.DatabaseEditor.exec_ = real
+        assert seen["heads"] == ["Name", "Shown as", "Colour", "Density", "Young's modulus"]
+        assert seen["note"] == ("Left out, as LSR MMTO has no property of that name: E0. Save writes the "
+                                "database without them.")
+        assert check_database(path)[0] == [] and database_table(path)[1] == ["Density", "Youngs_Modulus"]
+
+
 def test_error_in_the_app_keeps_it_running():
     """An error in what a button does is shown and written to the log; the app keeps running."""
     shown = []
