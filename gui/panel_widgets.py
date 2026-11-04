@@ -6,42 +6,14 @@ the "i" button, OK and Cancel, colour swatches, and the project's database and i
 """
 import ast
 import math
-import operator
 import os
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
+from lsr_mmto.problem.selections import plain_value  # noqa: F401  (the one safe reading of typed text)
+
 
 GREY = "color: #666666;"
-
-_ARITHMETIC = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv,
-               ast.Pow: lambda a, b: float(a) ** float(b), ast.USub: operator.neg, ast.UAdd: operator.pos}
-
-
-def plain_value(node):
-    """The value of a parsed piece of text made only of numbers, text, True/False/None, lists, tuples,
-    dicts, and arithmetic on numbers: + - * / ** ( ) and pi (38/2, 2*pi*5). Nothing else is accepted: no
-    other names, no calls, no attributes. ValueError for anything else."""
-    if isinstance(node, ast.Constant) and not isinstance(node.value, complex):
-        return node.value
-    if isinstance(node, (ast.List, ast.Tuple)):
-        items = [plain_value(e) for e in node.elts]
-        return items if isinstance(node, ast.List) else tuple(items)
-    if isinstance(node, ast.Dict) and None not in node.keys:
-        return {plain_value(k): plain_value(v) for k, v in zip(node.keys, node.values)}
-    if isinstance(node, ast.Name) and node.id == "pi":
-        return math.pi
-    operands = [node.operand] if isinstance(node, ast.UnaryOp) else \
-        [node.left, node.right] if isinstance(node, ast.BinOp) else None
-    if operands is not None and type(node.op) in _ARITHMETIC:
-        values = [plain_value(x) for x in operands]
-        if not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in values):
-            raise ValueError("arithmetic is only on numbers")
-        try:
-            return _ARITHMETIC[type(node.op)](*values)
-        except (ZeroDivisionError, OverflowError) as e:
-            raise ValueError(str(e)) from None
-    raise ValueError("only numbers and + - * / ** ( ) pi are accepted")
 
 
 def number(text):

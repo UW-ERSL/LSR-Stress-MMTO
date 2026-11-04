@@ -22,7 +22,7 @@ A project is an LSR MMTO project file (.mmto): the layout of a PyTO-AD project f
 
 ## Selection types
 
-Lengths are numbers in model units, or `"<k>h"` for k times the largest element size. `pad` widens every bound; `"auto"` is half an element for nodes and 0 for element centres (faces and planes always half an element).
+Lengths are numbers in model units, or text in numbers, pi and h, the largest element size: `"<k>h"` for k times it, or arithmetic such as `"5.64 + 1h"`, worked out on each mesh. `pad` widens every bound; `"auto"` is half an element for nodes and 0 for element centres (faces and planes always half an element).
 
 | type | fields | selects |
 |---|---|---|

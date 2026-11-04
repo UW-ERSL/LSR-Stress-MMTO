@@ -48,15 +48,21 @@ Types (to_dict / from_dict give the JSON form a project file stores):
 A function selection runs the Python file it names when it is evaluated: open project
 files with function selections only from people you trust.
 
-Lengths (radius, inner_radius, along, distance, pad) are numbers in model units, or
-"<k>h" for k times the largest element size, e.g. near_face("zmin", "1.5h").
+Lengths (radius, inner_radius, along, distance, pad) are numbers in model units, or text
+with h, the largest element size: "<k>h" for k times it, e.g. near_face("zmin", "1.5h"), or
+plain arithmetic in numbers, pi and h, e.g. "5.64 + 1h", "2*h", "38/2 + 0.5h". Text with h
+is kept as it is and worked out on each mesh; arithmetic without h is a number at once.
 
 To add a type: subclass Selection, give it a TYPE, a fields tuple and, for each field, how
 it is given (field_kinds: a Field each, which the GUI's form is made from), write _mask or
 evaluate, and add it to tests/test_selections.py. from_dict finds it by TYPE.
 """
+import ast
 import importlib.util
+import math
+import operator
 import os
+import re
 
 import numpy as np
 
@@ -72,22 +78,76 @@ def _points(mesh, on):
     raise ValueError(f"on must be 'nodes' or 'elements', not {on!r}")
 
 
+_ARITHMETIC = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv,
+               ast.Pow: lambda a, b: float(a) ** float(b), ast.USub: operator.neg, ast.UAdd: operator.pos}
+
+
+def plain_value(node, names=None):
+    """The value of a parsed piece of text made only of numbers, text, True/False/None, lists, tuples,
+    dicts, and arithmetic on numbers: + - * / ** ( ) and the names in names (pi by default): 38/2,
+    2*pi*5. Nothing else is accepted: no other names, no calls, no attributes. ValueError otherwise."""
+    names = {"pi": math.pi} if names is None else names
+    if isinstance(node, ast.Constant) and not isinstance(node.value, complex):
+        return node.value
+    if isinstance(node, (ast.List, ast.Tuple)):
+        items = [plain_value(e, names) for e in node.elts]
+        return items if isinstance(node, ast.List) else tuple(items)
+    if isinstance(node, ast.Dict) and None not in node.keys:
+        return {plain_value(k, names): plain_value(v, names) for k, v in zip(node.keys, node.values)}
+    if isinstance(node, ast.Name) and node.id in names:
+        return names[node.id]
+    operands = [node.operand] if isinstance(node, ast.UnaryOp) else \
+        [node.left, node.right] if isinstance(node, ast.BinOp) else None
+    if operands is not None and type(node.op) in _ARITHMETIC:
+        values = [plain_value(x, names) for x in operands]
+        if not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in values):
+            raise ValueError("arithmetic is only on numbers")
+        try:
+            return _ARITHMETIC[type(node.op)](*values)
+        except (ZeroDivisionError, OverflowError) as e:
+            raise ValueError(str(e)) from None
+    raise ValueError(f"only numbers and + - * / ** ( ) {' '.join(names)} are accepted")
+
+
+_K_H = re.compile(r"((?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)\s*h\b")       # "1.5h", "1.5 h": 1.5 times h
+
+
+def _length_text(v):
+    """The parsed form of a length text, "1.5h" read as 1.5 * h; None when it does not parse."""
+    try:
+        return ast.parse(_K_H.sub(r"(\1*h)", v.strip()), mode="eval").body
+    except SyntaxError:
+        return None
+
+
+def _length_value(v, h):
+    """The length text v worked out with h (the largest element size), or ValueError."""
+    tree = _length_text(v)
+    try:
+        value = None if tree is None else plain_value(tree, {"pi": math.pi, "h": h})
+    except ValueError:
+        value = None
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
+        raise ValueError(f"length {v!r}: write a number, or a length in element sizes h, e.g. '1.5h' or "
+                         f"'5 + 1h'")
+    return value
+
+
 def _length(mesh, v):
-    """A length: a number in model units, or "<k>h" for k times the largest element size."""
+    """A length: a number in model units, or text in numbers, pi and h, the largest element size
+    ("1.5h", "5 + 1h"), worked out on this mesh."""
     if isinstance(v, str):
-        if not v.endswith("h"):
-            raise ValueError(f"length {v!r}: write a number, or e.g. '1.5h' for 1.5 element sizes")
-        return float(v[:-1] or 1.0) * float(np.max(mesh.elem_size))
+        return float(_length_value(v, float(np.max(mesh.elem_size))))
     return float(v)
 
 
 def _keep(v):
-    """A length as given: a number, or an "<k>h" string kept as text until there is a mesh."""
+    """A length as given: a number, or text with h in it kept as text until there is a mesh; text
+    without h (38/2) becomes its number."""
     if isinstance(v, str):
-        if not v.endswith("h"):
-            raise ValueError(f"length {v!r}: write a number, or e.g. '1.5h' for 1.5 element sizes")
-        float(v[:-1] or 1.0)
-        return v
+        value = float(_length_value(v, 1.0))
+        uses_h = any(isinstance(n, ast.Name) and n.id == "h" for n in ast.walk(_length_text(v)))
+        return v if uses_h else value
     return float(v)
 
 
