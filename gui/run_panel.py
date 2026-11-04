@@ -372,7 +372,8 @@ class RunWindow(StructuralTopOptWindow):
                 ax2.plot(cons[:, k], linestyle=":", label=names[k] if k < len(names) else f"constraint {k + 1}")
             ax2.axhline(0.0, color="grey", linewidth=0.8)
             ax2.set_ylabel("constraint (met at or below 0)")
-            ax2.legend(loc="center right", fontsize=8)
+            # under the plot: the names are long, and there they never cover the curves
+            ax2.legend(loc="upper center", bbox_to_anchor=(0.5, -0.16), fontsize=8, frameon=False)
         self.history_canvas.draw_idle()
         i = history.get("iteration", 0)                            # 0 is the starting design
         elapsed = time.time() - self.started
@@ -386,8 +387,10 @@ class RunWindow(StructuralTopOptWindow):
         """The design so far (main thread), as the window's design: shown at the first frame of a run,
         later only while the Design view is on (Part, in the top row, keeps the part in view)."""
         mesh = draw_design.mesh_of(self.window, self.project)           # the run's own copy: edits wait
-        x, material, colours = np.asarray(frame["x"]), np.asarray(frame["material"]), self.colours
-        self.window.set_design(lambda w: draw_design.live(w, mesh, x, material, colours), show=self.first_frame)
+        x, material, colours, labels = np.asarray(frame["x"]), np.asarray(frame["material"]), self.colours, \
+            list(self.latent_names)
+        self.window.set_design(lambda w: draw_design.live(w, mesh, x, material, colours, labels),
+                               show=self.first_frame)
         self.first_frame = False
 
     # ------------------------------------------------------------------ the live latent space

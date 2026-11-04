@@ -1644,6 +1644,59 @@ def test_constraints_named_in_the_plots():
     assert texts == ["a", "b", "Mass", "Cost / Volume"], texts
 
 
+def test_material_legend():
+    """The legend at the top left of the 3D view: each material present with its share, largest first; while a
+    run goes, by density among the elements drawn; on a finished run's Material view, by solid elements; two
+    runs compared, a left and a right column. Hidden on the Part view, on Density, and for one material; it
+    follows the light and dark view."""
+    import types
+    from gui import draw_design
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        w.show()
+        w.project.n_dof, w.project.single_layer = 3000, True
+        mesh = w.preview_mesh()
+        n = int(mesh.num_elems)
+        x = np.zeros(n)
+        x[:100], x[100:150], x[150:160] = 1.0, 0.8, 0.05                      # the last ones too faint to count
+        material = np.zeros(n, dtype=int)
+        material[100:] = 2
+        colours, labels = ["#ff0000", "#00ff00", "#0000ff"], ["Red", "Green", "Blue"]
+        w.set_design(lambda win: draw_design.live(win, mesh, x, material, colours, labels))
+        APP.processEvents()
+        assert w.legend.isVisible() and w.legend.geometry().topLeft() == QtCore.QPoint(12, 12)
+        (column,) = w.design_legend
+        assert [r[:2] for r in column] == [("#ff0000", "Red"), ("#0000ff", "Blue")]
+        assert np.allclose([r[2] for r in column], [100 / 140, 40 / 140])
+        text = w.legend.text()
+        assert "Red" in text and "71%" in text and "29%" in text and "Green" not in text
+        assert text.index("Red") < text.index("Blue")
+        w.set_dark_view(True)
+        assert w.legend.property("dark") is True
+        w.set_dark_view(False)
+        w.show_setup_view()
+        assert not w.legend.isVisible()                                       # the Part view
+        w.set_design(lambda win: draw_design.live(win, mesh, x, np.zeros(n, dtype=int), colours, labels))
+        assert not w.legend.isVisible()                                       # one material
+        solid = np.zeros(n, dtype=bool)
+        solid[:30] = True
+        indices = np.where(np.arange(n) < 10, 1, 0)
+        run = types.SimpleNamespace(material_colors=colours, material_labels=labels, material_indices=indices,
+                                    solid=solid, x_cont=x, result_info={})
+        w.set_design(lambda win: draw_design.record(win, run, mesh, "Material"))
+        assert w.legend.isVisible() and w.design_legend[0][0][1] == "Red" and np.isclose(w.design_legend[0][0][2], 2 / 3)
+        w.set_design(lambda win: draw_design.record(win, run, mesh, "Density"))
+        assert not w.legend.isVisible()
+        other = types.SimpleNamespace(**{**vars(run), "material_indices": np.full(n, 2)})
+
+        def both(win):
+            draw_design.record(win, run, mesh, "Material", name="design")
+            draw_design.record(win, other, mesh, "Material", shift=100.0, name="design_2")
+        w.set_design(both, wide=True)
+        assert w.legend.isVisible() and len(w.design_legend) == 2
+        assert "<i>left</i>" in w.legend.text() and "<i>right</i>" in w.legend.text() and "Blue" in w.legend.text()
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in [(k, v) for k, v in list(globals().items()) if k.startswith("test_")]:

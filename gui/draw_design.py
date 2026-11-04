@@ -3,9 +3,13 @@ draw_design.py
 ==============
 An optimized design on the 3D view: one block per element, drawn in place of the part.
 
-    live(window, mesh, x, material, colours)    while a run goes: density and material
+    live(window, mesh, x, material, colours, labels)   while a run goes: density and material
     record(window, run, mesh, field, ...)       a finished run: Material, Density, a result (Stress) or Solid
     run_mesh(window, folder, run)               the mesh a saved run was made on
+
+A drawing of materials (a run going, the Material view, the smooth pieces) also adds a column to
+window.design_legend: each material present with its colour, label and share, for the window's legend
+(one column per design drawn, so two runs compared get two).
 
 Every actor drawn here is named "result_...", so clearing a preview (actors named "mmto_...")
 never removes a design. The window's Setup view and Design view (main_window.py) decide
@@ -86,13 +90,35 @@ def draw(window, mesh, mask, colours=None, values=None, title=None, clim=None, s
     return window.plotter.add_mesh(_blocks(centres, h, {}), color=SOLID_COLOUR, **kwargs)
 
 
-def live(window, mesh, x, material, colours):
+def legend_rows(colours, labels, shares):
+    """[(colour, label, share)] of the materials with a share, largest first; shares as fractions of the whole.
+    labels: one per material (a material without one is named by its number)."""
+    shares = np.asarray(shares, dtype=float)
+    total = shares.sum()
+    if total <= 0:
+        return []
+    rows = [(colours[i % len(colours)], labels[i] if i < len(labels) else f"material {i}", shares[i] / total)
+            for i in range(len(shares)) if shares[i] > 0]
+    return sorted(rows, key=lambda r: -r[2])
+
+
+def add_legend(window, rows):
+    """A column of the window's legend (window.design_legend), when the window keeps one."""
+    if hasattr(window, "design_legend"):
+        window.design_legend.append(rows)
+
+
+def live(window, mesh, x, material, colours, labels=()):
     """A design while it runs: elements at FAINT density or more, in their material's colour at a
-    strength that follows their density (pale when half solid, full colour when solid)."""
+    strength that follows their density (pale when half solid, full colour when solid). Its legend:
+    each material's share of the density of those elements."""
     x = np.asarray(x, dtype=float).ravel()
     table = np.array([rgb(c) for c in colours])
-    per_element = faded(table[np.asarray(material) % len(table)], strength(x))
-    return draw(window, mesh, x >= FAINT, colours=per_element)
+    m = np.asarray(material).ravel() % len(table)
+    per_element = faded(table[m], strength(x))
+    on = x >= FAINT
+    add_legend(window, legend_rows(colours, list(labels), np.bincount(m[on], weights=x[on], minlength=len(table))))
+    return draw(window, mesh, on, colours=per_element)
 
 
 def result_of(run, field):
@@ -125,8 +151,11 @@ def record(window, run, mesh, field="Material", shift=0.0, clim=None, name="desi
     solid elements, on a scale) or Solid (its solid elements, one colour)."""
     if field == "Material":
         table = np.array([rgb(c) for c in run.material_colors]).astype(np.uint8)
-        return draw(window, mesh, run.solid, colours=table[np.asarray(run.material_indices) % len(table)],
-                    shift=shift, name=name)
+        m = np.asarray(run.material_indices).ravel() % len(table)
+        solid = np.asarray(run.solid, dtype=bool).ravel()
+        add_legend(window, legend_rows(list(run.material_colors), list(run.material_labels),
+                                       np.bincount(m[solid], minlength=len(table))))
+        return draw(window, mesh, run.solid, colours=table[m], shift=shift, name=name)
     if field == "Density":
         return draw(window, mesh, np.asarray(run.x_cont) >= FAINT, values=run.x_cont, title="Density",
                     clim=clim or (0.0, 1.0), shift=shift, name=name)

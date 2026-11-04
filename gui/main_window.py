@@ -763,6 +763,7 @@ class MMTOWindow(MainWindow):
         self.project, self.path, self._saved = None, None, None
         self._mesh, self._mesh_key, self.preview_on = None, None, False
         self.design_bars = set()                                    # colour scales of the design
+        self.design_legend = []                                     # its materials: a column per design drawn
         self._said = set()                                          # errors and warnings already shown
         self.message_text.setText(f"{APP}. File > New starts a project from an STL; File > Open opens a "
                                   f".mmto project.")
@@ -903,6 +904,11 @@ class MMTOWindow(MainWindow):
         self.export_button.setEnabled(False)
         self.export_button.clicked.connect(self.export_stl)
         row.addWidget(self.export_button)
+        self.legend = QtWidgets.QLabel(self.pv_frame)              # the design's materials, top left
+        self.legend.setObjectName("legend")
+        self.legend.setTextFormat(QtCore.Qt.RichText)
+        self.legend.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
+        self.legend.hide()
         self.banner = Banner(self.pv_frame)
         self.banner.linkActivated.connect(lambda _: self._open_exported_folder())
         self.stl_done.connect(self._stl_done, QtCore.Qt.QueuedConnection)
@@ -1056,9 +1062,10 @@ class MMTOWindow(MainWindow):
         """The 3D view dark or light (the default), its drawings recoloured to suit; material colours stay."""
         self.dark_view = bool(dark)
         view_mode.set_background(self.plotter, self.dark_view)
-        self.pv_frame.setProperty("dark", self.dark_view)
-        self.pv_frame.style().unpolish(self.pv_frame)
-        self.pv_frame.style().polish(self.pv_frame)
+        for widget in (self.pv_frame, self.legend):
+            widget.setProperty("dark", self.dark_view)
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
         self.theme_button.setIcon(icon("sun" if self.dark_view else "moon"))
         self.theme_button.setToolTip("Light 3D view" if self.dark_view else "Dark 3D view")
         try:
@@ -2005,6 +2012,35 @@ class MMTOWindow(MainWindow):
             except (KeyError, ValueError, TypeError):
                 pass
         self.design_bars.clear()
+        self.design_legend.clear()
+        self.show_legend()
+
+    def show_legend(self):
+        """The design's materials at the top left of the 3D view: a swatch, the label and the share of each,
+        largest first, from what the drawing put in design_legend (two columns, left and right, for two
+        runs side by side). Shown only on the Design view, and only for a design of more than one material."""
+        from .draw_design import rgb
+        columns = self.design_legend
+        if self.view != "design" or not any(len(c) >= 2 for c in columns):
+            self.legend.hide()
+            return
+        labels = list(dict.fromkeys(label for column in columns for _, label, _ in column))
+        colour = {label: c for column in reversed(columns) for c, label, _ in column}
+        shares = [{label: share for _, label, share in column} for column in columns]
+        two = len(columns) > 1
+        rows = ["<tr><td></td><td></td>" + "".join(f"<td align='right'><i>{side}</i></td>" for side in
+                                                    ("left", "right")[:len(columns)]) + "</tr>"] if two else []
+        for label in labels:
+            r, g, b = (int(v) for v in rgb(colour[label]))
+            rows.append(f"<tr><td><span style='color:#{r:02x}{g:02x}{b:02x}; font-size:13pt'>&#9632;</span></td>"
+                        f"<td style='padding-left:6px; padding-right:12px'>{html_escape(label)}</td>" +
+                        "".join(f"<td align='right' style='padding-left:10px'>{s.get(label, 0) * 100:.0f}%</td>"
+                                for s in shares) + "</tr>")
+        self.legend.setText(f"<table cellspacing='0' cellpadding='1'>{''.join(rows)}</table>")
+        self.legend.adjustSize()
+        self.legend.move(12, 12)
+        self.legend.show()
+        self.legend.raise_()
 
     def show_design_view(self):
         """The design in place of the part; previews are cleared. False when there is no design."""
@@ -2020,6 +2056,7 @@ class MMTOWindow(MainWindow):
             self._design(self)
         except Exception as e:                                      # noqa: BLE001
             self.message_text.append(f"The design could not be drawn: {e}")
+        self.show_legend()
         wide = getattr(self, "_wide", False)
         if wide or getattr(self, "_shown_wide", False):             # into or out of two designs: fit the view
             self.plotter.reset_camera()
