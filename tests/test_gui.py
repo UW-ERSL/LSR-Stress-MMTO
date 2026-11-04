@@ -2109,6 +2109,52 @@ def test_export_stl():
         assert not res.field.model().item(res.field.findText(SMOOTH)).isEnabled()
 
 
+def test_earlier_run_after_scale_part():
+    """A run made before Scale part is drawn and exported at the size it was run at: its mesh is the rebuilt one
+    scaled back (the run's element size, the same nodes), Export STL gives the same extent, and the window's own
+    mesh of the scaled part is left as it is. A part changed in another way still cannot show the run."""
+    import trimesh
+    from stl import mesh as stl_mesh
+    from gui import draw_design
+    from lsr_mmto.results import load_results, stl_export
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        w.project.n_dof, w.project.single_layer = 3000, True
+        w.project.settings["common"]["maxIterations"] = 40                 # a design with voids to export
+        assert w.save_project_as(os.path.join(d, "P", "P.mmto"))
+        r = w.open_run_panel()
+        assert r.start_optimization() and _wait(lambda: not r.optimization_running)
+        folder = r.save_dir
+
+        def exported_extent(mesh):
+            report = stl_export.export(load_results.load(os.path.join(folder, "run_data")), mesh, folder,
+                                       materials=False)
+            assert not report.whole_error, report.whole_error
+            return trimesh.load(os.path.join(folder, "design.stl"), force="mesh").bounds
+
+        run = load_results.load(os.path.join(folder, "run_data"))
+        before = draw_design.run_mesh(w, folder, run)
+        nodes, extent = np.array(before.node_xyz, dtype=float), exported_extent(before)
+        assert w.scale_part(2.0)
+        after = draw_design.run_mesh(w, folder, load_results.load(os.path.join(folder, "run_data")))
+        assert after is not before and np.allclose(after.elem_size, run.elem_size, rtol=1e-12, atol=0)
+        assert np.allclose(after.node_xyz, nodes, rtol=1e-12, atol=1e-12 * np.abs(nodes).max())
+        assert np.allclose(exported_extent(after), extent, rtol=1e-9, atol=1e-9 * np.abs(extent).max())
+        own = draw_design.mesh_of(w, w.project)                              # the scaled part's own mesh
+        assert np.allclose(own.elem_size, 2 * np.asarray(run.elem_size), rtol=1e-12, atol=0)
+
+        part = stl_mesh.Mesh.from_file(w.project.stl_path())                 # stretched along x only
+        part.vectors[:, :, 0] *= 1.5
+        part.save(w.project.stl_path())
+        draw_design.forget_meshes(w.project.stl_path())
+        w._mesh, w._mesh_key = None, None
+        try:
+            draw_design.run_mesh(w, folder, load_results.load(os.path.join(folder, "run_data")))
+            raise AssertionError("a run was shown on a part of another shape")
+        except draw_design.MeshError as e:
+            assert "its part has changed since the run" in str(e), e
+
+
 def test_pieces_pulled_apart_in_a_row():
     """Pull the material pieces apart: the pieces side by side along x, largest first and in place, each next
     one moved by the part's width and a tenth more, so no two overlap; the legend names them."""
