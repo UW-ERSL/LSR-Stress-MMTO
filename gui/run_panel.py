@@ -268,6 +268,7 @@ class RunWindow(StructuralTopOptWindow):
         self.max_iterations = int(self.project.settings["common"]["maxIterations"])
         self.epochs = int(self.project.settings["vae"].get("numEpochs") or 0)
         self.colours = self._material_colours()
+        self.constraint_names = self._constraint_names()
         self.optimization_running = True
         for widget in self.run_buttons:
             widget.setVisible(False)
@@ -366,8 +367,9 @@ class RunWindow(StructuralTopOptWindow):
         cons = np.array(history["constraints"], dtype=float)
         if cons.size:
             ax2 = ax.twinx()
+            names = getattr(self, "constraint_names", [])
             for k in range(cons.shape[1]):
-                ax2.plot(cons[:, k], linestyle=":", label=f"constraint {k + 1}")
+                ax2.plot(cons[:, k], linestyle=":", label=names[k] if k < len(names) else f"constraint {k + 1}")
             ax2.axhline(0.0, color="grey", linewidth=0.8)
             ax2.set_ylabel("constraint (met at or below 0)")
             ax2.legend(loc="center right", fontsize=8)
@@ -453,6 +455,15 @@ class RunWindow(StructuralTopOptWindow):
         ax.set_title(f"Iteration {frame['iteration']}: " + run_plots.latent_title(zr.shape[1], agreement), fontsize=9)
         self.latent_figure.tight_layout()
         self.latent_canvas.draw_idle()
+
+    def _constraint_names(self):
+        """The run's constraints in the Formulation panel's words, with their limits: Mass <= 0.4 t."""
+        from .formulation_panel import formulation_lines
+        try:
+            lines = formulation_lines(self.project.formulation, self.project)[1:]
+        except Exception:                                           # noqa: BLE001
+            return []
+        return [line.split(": ", 1)[1] if line.startswith("Constraint: ") else line for line in lines]
 
     def _material_colours(self):
         from lsr_mmto.materials.databases import material_display

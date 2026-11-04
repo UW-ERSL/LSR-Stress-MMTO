@@ -485,7 +485,7 @@ The 3D view shows the design as it grows: each element in its material's colour,
 
 The panel's tabs:
 
-- **Progress**: the objective, as a solid line, and each constraint, as a dotted line. A constraint is met at or below the grey line at 0.
+- **Progress**: the objective, as a solid line, and each constraint, as a dotted line named as in Formulation with its limit, for example *Mass <= 0.4 t*. A constraint is met at or below the grey line at 0.
 - **Latent space**: where the elements' materials are heading on the material map. Red points are the elements, black stars the database's materials. As the run goes on, the points usually gather on the stars.
 - **Log**: everything the run writes, line by line.
 
@@ -540,7 +540,7 @@ The (i) at the top of the Summary says what each word means, and gives each cons
 
 ### 11.2 Comparing two runs
 
-Tick two runs and press **Compare**. A Compare window opens with their convergence on one plot, their latent spaces side by side, and their summaries in two columns. The 3D view shows both designs side by side, the first on the left. Close the Compare window, or click a run, to stop comparing.
+Tick two runs and press **Compare**. A Compare window opens with their convergence on one plot (each constraint by its name in the legend), their latent spaces side by side, and their summaries in two columns. The 3D view shows both designs side by side, the first on the left. Close the Compare window, or click a run, to stop comparing.
 
 ### 11.3 Results from elsewhere
 

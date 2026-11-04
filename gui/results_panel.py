@@ -65,11 +65,24 @@ def convergence_overlaid(runs):
     for ax in (top, bottom):
         ax.grid(True, color="#dddddd", lw=0.5)
     handles = [Line2D([], [], color=c, lw=w, label=n) for n, c, w in zip(runs, RUN_COLOURS, (1.4, 3.2))]
-    handles += [Line2D([], [], color="#666666", ls=styles[i % len(styles)], lw=1.2, label=f"constraint {i + 1}")
+    handles += [Line2D([], [], color="#666666", ls=styles[i % len(styles)], lw=1.2, label=constraint_name(runs, i))
                 for i in range(n_cons)]
     fig.legend(handles=handles, loc="lower center", ncol=min(len(handles), 5), fontsize=8, frameon=False)
     fig.tight_layout(rect=(0, 0.08, 1, 1))
     return fig
+
+
+def constraint_name(runs, i):
+    """Constraint i of the runs by its name (run.constraint_label), both names when the runs differ."""
+    names = []
+    for run in runs.values():
+        try:
+            label = run.constraint_label(i) if i < len(run.constraint_spec) else None
+        except Exception:                                           # noqa: BLE001
+            label = None
+        if label and label not in names:
+            names.append(label)
+    return " / ".join(names) or f"constraint {i + 1}"
 
 
 def same_network(run1, run2):

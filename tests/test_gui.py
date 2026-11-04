@@ -1500,6 +1500,34 @@ def test_export_stl():
         res.apart.setChecked(True)
         assert w.view == "design" and any(str(n).startswith("result_smooth") for n in w.plotter.actors)
 
+
+def test_constraints_named_in_the_plots():
+    """The Progress plot of Current run names each constraint in the Formulation panel's words with its
+    limit; the two-run plot of Results names them as the runs do (both names when the runs differ)."""
+    import types
+    from gui import results_panel
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        r = w.open_run_panel()
+        r.project = w.project
+        r.constraint_names = r._constraint_names()
+        assert r.constraint_names[0].startswith("Material volume fraction of ") and \
+            r.constraint_names[0].endswith("<= 0.15"), r.constraint_names
+        r.max_iterations, r.started = 10, 0.0
+        r.update_history_plot({"objective": [1.0, 0.9], "constraints": [[0.1, 0.2, 0.3], [0.0, 0.1, 0.2]],
+                               "iteration": 1})
+        legend = [t.get_text() for t in r.history_figure.axes[1].get_legend().get_texts()]
+        assert legend == r.constraint_names
+        r.close()
+
+    def run(labels):
+        return types.SimpleNamespace(history={"J_phys": [1.0, 0.5], "constraints": [[0.0] * len(labels)] * 2},
+                                     constraint_spec=[[k] for k in labels], constraint_label=lambda i: labels[i])
+    fig = results_panel.convergence_overlaid({"a": run(["Mass", "Cost"]), "b": run(["Mass", "Volume"])})
+    texts = [t.get_text() for t in fig.legends[0].get_texts()]
+    assert texts == ["a", "b", "Mass", "Cost / Volume"], texts
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in [(k, v) for k, v in list(globals().items()) if k.startswith("test_")]:
