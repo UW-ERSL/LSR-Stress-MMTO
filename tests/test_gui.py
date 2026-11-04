@@ -1558,6 +1558,8 @@ def test_network_warning_continue_or_cancel():
         vae = VAEParams()
         for k, v in DATABASE_VAE["BM1_3Mats_2Attr"].items():
             setattr(vae, k, v)
+        torch.manual_seed(0)                                                 # the same untrained network
+        np.random.seed(0)
         enc = MaterialEncoder(vae)
         enc.readExcel(xlsx)
         torch.save(enc.vaeNet.state_dict(), xlsx[:-5] + ".nt")             # untrained
