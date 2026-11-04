@@ -1319,13 +1319,15 @@ class MMTOWindow(MainWindow):
         self.snap.setCurrentIndex(min(max(chosen, 0), self.snap.count() - 1))
 
     def part_extent_text(self):
-        """The part's extent in words, for the region form: x 0 to 200, y 0 to 200, z 0 to 1 mm."""
+        """The part's extent in words, for the region form: x 0 to 200, y 0 to 200, z 0 to 1 mm; a zero is 0
+        whatever the part's size (on a 0.029 m part: x 0 to 0.0290)."""
         b = self.part_bounds()
         if b is None:
             return ""
         lo, hi = b
         f = self.length_format(float(np.max(hi - lo)))
-        parts = ", ".join(f"{a} {f % lo[k]} to {f % hi[k]}" for k, a in enumerate("xyz"))
+        text = lambda v: "0" if float(f % v) == 0 else f % v
+        parts = ", ".join(f"{a} {text(lo[k])} to {text(hi[k])}" for k, a in enumerate("xyz"))
         return without_minus_zero(f"The part spans {parts} {self.length_unit()}".rstrip() + ".")
 
     def part_facts(self):

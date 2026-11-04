@@ -1262,6 +1262,16 @@ def test_scale():
         assert any(label.text() == w.part_extent_text() for label in r.findChildren(QtWidgets.QLabel))
     assert G.MMTOWindow.length_format(200) == "%.0f" and G.MMTOWindow.length_format(0.029) % 0.016 == "0.0160"
     assert G.MMTOWindow.length_format(20) % 16 == "16.0" and G.MMTOWindow.length_format(0.1) % 0.05 == "0.050"
+    import types
+    with scratch() as d:                                                      # 0 on a small part, the rest as before
+        w = opened("L-bracket", d)
+        for corners, text in (([[-1e-12, 0.002, 0], [0.029, 0.016, 0.001]],
+                               "x 0 to 0.0290, y 0.0020 to 0.0160, z 0 to 0.0010"),     # a hair below 0
+                              ([[-10, 0, 0], [116, 38, 1]], "x -10 to 116, y 0 to 38, z 0 to 1")):
+            vectors = np.array([corners], dtype=float)
+            w.stl_geom = types.SimpleNamespace(mesh=types.SimpleNamespace(vectors=vectors))
+            assert w.part_extent_text() == f"The part spans {text} mm.", w.part_extent_text()
+        w.stl_geom = None
 
 
 def test_snap_steps_follow_the_part():
@@ -1293,7 +1303,7 @@ def test_snap_steps_follow_the_part():
         need = w.snap.fontMetrics().horizontalAdvance(w.snap.currentText()) + w.snap.iconSize().width() + 30
         assert w.snap.width() >= need                                         # the longer step not cut short
         assert np.allclose(w.snapped([0.01637, 0.0, 0.0]), [0.01636, 0.0, 0.0])
-        assert w.extent.text() == "Part: x 0.0000 to 0.0290 \u00b7 y 0.0000 to 0.0100 \u00b7 z 0.0000 to 0.0010 mm"
+        assert w.extent.text() == "Part: x 0 to 0.0290 \u00b7 y 0 to 0.0100 \u00b7 z 0 to 0.0010 mm"    # a zero is 0
 
 
 def test_selection_form_extent_follows_the_part_and_units():
@@ -1311,7 +1321,7 @@ def test_selection_form_extent_follows_the_part_and_units():
         pv.Box(bounds=(0, 50, 0, 20, 0, 2)).triangulate().save(small)
         with answers(Box.Yes):
             assert w.replace_part(small)
-        assert form.extent.text() == "The part spans x 0.0 to 50.0, y 0.0 to 20.0, z 0.0 to 2.0 mm."
+        assert form.extent.text() == "The part spans x 0 to 50.0, y 0 to 20.0, z 0 to 2.0 mm."
         try:
             def apply_ips(self):
                 self.settings.update_settings("IPS", self.settings.temperature_unit, self.settings.angle_unit)
@@ -1320,7 +1330,7 @@ def test_selection_form_extent_follows_the_part_and_units():
             w.open_units_window()
         finally:
             G.UnitsWindow.exec_ = real_exec
-        assert form.extent.text() == "The part spans x 0.0 to 50.0, y 0.0 to 20.0, z 0.0 to 2.0 in."
+        assert form.extent.text() == "The part spans x 0 to 50.0, y 0 to 20.0, z 0 to 2.0 in."
         form.reject()
 
 
