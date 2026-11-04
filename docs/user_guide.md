@@ -263,7 +263,7 @@ The types of selection:
 - **Sphere**: every node within a **Radius** of a **Centre**.
 - **Cylinder**: every node inside a cylinder, or inside a tube if you give an **Inner radius**. Good for holes and bolt bores. Give a **Point on the axis**, the **Axis direction** (x, y, z, or a direction such as 1, 1, 0) and the **Radius**. Leave the two ends empty for a cylinder through the whole part. With the axis along x, y or z, the ends are coordinates, for example x from 22 to 61. Along a tilted axis they are distances from the point on the axis. *Example: the inside of a bolt hole of radius 5 through z at x 20, y 30: Point on the axis 20, 30, 0, Axis direction z, Radius 5.5, Inner radius 4.5.*
 - **Closest node**: the one node nearest to a **Point**. Tick **Surface nodes only** to stay on the outside of the part. Use it for a load at one point.
-- **Inside an STL**: every node inside a closed surface loaded from another STL file (**File**, with **Browse...**). Use it for a shape no other type describes, such as a collar around a bore.
+- **Inside an STL**: every node inside a closed surface loaded from another STL file (**File**, with **Browse...**). Use it for a shape no other type describes, such as a collar around a bore. **Move by** (x, y, z, default 0, 0, 0) moves the shape before nodes are selected, for example when the STL was saved shifted to 0, 0, 0. Preview draws the shape where it ends up.
 - **Combined selections**: two selections of the project joined, overlapped, or one taken from the other. **How** is one of **Join: in A or in B**, **Overlap: in both A and B**, or **A minus B: in A, not in B**. It follows them: change Selection A or Selection B later and this selection changes too. It appears once the project has at least two selections. *Example: the left face without its bottom rows: A minus B, with A a face and B the rows.*
 
 Three more types are made with the mouse, and show up when you open such a selection: **Picked faces** (faces you clicked), **Node numbers** (single nodes, by number; they stay right only while the mesh does not change) and **Dragged box** (a box dragged over the part in earlier versions; a project that has one still opens and runs as before).
@@ -288,7 +288,7 @@ Every selection type at a glance:
 | Sphere | Nodes within a radius of a point. |
 | Cylinder | Nodes inside a cylinder, or a tube if you give an inner radius. Good for holes and bolt bores. Leave the ends empty for a cylinder through the whole part. With the axis along x, y or z the ends are coordinates, e.g. x from 22 to 61; along a tilted axis they are distances from the point on the axis. |
 | Closest node | The one node closest to a point. |
-| Inside an STL | Nodes inside a closed surface loaded from an STL file. |
+| Inside an STL | Nodes inside a closed surface loaded from an STL file. Move by moves the shape first. |
 | Combined selections | Two selections of this project joined, overlapped or one taken from the other. It follows them: edit Selection A or Selection B later and this selection changes with it. |
 | Picked faces | Faces you clicked with the mouse. Snap distance is how close a node must be to a face to count, in element sizes; leave it empty for the usual 0.7. Made with the mouse; open it from Selections to change it. |
 | Dragged box | A box you dragged with the mouse, as the planes that bound it. Made with the mouse; open it from Selections to change it. |

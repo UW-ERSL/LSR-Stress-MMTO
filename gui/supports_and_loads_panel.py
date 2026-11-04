@@ -48,7 +48,8 @@ FORM = {
                   "inner_radius": "Inner radius (0 = solid)", "along": ("From", "To")}),
     "nearest": ("Closest node", "The one node closest to a point.",
                 {"point": "Point", "boundary": "Surface nodes only"}),
-    "inside_stl": ("Inside an STL", "Nodes inside a closed surface loaded from an STL file.", {"path": "File"}),
+    "inside_stl": ("Inside an STL", "Nodes inside a closed surface loaded from an STL file. Move by moves the "
+                   "shape first.", {"path": "File", "shift": "Move by"}),
     "combined": ("Combined selections", "Two selections of this project joined, overlapped or one taken from "
                  "the other. It follows them: edit Selection A or Selection B later and this selection changes "
                  "with it.",
@@ -177,8 +178,8 @@ def describe(selection):
     parts = []
     for field in selection.fields:
         value = getattr(selection, field)
-        if value == defaults.get(field) or value is None:
-            continue
+        if value is None or value == defaults.get(field) or show_value(value) == show_value(defaults.get(field)):
+            continue                                                # as by default (0, 0, 0 as a list too)
         if field == "along":
             axis = getattr(selection, "axis", None)
             if isinstance(axis, str) and axis in "xyz" and all(isinstance(v, (int, float)) for v in value):
@@ -415,8 +416,9 @@ class RegionDialog(QtWidgets.QDialog):
                 if how.optional:
                     box.setPlaceholderText("automatic")
             unit = self.length_unit if how.kind in ("length", "point") else ""
-            if unit or field == "pad":
-                widget = self._beside(widget, unit, TOLERANCE[1] if field == "pad" else None)
+            info = TOLERANCE[1] if field == "pad" else how.help
+            if unit or info:
+                widget = self._beside(widget, unit, info)
             self.form.addRow(field_label(kind, field), widget)
             self.inputs[field] = box
             for signal in (("textChanged", "currentTextChanged", "toggled")):

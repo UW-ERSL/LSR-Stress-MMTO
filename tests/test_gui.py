@@ -979,6 +979,35 @@ def test_region_preview_clears():
         assert not on_part()
 
 
+def test_inside_stl_move_by():
+    """Inside an STL has a Move by row (x, y, z with the length unit and an (i)); the selection keeps the move,
+    the project file and the code line only when it is not zero, and the preview draws the moved shape."""
+    from lsr_mmto.problem import selections as S
+    airplane = Project.load(os.path.join(PROJECTS, "Airplane bracket.mmto"))
+    collar = airplane.selections["collar"]
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        r = SP.RegionDialog(w, airplane, "collar")
+        box = r.inputs["shift"]
+        assert r.form.labelForField(box.parentWidget()).text() == "Move by" and box.text() == "0, 0, 0"
+        row = [x for x in box.parentWidget().children() if isinstance(x, QtWidgets.QWidget)]
+        assert any(isinstance(x, QtWidgets.QLabel) and x.text() == "mm" for x in row)
+        assert any(isinstance(x, SP.Info) and x.toolTip().startswith("Moves the shape before nodes") for x in row)
+        assert r.from_form().to_dict() == collar.to_dict() and "shift" not in collar.to_dict()
+        assert SP.describe(collar).startswith("Inside an STL: File ") and "Move by" not in SP.describe(collar)
+        box.setText("10, 0, 0")
+        moved = r.selection()
+        assert moved.shift == [10.0, 0.0, 0.0] and moved.to_dict()["shift"] == [10.0, 0.0, 0.0]
+        assert SP.describe(moved).endswith("Move by 10, 0, 0")
+        r.tabs.setCurrentIndex(1)
+        assert r.code.text().endswith("shift=[10.0, 0.0, 0.0])")
+        assert SP.parse_selection(r.code.text()).to_dict() == moved.to_dict()
+        mesh = w.preview_mesh()
+        here = G.place_outline(collar, mesh, airplane.base_dir)
+        there = G.place_outline(moved, mesh, airplane.base_dir)
+        assert np.allclose(np.array(there.bounds) - np.array(here.bounds), [10, 10, 0, 0, 0, 0])
+
+
 def test_enter_previews():
     """Enter in the Selection form and in the support or load form checks what was typed and shows it on
     the part; the window stays open, a mistake shows in its message line; only OK saves and closes."""

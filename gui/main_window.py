@@ -220,9 +220,10 @@ def in_open_strip(widget):
         return False
 
 
-def place_outline(selection, mesh):
+def place_outline(selection, mesh, base_dir=None):
     """A solid showing a selection's shape (drawn as its edges), or None for one with no shape of its own (picked
-    faces, rows, a node, a list of numbers). selection has every selection(name) in it resolved."""
+    faces, rows, a node, a list of numbers). selection has every selection(name) in it resolved; base_dir is
+    where the files a selection names (an STL) are found."""
     import pyvista as pv
     from lsr_mmto.problem import selections as S
     xyz = np.asarray(mesh.node_xyz, dtype=float)
@@ -230,8 +231,10 @@ def place_outline(selection, mesh):
     h = 0.5 * np.asarray(mesh.elem_size, dtype=float)
     kind = selection.TYPE
     if kind in ("union", "intersect", "difference"):
-        parts = [o for o in (place_outline(s, mesh) for s in selection.parts) if o is not None]
+        parts = [o for o in (place_outline(s, mesh, base_dir) for s in selection.parts) if o is not None]
         return parts[0].merge(parts[1:]) if len(parts) > 1 else (parts[0] if parts else None)
+    if kind == "inside_stl":                                        # the surface, moved as the selection moves it
+        return selection.surface(base_dir)
     if kind == "sphere":
         return pv.Sphere(radius=S._length(mesh, selection.radius), center=selection.center,
                          theta_resolution=12, phi_resolution=8)              # a light wire ball
@@ -1916,7 +1919,8 @@ class MMTOWindow(MainWindow):
         (place_outline); nothing for a place without one. colour is the nodes', kept for the call."""
         from lsr_mmto.problem import selections as S
         self.plotter.remove_actor(name, reset_camera=False)
-        shape = place_outline(S.resolved(selection, self.project.selections), self.preview_mesh())
+        shape = place_outline(S.resolved(selection, self.project.selections), self.preview_mesh(),
+                              self.project.base_dir)
         if shape is not None:
             self.plotter.add_mesh(shape, color=OUTLINE_COLOUR, style="wireframe", line_width=2, pickable=False, name=name,
                                   reset_camera=False)       # edges, not a see-through surface: transparency
