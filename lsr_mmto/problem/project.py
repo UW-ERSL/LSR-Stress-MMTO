@@ -67,6 +67,26 @@ SCHEMA_VERSION = 1
 # changes: raise SCHEMA_VERSION and add the function here; old files then still load.
 _UPGRADES = {}
 
+# The steps of a project's setup, each with what makes it begun: an error Project.validate finds names its
+# step (Problem.step), so the window can mark the step it is about; a step not begun is never marked wrong.
+STEPS = {"part": lambda p: True,
+         "units": lambda p: p.units != "none",
+         "materials": lambda p: p.database is not None,
+         "supports and loads": lambda p: bool(p.bcs),
+         "formulation": lambda p: bool(p.formulation.get("objective")),
+         "settings": lambda p: True}
+
+
+class Problem(str):
+    """An error Project.validate finds: its text, with .step, the step of STEPS it is about."""
+
+    def __new__(cls, step, text):
+        if step not in STEPS:
+            raise ValueError(f"{step!r} is not a step of the setup ({', '.join(STEPS)})")
+        problem = super().__new__(cls, text)
+        problem.step = step
+        return problem
+
 
 def network_shape(path):
     """(inputs, hidden width, latent dimension) of the VAE saved in path, read from its weights;
@@ -270,67 +290,68 @@ class Project:
         return path, None
 
     def validate(self):
-        """Problems that can be found without building the mesh; an empty list means none."""
+        """Problems that can be found without building the mesh; an empty list means none. Each is a
+        Problem: its text, and the step of the setup it is about (Problem.step)."""
         errors = []
         if not os.path.isfile(self.stl_path()):
-            errors.append(f"STL file {self.stl_path()} does not exist")
+            errors.append(Problem("part", f"STL file {self.stl_path()} does not exist"))
         if self.physics not in PHYSICS:
-            errors.append(f"physics {self.physics!r}: one of {', '.join(PHYSICS)}")
+            errors.append(Problem("part", f"physics {self.physics!r}: one of {', '.join(PHYSICS)}"))
         if self.units != "none" and self.units not in UNIT_SYSTEMS:
-            errors.append(f"units {self.units!r}: one of {', '.join(UNIT_SYSTEMS)} or 'none'")
+            errors.append(Problem("units", f"units {self.units!r}: one of {', '.join(UNIT_SYSTEMS)} or 'none'"))
         for i, bc in enumerate(self.bcs, 1):
             where = f"boundary condition {i} ({bc.get('kind')})"
             if bc.get("kind") not in BC_KINDS:
-                errors.append(f"{where}: kind must be one of {', '.join(BC_KINDS)}")
+                errors.append(Problem("supports and loads", f"{where}: kind must be one of {', '.join(BC_KINDS)}"))
                 continue
             if bc.get("on") not in self.selections:
-                errors.append(f"{where}: no selection named {bc.get('on')!r}")
-            errors += [f"{where}: {e}" for e in BC_KINDS[bc["kind"]].errors(bc)]
+                errors.append(Problem("supports and loads", f"{where}: no selection named {bc.get('on')!r}"))
+            errors += [Problem("supports and loads", f"{where}: {e}") for e in BC_KINDS[bc["kind"]].errors(bc)]
             if self.physics in PHYSICS and BC_KINDS[bc["kind"]].field not in PHYSICS[self.physics].FIELDS:
-                errors.append(f"{where}: not a kind of {self.physics} support or load")
+                errors.append(Problem("supports and loads", f"{where}: not a kind of {self.physics} support or load"))
         roles = {BC_KINDS[bc["kind"]].role for bc in self.bcs if bc.get("kind") in BC_KINDS}
         needs = PHYSICS[self.physics].NEEDS if self.physics in PHYSICS else ("support", "load")
         for role in needs:                                        # the physics says what a problem must have
             if role not in roles:
-                errors.append(f"no {role}s")
+                errors.append(Problem("supports and loads", f"no {role}s"))
         for n in self.keep_solid_names:
             if n not in self.selections:
-                errors.append(f"keep_solid: no selection named {n!r}")
+                errors.append(Problem("supports and loads", f"keep_solid: no selection named {n!r}"))
         for n, sel in self.selections.items():                   # selections inside selections: known, no loops
             try:
                 S.resolved(sel, self.selections, (n,))
             except ValueError as e:
-                errors.append(f"selection {n}: {e}")
+                errors.append(Problem("supports and loads", f"selection {n}: {e}"))
         if self.database is None:
-            errors.append("no material database")
+            errors.append(Problem("materials", "no material database"))
         else:
             xlsx, _ = self.database_paths()
             db_errors = check_database(xlsx)[0]
-            errors += [f"material database {os.path.basename(xlsx)}: {e}" for e in db_errors]
+            errors += [Problem("materials", f"material database {os.path.basename(xlsx)}: {e}") for e in db_errors]
             if not db_errors:
                 errors += self._missing_columns(database_attributes(xlsx))
                 errors += self.vae_check()[0]
         for section, values in self.settings.items():
             if section not in DEFAULT_SETTINGS:
-                errors.append(f"settings: unknown section {section!r}")
+                errors.append(Problem("settings", f"settings: unknown section {section!r}"))
                 continue
             for k, v in values.items():
                 entry = BY_KEY.get(k)
                 if entry is None or entry.section != section:
-                    errors.append(f"settings.{section}: unknown setting {k!r}")
+                    errors.append(Problem("settings", f"settings.{section}: unknown setting {k!r}"))
                 elif entry.choices is not None and v is not None and v not in entry.choices.__members__:
-                    errors.append(f"settings.{section}.{k}: {v!r} is not one of "
-                                  f"{', '.join(entry.choices.__members__)}")
+                    errors.append(Problem("settings", f"settings.{section}.{k}: {v!r} is not one of "
+                                                      f"{', '.join(entry.choices.__members__)}"))
         obj = self.formulation.get("objective")
         if not obj:
-            errors.append("no objective")
+            errors.append(Problem("formulation", "no objective"))
         else:
             if obj.get("sense", "minimize") != "minimize":
-                errors.append("objective: only 'minimize' for now")
+                errors.append(Problem("formulation", "objective: only 'minimize' for now"))
             try:
                 to_params_form(obj.get("expression"), "objective")
             except ValueError as e:
-                errors.append(f"objective: {e}")
+                errors.append(Problem("formulation", f"objective: {e}"))
         taus = set()
         for c in self.formulation.get("constraints", []):
             try:
@@ -341,25 +362,29 @@ class Project:
                 taus.add(float(kwargs.get("tau", default_of(name, "tau"))))
         if len(taus) > 1:
             listed = ", ".join(f"{t:g}" for t in sorted(taus))
-            errors.append(f"the material volume fraction constraints use different tau ({listed}); one tau "
-                          f"applies to all of them: use the same value")
+            errors.append(Problem("formulation", f"the material volume fraction constraints use different tau "
+                                                 f"({listed}); one tau applies to all of them: use the same value"))
         if any(t <= 0 for t in taus):
-            errors.append("tau must be greater than 0")
+            errors.append(Problem("formulation", "tau must be greater than 0"))
         for i, c in enumerate(self.formulation.get("constraints", []), 1):
             if c.get("op") != "<=":
-                errors.append(f"constraint {i}: only '<=' for now")
+                errors.append(Problem("formulation", f"constraint {i}: only '<=' for now"))
             if not c.get("bound"):
-                errors.append(f"constraint {i}: the bound must be a nonzero number")
+                errors.append(Problem("formulation", f"constraint {i}: the bound must be a nonzero number"))
             try:
                 to_params_form(c.get("expression"), "constraint", c.get("bound") or 1.0)
             except ValueError as e:
-                errors.append(f"constraint {i}: {e}")
+                errors.append(Problem("formulation", f"constraint {i}: {e}"))
         return errors
+
+    def set_up(self, step):
+        """True once the step of STEPS is begun (units chosen, a database, a support or load, an objective)."""
+        return STEPS[step](self)
 
     def _missing_columns(self, columns):
         """Columns the physics and the objective and constraints read that the database lacks."""
         from lsr_mmto.formulation.quantities import QUANTITIES
-        out = [f"material database: the {self.physics} model needs a {c} column"
+        out = [Problem("materials", f"material database: the {self.physics} model needs a {c} column")
                for c in (PHYSICS[self.physics].PROPERTIES if self.physics in PHYSICS else ()) if c not in columns]
         by_name = {q.name: q for q in QUANTITIES}
         f = self.formulation
@@ -371,7 +396,7 @@ class Project:
                 continue                                    # a bad expression is reported on its own
             for c in (q.needs if q else ()):
                 if c not in columns:
-                    out.append(f"material database: {q.name} needs a {c} column")
+                    out.append(Problem("materials", f"material database: {q.name} needs a {c} column"))
         return out
 
     def _unit_warnings(self, xlsx):
@@ -465,8 +490,9 @@ class Project:
         train = not vae.get("use_pretrained_vae", True) or not exists
         errors, warnings_ = [], []
         if train and shipped:
-            errors.append(f"a run would train a new VAE and save it over the shipped {name}; to train a different "
-                          f"network, copy {os.path.basename(xlsx)} to a folder of your own and use the copy")
+            errors.append(Problem("materials", f"a run would train a new VAE and save it over the shipped {name}; to "
+                                               f"train a different network, copy {os.path.basename(xlsx)} to a "
+                                               f"folder of your own and use the copy"))
         elif train and exists:
             warnings_.append(f"{name} exists: the next run trains a new network and replaces it (the old one is "
                              f"kept as {os.path.splitext(name)[0]}.previous.nt). To keep both, copy "
@@ -474,17 +500,19 @@ class Project:
         if not train:
             shape = network_shape(nt)
             if shape is None:
-                errors.append(f"{name} could not be read as a VAE network")
+                errors.append(Problem("materials", f"{name} could not be read as a VAE network"))
             else:
                 n_in, hidden, latent = shape
                 n_columns = len(database_attributes(xlsx))
                 if n_in != n_columns:
-                    errors.append(f"{name} takes {n_in} attributes, but {os.path.basename(xlsx)} has {n_columns}: "
-                                  f"it was trained on another database")
+                    errors.append(Problem("materials", f"{name} takes {n_in} attributes, but "
+                                                       f"{os.path.basename(xlsx)} has {n_columns}: it was trained on "
+                                                       f"another database"))
                 for key, have in (("latentDim", latent), ("vae_hiddenDim", hidden)):
                     if vae.get(key) is not None and int(vae[key]) != have:
-                        errors.append(f"{key} is {vae[key]}, but {name} was trained with {have}: set it to {have}, "
-                                      f"or switch off use_pretrained_vae to train a new network")
+                        errors.append(Problem("settings", f"{key} is {vae[key]}, but {name} was trained with {have}: "
+                                                          f"set it to {have}, or switch off use_pretrained_vae to "
+                                                          f"train a new network"))
         d_eff, n_z = recommended_latent_dim(xlsx)
         latent = vae.get("latentDim")
         if latent is not None and int(latent) > n_z:

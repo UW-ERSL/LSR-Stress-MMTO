@@ -62,6 +62,8 @@ ICON = os.path.join(ASSETS, "lsr_mmto.ico")
 STYLE = os.path.join(ASSETS, "app_style.qss")           # the window's colours and shapes
 ICONS = os.path.join(ASSETS, "icons")                    # the buttons' pictures
 SIDEBAR_WORDS = {"Run": "Current run"}                   # a sidebar button's text, where not its name
+SIDEBAR_STEPS = {"Units": "units", "Materials": "materials", "Supports and loads": "supports and loads",
+                 "Formulation": "formulation"}           # the buttons marked by their step's check (Project.STEPS)
 SIDEBAR_ICONS = {"Units": "units", "Materials": "materials", "Supports and loads": "supports",
                  "Formulation": "formulation", "Settings": "settings", "Run": "run", "Results": "results",
                  "Display Options": "display"}
@@ -256,8 +258,8 @@ class StartPage(QtWidgets.QFrame):
         grid.setHorizontalSpacing(10)
         grid.setVerticalSpacing(10)
         self.examples = {}
-        shown = [(name, os.path.join(EXAMPLES, f)) for name, f in START_EXAMPLES if os.path.isfile(os.path.join(EXAMPLES, f))]
-        for k, (name, path) in enumerate(shown):
+        shown = [(name, os.path.join(EXAMPLES, f)) for name, f in START_EXAMPLES]
+        for k, (name, path) in enumerate([(n, f) for n, f in shown if os.path.isfile(f)]):
             self.examples[name] = self._button(name, "example", lambda p=path: window.open_project(p))
             grid.addWidget(self.examples[name], k // 2, k % 2)
         col.addLayout(grid)
@@ -785,10 +787,22 @@ class MMTOWindow(MainWindow):
         return btn
 
     def set_sidebar_icon(self, button_text, icon_type):
-        """A done step shows a check; otherwise the button keeps its own picture."""
-        btn = self.sidebar_buttons.get(button_text)
-        if btn is not None:
-            btn.setIcon(icon("check") if icon_type == "check" else icon(SIDEBAR_ICONS.get(button_text, "units")))
+        """PyTO-AD's own marks (its Units dialog ticks Units) give way to update_side_marks."""
+        self.update_side_marks()
+
+    def update_side_marks(self):
+        """The buttons of SIDEBAR_STEPS marked by the run's own check (Project.validate, as Run uses it): a
+        tick once the step is set up and the check finds nothing wrong in it, a red mark when it finds an
+        error in it, and the button's own picture while the step is not set up yet. Warnings mark nothing."""
+        p = getattr(self, "project", None)                          # (PyTO-AD may ask before there is one)
+        wrong = {e.step for e in p.validate()} if p is not None else set()
+        for name, step in SIDEBAR_STEPS.items():
+            btn = getattr(self, "sidebar_buttons", {}).get(name)
+            if btn is None:
+                continue
+            mark = "plain" if p is None or not p.set_up(step) else "error" if step in wrong else "check"
+            btn.setIcon(icon(SIDEBAR_ICONS[name] if mark == "plain" else mark))
+            btn.setProperty("mark", mark)
 
     def _project_or_not(self):
         """With no project open, the start page over the 3D view, and the side buttons, Run, Export STL and
@@ -1432,6 +1446,8 @@ class MMTOWindow(MainWindow):
         return self.project is not None and (self.path is None or self._state() != self._saved)
 
     def _refresh_title(self):
+        """The title, and the side buttons' marks, after any change of the project."""
+        self.update_side_marks()
         if self.project is None:
             self.setWindowTitle(APP)
             return
@@ -2160,8 +2176,9 @@ class MMTOWindow(MainWindow):
             if answer != QtWidgets.QMessageBox.Yes:
                 return False
         if stl is None:
-            stl, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Replace part", os.path.dirname(self.project.stl_path()),
-                                                           "STL Files (*.stl *.STL)", options=FILE_DIALOG_OPTIONS)
+            here = os.path.dirname(self.project.stl_path())
+            stl, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Replace part", here, "STL Files (*.stl *.STL)",
+                                                           options=FILE_DIALOG_OPTIONS)
             if not stl:
                 return False
         stl = os.path.abspath(stl)

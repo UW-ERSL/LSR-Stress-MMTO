@@ -99,6 +99,50 @@ def test_validate():
         assert says in errors, (says, errors)
 
 
+def test_every_error_names_its_step():
+    """Every error validate can give carries the step of the setup it is about, as data (Problem.step): each
+    place in validate, _missing_columns and vae_check that adds an error makes a Problem with a step of STEPS
+    (read from the code, so a new error cannot leave it out), and the errors of broken projects all have one."""
+    import ast
+    import inspect
+    import textwrap
+    from lsr_mmto.problem import project as P
+    for method in (P.Project.validate, P.Project._missing_columns, P.Project.vae_check):
+        tree = ast.parse(textwrap.dedent(inspect.getsource(method)))
+        lists = {"errors", "out"} if method is not P.Project.vae_check else {"errors"}
+        added = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "append" \
+                    and isinstance(node.func.value, ast.Name) and node.func.value.id in lists:
+                added.append(node.args[0])
+            if isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name) and node.target.id in lists:
+                value = node.value
+                added.append(value.elt if isinstance(value, ast.ListComp) else value)
+        assert added, method.__name__
+        for value in added:
+            text = ast.unparse(value)
+            if isinstance(value, ast.Call) and getattr(value.func, "id", None) == "Problem":
+                step = value.args[0]
+                assert isinstance(step, ast.Constant) and step.value in P.STEPS, text
+            else:                                           # the errors of the other two, which make Problems
+                assert text in ("self._missing_columns(database_attributes(xlsx))", "self.vae_check()[0]"), text
+    p = coded_ubracket()
+    p.bcs.append({"kind": "fixed", "on": "nowhere", "dofs": "xyz"})
+    p.bcs.append({"kind": "nonsense", "on": "bottom"})
+    p.constraint("Mass()", ">=", 0.0)
+    p.keep_solid_names.append("ghost")
+    p.units, p.physics, p.stl = "Imperial", "acoustic", "missing.stl"
+    p.settings["nowhere"] = {}
+    p.settings["common"]["no_such_setting"] = 1
+    empty = Project("empty", stl="UBracket.STL", base_dir=UBRACKET)
+    errors = p.validate() + empty.validate()
+    assert len(errors) >= 12, errors
+    for e in errors:
+        assert isinstance(e, P.Problem) and e.step in P.STEPS, e
+    steps = {e.step for e in errors}
+    assert steps >= {"part", "units", "supports and loads", "materials", "formulation", "settings"}, steps
+
+
 def test_build_coded():
     p = coded_ubracket()
     mesh, mat_prop, bcs, body_force, to_params, vae_params = p.build(verbose=False)

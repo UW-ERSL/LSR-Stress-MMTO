@@ -41,7 +41,7 @@ From left to right:
 
 ### 2.2 The buttons on the right
 
-**Units**, **Materials**, **Supports and loads**, **Formulation**, **Settings**, **Current run**, **Results** and **Display Options**. Units shows a green tick once the units are applied.
+**Units**, **Materials**, **Supports and loads**, **Formulation**, **Settings**, **Current run**, **Results** and **Display Options**. Units, Materials, Supports and loads and Formulation show how far each step is: a green tick once it is set up and nothing in it stops a run, a red mark when something in it would stop a run (the messages say what, as an **Error**), and the button's own picture while it is not set up yet. A warning does not change the mark.
 
 Units, Materials, Formulation, Settings and Display Options open as windows with OK and Cancel (or Apply and Close): OK puts your changes into the project, and Cancel leaves the project as it was.
 

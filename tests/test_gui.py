@@ -304,6 +304,45 @@ def test_start_page():
     w.close()
 
 
+def test_side_marks():
+    """Units, Materials, Supports and loads and Formulation: a tick once set up and the run's check finds nothing
+    wrong there, a red mark for an error of that step, plain while not set up (never red then); a warning marks
+    nothing; the other buttons have no mark. The marks follow every change."""
+    from lsr_mmto.problem.project import Project as P
+    marks = lambda w: {n: w.sidebar_buttons[n].property("mark") for n in G.SIDEBAR}       # noqa: E731
+    w = G.MMTOWindow()
+    assert set(marks(w).values()) <= {"plain", None}
+    with scratch() as d:
+        assert w.open_project(shutil.copy(os.path.join(PROJECTS, "L-bracket.mmto"), d))
+        assert w.project.validate() == [] and w.project.warnings()                # warnings: still ticked
+        assert marks(w) == {"Units": "check", "Materials": "check", "Supports and loads": "check",
+                            "Formulation": "check", "Settings": None, "Run": None, "Results": None,
+                            "Display Options": None}
+        w.project.bcs.append({"kind": "fixed", "on": "nowhere", "dofs": "xyz"})
+        w.project_changed()                                                    # as Supports and loads says
+        assert marks(w)["Supports and loads"] == "error" and marks(w)["Formulation"] == "check"
+        w.project.bcs.pop()
+        w.project.formulation["constraints"][0]["bound"] = 0.0
+        w.project_changed()
+        assert marks(w)["Supports and loads"] == "check" and marks(w)["Formulation"] == "error"
+        w.project.formulation["constraints"][0]["bound"] = 0.15
+        w.project.settings["vae"]["latentDim"] += 1                            # an error of Settings: no mark
+        w.project_changed()
+        assert any(e.step == "settings" for e in w.project.validate())
+        assert all(m in ("check", None) for m in marks(w).values()), marks(w)
+        with answers(Box.Discard):
+            assert w.open_project(shutil.copy(os.path.join(PROJECTS, "U-bracket.mmto"), d))
+        assert w.project.units == "none" and marks(w)["Units"] == "plain"         # not set up yet
+        empty = P("empty", stl=w.project.stl, base_dir=w.project.base_dir)
+        assert {"no supports", "no loads", "no material database", "no objective"} <= set(empty.validate())
+        with answers(Box.Discard):
+            w._show(empty, None)
+        assert {n: marks(w)[n] for n in G.SIDEBAR_STEPS} == dict.fromkeys(G.SIDEBAR_STEPS, "plain")
+        empty.bcs.append({"kind": "fixed", "on": "nowhere", "dofs": "xyz"})       # begun, and wrong: red
+        w.project_changed()
+        assert marks(w)["Supports and loads"] == "error"
+
+
 # ---------------------------------------------------------------------- Materials, Formulation, Settings
 from gui import formulation_panel, materials_panel, settings_panel  # noqa: E402
 
