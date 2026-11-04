@@ -1294,6 +1294,16 @@ def test_click_a_hole():
     assert outside and not hole_from_wall(-tube.cell_data["Normals"], corners)[5]   # normals out: a round face
 
 
+def test_filled_numbers_to_the_parts_precision():
+    """The numbers Click a hole fills in keep the part's own precision: under 1e-6 x its largest extent is 0;
+    on a 200 mm part the values are as they were."""
+    from gui.supports_and_loads_panel import _number_text
+    assert _number_text(-2.4e-08, 0.22) == "0" and _number_text(-0.00876, 0.22) == "-0.00876"
+    assert _number_text(0.0028199999489, 0.22) == "0.00282" and _number_text(-0.0325626, 0.22) == "-0.0325626"
+    for v in (40.0, 30.000000049, 7.999999699, 0.0, 10.0, -52.5, 123.456789, 0.25, 1e-3):
+        assert _number_text(v, 200.0) == format(round(v, 9) + 0.0, ".6g"), v
+
+
 def test_click_a_hole_on_the_rotor():
     """Click a hole on a brake rotor saved in metres: every triangle of the inside wall of the bore, the six
     bolt holes and the six rim notches gives its centre and radius (within 1 %); a bolt hole, under two element
@@ -1352,7 +1362,8 @@ def test_click_a_hole_on_the_rotor():
             assert "nodes on the run's mesh" in r.result.text()
             assert (note in r.result.text()) == (radius < 2 * h) == (known == 0.00282), r.result.text()
             assert r.inputs["boundary"].isChecked()
-        mesh = w.preview_mesh()                                               # the bore, at 30000 dofs
+        assert r.inputs["center"].text().split(", ")[1] == "-0.00876"          # the bore's y, to the part's
+        mesh = w.preview_mesh()                                               # precision; at 30000 dofs
         assert w.project.n_dof == 30000
         surface = set(np.asarray(mesh.get_boundary_nodes()).tolist())
         bore_on_surface = r.selection()
@@ -1364,6 +1375,7 @@ def test_click_a_hole_on_the_rotor():
         radius, inner = r.inputs["radius"].text(), r.inputs["inner_radius"].text()
         assert radius.endswith(" + 1h") and inner.endswith(" - 1h") and radius.split()[0] == inner.split()[0]
         assert abs(float(radius.split()[0]) - 0.1096) < 0.001
+        assert r.inputs["center"].text().split(", ")[0] == "0"                 # the fit's noise in x is gone
         mesh = w.preview_mesh()
         xyz = np.asarray(mesh.node_xyz, dtype=float)
         h = float(np.max(mesh.elem_size))

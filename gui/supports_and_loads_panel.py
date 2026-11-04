@@ -273,8 +273,15 @@ def hole_from_wall(normals, corners):
     return centre, axis, r, float(t.min()), float(t.max()), outside
 
 
-def _number_text(value):
-    return format(round(float(value), 9) + 0.0, ".6g")
+def _number_text(value, size=None):
+    """A number filled into the form, to 6 significant digits. With size (the part's largest extent), to the
+    part's own precision: under 1e-6 x size it is 0, and nothing finer than that is kept, so the noise of a
+    fit on a small part does not show."""
+    value = float(value)
+    if size:
+        digits = -int(np.floor(np.log10(1e-6 * size)))
+        value = 0.0 if abs(value) < 1e-6 * size else round(value, digits)
+    return format(round(value, 9) + 0.0, ".6g")
 
 
 def fill_from_hole(dialog, normals, corners):
@@ -291,14 +298,17 @@ def fill_from_hole(dialog, normals, corners):
         return
     letter = next((a for a, e in zip("xyz", np.eye(3)) if np.array_equal(axis, e)), None)
     boxes = dialog.inputs
-    boxes["center"].setText(", ".join(_number_text(c) for c in centre))
+    lo, hi = dialog.main.part_bounds()
+    size = float(np.max(hi - lo))                                   # lengths to the part's own precision
+    boxes["center"].setText(", ".join(_number_text(c, size) for c in centre))
     boxes["axis"].setCurrentText(letter or ", ".join(_number_text(c) for c in axis))
-    boxes["radius"].setText(f"{_number_text(r)} + 1h" if outside else _number_text(r))
-    boxes["inner_radius"].setText(f"{_number_text(r)} - 1h" if outside else "0")
+    radius = _number_text(r, size)
+    boxes["radius"].setText(f"{radius} + 1h" if outside else radius)
+    boxes["inner_radius"].setText(f"{radius} - 1h" if outside else "0")
     boxes["boundary"].setChecked(True)                              # the nodes on the face, none inside
     ends = (start, end) if letter else (0.0, end - start)          # coordinates along x, y, z; else distances
     for box, value in zip(boxes["along"], ends):
-        box.setText(_number_text(value))
+        box.setText(_number_text(value, size))
     dialog.show_preview()
     if dialog.shown and not outside:                                # the preview's mesh, already built
         h = float(np.max(dialog.main.preview_mesh().elem_size))
