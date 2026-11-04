@@ -133,6 +133,36 @@ def test_element_size_lengths_and_rows():
             raise AssertionError("a bad length or axis was accepted")
 
 
+def test_lengths_in_element_sizes():
+    """A length may be arithmetic in numbers, pi and h, the largest element size: kept as text when it has
+    h and worked out on each mesh; without h it is a number at once. "1.5h" means what it always did."""
+    class Coarse(GridMesh):                                         # the same grid, elements twice as big
+        def __init__(self):
+            super().__init__()
+            self.elem_size = [2.0, 2.0, 2.0]
+    coarse = Coarse()
+    for text, fine, big in (("5 + 1h", 6.0, 7.0), ("5 + h", 6.0, 7.0), ("2*h", 2.0, 4.0), ("2 h", 2.0, 4.0),
+                            ("38/2 + 0.5h", 19.5, 20.0), ("1.5h", 1.5, 3.0), ("h", 1.0, 2.0), ("pi*h", np.pi, 2 * np.pi)):
+        assert S._keep(text) == text, text                          # kept as typed
+        assert S._length(MESH, text) == fine and S._length(coarse, text) == big, text
+    for h in (0.7, 1.3, 0.12345678):                                # "1.5h" bit for bit as before
+        mesh = type("M", (), {"elem_size": [h, h / 2, h]})()
+        assert S._length(mesh, "1.5h") == float("1.5") * h and S._length(mesh, "h") == 1.0 * h
+    assert S._keep("2 + 2") == 4.0 and isinstance(S._keep("38/2"), float)   # no h: a number at once
+    s = S.sphere([5, 5, 5], "1 + 1h", pad=0)
+    assert s.to_dict()["radius"] == "1 + 1h" and S.from_dict(json.loads(json.dumps(s.to_dict()))).radius == "1 + 1h"
+    assert count(s) == len(S.sphere([5, 5, 5], 2.0, pad=0).evaluate(MESH))
+    assert len(s.evaluate(coarse)) == len(S.sphere([5, 5, 5], 3.0, pad=0).evaluate(MESH)) > count(s)
+    assert S.near_face("xmin", "1.5h").to_dict() == {"type": "near_face", "side": "xmin", "distance": "1.5h"}
+    for bad in ("5 + x", "2mm", "abs(h)", "h.real", "e*h", "1/0", "h +", "hh"):
+        try:
+            S._keep(bad)
+        except ValueError as e:
+            assert "element sizes h" in str(e), (bad, e)
+        else:
+            raise AssertionError(f"accepted {bad!r}")
+
+
 def test_stl_faces():
     """stl_faces asks the mesh for the nodes on those triangles (PyTO-AD's own lookup)."""
     class FakeMesh(GridMesh):

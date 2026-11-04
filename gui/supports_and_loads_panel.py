@@ -263,10 +263,10 @@ def _number_text(value):
     return format(round(float(value), 9) + 0.0, ".6g")
 
 
-def fill_from_hole(dialog, normals, corners, element_size):
+def fill_from_hole(dialog, normals, corners):
     """The Cylinder form filled in from the inside wall of a hole (hole_from_wall): Point on the axis, Axis
-    direction, Radius (the hole's radius plus one element size, so the nodes of the wall are in), and the
-    ends; then its preview. A wall that is not round fills nothing and says so."""
+    direction, Radius (the hole's radius + 1h, one element size of whatever mesh it is used on, so the nodes
+    of the wall are in), and the ends; then its preview. A wall that is not round fills nothing and says so."""
     try:
         centre, axis, r, start, end = hole_from_wall(normals, corners)
     except ValueError as e:
@@ -276,7 +276,7 @@ def fill_from_hole(dialog, normals, corners, element_size):
     boxes = dialog.inputs
     boxes["center"].setText(", ".join(_number_text(c) for c in centre))
     boxes["axis"].setCurrentText(letter or ", ".join(_number_text(c) for c in axis))
-    boxes["radius"].setText(_number_text(r + element_size))
+    boxes["radius"].setText(f"{_number_text(r)} + 1h")
     ends = (start, end) if letter else (0.0, end - start)          # coordinates along x, y, z; else distances
     for box, value in zip(boxes["along"], ends):
         box.setText(_number_text(value))
@@ -284,7 +284,7 @@ def fill_from_hole(dialog, normals, corners, element_size):
 
 
 # A button of the form that fills it in from a click on the part: (its text, its (i), the filling, given the
-# dialog, the normals and corners of the face clicked, and the element size).
+# dialog and the normals and corners of the face clicked).
 CLICK_TO_FILL = {"cylinder": ("Click a hole", "Then click the inside wall of a round hole on the part: the "
                               "point, axis, radius and ends are filled in from it.", fill_from_hole)}
 
@@ -506,8 +506,7 @@ class RegionDialog(QtWidgets.QDialog):
     def _wait_for_click(self, fill):
         """The next click on the part fills the form in (CLICK_TO_FILL), from the face it lands on."""
         def take(cell):
-            normals, corners = self.main.wall_triangles(cell)
-            fill(self, normals, corners, float(np.max(self.main.preview_mesh().elem_size)))
+            fill(self, *self.main.wall_triangles(cell))
         self.on_click = take
         self.result.setText("Click the inside wall of the hole on the part.")
 
@@ -590,14 +589,21 @@ class RegionDialog(QtWidgets.QDialog):
 
     @staticmethod
     def _value(label, text):
-        """A typed value: a number, a point (0, 38, 0, brackets optional), a list, or a word such as 1.5h;
-        a number may be plain arithmetic (38/2, 2*pi*5, also inside a point: 0, 38/2, 0)."""
+        """A typed value: a number, a point (0, 38, 0, brackets optional), a list, a word such as xmax, or
+        a length in element sizes h (1.5h, 5 + 1h), kept as text; a number may be plain arithmetic (38/2,
+        2*pi*5, also inside a point: 0, 38/2, 0)."""
+        from lsr_mmto.problem import selections as S
         try:
             value = plain_value(ast.parse(text, mode="eval").body)
         except (ValueError, SyntaxError):
-            if text.endswith("h") or text.replace("_", "").isalnum():         # "1.5h", xmax without quotes
+            if text.replace("_", "").isalnum():                             # xmax without quotes, 2h
                 return text
-            raise ValueError(f"{label}: {text!r} is not a value; write e.g. 2.5 or 0, 38, 0") from None
+            try:
+                S._length_value(text, 1.0)                                  # 1.5h, 5 + 1h: worked out per mesh
+                return text
+            except ValueError:
+                raise ValueError(f"{label}: {text!r} is not a value; write e.g. 2.5 or 0, 38, 0, or a length "
+                                 f"in element sizes h such as 5 + 1h") from None
         return list(value) if isinstance(value, tuple) else value
 
     def from_form(self):

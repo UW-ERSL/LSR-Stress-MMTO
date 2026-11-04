@@ -676,6 +676,17 @@ def test_arithmetic_in_number_boxes():
         assert "114.0" in r.code.text() and "/" not in r.code.text()
         r.code.setText("box(lo=[0, 0, 0], hi=[200/10, 2*10, 1])")
         assert r.problems() == [] and r.selection().to_dict() == S.box([0, 0, 0], [20.0, 20, 1]).to_dict()
+        r.code.setText("sphere([0, 0, 0], radius='2 + 1h')")                # a length in element sizes
+        assert r.problems() == [] and r.selection().radius == "2 + 1h"
+        r.tabs.setCurrentIndex(0)
+        r.type.setCurrentText("Sphere")
+        r.inputs["center"].setText("0, 0, 0")
+        for typed, kept in (("2 + 2", 4), ("5.64 + 1h", "5.64 + 1h"), ("1.5h", "1.5h"), ("38/2 + 0.5 h", "38/2 + 0.5 h")):
+            r.inputs["radius"].setText(typed)
+            assert r.selection().radius == kept, typed
+        r.inputs["radius"].setText("5 + x")
+        assert r.problems() == ["Radius: '5 + x' is not a value; write e.g. 2.5 or 0, 38, 0, or a length in "
+                                "element sizes h such as 5 + 1h"]
         b = SP.BCDialog(w, w.project)
         b.kind.setCurrentText("Force")
         b.inputs["total"][1][1].setText("-100/4")
@@ -1044,13 +1055,26 @@ def test_click_a_hole():
         geom.tri_highlight[5] = True                                          # a pick in the Pick window, kept
         button.click()
         w.on_left_button_press(c[wall].tolist(), Picker(wall))
-        h = float(np.max(w.preview_mesh().elem_size))
         centre = [float(x) for x in r.inputs["center"].text().split(",")]
         assert np.allclose(centre[:2], [40, 30], rtol=0.01) and abs(centre[2]) < 1e-6
         assert r.inputs["axis"].currentText() == "z"
-        assert abs(float(r.inputs["radius"].text()) - h - 8) < 0.08          # within 1 %
+        radius, plus = r.inputs["radius"].text().split(" + ")
+        assert abs(float(radius) - 8) < 0.08 and plus == "1h"              # within 1 %, and one element size
         assert [float(b.text()) for b in r.inputs["along"]] == [0.0, 10.0]
         assert "nodes on the run's mesh" in r.result.text() and "mmto_region" in w.plotter.actors
+        bore = r.selection()
+        assert bore.radius == r.inputs["radius"].text()                     # kept as typed: follows the mesh
+        from lsr_mmto.problem.mesh import make_mesh
+        p = w.project
+        for n_dof in (p.n_dof, 4 * p.n_dof):                                # the wall nodes on two mesh sizes
+            mesh = make_mesh(os.path.abspath(p.stl_path()), n_dof, p.single_layer, p.unknowns_per_node())
+            xyz = np.asarray(mesh.node_xyz, dtype=float)
+            h = float(np.max(mesh.elem_size))
+            boundary = np.asarray(mesh.get_boundary_nodes())
+            wall_nodes = boundary[np.hypot(xyz[boundary, 0] - 40, xyz[boundary, 1] - 30) < 8 + 0.5 * h]
+            taken = p.evaluate(bore, mesh, "nodes")
+            assert len(wall_nodes) and set(wall_nodes) <= set(taken), n_dof
+            assert np.hypot(xyz[taken, 0] - 40, xyz[taken, 1] - 30).max() <= 8 + 1.6 * h
         assert np.flatnonzero(geom.tri_highlight).tolist() == [5]
         w.on_left_button_press(c[wall].tolist(), Picker(wall))                # one fill per click of the button
         assert "Copied" in panel.stack.currentWidget().copied.text()
