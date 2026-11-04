@@ -273,13 +273,35 @@ def place_outline(selection, mesh):
 
 
 class PickWindow(StructuralLoadsWindow):
-    """Picking supports and loads with the mouse: Selection, Type, the force, Apply. Each Apply goes
-    straight into the project (MMTOWindow.adopt_picks), so there is no list of applied loads here, no
-    load set (one load case) and no torque (not one of LSR MMTO's loads)."""
+    """Picking supports and loads with the mouse: Selection, Type, the force, Apply, Clear picks. Each Apply
+    goes straight into the project (MMTOWindow.adopt_picks), so there is no list of applied loads here, no
+    load set (one load case) and no torque (not one of LSR MMTO's loads). Nodes are picked one click at a
+    time (no box select); picks not applied are cleared when the window closes."""
 
     def init_window(self):
         super().init_window()
         self.setWindowTitle("Pick")
+
+    def create_selection_control(self, parent_layout):
+        layout = QtWidgets.QHBoxLayout()                            # Facet, Triangle, Node: no Box select nodes
+        layout.addWidget(QtWidgets.QLabel("Selection"))
+        self.selection_combo = QtWidgets.QComboBox()
+        self.selection_combo.addItems(list(self.SELECTION_MODES))
+        layout.addWidget(self.selection_combo)
+        parent_layout.addLayout(layout)
+
+    def _take_selected_points(self):
+        points = list(getattr(self.parent, "selected_points", []) or [])
+        regions = list(getattr(self.parent, "selected_regions", []) or [])
+        if not points and not regions:
+            QtWidgets.QMessageBox.warning(self, "No Selection", "No nodes selected. In Node mode, click the part "
+                                                                "near a node.")
+            return None
+        return points, regions
+
+    def closeEvent(self, event):
+        self.parent.clear_picks()                                   # picks not applied go with the window
+        super().closeEvent(event)
 
     def create_load_set_control(self, parent_layout):
         self.load_set_spin = QtWidgets.QSpinBox(self)               # read when a load is applied: always 0
@@ -294,8 +316,15 @@ class PickWindow(StructuralLoadsWindow):
         parent_layout.addLayout(layout)
 
     def create_buttons(self, parent_layout):
+        row = QtWidgets.QHBoxLayout()
         self.apply_button = QtWidgets.QPushButton("Apply")
-        parent_layout.addWidget(self.apply_button)
+        row.addWidget(self.apply_button)
+        self.clear_button = QtWidgets.QPushButton("Clear picks")
+        self.clear_button.setToolTip("Remove every face and node picked and not applied yet. A right click on "
+                                     "the part does the same.")
+        self.clear_button.clicked.connect(lambda: self.parent.clear_picks())
+        row.addWidget(self.clear_button)
+        parent_layout.addLayout(row)
 
     def init_ui(self):
         super().init_ui()
@@ -1199,16 +1228,10 @@ class MMTOWindow(MainWindow):
         return None
 
     def on_right_button_press(self, obj, event):
-        """A right click with the Pick strip open clears what is selected in it; otherwise it does nothing."""
-        if not in_open_strip(getattr(self, "structural_loads_window", None)) or not self.stl_geom:
-            return
-        if getattr(self, "selected_points", None) or getattr(self, "selected_regions", None):
-            self.selected_points, self.selected_regions = [], []
-            self.update_point_markers()
-        if self.picked_count():
-            self.stl_geom.tri_highlight = [False] * len(self.stl_geom.tri_highlight)
-            self.update_highlights()
-        self.show_picked_count()
+        """A right click with the Pick strip open clears what is selected in it (as its Clear picks does);
+        otherwise it does nothing."""
+        if in_open_strip(getattr(self, "structural_loads_window", None)) and self.stl_geom:
+            self.clear_picks()
 
     def _draw_measure(self):
         import pyvista as pv

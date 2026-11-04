@@ -812,6 +812,53 @@ def test_picks_are_adopted():
         assert "A torque is not one of LSR MMTO's loads" in w.message_text.toPlainText()
 
 
+def test_pick_window_clear_picks():
+    """The Pick window has no Box select nodes; Clear picks (and a right click) removes every face and node
+    picked; picks not applied go when the window closes. A project with a Dragged box opens, shows and runs."""
+    from lsr_mmto.problem import selections as S
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        w.show()
+        w.open_structural_loads_window()
+        pick = w.structural_loads_window
+        buttons = [b.text() for b in pick.findChildren(QtWidgets.QPushButton)]
+        assert "Box select nodes" not in buttons and "Clear picks" in buttons
+        pick.selection_combo.setCurrentText("Node")
+        assert not [b for b in pick.findChildren(QtWidgets.QPushButton) if "Box" in b.text()]
+
+        def picked():
+            w.select_triangles(10)
+            w.update_highlights()
+            w.selected_points = [[0.0, 0.0, 0.0]]
+            w.update_point_markers()
+            assert w.picked_count() and "selected_points" in w.plotter.actors
+        picked()
+        pick.clear_button.click()
+        assert w.picked_count() == 0 and w.selected_points == [] and "selected_points" not in w.plotter.actors
+        picked()
+        w.on_right_button_press(None, None)                                   # a right click: the same
+        assert w.picked_count() == 0 and "selected_points" not in w.plotter.actors
+        picked()
+        pick.parentWidget().close()                                           # the strip's x: picks go
+        APP.processEvents()
+        assert w.picked_count() == 0 and w.selected_points == [] and "selected_points" not in w.plotter.actors
+
+        p = w.project                                                         # a Dragged box, made earlier
+        p.add_selection("dragged", S.halfspaces([[1, 0, 0], [-1, 0, 0]], [[20, 0, 0], [0, 0, 0]]))
+        p.bcs.append({"kind": "fixed", "on": "dragged", "dofs": "xyz"})
+        w.save_project()
+        assert w.open_project(w.path) and w.project.selections["dragged"].TYPE == "halfspaces"
+        panel = w.open_supports_and_loads_panel()
+        r = panel.edit_region("dragged")
+        assert r.kind() == "halfspaces" and r.from_form().to_dict() == w.project.selections["dragged"].to_dict()
+        r.reject()
+        panel.preview()
+        assert panel.counts["dragged"] > 0 and "Error" not in panel.report.text()
+        mesh = w.preview_mesh()
+        bcs, _ = w.project.supports_and_loads(mesh)
+        assert w.project.supports_and_loads_error(mesh, bcs) is None
+
+
 def test_docked():
     """Supports and loads and the Pick window sit on the right edge of the window, not over the 3D view;
     a second click raises the open one; Close (or a new project) removes the strip."""

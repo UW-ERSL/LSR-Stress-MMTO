@@ -229,14 +229,14 @@ Click **Add**, then **Click on the part...**. The Pick window opens beside the p
 1. Under **Selection**, choose how a click selects:
    - **Facet**: the face you click and every face joined to it with no sharp edge in between (an edge that bends more than about 15 degrees stops it). One click selects a whole flat side, or a whole smoothly curved surface such as the inside of a hole.
    - **Triangle**: only the single triangle you click. The edges of the triangles show, so you can see them. Use it for a small area.
-   - **Node**: the point of the part nearest to your click. **Box select nodes** then lets you drag a rectangle: every node inside it is selected, through the whole depth of the part.
-2. Click the part. Each click adds to what is selected; clicking a selected face again takes it off. A right click clears everything selected so far.
+   - **Node**: the point of the part nearest to your click. Click again for each node you want.
+2. Click the part. Each click adds to what is selected; clicking a selected face again takes it off. **Clear picks**, or a right click on the part, clears everything selected so far.
 3. Under **Type**, choose **Fixed XYZ**, **Fixed X**, **Fixed Y** or **Fixed Z** for a support, or **Force** for a load. For a force, give its X, Y and Z under **Force Components**: this is the total force on everything you selected.
 4. Press **Apply**.
 
 The pick becomes a support or load in the list, on a new selection named gui_support1, gui_load1 and so on. Rename the selection under Selections if you like.
 
-Faces are only picked while the Pick window is open. With it closed, clicking and dragging on the part just turns the view.
+Faces are only picked while the Pick window is open. Closing it clears whatever was picked and not applied. With it closed, clicking and dragging on the part just turns the view.
 
 A picked selection remembers the triangles of the STL by their numbers. If you load a different STL for the part, the same numbers are different faces, so pick them again.
 
@@ -266,7 +266,7 @@ The types of selection:
 - **Inside an STL**: every node inside a closed surface loaded from another STL file (**File**, with **Browse...**). Use it for a shape no other type describes, such as a collar around a bore.
 - **Combined selections**: two selections of the project joined, overlapped, or one taken from the other. **How** is one of **Join: in A or in B**, **Overlap: in both A and B**, or **A minus B: in A, not in B**. It follows them: change Selection A or Selection B later and this selection changes too. It appears once the project has at least two selections. *Example: the left face without its bottom rows: A minus B, with A a face and B the rows.*
 
-Three more types are made with the mouse, and show up when you open such a selection: **Picked faces** (faces you clicked), **Dragged box** (a box you dragged in Node mode) and **Node numbers** (single nodes, by number; they stay right only while the mesh does not change).
+Three more types are made with the mouse, and show up when you open such a selection: **Picked faces** (faces you clicked), **Node numbers** (single nodes, by number; they stay right only while the mesh does not change) and **Dragged box** (a box dragged over the part in earlier versions; a project that has one still opens and runs as before).
 
 Most types have a **Tolerance**: how far outside the selection a node may sit and still count. **Automatic** is right almost always.
 
