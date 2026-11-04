@@ -27,7 +27,7 @@ To try LSR MMTO before making a project of your own, open one of the examples: c
 
 ## 2. The window
 
-While no project is open, the 3D view shows the start page: **New project from an STL...** (the same as File > New), **Open a project...** (File > Open), and four examples under **Try an example**. Until a project is open, the buttons on the right, Run, Export STL and Part / Design are greyed.
+While no project is open, the 3D view shows the start page: **New project from an STL...** (the same as File > New), **Open a project...** (File > Open), and four examples under **Try an example**. Until a project is open, the buttons on the right, Run, Analyse, Export STL and Part / Design are greyed.
 
 ### 2.1 The top row
 
@@ -38,6 +38,7 @@ From left to right:
 - The **moon** button switches the 3D view to dark; it then shows a **sun**, which switches it back to light. The 3D view starts light. Only the background and the window's own drawings (the ruler, Measure, labels) change colour; the materials keep the colours the database gives them.
 - **Export STL** writes the design on the screen as STL files. It is greyed while there is no finished design on the screen. See section 12.
 - **Run** starts a run of the project. While the run goes, the same button reads **Stop**, and the run's progress shows beside it, for example *Iteration 29 / 40 · 0:33 so far · about 0:12 left*. See section 10.
+- **Analyse** solves the project once with the whole part solid in one material, without optimizing, to check the setup before a run. While a run goes, Analyse steps aside for the run's progress. See section 10.4.
 
 ### 2.2 The buttons on the right
 
@@ -524,9 +525,22 @@ Every run has its own folder in the project's results folder, named by when it s
 
 How long a run takes depends mostly on Mesh dofs and Max iterations: a few minutes for a coarse flat part, up to hours for a fine 3D part.
 
+### 10.4 Analyse
+
+**Analyse**, beside Run, solves the project once with every element of the part solid, in one material of the database. It uses that material's values as the database gives them, the project's supports and loads, and the same mesh as a run. Nothing is optimized and the material network is not used, so it is quick. Use it to check the supports, the loads and the materials before a run: a stress far from what you expect usually means a load or a unit is wrong.
+
+Press **Analyse**. A small window asks for:
+
+- **Material**: the material the whole part is made of, named as in the Materials panel.
+- **Save in the results**: unticked, the analysis is only shown, and nothing is written, not even the project. Ticked, it is kept in the project's results folder like a run; the project is saved first, as before a run.
+
+The same checks as for a run come first: if something stops a run, it stops the analysis too, and the Current run panel says why under *Cannot start:*. While it goes, the line beside the buttons says *Analysing the solid part in* and the material, and **Stop** ends it; nothing is saved then.
+
+When it is done, Results shows it the way it shows a run, titled **Analysis:** and the material: the part in the 3D view (Material, Density, Stress, Solid) and its **Summary**, with the objective and each constraint for the solid part. An analysis has no **Convergence** and no **Latent space**. A material volume fraction is worked out from the material network, so the Summary says *not given by an analysis* for it.
+
 ## 11. Results
 
-**Results** lists the runs of the project, newest first: when each ran, how many iterations it made, and *stopped* for a run that was stopped. Click one to see it:
+**Results** lists the runs of the project, newest first: when each ran, how many iterations it made, and *stopped* for a run that was stopped. An analysis (section 10.4) is listed among them as **Analysis:** and its material; one that was not saved is listed first, as *not saved*, until the next analysis, or until Results or the project is closed. Click one to see it:
 
 - its design on the part, in the 3D view;
 - **Convergence**: the objective and the constraints, iteration by iteration;

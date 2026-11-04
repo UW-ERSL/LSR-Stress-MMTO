@@ -23,8 +23,8 @@ QWidget#topButtons QToolButton { background: #ffffff; border: 1px solid #d7dde6;
 QWidget#topButtons QToolButton:hover { border-color: #3b5bdb; background: #f5f7ff; }
 QWidget#topButtons QToolButton:disabled { color: #a0a7b2; border-color: #e6e9ef; background: #fafbfc; }
 QToolBar { background: #ffffff; border: none; border-bottom: 1px solid #e3e7ee; padding: 6px 4px; spacing: 6px; }
-QWidget#topButtons QToolButton#runButton { background: #2f5fe0; color: white; border: 1px solid #2f5fe0; font-weight: 600; padding: 7px 22px; }
-QWidget#topButtons QToolButton#runButton:hover { background: #2550c7; }
+QWidget#topButtons QToolButton#runButton, QWidget#topButtons QToolButton#analyseButton { background: #2f5fe0; color: white; border: 1px solid #2f5fe0; font-weight: 600; padding: 7px 22px; }
+QWidget#topButtons QToolButton#runButton:hover, QWidget#topButtons QToolButton#analyseButton:hover { background: #2550c7; }
 QWidget#topButtons QToolButton#stopButton { background: #ffffff; color: #c92a2a; border: 1px solid #e3a6a6; font-weight: 600; padding: 7px 20px; }
 QWidget#topButtons QToolButton#segLeft, QWidget#topButtons QToolButton#segRight { background: #ffffff; border: 1px solid #d7dde6; padding: 7px 14px; border-radius: 0px; }
 QWidget#topButtons QToolButton#segLeft { border-top-left-radius: 6px; border-bottom-left-radius: 6px; border-right: none; }
@@ -33,7 +33,8 @@ QWidget#topButtons QToolButton#segLeft:checked, QWidget#topButtons QToolButton#s
 QWidget#topButtons QToolButton#segLeft:checked { border-right: 1px solid #2f5fe0; }
 QWidget#topButtons QToolButton#segLeft:disabled, QWidget#topButtons QToolButton#segRight:disabled { color: #a0a7b2;
     background: #fafbfc; border-color: #e6e9ef; font-weight: 400; }
-QWidget#topButtons QToolButton#runButton:disabled { background: #b7c6f2; border-color: #b7c6f2; color: #ffffff; }
+QWidget#topButtons QToolButton#runButton:disabled, QWidget#topButtons QToolButton#analyseButton:disabled {
+    background: #b7c6f2; border-color: #b7c6f2; color: #ffffff; }
 QWidget#topButtons QToolButton#themeButton { padding: 7px 9px; }
 QLabel#progressText { color: #4b5563; font-size: 9pt; padding-left: 8px; }
 

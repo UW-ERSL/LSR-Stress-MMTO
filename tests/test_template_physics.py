@@ -206,6 +206,25 @@ def test_the_saved_run_keeps_the_properties_the_physics_reads(monkeypatch):
     assert not any(k.lower().startswith("youngs") for k in saved)
 
 
+def test_the_template_is_analysed_with_no_file_of_it_changed():
+    """Analyse (optimize/solid_part_analysis.py) on a template project: its analyse and final_summary run on
+    the solid part in one material, and the analysis gives its objective and its RESULT_FIELDS."""
+    from lsr_mmto.optimize.solid_part_analysis import analyse_solid_part
+    from lsr_mmto.problem import selections as S
+    with registered(TEMPLATE):
+        p = _project("template", "UBracket.STL", UBRACKET, 3000)
+        p.add_selection("bottom", S.face("ymin"))
+        p.add_selection("top_right", S.box([0.75, 0.9, -1], [1.0, 1.0, 1]))
+        p.bcs += [{"kind": "set_value", "on": "bottom", "value": 0.0},
+                  {"kind": "source", "on": "top_right", "total": 1.0}]
+        r = analyse_solid_part(p, 2)
+    assert r.analysed_material and list(r.results) == list(TEMPLATE.RESULT_FIELDS) == ["mean_value"]
+    assert r.results["mean_value"].shape == (r.n_elems,) and np.all(np.isfinite(r.results["mean_value"]))
+    assert r.result_info["mean_value"]["view"] == "Value"
+    assert np.isfinite(r.final_objective) and r.final_objective > 0             # f . c of the source
+    assert np.isclose(r.utilisation(0), 1.0 / 0.5)                            # every element full: volume 1
+
+
 def test_a_result_the_physics_does_not_return_stops_the_save_with_a_message(monkeypatch):
     """final_summary returns the value of every RESULT_FIELDS entry; one left out is a clear error, not a
     result silently missing or taken from an earlier solve."""

@@ -11,6 +11,10 @@ designs side by side on the 3D view, each on its own mesh.
 Each run folder holds what showing it needs: the run's record and a copy of the project that
 ran, and the STL files once Export STL has written them (Show: Smooth (exported) draws those). Nothing
 here changes the project open in the window.
+
+An analysis (Analyse, beside Run) is listed among the runs as "Analysis: <material>"; one not saved is
+listed first, until the next one, and has no folder. An analysis has no convergence and no latent
+points: those tabs are left out, and a comparison with one says so in their place.
 """
 import os
 
@@ -25,7 +29,9 @@ RESULTS_HELP = ("Each run of the project is listed here, newest first. Click one
                 "each element's material, its density, its stress, only which elements are solid, or the smooth "
                 "STL files Export STL wrote for the run.\n\n"
                 "Tick two runs and press Compare to see them side by side. Open other results... shows a run "
-                "from anywhere, another project's too; it changes nothing in your project.")
+                "from anywhere, another project's too; it changes nothing in your project.\n\n"
+                "An analysis (Analyse, at the top) is listed as Analysis: and its material. One not saved is "
+                "listed first until the next analysis, and is gone once Results or the project is closed.")
 OTHER = "Other: "
 STL_HELP = ("Export STL, at the top, writes the design shown as two kinds of smooth STL into the run's folder.\n\n"
             "design.stl is the whole part, for printing in one material. Faces the optimization did not touch keep "
@@ -39,6 +45,8 @@ STL_HELP = ("Export STL, at the top, writes the design shown as two kinds of smo
             "Show > Smooth (exported) draws the files of a run that has been exported, each piece in its "
             "material's colour. Pull the material pieces apart sets them side by side, so each can be seen alone.")
 SMOOTH = "Smooth (exported)"                             # the Show choice of a run's exported STL files
+UNSAVED = "analysis not saved"                           # the list's key of the analysis shown but not saved
+NO_HISTORY = "An analysis is one solve of the solid part, not an optimization: it has no {}."
 RUN_COLOURS = ("#2b3a67", "#b2452e")                     # the left run, the right run
 
 
@@ -156,8 +164,12 @@ class CompareWindow(QtWidgets.QDialog):
         layout.addWidget(head)
         self.tabs = QtWidgets.QTabWidget()
         layout.addWidget(self.tabs, stretch=1)
-        for title, make in (("Convergence", lambda: convergence_overlaid(runs)),
-                            ("Latent space", lambda: latent_side_by_side(runs))):
+        analysis = any(run.analysed_material is not None for run in runs.values())
+        for title, make, what in (("Convergence", lambda: convergence_overlaid(runs), "convergence"),
+                                  ("Latent space", lambda: latent_side_by_side(runs), "latent space")):
+            if analysis:
+                self.tabs.addTab(QtWidgets.QLabel(NO_HISTORY.format(what)), title)
+                continue
             try:
                 self.tabs.addTab(plot_canvas(make()), title)
             except Exception as e:                                  # noqa: BLE001
@@ -182,6 +194,7 @@ class ResultsWindow(QtWidgets.QDialog):
         self.window = window
         self.setWindowTitle("Results")
         self.records, self.others, self.current = {}, [], None    # folder -> Run; other folders; shown
+        self.unsaved = None                                        # (Run, mesh) of the analysis not saved
         self.comparing = None                                      # [(name, (run, mesh))] x 2 while comparing
         layout = QtWidgets.QVBoxLayout(self)
 
@@ -245,29 +258,45 @@ class ResultsWindow(QtWidgets.QDialog):
     # ------------------------------------------------------------------ the list
     def refresh(self):
         """The list again: this project's runs, newest first, then the other results opened."""
-        from lsr_mmto.problem.project_folder import is_run, run_facts, runs
+        from lsr_mmto.problem.project_folder import analysed_material, is_run, run_facts, runs
         keep = self.current
         self.others = [f for f in self.others if is_run(f)]
         self.list.blockSignals(True)
         self.list.clear()
-        for folder in runs(self.window.project) + self.others:
+        for folder in ([UNSAVED] if self.unsaved else []) + runs(self.window.project) + self.others:
+            if folder == UNSAVED:
+                self._add_item(UNSAVED, f"Analysis: {self.unsaved[0].analysed_material} · not saved", "")
+                continue
             when, iterations, stopped = run_facts(folder)
             text = when + (f" · {iterations} iterations" if iterations is not None else "") + \
                 (" · stopped" if stopped else "")
+            material = analysed_material(folder)
+            if material is not None:
+                text = f"Analysis: {material} · {when}"
             if folder in self.others:
                 text = OTHER + f"{os.path.basename(os.path.dirname(folder))}, {text}"
-            item = QtWidgets.QListWidgetItem(text)
-            item.setData(QtCore.Qt.UserRole, folder)
-            item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
-            item.setCheckState(QtCore.Qt.Unchecked)
-            item.setToolTip(folder)
-            self.list.addItem(item)
+            self._add_item(folder, text, folder)
         self.list.blockSignals(False)
         self.empty.setVisible(self.list.count() == 0)
         if keep is not None and not self.select(keep):
             self.current = None
             self.tabs.clear()
         self._update_buttons()
+
+    def _add_item(self, folder, text, tip):
+        item = QtWidgets.QListWidgetItem(text)
+        item.setData(QtCore.Qt.UserRole, folder)
+        item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
+        item.setCheckState(QtCore.Qt.Unchecked)
+        item.setToolTip(tip)
+        self.list.addItem(item)
+
+    def show_analysis(self, run, mesh, folder=None):
+        """A finished analysis shown as a run is: saved (in folder), from its place among the runs; not saved,
+        listed first until the next analysis."""
+        self.unsaved = None if folder else (run, mesh)
+        self.refresh()
+        return self.select(folder or UNSAVED)
 
     def folders(self):
         return [self.list.item(i).data(QtCore.Qt.UserRole) for i in range(self.list.count())]
@@ -278,9 +307,9 @@ class ResultsWindow(QtWidgets.QDialog):
 
     def select(self, folder):
         """The run in folder shown; False when it is not in the list."""
-        folder = os.path.abspath(folder)
+        key = (lambda f: f) if folder == UNSAVED else (lambda f: os.path.normcase(os.path.abspath(f)))
         for i, f in enumerate(self.folders()):
-            if os.path.normcase(os.path.abspath(f)) == os.path.normcase(folder):
+            if key(f) == key(folder):
                 if self.list.currentRow() == i and self.current == f:
                     self.show_run(self.list.item(i))
                 self.list.setCurrentRow(i)
@@ -288,9 +317,9 @@ class ResultsWindow(QtWidgets.QDialog):
         return False
 
     def _update_buttons(self):
-        mine = self.current is not None and self.current not in self.others
+        mine = self.current is not None and self.current not in self.others and self.current != UNSAVED
         self.delete_button.setEnabled(mine)                         # others are for looking only
-        self.folder_button.setEnabled(self.current is not None)
+        self.folder_button.setEnabled(self.current is not None and self.current != UNSAVED)
         self.compare_button.setEnabled(len(self.ticked()) == 2)
 
     def open_other(self):
@@ -319,6 +348,8 @@ class ResultsWindow(QtWidgets.QDialog):
     # ------------------------------------------------------------------ one run
     def record(self, folder):
         from lsr_mmto.results import load_results
+        if folder == UNSAVED:
+            return self.unsaved[0]
         if folder not in self.records:
             self.records[folder] = load_results.load(os.path.join(folder, "run_data"))
         return self.records[folder]
@@ -329,7 +360,7 @@ class ResultsWindow(QtWidgets.QDialog):
         try:
             QtWidgets.QApplication.processEvents()
             run = self.record(folder)
-            return run, draw_design.run_mesh(self.window, folder, run)
+            return run, (self.unsaved[1] if folder == UNSAVED else draw_design.run_mesh(self.window, folder, run))
         except Exception as e:                                      # noqa: BLE001
             self.status.setText(f"<span style='color:#b00000'>This run cannot be shown: {e}</span>")
             return None
@@ -373,7 +404,7 @@ class ResultsWindow(QtWidgets.QDialog):
             self.field.setMinimumWidth(longest + 60)                # each choice read whole, past the arrow
         if len(runs) == 1:
             smooth = self.field.model().item(items.index(SMOOTH))
-            done = self.current is not None and stl_export.exported(runs[0], self.current) is not None
+            done = self.current not in (None, UNSAVED) and stl_export.exported(runs[0], self.current) is not None
             smooth.setEnabled(done)
             smooth.setToolTip("" if done else "Export STL first")
             if choice == SMOOTH and not done:
@@ -393,7 +424,7 @@ class ResultsWindow(QtWidgets.QDialog):
         run, mesh = loaded
         field = self.field.currentText()
         self.apart.setVisible(field == SMOOTH)
-        mine = (self.current, run, mesh) if self.current not in self.others else None
+        mine = (self.current, run, mesh) if self.current not in self.others and self.current != UNSAVED else None
         if field == SMOOTH:
             return self._draw_smooth(run, mine)
         self.window.set_design(lambda w: draw_design.record(w, run, mesh, field), run=mine)
@@ -429,7 +460,7 @@ class ResultsWindow(QtWidgets.QDialog):
         self.window.set_design(lambda w: draw_design.smooth(w, pieces, apart, absent), wide=apart, run=mine)
 
     def delete_run(self):
-        if self.current is None or self.current in self.others:
+        if self.current is None or self.current in self.others or self.current == UNSAVED:
             return
         folder = self.current
         if ask_delete_run(self, folder):
@@ -488,7 +519,12 @@ class ResultsWindow(QtWidgets.QDialog):
 
     def _name(self, folder):
         from lsr_mmto.problem.project_folder import run_facts
+        from lsr_mmto.problem.project_folder import analysed_material
+        if folder == UNSAVED:
+            return f"Analysis: {self.unsaved[0].analysed_material}, not saved"
         when = run_facts(folder)[0]
+        material = analysed_material(folder)
+        when = when if material is None else f"Analysis: {material}, {when}"
         return (OTHER + when) if folder in self.others else when
 
     def _draw_compare(self):

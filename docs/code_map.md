@@ -44,6 +44,7 @@ LSR MMTO
 │   │   ├── design_model.py       one design: filter, projection, properties, then the physics' analysis
 │   │   ├── history.py            what each iteration records and prints
 │   │   ├── final_design_analysis.py   the final design analysed, the results kept
+│   │   ├── solid_part_analysis.py     Analyse: the solid part solved once in one material, no optimizer
 │   │   ├── save_results.py       a finished run on disk
 │   │   ├── gradient_check.py     a run's gradient against finite differences
 │   │   ├── filters.py            the filter matrices

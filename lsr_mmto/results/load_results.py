@@ -4,6 +4,8 @@ load_results.py
 An optimization run, read back for plotting.
 
 load(path)        a run saved to disk, as a Run.
+from_arrays(...)  the same from the record's arrays and manifest, written or not (an analysis
+                  shown without being saved).
 
 Nothing here imports torch, pyvista or PyTO.
 """
@@ -48,6 +50,12 @@ class Run:
     @property
     def descriptor(self) -> str:
         return self.meta.get("descriptor", "?")
+
+    @property
+    def analysed_material(self):
+        """The material of an analysis (the solid part in one material, analysed once, not optimized:
+        optimize/solid_part_analysis.py), as its label; None for a run."""
+        return ((self.config or {}).get("analysis") or {}).get("material")
 
     @property
     def n_latent(self) -> int:
@@ -196,15 +204,28 @@ def load(path: str) -> Run:
     except Exception as e:
         raise RecordError(f"{path} is not a readable .npz: {e}") from e
 
-    if "schema_version" not in r.files or int(r["schema_version"]) != 2:
+    config = None
+    if os.path.isfile(path[:-4] + ".config.json"):
+        with open(path[:-4] + ".config.json") as fh:
+            config = json.load(fh)
+    return from_arrays(path, r, config)
+
+
+def from_arrays(path: str, r, config) -> Run:
+    """A record from its arrays (r: run_data.npz's, or the same arrays not written, as
+    save_results.record_arrays makes them) and its manifest (run_data.config.json's; None when the
+    record has none)."""
+    keys = list(r.keys())
+    files = set(keys)
+    if "schema_version" not in files or int(r["schema_version"]) != 2:
         raise RecordError(f"{os.path.basename(path)} was saved by an earlier version of LSR MMTO; run the "
                           f"project again to see it here")
     need = {"material_indices", "x_bin_packed", "n_elems", "x_cont", "z_elem_solid",
             "zRealPoints", "meta_json", "material_names", "material_colors", "material_labels"}
-    missing = need - set(r.files)
+    missing = need - files
     if missing:
         raise RecordError(f"{os.path.basename(path)} is missing {sorted(missing)}. "
-                          f"Present: {sorted(r.files)}")
+                          f"Present: {sorted(files)}")
 
     n = int(r["n_elems"])
     solid = np.unpackbits(r["x_bin_packed"])[:n].astype(bool)   # unpackbits pads to 8
@@ -220,17 +241,13 @@ def load(path: str) -> Run:
     z = np.full((n, z_solid.shape[1]), np.nan, dtype=np.float32)
     z[solid] = z_solid
 
-    cfg_path = path[:-4] + ".config.json"
-    if not os.path.isfile(cfg_path):
-        raise RecordError(f"no {os.path.basename(cfg_path)} beside {os.path.basename(path)}")
-    with open(cfg_path) as fh:
-        config = json.load(fh)
-
+    if config is None:
+        raise RecordError(f"no {os.path.basename(path)[:-4]}.config.json beside {os.path.basename(path)}")
     return _build(path, json.loads(str(r["meta_json"])), config, n,
                   r["material_indices"], solid, r["x_cont"],
-                  {k[2:]: r[k] for k in r.files if k.startswith("r_")},
+                  {k[2:]: r[k] for k in keys if k.startswith("r_")},
                   z, r["zRealPoints"], [str(s) for s in r["material_names"]],
-                  {k[2:]: r[k] for k in r.files if k.startswith("h_")},
+                  {k[2:]: r[k] for k in keys if k.startswith("h_")},
                   [str(s) for s in r["material_colors"]],
                   [str(s) for s in r["material_labels"]])
 

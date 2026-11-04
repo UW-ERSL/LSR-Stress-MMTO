@@ -13,13 +13,14 @@ chosen from elsewhere is copied in. Every save also writes the project's setup s
 asks for a folder of your own, so the examples never change.
 
 While no project is open, the 3D view holds the start page (StartPage): New, Open and the examples; the
-side buttons, Run, Export STL and Part / Design wait for a project.
+side buttons, Run, Analyse, Export STL and Part / Design wait for a project.
 
 The 3D view shows either the part (the Setup view: supports, loads, previews) or a design (the
 Design view: a run's result, drawn by draw_design.py). Anything about the setup switches to the
 Setup view; the design is kept until the next run, so Design in the top row always brings it back.
-The top row also holds Run (Stop while a run goes), Export STL and the light / dark switch of the 3D
-view; Snap, Measure and Ruler are in the status bar.
+The top row also holds Run (Stop while a run goes), Analyse (the solid part analysed once in one
+material), Export STL and the light / dark switch of the 3D view; Snap, Measure and Ruler are in the
+status bar.
 
     python run_gui.py [project.mmto]        (from the repository folder)
 
@@ -985,8 +986,8 @@ class MMTOWindow(MainWindow):
 
     def _build_top_row(self):
         """One row along the top: LSR MMTO, the File and Help menus, the Part / Design switch, the light /
-        dark switch of the 3D view, Export STL, and Run (Stop while a run goes) with its progress beside
-        it. It is a tool bar: a tool bar lays itself out again when its contents change size, so a longer
+        dark switch of the 3D view, Export STL, Run (Stop while a run goes) and Analyse (not shown while a
+        run or an analysis goes), with the progress beside them. It is a tool bar: a tool bar lays itself out again when its contents change size, so a longer
         progress text never squeezes the rest; one longer than the room left ends in an ellipsis. The menu
         bar itself is hidden; its shortcuts stay."""
         row_box = QtWidgets.QWidget()
@@ -1066,6 +1067,9 @@ class MMTOWindow(MainWindow):
         self.run_button = button("Run", "run_white", "runButton")
         self.run_button.clicked.connect(self.run_or_stop)
         row.addWidget(self.run_button)
+        self.analyse_button = button("Analyse", "check_white", "analyseButton")
+        self.analyse_button.clicked.connect(self.analyse)
+        row.addWidget(self.analyse_button)
         self.progress_text = EllipsisLabel("")
         self.progress_text.setObjectName("progressText")
         row.addWidget(self.progress_text)
@@ -1098,6 +1102,13 @@ class MMTOWindow(MainWindow):
         if rw is not None:
             rw.start_optimization()
 
+    def analyse(self):
+        """Analyse: the solid part analysed once in one material, in the Current run panel (run_panel.py)."""
+        if self.run_going_now():
+            return False
+        rw = self.open_run_panel()
+        return rw is not None and rw.analyse()
+
     def update_top_row(self):
         running = self.run_going_now()
         if running != self._running:
@@ -1108,6 +1119,7 @@ class MMTOWindow(MainWindow):
             self.run_button.setObjectName("stopButton" if running else "runButton")
             self.run_button.style().unpolish(self.run_button)
             self.run_button.style().polish(self.run_button)
+            self.analyse_button.setVisible(not running)            # steps aside for the progress: the row
         rw = getattr(self, "run_window", None)
         if running:
             self.run_button.setEnabled(not getattr(rw, "stop_requested", False))
@@ -1116,6 +1128,8 @@ class MMTOWindow(MainWindow):
             self.run_button.setEnabled(self.project is not None)
             self.progress_text.setText("")
         self.run_button.setToolTip("" if self.project is not None else NO_PROJECT)
+        self.analyse_button.setEnabled(self.project is not None)    # still fits a window 1225 px wide
+        self.analyse_button.setToolTip("" if self.project is not None else NO_PROJECT)
         shown = self.shown_run()
         self.export_button.setEnabled(shown is not None and not self.exporting)
         self.export_button.setToolTip(

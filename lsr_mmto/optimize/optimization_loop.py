@@ -155,6 +155,25 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
     return optimize(state)
 
 
+def problem_solver(physics, mesh, mat_prop, bcs, elem_body_force, to_params):
+    """The physics' solver of the problem (its make_solver), with the linear solver chosen by size.
+
+    Direct (PARDISO) for small problems; iterative (DPCG + deflation) beyond the DOF cutoff, for a
+    physics that builds a deflation space (its deflation_space); a physics without one keeps the
+    direct solver at every size. Mirrors topopt_mma.py so the MMTO driver uses the same tested
+    iterative path as single-material. The adjoint solve in PyTO-AD's differentiable solve reuses
+    fe_solver.solver and fe_solver.dsolver, so it follows this choice automatically."""
+    from lsr_mmto.pyto_ad_imports import DIRECT_SOLVER_DOF_CUTOFF    # dof limit for the direct solver; above it, DPCG
+
+    linear_solver = linear_solvers.Solvers.PARDISO
+    dsolver = deflation.DeflationSolver()
+    if to_params.nDOFDesired > DIRECT_SOLVER_DOF_CUTOFF and physics.deflation_space is not None:
+        linear_solver = linear_solvers.Solvers.DPCG
+        physics.deflation_space(dsolver, mesh)
+    print("Solver:", linear_solver.name)
+    return physics.make_solver(mesh, mat_prop, bcs, linear_solver, dsolver, elem_body_force)
+
+
 def setup(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, plotter, progress, should_stop,
           on_network_error):
     """
@@ -249,22 +268,7 @@ def setup(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, plotter,
     zRealPoints = matEncoder.training_latents
     zRealPoints_np = zRealPoints.detach().cpu().numpy().astype(float)
 
-    # --- Solver selection: direct (PARDISO) for small problems; iterative
-    #     (DPCG + deflation) beyond the DOF cutoff, for a physics that builds a deflation space
-    #     (its deflation_space); a physics without one keeps the direct solver at every size.
-    #     Mirrors topopt_mma.py so the MMTO driver uses the same tested iterative path as
-    #     single-material. The adjoint solve in PyTO-AD's differentiable solve reuses
-    #     fe_solver.solver and fe_solver.dsolver, so it follows this choice automatically.
-    from lsr_mmto.pyto_ad_imports import DIRECT_SOLVER_DOF_CUTOFF    # dof limit for the direct solver; above it, DPCG
-
-    linear_solver = linear_solvers.Solvers.PARDISO
-    dsolver = deflation.DeflationSolver()
-    if to_params.nDOFDesired > DIRECT_SOLVER_DOF_CUTOFF and physics.deflation_space is not None:
-        linear_solver = linear_solvers.Solvers.DPCG
-        physics.deflation_space(dsolver, mesh)
-    print("Solver:", linear_solver.name)
-
-    solver = physics.make_solver(mesh, mat_prop, bcs, linear_solver, dsolver, elem_body_force)
+    solver = problem_solver(physics, mesh, mat_prop, bcs, elem_body_force, to_params)
 
     num_dof = solver.bc.num_dofs
     print(f"Number of DOF: {num_dof}")

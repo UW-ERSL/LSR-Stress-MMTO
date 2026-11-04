@@ -54,7 +54,7 @@ def _iterations(run):
 def table(runs):
     """The runs side by side, one column each, in the sections of a run's summary (tables.summary):
     the result with each constraint met or not, the design, the materials and the run."""
-    from .tables import Heading, Table, Tables, _unit, constraint_name, met, met_cell
+    from .tables import NOT_GIVEN, Heading, Table, Tables, _unit, constraint_name, met, met_cell
     names = list(runs)
     rs = [runs[n] for n in names]
     r0 = rs[0]
@@ -66,13 +66,15 @@ def table(runs):
         result.append(["Max failure factor"] + [f"{r.max_ff:.3f}" for r in rs])
     for i in range(len(r0.constraint_spec)):
         result.append([f"{constraint_name(r0, i)}, used"] +
-                      [met_cell(met(r, i), f"{100 * r.utilisation(i):.1f} %") for r in rs])
+                      [met_cell(met(r, i), f"{100 * r.utilisation(i):.1f} %") if np.isfinite(r.utilisation(i))
+                       else NOT_GIVEN for r in rs])
     return Tables(
         Heading(f"{r0.example}: the runs side by side"),
         Table(result, headers=[""] + names, title="Result", right_cols=right),
         Table([["Elements"] + [f"{r.n_elems:,}" for r in rs],
                ["Solid"] + [f"{int(r.solid.sum()):,} ({100 * r.solid.mean():.1f} %)" for r in rs],
-               ["Grey (in between)"] + [f"{100 * r.grey:.1f} %" for r in rs]], title="Design", right_cols=right),
+               ["Grey (in between)"] + [f"{100 * r.grey:.1f} %" if np.isfinite(r.grey) else "" for r in rs]],
+              title="Design", right_cols=right),
         Table([["Used"] + [f"{int(r.materials_used().size)} of {len(r.material_names)}" for r in rs],
                ["Latent dimension"] + [str(r.n_latent) for r in rs]], title="Materials", right_cols=right),
         Table([["Iterations"] + [f"{_iterations(r)}" for r in rs],

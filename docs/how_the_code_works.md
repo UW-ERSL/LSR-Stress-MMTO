@@ -24,7 +24,7 @@ different material in each element, a subclass does that (`MultiMaterialHexFEA` 
 | `design/` | density filter and Heaviside projection, latent points to material properties (`decode`), the penalties added to the objective (`PENALTIES`) |
 | `formulation/` | the quantities an objective or a constraint can name, and the formula text |
 | `physics/` | `available_physics.py`, the list of physics, and one folder per physics |
-| `optimize/` | the optimization loop, one iteration's model, the history, the final design analysis, saving a run |
+| `optimize/` | the optimization loop, one iteration's model, the history, the final design analysis, saving a run, and Analyse (the solid part solved once in one material) |
 | `results/` | a saved run read back: tables, plots, 3D views, STL export, two runs compared |
 
 ## One run

@@ -13,6 +13,8 @@ signals, its live plot, its live redraw of the design and its log. What it overr
     (PyTO-AD's Stop only cleared a flag the optimizer never read);
   - the end: the final design on the part, the convergence, latent space and summary, and the
     run's folder: open it, show it in Results, or delete it.
+Analyse, beside Run, goes through the same thread, checks and Stop: the solid part analysed once in
+one material (optimize/solid_part_analysis.py), shown in Results, and saved there only when asked.
 While the material network trains, before the optimization starts, the status line counts
 its epochs from the lines the training prints.
 
@@ -43,6 +45,9 @@ RUN_HELP = ("Run, at the top, optimizes the project as it is now: it is saved fi
             "the elements, black stars for the real materials. With one latent dimension it counts the "
             "elements along the line; with more than three it shows a flat view, and its title says for "
             "how many of the elements that view shows the right nearest material.")
+ANALYSE_HELP = ("Analyse solves the project once with every element of the part solid, in the material you "
+                "choose, using that material's values from the database. Nothing is optimized: it is for "
+                "checking the supports, the loads and the materials before a run.")
 EPOCH = re.compile(r"^(?:\[(?:STD|SAM)\] )?Epoch (\d+):")   # what the network's training prints
 
 
@@ -102,12 +107,14 @@ def plot_canvas(figure):
 
 
 def result_tabs(tabs, run, keep=0):
-    """Convergence, Latent space and Summary tabs of a saved run, after the first keep tabs."""
+    """Convergence, Latent space and Summary tabs of a saved run, after the first keep tabs; an analysis
+    has neither convergence nor latent points, so only its Summary."""
     from lsr_mmto.results import run_plots, tables
     while tabs.count() > keep:
         tabs.removeTab(keep)
-    for title, make in (("Convergence", lambda: run_plots.convergence(run)),
-                        ("Latent space", lambda: run_plots.latent_scatter(run))):
+    plots = (("Convergence", lambda: run_plots.convergence(run)),
+             ("Latent space", lambda: run_plots.latent_scatter(run)))
+    for title, make in plots if run.analysed_material is None else ():
         try:
             tabs.addTab(plot_canvas(make()), title)
         except Exception as e:                                      # noqa: BLE001
@@ -164,6 +171,28 @@ def nearest_material(z, z_real):
     return d.argmin(axis=1)
 
 
+class AnalyseDialog(QtWidgets.QDialog):
+    """Analyse: the material the solid part is analysed in (the database's materials, as the Materials
+    panel names them), and whether the analysis is saved in the results."""
+
+    def __init__(self, parent, labels):
+        from .panel_widgets import ok_cancel
+        super().__init__(parent)
+        self.setWindowTitle("Analyse")
+        self.resize(380, 0)
+        layout = QtWidgets.QVBoxLayout(self)
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(QtWidgets.QLabel("Material:"))
+        self.material = QtWidgets.QComboBox()
+        self.material.addItems([str(label) for label in labels])
+        row.addWidget(self.material, stretch=1)
+        row.addWidget(Info(ANALYSE_HELP))
+        layout.addLayout(row)
+        self.save = QtWidgets.QCheckBox("Save in the results")
+        layout.addWidget(self.save)
+        ok_cancel(self, layout)
+
+
 class RunWindow(StructuralTopOptWindow):
     """PyTO-AD's Optimize window, running LSR MMTO's optimization (see the module docstring)."""
     latent_update = QtCore.pyqtSignal(object)                  # a frame of the live latent space
@@ -175,6 +204,7 @@ class RunWindow(StructuralTopOptWindow):
         self.latent_order = None
         self.started, self.last_draw, self.history = 0.0, 0.0, {"objective": [], "constraints": []}
         self.first_frame, self.optimizing = True, False
+        self.analysis = None                                       # (material row, its label) while Analyse goes
         super().__init__(window)
         self.setWindowTitle("Current run")
         self.log_line.connect(self._training_progress, QtCore.Qt.QueuedConnection)
@@ -239,27 +269,40 @@ class RunWindow(StructuralTopOptWindow):
         return list(self.window.project.selections)
 
     # ------------------------------------------------------------------ start, run, stop
-    def start_optimization(self):
-        """The project's checks, a save, then _run_topopt in PyTO-AD's worker thread."""
-        w = self.window
-        errors = w.project.validate()
+    def _checked(self):
+        """The project's checks (Project.validate): False, with its errors listed, when one stops a run."""
+        errors = self.window.project.validate()
         if errors:
             self.status.setText("<span style='color:#b00000'>Cannot start:<br>" + "<br>".join(errors) + "</span>")
             return False
+        return True
+
+    def _saved(self, title):
+        """The project saved before results are written for it, after a yes (an example as a project of the
+        user's own); False when it is not."""
+        w = self.window
         if w.template:
             answer = QtWidgets.QMessageBox.question(
-                self, "Run", "This is an example: it is saved as a project of your own before it runs, so the "
+                self, title, "This is an example: it is saved as a project of your own before it runs, so the "
                              "example stays as it is and the results go in your project's folder. Save now?",
                 QtWidgets.QMessageBox.Save | QtWidgets.QMessageBox.Cancel)
             if answer != QtWidgets.QMessageBox.Save or not w.save_project():
                 return False
         elif w.is_dirty() or w.path is None:
             answer = QtWidgets.QMessageBox.question(
-                self, "Run", "The project is saved before a run, so the run matches the file. Save now?",
+                self, title, "The project is saved before a run, so the run matches the file. Save now?",
                 QtWidgets.QMessageBox.Save | QtWidgets.QMessageBox.Cancel)
             if answer != QtWidgets.QMessageBox.Save or not w.save_project():
                 return False
+        return True
+
+    def start_optimization(self):
+        """The project's checks, a save, then _run_topopt in PyTO-AD's worker thread."""
+        w = self.window
+        if not self._checked() or not self._saved("Run"):
+            return False
         import threading
+        self.analysis = None
         self.project = w.project.copy()                            # the run's own copy: edits go to the next run
         self.save_dir = results_folder(self.project)
         self.stop_requested, self.history = False, {"objective": [], "constraints": []}
@@ -281,25 +324,68 @@ class RunWindow(StructuralTopOptWindow):
         self.optimization_thread.start()
         return True
 
+    def analyse(self):
+        """Analyse (top row): the project's checks as for a run, the Analyse window, then start_analysis."""
+        from lsr_mmto.materials.databases import material_display
+        if not self._checked():
+            return False
+        labels = material_display(self.window.project.database_paths()[0])[1]
+        dialog = AnalyseDialog(self, labels)
+        if dialog.exec_() != QtWidgets.QDialog.Accepted:
+            return False
+        return self.start_analysis(dialog.material.currentIndex(), dialog.save.isChecked())
+
+    def start_analysis(self, material, save):
+        """The solid part analysed in one material (its row in the database) in PyTO-AD's worker thread, as a
+        run goes; saved in the project's results folder when save, after the save a run asks for, else
+        nothing is written, not even the project."""
+        from lsr_mmto.materials.databases import material_display
+        w = self.window
+        if not self._checked() or (save and not self._saved("Analyse")):
+            return False
+        import threading
+        self.project = w.project.copy()
+        label = material_display(self.project.database_paths()[0])[1][material]
+        self.analysis = (int(material), label)
+        self.save_dir = results_folder(self.project) if save else None
+        self.stop_requested, self.history = False, {"objective": [], "constraints": []}
+        self.started, self.optimizing = time.time(), False
+        self.optimization_running = True
+        for widget in self.run_buttons:
+            widget.setVisible(False)
+        self.formulation.log_view.clear()
+        self.status.setText(f"Analysing the solid part in {label}...")
+        w.message_text.append(f"Analysis started: the solid part in {label}" +
+                              (f", saved in {self.save_dir}" if save else ", not saved"))
+        self.optimization_thread = threading.Thread(target=self.run_optimization, args=(None, None, None),
+                                                    daemon=True)
+        self.optimization_thread.start()
+        return True
+
     def _run_optimization(self, plan, fe_solver, spec):
         """In the worker thread (PyTO-AD's run_optimization sends what is printed to the log)."""
         from lsr_mmto.materials.encoder import NetworkRunCancelled, TrainingStopped
+        from lsr_mmto.optimize.solid_part_analysis import AnalysisStopped, analyse_solid_part
         from lsr_mmto.problem.project import run
-        success, error = False, ""
+        success, error, analysed = False, "", None
         self.stopped_training, self.network_cancelled = False, False
         try:
-            run(self.project, save_dir=self.save_dir, progress=self._progress,
-                should_stop=lambda: self.stop_requested, on_network_error=self._network_error)
+            if self.analysis is not None:
+                analysed = analyse_solid_part(self.project, self.analysis[0], save_dir=self.save_dir,
+                                              should_stop=lambda: self.stop_requested)
+            else:
+                run(self.project, save_dir=self.save_dir, progress=self._progress,
+                    should_stop=lambda: self.stop_requested, on_network_error=self._network_error)
             success = True
-        except TrainingStopped:                                     # Stop before the first iteration
-            self.stopped_training = True
+        except (TrainingStopped, AnalysisStopped):                  # Stop before the first iteration, or
+            self.stopped_training = True                            # before the analysis is done
         except NetworkRunCancelled:                                 # Cancel on the network warning: no run
             self.network_cancelled = True
         except Exception as e:                                      # noqa: BLE001
             import traceback
             traceback.print_exc()
             error = str(e)
-        self.optimization_done.emit(success, error, self.history, self.save_dir, None)
+        self.optimization_done.emit(success, error, self.history, self.save_dir, analysed)
 
     def _network_error(self, warning):
         """In the worker thread: the network warning asked in the window (_ask_network); True to go on."""
@@ -478,8 +564,10 @@ class RunWindow(StructuralTopOptWindow):
 
     # ------------------------------------------------------------------ the end
     @QtCore.pyqtSlot(bool, str, object, object, object)
-    def optimization_completed(self, success, error, history, save_dir, _):
+    def optimization_completed(self, success, error, history, save_dir, analysed):
         self.optimization_running = False
+        if self.analysis is not None:
+            return self._analysis_completed(success, error, save_dir, analysed)
         self._end_live_latent()
         w = self.window
         cancelled = getattr(self, "network_cancelled", False)
@@ -513,6 +601,26 @@ class RunWindow(StructuralTopOptWindow):
                 results.refresh()                                  # the new run in its list
             except RuntimeError:
                 pass
+
+    def _analysis_completed(self, success, error, save_dir, analysed):
+        """The analysis shown in Results: listed there when it was saved, shown there only when not."""
+        w, label = self.window, self.analysis[1]
+        if getattr(self, "stopped_training", False):                # it writes only once it is done
+            self.status.setText("The analysis was stopped. Nothing was saved.")
+            w.message_text.append("Analysis stopped; nothing was saved.")
+            return
+        if not success:
+            self.status.setText(f"<span style='color:#b00000'>The analysis failed: {error}</span><br>"
+                                f"The Log tab has the details.")
+            w.message_text.append(f"Analysis failed: {error}")
+            return
+        self.status.setText(f"Analysis of the solid part in {label} done, " +
+                            ("saved in the results." if save_dir else "not saved."))
+        w.message_text.append(f"Analysis done: the solid part in {label}" +
+                              (f", results in {save_dir}" if save_dir else ", not saved"))
+        results = w.open_results_panel()
+        if results is not None:
+            results.show_analysis(analysed, draw_design.mesh_of(w, self.project), save_dir)
 
     def show_results(self, save_dir):
         """The final design on the part, and tabs for the convergence, the latent space, the summary."""

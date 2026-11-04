@@ -310,6 +310,16 @@ def run_facts(folder):
     return when.replace("T", " "), iterations, stopped
 
 
+def analysed_material(folder):
+    """The material of an analysis (Analyse: the solid part in one material, not optimized), as its label, from
+    its record's manifest; None for a run, or when the manifest cannot be read."""
+    try:
+        with open(os.path.join(folder, "run_data.config.json")) as fh:
+            return ((json.load(fh) or {}).get("analysis") or {}).get("material")
+    except (OSError, ValueError):
+        return None
+
+
 def delete_run(folder):
     """A run's folder and everything in it removed; only a folder that holds a run."""
     if not is_run(folder):

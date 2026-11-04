@@ -234,6 +234,11 @@ A module's files import the layers below them (`elements/`, `design/`, `pyto_ad_
 the core's lists: its quantities, kinds and settings are given as plain arguments, and the core
 makes the entries.
 
+Analyse (`optimize/solid_part_analysis.py`) uses the same entries with nothing added: `make_solver`,
+then `analyse` and the quantities on the whole part solid in one database material, then
+`final_summary` with that one design. Its model has no latent points, so a quantity that reads
+`m.z` is shown as not given there; everything else a physics reads is as in a run.
+
 ## A material database
 
 An `.xlsx` in `data/databases/`: row 1 the attribute names, row 2 their units, then one row

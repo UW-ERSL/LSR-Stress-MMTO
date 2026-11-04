@@ -249,7 +249,10 @@ def run_time_label(run):
 
 
 def run_title(run):
-    """'L-bracket \u00b7 run of 3 Nov 2026, 03:31', or the run's folder name when it is not a date."""
+    """'L-bracket \u00b7 run of 3 Nov 2026, 03:31', or the run's folder name when it is not a date;
+    'L-bracket \u00b7 Analysis: Steel' for an analysis."""
+    if run.analysed_material is not None:
+        return f"{run.example} \u00b7 Analysis: {run.analysed_material}"
     when = run_time_label(run)
     return f"{run.example} \u00b7 " + (f"run of {when}" if when else f"run {run.descriptor}")
 
@@ -301,6 +304,7 @@ def constraint_name(run, i):
 
 
 MET_TOLERANCE = 1e-3          # a constraint within 0.1 % of its limit counts as met
+NOT_GIVEN = "not given by an analysis"    # a constraint of the latent points, which an analysis has none of
 
 
 def met(run, i):
@@ -317,7 +321,9 @@ def met_cell(ok, before=""):
 
 def summary(run, show=True):
     """One run at a glance, in sections: the result (objective and each constraint, met or not), the
-    design, the materials and the run."""
+    design, the materials and the run. An analysis: the same for its one solve, without what only an
+    optimization has (grey elements, the latent space, iterations)."""
+    analysis = run.analysed_material
     obj = (run.config or {}).get("topopt_params", {}).get("Objective") or ["objective", None]
     result = [[run.objective_label, f"{run.final_objective:.4g}", _unit(run, obj[0])]]
     if np.isfinite(run.max_ff):
@@ -325,37 +331,51 @@ def summary(run, show=True):
     rows = []
     for i, spec in enumerate(run.constraint_spec):
         bound = float(spec[2]) if len(spec) > 2 else np.nan
+        if analysis is not None and not np.isfinite(run.utilisation(i)):
+            rows.append([constraint_name(run, i), NOT_GIVEN, _amount(run, spec[0], bound), "", ""])
+            continue
         rows.append([constraint_name(run, i), _amount(run, spec[0], run.utilisation(i) * bound),
                      _amount(run, spec[0], bound), f"{100 * run.utilisation(i):.1f} %", met_cell(met(run, i))])
     units = (run.config or {}).get("units") or {}
-    run_rows = [["Iterations", str(run.iterations)]]
+    run_rows = [["Iterations", str(run.iterations)]] if analysis is None else []
     if units.get("system") not in (None, "none"):
         run_rows.append(["Units", f"{units['system']}: {units['length']}, {units['force']}, "
                                   f"{units['stress']}, {units['mass']}"])
+    design = [["Elements", f"{run.n_elems:,}", ""],
+              ["Solid", f"{int(run.solid.sum()):,}", f"{100 * run.solid.mean():.1f} % of the elements"]]
+    if analysis is None:
+        design.append(["Grey (in between)", f"{100 * run.grey:.1f} %", ""])
+    materials = ([["Used", f"{int(run.materials_used().size)} of {len(run.material_names)}"],
+                  ["Latent dimension", str(run.n_latent)]] if analysis is None else [["Material", analysis]])
     return Tables(
         Heading(run_title(run)),
         Table(result, title="Result", right_cols=(1,)),
         Table(rows, headers=["Constraint", "Value", "Limit", "Used", ""], right_cols=(1, 2, 3)) if rows else None,
-        Table([["Elements", f"{run.n_elems:,}", ""],
-               ["Solid", f"{int(run.solid.sum()):,}", f"{100 * run.solid.mean():.1f} % of the elements"],
-               ["Grey (in between)", f"{100 * run.grey:.1f} %", ""]], title="Design", right_cols=(1,)),
-        Table([["Used", f"{int(run.materials_used().size)} of {len(run.material_names)}"],
-               ["Latent dimension", str(run.n_latent)]], title="Materials", right_cols=(1,)),
-        Table(run_rows, title="Run", right_cols=(1,)))
+        Table(design, title="Design", right_cols=(1,)),
+        Table(materials, title="Materials", right_cols=(1,)),
+        Table(run_rows, title="Run", right_cols=(1,)) if run_rows else None)
 
 
 def summary_details(run):
     """What the summary's words mean, and each constraint's exact value and limit: the text behind its (i)."""
     obj = (run.config or {}).get("topopt_params", {}).get("Objective") or ["objective", None]
     q = _quantity(obj[0])
-    lines = [f"{run.objective_label}: {q.help}" if q is not None else run.objective_label]
+    analysis = run.analysed_material
+    lines = [] if analysis is None else [f"An analysis: the whole part solid in {analysis}, with its values from "
+                                         f"the database, solved once. Nothing is optimized."]
+    lines.append(f"{run.objective_label}: {q.help}" if q is not None else run.objective_label)
     for i, spec in enumerate(run.constraint_spec):
         bound = float(spec[2]) if len(spec) > 2 else np.nan
+        if analysis is not None and not np.isfinite(run.utilisation(i)):
+            lines.append(f"{constraint_name(run, i)}: {NOT_GIVEN}, because it is worked out from the material "
+                         f"network, which an analysis does not use.")
+            continue
         lines.append(f"{constraint_name(run, i)}: {run.utilisation(i) * bound:.6g} against a limit of {bound:.6g} "
                      f"({100 * run.utilisation(i):.2f} % of it). Met means at most 0.1 % over the limit.")
     lines.append("Solid: elements with a density of 0.5 or more.")
-    lines.append("Grey (in between): how much of the design is neither solid nor empty; 0 % is a clean design.")
-    lines.append("Latent dimension: the number of coordinates of the learned material space.")
+    if analysis is None:
+        lines.append("Grey (in between): how much of the design is neither solid nor empty; 0 % is a clean design.")
+        lines.append("Latent dimension: the number of coordinates of the learned material space.")
     return "\n".join(lines)
 
 

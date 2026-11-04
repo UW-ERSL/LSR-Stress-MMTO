@@ -124,13 +124,13 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 
 | File | Purpose |
 |---|---|
-| `main_window.py` | the window: New, Open and Save of .mmto projects, units, geometry, the top row (Run, Export STL, Part and Design, light and dark) and the status bar (Snap, Measure, Ruler) |
+| `main_window.py` | the window: New, Open and Save of .mmto projects, units, geometry, the top row (Run, Analyse, Export STL, Part and Design, light and dark) and the status bar (Snap, Measure, Ruler) |
 | `materials_panel.py` | the Materials panel |
 | `formulation_panel.py` | the Formulation panel: objective and constraints |
 | `settings_panel.py` | the Settings panel |
 | `supports_and_loads_panel.py` | the Supports and loads panel: selections, supports, loads, keep solid, preview |
 | `database_editor.py` | making and changing a material database in the app |
-| `run_panel.py` | the Current run panel: a run's progress, its live design and latent space, its log |
+| `run_panel.py` | the Current run panel: a run's progress, its live design and latent space, its log; the Analyse window |
 | `results_panel.py` | the Results panel: a finished run's tables, plots and 3D design |
 | `draw_design.py` | draws a design in the 3D view |
 | `dark_and_light_3d_view.py` | the 3D view light or dark, and its drawings readable on either |
@@ -203,6 +203,7 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad_imp
 | `filters.py` | the density and material filters |
 | `history.py` | what each iteration records and prints |
 | `final_design_analysis.py` | the final design analysed three ways, and the run saved |
+| `solid_part_analysis.py` | Analyse: the whole part solid in one material, solved once without optimizing |
 | `save_results.py` | saves a finished run to disk |
 | `gradient_check.py` | the autodiff gradient against central finite differences |
 

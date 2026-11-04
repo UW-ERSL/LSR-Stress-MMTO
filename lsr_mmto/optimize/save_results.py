@@ -361,6 +361,16 @@ def save_run_data(save_dir, config, fields, vae_state_dict, history,
     """
     if WRITE_FILES:
         os.makedirs(save_dir, exist_ok=True)
+    data = run_data(config, fields, vae_state_dict, history, example_name, z_real_points, material_colors,
+                    material_names, latent_dim, num_elems, num_nodes, material_labels, results)
+    if not WRITE_FILES:
+        return None
+    return write_run_data(save_dir, data)
+
+
+def run_data(config, fields, vae_state_dict, history, example_name, z_real_points, material_colors,
+             material_names, latent_dim, num_elems, num_nodes, material_labels=None, results=None):
+    """Everything save_run_data writes, as one dict (its arguments as save_run_data takes them)."""
     sd = {}
     try:
         for k, v in (vae_state_dict or {}).items():
@@ -384,10 +394,12 @@ def save_run_data(save_dir, config, fields, vae_state_dict, history,
         "material_names": list(material_names),
         "material_labels": list(material_names if material_labels is None else material_labels),
     }
+    return data
 
-    if not WRITE_FILES:
-        return None
 
+def write_run_data(save_dir, data):
+    """run_data's dict written into save_dir: the record, run_config.yaml, and the pickle if SAVE_PICKLE.
+    Returns the path of the primary artefact, as save_run_data."""
     rec_path = _save_record(save_dir, data)
 
     pkl_path = None
@@ -397,7 +409,7 @@ def save_run_data(save_dir, config, fields, vae_state_dict, history,
             pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     try:
-        write_run_config_yaml(config, os.path.join(save_dir, "run_config.yaml"))
+        write_run_config_yaml(data["config"], os.path.join(save_dir, "run_config.yaml"))
     except Exception as e:
         print(f"[save] WARNING: run_config.yaml not written: {e}")
     return pkl_path or rec_path
@@ -411,6 +423,20 @@ def _save_record(save_dir, data):
     are not stored; they are recoverable from z_elem and the .nt named in meta.
     Each of the physics' results is stored as r_<name>, described in meta's results.
     """
+    rec, cfg = record_arrays(save_dir, data)
+    base = os.path.join(save_dir, "run_data")
+    np.savez_compressed(base + ".npz", **rec)
+    try:
+        with open(base + ".config.json", "w") as fh:
+            json.dump(cfg, fh, indent=1, default=str)
+    except Exception as e:
+        print(f"[save] WARNING: run_data.config.json not written: {e}")
+    return base + ".npz"
+
+
+def record_arrays(save_dir, data):
+    """(the arrays of run_data.npz, the manifest of run_data.config.json) of run_data's dict, as
+    _save_record writes them for a record in save_dir (its folder name is the record's descriptor)."""
     f = data["fields"]
     n = int(data["num_elems"])
 
@@ -457,12 +483,4 @@ def _save_record(save_dir, data):
                            str(tp.get("MaterialsExcelFile", ""))).replace(".xlsx", ".nt"),
         "results":     data["result_info"],
     }, default=str))
-
-    base = os.path.join(save_dir, "run_data")
-    np.savez_compressed(base + ".npz", **rec)
-    try:
-        with open(base + ".config.json", "w") as fh:
-            json.dump(cfg, fh, indent=1, default=str)
-    except Exception as e:
-        print(f"[save] WARNING: run_data.config.json not written: {e}")
-    return base + ".npz"
+    return rec, cfg

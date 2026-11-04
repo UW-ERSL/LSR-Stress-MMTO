@@ -208,8 +208,9 @@ def styled():
 
 def test_top_row_and_bottom_buttons():
     """One top row: LSR MMTO, File and Help (their menus and shortcuts), Part / Design, the light / dark
-    switch, Export STL, Run; in a window held at 1225 px the row fits and nothing in it is cut short; a
-    progress text longer than the room left ends in an ellipsis (a shorter one shows whole).
+    switch, Export STL, Run, Analyse; in a window held at 1225 px the row fits and nothing in it is cut short;
+    while a run goes (Analyse steps aside), a progress text longer than the room left ends in an ellipsis (a
+    shorter one shows whole).
     Snap, Measure and Ruler at the bottom drive the window's measuring and scales."""
     styled()
     try:
@@ -220,15 +221,17 @@ def test_top_row_and_bottom_buttons():
                  if b.objectName() == "menuButton"}
         assert set(menus) == {"&File", "&Help"} and "&Save" in menus["&File"]
         assert {a.shortcut().toString() for a in w.actions()} >= {"Ctrl+N", "Ctrl+O", "Ctrl+S"}
-        assert [b.text() for b in (w.part_button, w.design_button, w.export_button, w.run_button)] == \
-            ["Part", "Design", "Export STL", "Run"]
+        assert [b.text() for b in (w.part_button, w.design_button, w.export_button, w.run_button,
+                                   w.analyse_button)] == ["Part", "Design", "Export STL", "Run", "Analyse"]
         assert not w.design_button.isEnabled() and w.part_button.isChecked()      # no design yet
         w.update_top_row()
         assert not w.export_button.isEnabled() and w.shown_run() is None          # nothing to export
         p = w.progress_text
         w._top_timer.stop()                                   # it would clear the text: no run goes
-        for text, whole in (("Starting: building the mesh and the material network...", False),
-                            ("Iteration 6 / 40 \u00b7 0:09 so far \u00b7 about 0:46 left", True)):
+        for text, whole, idle in (("", True, True),            # nothing going: Analyse beside Run
+                                  ("Starting: building the mesh and the material network...", False, False),
+                                  ("Iteration 6 / 40 \u00b7 0:09 so far \u00b7 about 0:46 left", True, False)):
+            w.analyse_button.setVisible(idle)                   # as update_top_row sets it while a run goes
             p.setText(text)
             row = w.top_row.widgetForAction(w.top_row.actions()[0])
             room = w.top_row.layout().contentsRect().width()
