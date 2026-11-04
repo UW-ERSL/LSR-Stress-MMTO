@@ -275,6 +275,99 @@ def test_replace_part():
         assert any(line.startswith("Part replaced") for line in w.message_text.toPlainText().splitlines())
 
 
+@contextlib.contextmanager
+def answered_in_turn(*replies):
+    """Questions answered with replies, one after the other, without showing them; the texts asked are kept
+    in the list given back. warning() and information() give OK."""
+    asked, saved = [], (Box.question, Box.warning, Box.information)
+    Box.question = staticmethod(lambda _parent, _title, text, *a, **k: asked.append(text) or replies[len(asked) - 1])
+    Box.warning = staticmethod(lambda *a, **k: Box.Ok)
+    Box.information = staticmethod(lambda *a, **k: Box.Ok)
+    try:
+        yield asked
+    finally:
+        Box.question, Box.warning, Box.information = saved
+
+
+def test_scale_part():
+    """File > Scale part: the window shows the size the part will have; the selections typed for the old size
+    (a Box, a Cylinder) are named first, not picked faces or a length in element sizes; a project not in a
+    folder of its own is saved as one first and only its part/ is written, every coordinate exactly times the
+    factor; scaling again multiplies again, one STL in part/; the extent follows; Cancel changes nothing."""
+    from stl import mesh as stl_mesh
+    from lsr_mmto.problem import selections as S
+
+    def vectors(path):
+        return stl_mesh.Mesh.from_file(path).vectors
+
+    entry = [a for m in G.MMTOWindow().menuBar().actions() if m.menu() for a in m.menu().actions()
+             if a.text().replace("&", "") == "Scale part..."]
+    assert len(entry) == 1
+    shipped = os.path.join(ROOT, "data", "models", "LBracket_BM1", "LBracket_BM1.STL")
+    before, original = open(shipped, "rb").read(), vectors(shipped).copy()
+    with scratch() as d:
+        w = opened("L-bracket", d)                                  # a project file of its own, the STL shipped
+        lo, hi = w.part_bounds()
+        dialog = G.ScalePartDialog(w, hi - lo, w.length_unit())
+        dialog.by.setText("1/1000")
+        size = hi - lo
+        assert dialog.factor() == 0.001 and dialog.will_be.text() == \
+            "The part will be " + " \u00d7 ".join(f"{float(f'{v / 1000:.3g}'):g}" for v in size) + f" {w.length_unit()}"
+        dialog.by.setText("0")
+        assert dialog.factor() is None and not dialog.buttons.button(QtWidgets.QDialogButtonBox.Ok).isEnabled()
+        saved_exec = G.ScalePartDialog.exec_
+        G.ScalePartDialog.exec_ = lambda dialog: 0                  # the window's Cancel
+        try:
+            assert not w.scale_part()
+        finally:
+            G.ScalePartDialog.exec_ = saved_exec
+        w.project.selections.update(pad=S.box([0, 0, 0], [10, 10, 1]), bore=S.cylinder([5, 5, 0], "z", 2.0),
+                                    edge=S.near_face("xmin", "1.5h"))
+        project_file = open(w.path).read()
+        with answered_in_turn(Box.Cancel) as asked:                 # Cancel at the typed selections
+            assert not w.scale_part(2.0)
+        assert asked == ["These selections were typed for the old size and are not scaled: pad, bore."]
+        assert open(w.path).read() == project_file and not os.path.exists(os.path.join(d, "part"))
+        with answered_in_turn(Box.Ok, Box.Save) as asked:
+            assert w.scale_part(2.0)
+        assert len(asked) == 2 and "Save the project there first?" in asked[1] and w.own_folder()
+        assert os.listdir(os.path.join(d, "part")) == ["LBracket_BM1.STL"]
+        assert np.array_equal(vectors(w.project.stl_path()), original * 2.0)
+        assert open(shipped, "rb").read() == before                 # the STL it came from is untouched
+        assert np.allclose(w.part_bounds()[1], hi * 2.0) and w.extent.text() != "" and \
+            G.without_minus_zero(w.length_format(float(np.max(size * 2))) % (hi[0] * 2)) in w.extent.text()
+        assert "Part scaled by 2" in w.message_text.toPlainText().splitlines()
+        with answered_in_turn(Box.Ok):
+            assert w.scale_part(3)
+        with answered_in_turn(Box.Ok):
+            assert w.scale_part(0.5)
+        assert os.listdir(os.path.join(d, "part")) == ["LBracket_BM1.STL"]
+        assert np.array_equal(vectors(w.project.stl_path()), original * 6.0 * 0.5)
+        assert open(shipped, "rb").read() == before
+
+    example = os.path.join(PROJECTS, "L-bracket.mmto")              # an example: saved as a project of its own
+    example_text, models = open(example).read(), sorted(os.listdir(os.path.dirname(shipped)))
+    w = G.MMTOWindow()
+    assert w.open_project(example) and w.template
+    real = G.ProjectFolderDialog.exec_
+    with scratch() as d:
+        def fill(dialog):
+            dialog.location.setText(d)
+            dialog.name.setText("Mine")
+            return 1
+        G.ProjectFolderDialog.exec_ = fill
+        try:
+            with answered_in_turn(Box.Save) as asked:               # clamp and corner: nothing typed
+                assert w.scale_part(25.4)
+        finally:
+            G.ProjectFolderDialog.exec_ = real
+        assert len(asked) == 1 and not w.template and w.path == os.path.join(d, "Mine", "Mine.mmto")
+        assert os.listdir(os.path.join(d, "Mine", "part")) == ["LBracket_BM1.STL"]
+        assert np.array_equal(vectors(w.project.stl_path()), original * 25.4)
+        assert open(example).read() == example_text and open(shipped, "rb").read() == before
+        assert sorted(os.listdir(os.path.dirname(shipped))) == models
+
+
 def test_start_page():
     """With no project open the start page covers the 3D view, and the side buttons, Run, Export STL and Part /
     Design are greyed with a tip; opening a project hides the page and they work. Recent lists the projects
@@ -1767,6 +1860,8 @@ def test_network_warning_continue_or_cancel():
         vae = VAEParams()
         for k, v in DATABASE_VAE["BM1_3Mats_2Attr"].items():
             setattr(vae, k, v)
+        torch.manual_seed(0)                                                 # the same untrained network
+        np.random.seed(0)
         enc = MaterialEncoder(vae)
         enc.readExcel(xlsx)
         torch.save(enc.vaeNet.state_dict(), xlsx[:-5] + ".nt")             # untrained
@@ -1915,6 +2010,61 @@ def test_snap_copy_outline_colour_new_database():
         assert [round(c * 255) for c in colour] == [196, 0, 196]               # magenta, not the red given
 
 
+
+
+def test_convert_units():
+    """Convert to <units> units (Materials), on a copy of the Airplane bracket project (mmKS, its database in
+    kg/m^3, Pa and USD/kg): the button shows only while the units differ; the window lists each column with its
+    factor and the limits; OK writes the project's own copy with the values times the factors exactly and the
+    limits converted, saves the project, and leaves no unit warning; the network file is byte-identical and
+    still gives the materials back as closely; the shipped database is untouched. Unticked, the limits stay."""
+    from lsr_mmto.materials.databases import DATABASE_DIR, database_table
+    from lsr_mmto.materials.encoder import network_reconstruction
+    shipped = os.path.join(DATABASE_DIR, "CustomAlloys20_3D")
+    before = {ext: open(shipped + ext, "rb").read() for ext in (".xlsx", ".nt")}
+    _, attributes, _, old = database_table(shipped + ".xlsx")
+    errors = [r["percent_of_range"] for r in network_reconstruction(shipped + ".xlsx", shipped + ".nt")]
+    factors = np.array([{"Density": 1e-12, "Youngs_Modulus": 1e-06, "Cost": 1000.0}.get(a, 1.0) for a in attributes])
+    real, seen = materials_panel.ConvertUnitsDialog.exec_, []
+    for tick in (True, False):
+        with scratch() as d:
+            w = opened("Airplane bracket", d)
+            assert w.save_project_as(os.path.join(d, "A", "A.mmto"))
+            bounds = [c["bound"] for c in w.project.formulation["constraints"]]
+            expected = [new for _, _, _, new in w.project.unit_conversion()[1]] if tick else bounds
+            m = materials_panel.MaterialsPanel(w, w.project)
+            assert not m.convert_button.isHidden() and m.convert_button.text() == "Convert to mmKS units..."
+
+            def answer(dialog):
+                seen.append([label.text().strip() for label in dialog.findChildren(QtWidgets.QLabel)])
+                dialog.limits.setChecked(tick)
+                return 1
+            materials_panel.ConvertUnitsDialog.exec_ = answer
+            try:
+                lines = m.convert_units()
+            finally:
+                materials_panel.ConvertUnitsDialog.exec_ = real
+            assert seen[-1][1:] == ["Density: kg/m^3 -> t/mm^3, x 1e-12", "Young's modulus: Pa -> MPa, x 1e-06",
+                                    "Cost: USD/kg -> USD/t, x 1000", "Limits written for the old numbers:",
+                                    "Mass <= 4e+07 -> 4e-05 t", "Cost <= 7.5e+08 -> 0.75 USD"], seen[-1]
+            p, folder = w.project, os.path.join(d, "A", "materials")
+            assert p.database == "materials/CustomAlloys20_3D.xlsx" and sorted(os.listdir(folder)) == \
+                ["CustomAlloys20_3D.nt", "CustomAlloys20_3D.xlsx"]
+            _, _, units, new = database_table(os.path.join(folder, "CustomAlloys20_3D.xlsx"))
+            stored = np.vectorize(lambda v: float("%.16g" % v))(old * factors)   # as an Excel file keeps them
+            assert units == ["t/mm^3", "MPa", "USD/t", "MPa"] and np.array_equal(new, stored)
+            assert [c["bound"] for c in p.formulation["constraints"]] == expected and (expected[0] == 4e7 / 1e12) == tick
+            assert not any("the database gives" in x for x in p.warnings()) and m.convert_button.isHidden()
+            assert open(os.path.join(folder, "CustomAlloys20_3D.nt"), "rb").read() == before[".nt"]
+            assert not w.is_dirty() and Project.load(w.path).formulation == p.formulation
+            assert lines[0].startswith("Database converted to mmKS units") and \
+                any(line.startswith("Limits converted: Mass <= 4e+07 -> 4e-05 t") for line in lines) == tick
+            again = [r["percent_of_range"] for r in network_reconstruction(os.path.join(folder, "CustomAlloys20_3D.xlsx"),
+                                                                            os.path.join(folder, "CustomAlloys20_3D.nt"))]
+            assert np.allclose(again, errors, atol=0.05), (max(again), max(errors))
+            w.apply_panel(m)                                            # OK of the panel: nothing more changes
+            assert p.database == "materials/CustomAlloys20_3D.xlsx" and not w.is_dirty()
+    assert {ext: open(shipped + ext, "rb").read() for ext in (".xlsx", ".nt")} == before
 
 
 def test_examples_open_as_templates():
@@ -2166,6 +2316,52 @@ def test_export_stl():
                 os.remove(os.path.join(folder, f))
         res.select(r.save_dir)
         assert not res.field.model().item(res.field.findText(SMOOTH)).isEnabled()
+
+
+def test_earlier_run_after_scale_part():
+    """A run made before Scale part is drawn and exported at the size it was run at: its mesh is the rebuilt one
+    scaled back (the run's element size, the same nodes), Export STL gives the same extent, and the window's own
+    mesh of the scaled part is left as it is. A part changed in another way still cannot show the run."""
+    import trimesh
+    from stl import mesh as stl_mesh
+    from gui import draw_design
+    from lsr_mmto.results import load_results, stl_export
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        w.project.n_dof, w.project.single_layer = 3000, True
+        w.project.settings["common"]["maxIterations"] = 40                 # a design with voids to export
+        assert w.save_project_as(os.path.join(d, "P", "P.mmto"))
+        r = w.open_run_panel()
+        assert r.start_optimization() and _wait(lambda: not r.optimization_running)
+        folder = r.save_dir
+
+        def exported_extent(mesh):
+            report = stl_export.export(load_results.load(os.path.join(folder, "run_data")), mesh, folder,
+                                       materials=False)
+            assert not report.whole_error, report.whole_error
+            return trimesh.load(os.path.join(folder, "design.stl"), force="mesh").bounds
+
+        run = load_results.load(os.path.join(folder, "run_data"))
+        before = draw_design.run_mesh(w, folder, run)
+        nodes, extent = np.array(before.node_xyz, dtype=float), exported_extent(before)
+        assert w.scale_part(2.0)
+        after = draw_design.run_mesh(w, folder, load_results.load(os.path.join(folder, "run_data")))
+        assert after is not before and np.allclose(after.elem_size, run.elem_size, rtol=1e-12, atol=0)
+        assert np.allclose(after.node_xyz, nodes, rtol=1e-12, atol=1e-12 * np.abs(nodes).max())
+        assert np.allclose(exported_extent(after), extent, rtol=1e-9, atol=1e-9 * np.abs(extent).max())
+        own = draw_design.mesh_of(w, w.project)                              # the scaled part's own mesh
+        assert np.allclose(own.elem_size, 2 * np.asarray(run.elem_size), rtol=1e-12, atol=0)
+
+        part = stl_mesh.Mesh.from_file(w.project.stl_path())                 # stretched along x only
+        part.vectors[:, :, 0] *= 1.5
+        part.save(w.project.stl_path())
+        draw_design.forget_meshes(w.project.stl_path())
+        w._mesh, w._mesh_key = None, None
+        try:
+            draw_design.run_mesh(w, folder, load_results.load(os.path.join(folder, "run_data")))
+            raise AssertionError("a run was shown on a part of another shape")
+        except draw_design.MeshError as e:
+            assert "its part has changed since the run" in str(e), e
 
 
 def test_pieces_pulled_apart_in_a_row():

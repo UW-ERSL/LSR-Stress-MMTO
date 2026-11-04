@@ -82,6 +82,7 @@ An **Error** stops a run from starting until it is put right. A **Warning** lets
 - **Save** saves the project in its file. A project never saved, or an example, is saved with Save As instead.
 - **Save As...** saves the project as a new one, in a new folder, with everything it uses copied in. The new project takes the new name; the runs made so far stay with the old one.
 - **Replace part...** changes the project's STL for another one. See section 5.
+- **Scale part...** multiplies every coordinate of the part by a number, for a part drawn in another unit. See section 5.
 - **Export as script** writes the project as a short Python script, *name*_setup.py, in the project's folder. Every save writes it again, so it always matches the project; this entry saves first if needed and says where the script is. Open it in any text editor to see the whole project written out, or to change it.
 - **Run script...** runs a Python script, such as one written by Export as script and then changed. What the script prints goes to the messages. When the script saves a project in its folder, that project opens in the window.
 - **Exit** closes LSR MMTO.
@@ -125,6 +126,8 @@ The part comes in when you make the project (File > New). To use a different STL
 
 The STL should be closed (watertight) and in the project's length unit. The size in the bottom bar (section 2.5) is a quick check: a part that should be 200 mm long and reads *x 0 to 0.2 mm* was drawn in metres.
 
+To fix that, choose File > **Scale part...** and type in **Scale by** the number every coordinate is multiplied by: 1000 from metres to millimetres, 1/1000 back, 25.4 from inches to millimetres. The window shows the size the part will have. OK changes the project's own copy of the part, in its part folder, so scaling again multiplies again (by 2, then by 3, is by 6). An example, or a project whose part is not in a folder of its own, is first saved as a project of your own: the STL the part came from never changes. Only the part is scaled. The units, the loads, the limits and the materials stay as they are. Faces you picked stay picked. Selections with coordinates or lengths you typed (a Box, a Cylinder, ...) are not scaled, so LSR MMTO names them first: check them afterwards. A length in element sizes, such as 1.5h, follows the mesh by itself. Runs made before keep their size: Results shows them, and Export STL exports them, at the size they were run at.
+
 ### 5.1 The mesh
 
 A run does not work on the STL itself. It fills the part with a grid of small equal blocks, the elements, and decides the material of each one. The corners of the blocks are the nodes, which supports and loads act on.
@@ -159,6 +162,8 @@ The buttons next to the list:
 - **Check again** reads the database again, for example after you changed it in Excel.
 
 New database and Import save into the project's folder, so the project must be saved first; LSR MMTO says so if it is not.
+
+When some columns of the database are in other units than the project's (section 4), a button **Convert to mmKS units...** (with the project's unit system) shows under the report. It opens a window that lists each of those columns with what its numbers are multiplied by, for example *Young's modulus: Pa -> MPa, x 1e-06*, and the limits of the formulation written for the old numbers with what they become, for example *Mass <= 4e+07 -> 4e-05 t*. **Convert these limits too** is ticked, so each limit keeps its meaning. **OK** writes the converted database as the project's own copy, in its materials folder (one that comes with LSR MMTO is never changed), keeps its trained network, which still fits, converts the ticked limits, saves the project and says in the messages what was converted.
 
 ### 6.2 Values and Network error
 
@@ -615,7 +620,7 @@ These appear in the messages as **Error:** lines, and under *Cannot start:* in t
 
 ### 14.3 Units
 
-- Warning **the database gives Young's modulus in Pa, but the project's units (mmKS) expect MPa: its numbers are 10^6 times what they should be. Displacement and compliance come out 10^6 times too small; stress and failure factor are unaffected.** The database and the project use different unit systems. The message says what it changes, sometimes including what a constraint's limit then really means. Either change the project's units (section 4) to match the database, or make a database in the project's units.
+- Warning **the database gives Young's modulus in Pa, but the project's units (mmKS) expect MPa: its numbers are 10^6 times what they should be. Displacement and compliance come out 10^6 times too small; stress and failure factor are unaffected.** The database and the project use different unit systems. The message says what it changes, sometimes including what a constraint's limit then really means. Either change the project's units (section 4) to match the database, or convert the database into the project's units with **Convert to ... units...** in Materials (section 6.1).
 
 ### 14.4 Supports and loads
 

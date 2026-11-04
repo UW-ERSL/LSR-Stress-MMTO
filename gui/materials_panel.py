@@ -6,6 +6,7 @@ Like every panel, a dialog with OK and Cancel working on a copy of the project: 
 the edited parts (apply), Cancel leaves the project as it was. A value left as it was is handed
 back exactly as it was, so a panel closed with OK and no edits changes nothing in the file.
 """
+import json
 import math
 import os
 import subprocess
@@ -16,6 +17,51 @@ from PyQt5 import QtCore, QtWidgets
 from lsr_mmto.problem.settings import BY_KEY, VAE_PARAMS as VAE_KEYS
 
 from .panel_widgets import Info, database_choice, ok_cancel, same, swatch
+
+
+CONVERT_HELP = ("The database is written again as the project's own copy, in its materials folder, with these "
+                "numbers in the project's units. Its trained network still fits the converted numbers, so it is "
+                "kept. A limit written for the old numbers means something else afterwards; converting it keeps "
+                "the limit the same in the converted units.")
+
+
+def conversion_lines(project, columns, limits):
+    """(column lines, limit lines) of a unit conversion (Project.unit_conversion), in words: "Young's
+    modulus: Pa -> MPa, x 1e-06", "Mass <= 4e+07 -> 4e-05 t"."""
+    from lsr_mmto.materials.databases import SHOWN
+    constraints = project.formulation.get("constraints", [])
+    return ([f"{SHOWN[name]}: {unit} -> {to}, x {factor:g}" for name, unit, to, factor in columns],
+            [f"{q.shown} {constraints[i]['op']} {bound:g} -> {new:g}{project.quantity_unit(q)}"
+             for i, q, bound, new in limits])
+
+
+class ConvertUnitsDialog(QtWidgets.QDialog):
+    """Convert to <units> units: each column of the database in other units, with its factor, and the limits
+    written for the old numbers with what they become, converted too while "Convert these limits too" is
+    ticked."""
+
+    def __init__(self, parent, project, columns, limits):
+        super().__init__(parent)
+        self.setWindowTitle("Convert units")
+        layout = QtWidgets.QVBoxLayout(self)
+        column_lines, limit_lines = conversion_lines(project, columns, limits)
+        head = QtWidgets.QHBoxLayout()
+        head.addWidget(QtWidgets.QLabel(f"The database in {project.units} units:"))
+        head.addWidget(Info(CONVERT_HELP))
+        head.addStretch()
+        layout.addLayout(head)
+        for line in column_lines:
+            layout.addWidget(QtWidgets.QLabel("    " + line))
+        self.limits = QtWidgets.QCheckBox("Convert these limits too")
+        self.limits.setChecked(True)
+        if limit_lines:
+            layout.addWidget(QtWidgets.QLabel("Limits written for the old numbers:"))
+            for line in limit_lines:
+                layout.addWidget(QtWidgets.QLabel("    " + line))
+            layout.addWidget(self.limits)
+        else:
+            self.limits.setChecked(False)
+        ok_cancel(self, layout)
 
 
 def effective_text(d_eff, n_z):
@@ -104,6 +150,9 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.latent_info.setVisible(False)
         below.addWidget(self.latent_info, alignment=QtCore.Qt.AlignTop)
         layout.addLayout(below)
+        self.convert_button = QtWidgets.QPushButton("")               # only while the units differ
+        self.convert_button.clicked.connect(lambda: self.convert_units())
+        layout.addWidget(self.convert_button, alignment=QtCore.Qt.AlignLeft)
         ok_cancel(self, layout)
         self._refresh()
 
@@ -220,6 +269,28 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.report.setText(note + "\n" + self.report.toPlainText())
         return path
 
+    def convert_units(self):
+        """Convert to <units> units...: the project's database (the one it uses now) converted into the
+        project's units, and the limits too when ticked, at once (the window's convert_database_units). The
+        panel then shows the converted database. Returns what was said in the messages, or None."""
+        window = self.parent()
+        if self._own_folder("Convert units") is None:
+            return None
+        lines = window.convert_database_units(self)
+        if not lines:
+            return None
+        project = window.project
+        self.original = self.project.database = project.database
+        self.project.formulation = json.loads(json.dumps(project.formulation))
+        self.project.settings["vae"] = dict(project.settings["vae"])
+        self.combo.blockSignals(True)
+        if self.combo.findText(project.database) < 0:
+            self.combo.addItem(project.database)
+        self.combo.setCurrentText(project.database)
+        self.combo.blockSignals(False)
+        self._refresh()
+        return lines
+
     def set_database(self, path):
         """A database by its file: a shipped one by name, any other by its path relative to the project."""
         from lsr_mmto.materials.databases import DATABASE_DIR, DATABASE_VAE
@@ -255,6 +326,9 @@ class MaterialsPanel(QtWidgets.QDialog):
         self._shown_table, self._network_rows = None, None
         self.latent_info.setVisible(False)
         self.show_errors.setEnabled(False)
+        self.convert_button.setText(f"Convert to {self.project.units} units...")
+        self.convert_button.setVisible(self.project.database == self.original and
+                                       bool(self.project.unit_conversion()[0]))
         xlsx, error = database_choice(self.project)
         if error:
             self.report.setText(error)

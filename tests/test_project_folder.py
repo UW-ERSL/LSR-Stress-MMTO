@@ -193,6 +193,43 @@ def test_setup_script_left_alone_by_a_script_save():
         shutil.rmtree(d, ignore_errors=True)
 
 
+def test_scale_part():
+    """Scale part: every coordinate of the project's own part times the factor, exactly, written over the same
+    file (one STL in part/ after three scales; by 2 then by 3 is by 6); the STL it came from is untouched;
+    a project not in a folder of its own, and a factor that is not a number above 0, are refused."""
+    import numpy as np
+    from stl import mesh as stl_mesh
+    d = _scratch()
+    try:
+        source = shutil.copy(STL, os.path.join(d, "export.STL"))           # the user's CAD export
+        before = open(source, "rb").read()
+        original = stl_mesh.Mesh.from_file(source).vectors.copy()
+        p, _ = F.create(os.path.join(d, "P"), source)
+        assert F.scale_part(p, 2.0) == os.path.abspath(p.stl_path())
+        assert np.array_equal(stl_mesh.Mesh.from_file(p.stl_path()).vectors, original * 2.0)
+        F.scale_part(p, 3)
+        assert np.array_equal(stl_mesh.Mesh.from_file(p.stl_path()).vectors, original * 6.0)
+        F.scale_part(p, 1 / 1000)
+        assert np.array_equal(stl_mesh.Mesh.from_file(p.stl_path()).vectors, original * 6.0 * (1 / 1000))
+        assert os.listdir(os.path.join(d, "P", "part")) == ["export.STL"] and open(source, "rb").read() == before
+        for bad in (0, -2.0, float("inf"), True, "2"):
+            try:
+                F.scale_part(p, bad)
+                raise AssertionError(bad)
+            except ValueError as e:
+                assert "above 0" in str(e), e
+        example = Project.load(os.path.join(PROJECTS, "L-bracket.mmto"))   # its STL is the shipped one
+        shipped = open(example.stl_path(), "rb").read()
+        try:
+            F.scale_part(example, 2.0)
+            raise AssertionError("an example's STL was scaled")
+        except ValueError as e:
+            assert "folder of its own" in str(e), e
+        assert open(example.stl_path(), "rb").read() == shipped
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in [(k, v) for k, v in list(globals().items()) if k.startswith("test_")]:

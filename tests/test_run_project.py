@@ -289,6 +289,7 @@ def test_vae_training_guards():
     import contextlib
     import io
     import shutil
+    import torch
     from lsr_mmto.materials.databases import DATABASE_DIR
     p = ubracket_project()                                              # 6Materials_AF_3Attr, shipped
     shipped = os.path.join(ROOT, DATABASE_DIR, "6Materials_AF_3Attr")
@@ -311,6 +312,8 @@ def test_vae_training_guards():
         old = open(os.path.join(d, "ggd.nt"), "rb").read()
         p.database = os.path.join(d, "ggd.xlsx")
         p.settings["vae"]["numEpochs"] = 3                              # a network that has learned nothing
+        torch.manual_seed(0)                                            # the same poor network every time
+        np.random.seed(0)
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             captured = _run(p, _run_arguments(p, save_dir=d, verbose=False))

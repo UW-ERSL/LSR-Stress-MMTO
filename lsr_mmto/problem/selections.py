@@ -672,6 +672,26 @@ def renamed(selection, old, new):
                            lambda d: dict(d, type="selection", name=new) if d["name"] == old else d))
 
 
+def holds_typed_lengths(selection):
+    """True when the selection holds a coordinate or a length typed in model units: a field given as a
+    point or a length (field_kinds) whose value is not in element sizes h ("1.5h" is, "5 + 1h" is not;
+    so are the words of a choice, such as "auto"). Such values stay as typed when the part is scaled.
+    Inside combinations too."""
+    def typed(v):
+        if isinstance(v, (list, tuple)):
+            return any(typed(x) for x in v)
+        if isinstance(v, str):
+            try:
+                return _length_value(v, 0.0) != 0
+            except ValueError:
+                return False
+        return isinstance(v, (int, float)) and not isinstance(v, bool)
+    if any(holds_typed_lengths(part) for part in getattr(selection, "parts", ())):
+        return True
+    return any(field.kind in ("point", "length") and typed(getattr(selection, name))
+               for name, field in selection.field_kinds.items())
+
+
 def union(*parts):
     return Union(*parts)
 

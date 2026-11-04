@@ -5,7 +5,7 @@ An optimized design on the 3D view: one block per element, drawn in place of the
 
     live(window, mesh, x, material, colours, labels)   while a run goes: density and material
     record(window, run, mesh, field, ...)       a finished run: Material, Density, a result (Stress) or Solid
-    run_mesh(window, folder, run)               the mesh a saved run was made on
+    run_mesh(window, folder, run)               the mesh a saved run was made on, at the size it was run at
 
 A drawing of materials (a run going, the Material view, the smooth pieces) also adds a column to
 window.design_legend: each material of the database with its colour, label and share (none when the
@@ -207,9 +207,30 @@ def mesh_of(window, project):
     return _MESHES[key]
 
 
+def forget_meshes(stl):
+    """The meshes kept for the STL at stl dropped, after its file changed (File > Scale part)."""
+    for key in [k for k in _MESHES if os.path.normcase(k[0]) == os.path.normcase(os.path.abspath(stl))]:
+        del _MESHES[key]
+
+
+def _scaled(mesh, factor):
+    """A copy of mesh at factor times its size: its nodes, element centres, element size and the part's surface
+    (which Export STL cuts the design from); everything else is the same, and mesh itself is not changed."""
+    import copy
+    out = copy.copy(mesh)
+    out.node_xyz = np.asarray(mesh.node_xyz, dtype=float) * factor
+    out.elem_centers = np.asarray(mesh.elem_centers, dtype=float) * factor
+    out.elem_size = np.asarray(mesh.elem_size, dtype=float) * factor
+    out.stlMesh = mesh.stlMesh.scale(factor, inplace=False)
+    return out
+
+
 def run_mesh(window, folder, run):
     """The mesh a saved run was made on, rebuilt from the project its record keeps (the window's own
-    mesh when it is the same one). MeshError when it cannot match the run."""
+    mesh when it is the same one). A part scaled since the run (File > Scale part: the same elements, each
+    larger or smaller by one factor in x, y and z than the run recorded) gives a copy of the mesh scaled back
+    to the run's own size. MeshError when it cannot match the run."""
+    from lsr_mmto.results.load_results import RecordError
     from lsr_mmto.problem.project import Project
     spec = ((run.config or {}).get("arguments_resolved") or {}).get("to_problem")
     if not isinstance(spec, dict) or "project" not in spec:
@@ -221,7 +242,18 @@ def run_mesh(window, folder, run):
     if int(mesh.num_elems) != int(run.n_elems):
         raise MeshError(f"its part has changed since the run: the mesh has {int(mesh.num_elems)} elements, "
                         f"the run {int(run.n_elems)}")
-    return mesh
+    try:
+        recorded = run.elem_size
+    except RecordError:                                         # an older record: as it is
+        return mesh
+    ratio = np.asarray(mesh.elem_size, dtype=float) / recorded
+    if np.allclose(ratio, 1.0, rtol=1e-9, atol=0.0):
+        return mesh
+    if not np.allclose(ratio, ratio[0], rtol=1e-9, atol=0.0):
+        raise MeshError(f"its part has changed since the run: the mesh's elements are "
+                        f"{' x '.join(f'{v:.4g}' for v in mesh.elem_size)}, the run's "
+                        f"{' x '.join(f'{v:.4g}' for v in recorded)}")
+    return _scaled(mesh, 1.0 / float(ratio[0]))
 
 
 def width(mesh):

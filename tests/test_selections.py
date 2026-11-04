@@ -215,6 +215,18 @@ def test_combinations():
     assert count(top_middle) == 5 * 11
 
 
+def test_typed_lengths():
+    """The selections whose coordinates or lengths are typed in model units (a scaled part leaves them as
+    they are): points and lengths of field_kinds, not lengths in element sizes h, nor triangle numbers."""
+    typed = [S.box([0, 0, 0], [2, 2, 2]), S.cylinder([5, 5, 0], "z", "1.5h"), S.sphere([5, 5, 5], 1.0),
+             S.plane("y", 3.0), S.near_face("zmin", 2.0), S.near_face("zmin", "5 + 1h"), S.nearest([1, 2, 3]),
+             S.inside_stl("c.stl"), S.union(S.face("xmin"), S.box([0, 0, 0], [1, 1, 1]))]
+    plain = [S.face("xmax"), S.near_face("zmax", "1.5h"), S.stl_faces([1, 2]), S.rows("xmax", "y", 3),
+             S.ids([1, 2]), S.selection("other"), S.union(S.face("xmin"), S.near_face("ymin", "2*h"))]
+    assert [s for s in typed if not S.holds_typed_lengths(s)] == []
+    assert [s for s in plain if S.holds_typed_lengths(s)] == []
+
+
 def test_json_round_trip():
     sels = [S.box([0, 0, 0], [2, 2, 2]), S.cylinder([5, 5, 0], "z", 1.5, 1.0, (0, 2), pad=0),
             S.cylinder([5, 5, 0], [0, 0, 1], 1.0), S.cylinder([5, 5, 0], "z", 1.0, boundary=True), S.sphere([5, 5, 5], 1.0), S.plane("y", 3.0),
