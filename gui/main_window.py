@@ -50,6 +50,7 @@ APP = "LSR MMTO"
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXAMPLES = os.path.join(REPO, "projects")   # the example projects: opened as templates, never changed
 OUTLINE_COLOUR = "#c400c4"                  # selection shapes: magenta, unlike the part, supports, loads
+MEASURE_COLOURS = ("#222222", "#ffffff")    # Measure's line and points: in the light view, in the dark view
 SNAPS = [("Snap: off", 0.0), ("Snap: 0.1", 0.1), ("Snap: 1", 1.0), ("Snap: 5", 5.0), ("Snap: 10", 10.0)]
 PROJECT_FILTER = "LSR MMTO project (*.mmto)"
 SCRIPT_FILTER = "Python script (*.py)"
@@ -886,13 +887,15 @@ class MMTOWindow(MainWindow):
         view_mode.apply(self.plotter, self.dark_view)
         self.plotter.render()
 
-    def view_colour(self, colour, text=False):
-        """The colour to draw one of the window's own drawings with, in the current 3D view."""
-        return view_mode.colour_for(colour, self.dark_view, text)
+    def view_colour(self, colour, text=False, dark_colour=None):
+        """The colour to draw one of the window's own drawings with, in the current 3D view (dark_colour: its
+        own colour in the dark view, if it has one)."""
+        return view_mode.colour_for(colour, self.dark_view, text, dark_colour)
 
-    def mark_drawing(self, prop, colour, text=False):
-        """A drawing of the window's own, drawn with view_colour(colour): kept in step with the view."""
-        view_mode.mark(prop, colour, self.dark_view, text)
+    def mark_drawing(self, prop, colour, text=False, dark_colour=None):
+        """A drawing of the window's own, drawn with view_colour(colour, text, dark_colour): kept in step with
+        the view."""
+        view_mode.mark(prop, colour, self.dark_view, text, dark_colour)
 
     def open_display_options_window(self):
         if self._raise_if_open("_display_options_dialog"):
@@ -1212,16 +1215,17 @@ class MMTOWindow(MainWindow):
         for name in [n for n in self.plotter.actors if str(n).startswith("measure_")]:
             self.plotter.remove_actor(name, reset_camera=False)
         pts = self._measure_points
+        light, dark = MEASURE_COLOURS
+        colour = self.view_colour(light, dark_colour=dark)
         drawn = []
         if pts:
-            drawn.append(self.plotter.add_mesh(pv.PolyData(np.vstack(pts)), color=self.view_colour("#222222"),
-                                               point_size=12, render_points_as_spheres=True, pickable=False,
-                                               name="measure_points"))
+            drawn.append(self.plotter.add_mesh(pv.PolyData(np.vstack(pts)), color=colour, point_size=12,
+                                               render_points_as_spheres=True, pickable=False, name="measure_points"))
         if len(pts) == 2:
-            drawn.append(self.plotter.add_mesh(pv.Line(pts[0], pts[1]), color=self.view_colour("#222222"),
-                                               line_width=3, pickable=False, name="measure_line"))
+            drawn.append(self.plotter.add_mesh(pv.Line(pts[0], pts[1]), color=colour, line_width=3, pickable=False,
+                                               name="measure_line"))
         for actor in drawn:
-            self.mark_drawing(actor.GetProperty(), "#222222")
+            self.mark_drawing(actor.GetProperty(), light, dark_colour=dark)
         self.plotter.render()
 
     def _build_menu(self):
