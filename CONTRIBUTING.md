@@ -53,6 +53,15 @@ in one line what is in the file. `structural_supports_and_loads.py` passes; `loo
   `python -m gui.user_guide_window --write`; the reference page and the user guide's lists are made
   from the code.
 
+## What is not committed
+
+The setup and the runs make these on your computer; `.gitignore` leaves them out, and they are never
+committed:
+
+- `lsr_mmto.egg-info/`, made by the setup (`pip install -e .`);
+- `__pycache__/` folders, made by Python;
+- the `results/` folder of each project, with its runs and analyses.
+
 ## Commit messages
 
 Plain sentences saying what changed and why, in the present tense, ending with "No number

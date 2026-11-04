@@ -102,6 +102,8 @@ Everything else (examples, material databases, VAEs, optimizer settings, schedul
 
 ## Files
 
+The pages in `docs/` and `CONTRIBUTING.md` can also be read inside the GUI: the user guide under Help > User guide, and the others under Help > Researcher guide, so no Markdown viewer is needed.
+
 ### Top level
 
 | File | Purpose |
