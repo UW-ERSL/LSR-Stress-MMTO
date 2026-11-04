@@ -9,8 +9,8 @@ import matplotlib.cm as cm
 import os
 import sys
 import warnings
-from lsr_mmto.materials.databases import (SHOWN, once_per_file_version, attribute_name, log_scaled, normalize,
-                                          participation_ratio)
+from lsr_mmto.materials.databases import (SHOWN, once_per_file_version, attribute_name, database_pca, log_scaled,
+                                          normalize)
 
 STOP_CHECK_EVERY = 100            # epochs between two asks of trainAutoencoder's should_stop
 
@@ -127,16 +127,15 @@ class MaterialEncoder:
         self.attribute_means = attribute_means
         self.attribute_stds = attribute_stds
         self.computeParticipationRatio()
-        print(f"Intrinsic dimension estimate (participation ratio): {self.intrinsic_dim:.3f}")
-        print(f"PCA explained variance ratio: {self.pca_explained_variance_ratio}")
+
     def computeParticipationRatio(self):
         """
-        Effective intrinsic dimensionality estimate from PCA eigenvalues.
-        Uses normalized data already created in preprocessData.
+        Effective intrinsic dimensionality estimate from PCA eigenvalues of the normalized database:
+        databases.database_pca, worked out once per version of the file. Shown by results/tables.pca and the
+        Materials window, not printed.
         """
-        X = self.scaledMaterialData.detach().cpu().numpy()
         self.intrinsic_dim, self.pca_explained_variance, self.pca_explained_variance_ratio = \
-            participation_ratio(X)
+            database_pca(self.excel_file)
         return self.intrinsic_dim
 
 

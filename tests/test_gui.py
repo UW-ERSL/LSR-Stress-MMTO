@@ -453,6 +453,32 @@ def opened(name, d):
     return w
 
 
+def test_the_materials_window_works_out_the_database_pca_once_and_prints_nothing(monkeypatch, capsys):
+    """Opening the Materials window: the PCA of the database (its effective dimension) is worked out once,
+    for the recommended latent dimension and the network's check alike, and nothing goes to the terminal.
+    It was worked out by each of them and printed by the encoder, once more for each project check."""
+    from lsr_mmto.materials import databases
+    calls = []
+    real = databases.participation_ratio
+    monkeypatch.setattr(databases, "participation_ratio", lambda X: (calls.append(X.shape), real(X))[1])
+    with scratch() as d:
+        w = opened("U-bracket", d)
+        databases._READ_CACHE.clear()                                       # as for a database just opened
+        calls.clear()
+        capsys.readouterr()
+        real_exec = QtWidgets.QDialog.exec_
+        try:
+            QtWidgets.QDialog.exec_ = lambda self: 0
+            w.handle_button_click(next(c for c in w.BUTTON_CONFIG if c["name"] == "Materials"))
+        finally:
+            QtWidgets.QDialog.exec_ = real_exec
+        out = capsys.readouterr().out
+        assert len(calls) == 1, calls
+        assert out == "", out
+        w.update_side_marks()                                               # the project's checks: no more
+        assert len(calls) == 1, calls
+
+
 def test_panels_with_no_edits_change_nothing():
     """OK with no edits, on every project and every panel: the project is as it was, to the last digit
     (the U-bracket's mass bound is 0.0035000000000000005)."""

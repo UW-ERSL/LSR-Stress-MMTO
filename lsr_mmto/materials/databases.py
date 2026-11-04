@@ -295,11 +295,19 @@ def latent_dim_breakdown(path):
     """(d_eff, n_z, ratios): as recommended_latent_dim, with the share of the variation each
     principal component of the normalized database explains (largest first, summing to 1)."""
     import math
+    d_eff, _, ratios = database_pca(path)
+    return d_eff, max(1, math.ceil(d_eff)), ratios
+
+
+@once_per_file_version
+def database_pca(path):
+    """participation_ratio of the normalized database: (d_eff, the PCA eigenvalues, their explained variance
+    ratios), worked out once for each version of the file, whoever asks (the project's checks, the
+    Materials window, the material encoder)."""
     df = _read(path)
     names = [attribute_name(n) for n in df.iloc[0, 1:].tolist()]
     values = df.iloc[2:, 1:].to_numpy(dtype=float)
-    d_eff, _, ratios = participation_ratio(normalize(values, names)[0])
-    return d_eff, max(1, math.ceil(d_eff)), ratios
+    return participation_ratio(normalize(values, names)[0])
 
 
 def check_database(path):
