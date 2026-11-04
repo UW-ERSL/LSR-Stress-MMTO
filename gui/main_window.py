@@ -156,13 +156,19 @@ class ProblemList(QtWidgets.QTextEdit):
 
     def fit(self):
         """As high as its lines, at most half of the panel in whole lines (one at least), so no line shows cut."""
+        if not self.isVisible():                                    # hidden, or not laid out yet: nothing to fit
+            return
         doc = self.document()
         doc.setTextWidth(self.viewport().width())
         edge = self.height() - self.viewport().height() + 2 * doc.documentMargin()     # frame, padding, margin
         first = doc.firstBlock().layout()
         line = first.lineAt(0).height() if first.lineCount() else self.fontMetrics().lineSpacing()
         most = max(1, int((self.panel.height() // 2 - edge) // line)) * line + edge
-        self.setFixedHeight(int(np.ceil(min(doc.size().height() - 2 * doc.documentMargin() + edge, most))))
+        self.setFixedHeight(max(0, int(np.ceil(min(doc.size().height() - 2 * doc.documentMargin() + edge, most)))))
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.fit()                                                  # its heights are only right once it is shown
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
