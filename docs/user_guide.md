@@ -63,7 +63,7 @@ A click on the part selects nothing, unless one of these is open:
 
 ### 2.4 The messages
 
-Under the 3D view, three lines of messages. At the top, the project's errors (red) and warnings (amber) as they are now, with a thin line under them: one you put right goes at once, and shows again if it comes back. With none, they take no room. Under them, what happened: what was opened and saved, what a run is doing. A message repeated at once is shown once, with how many times, for example *(×3)*. Scroll up to read earlier ones. The bin at the top right clears what happened; the errors and warnings stay.
+Under the 3D view, the messages, three lines high at first. Drag the divider between the 3D view and the messages to make them taller or shorter; LSR MMTO keeps that height for the next time. At the top, the project's errors (red) and warnings (amber) as they are now, with a thin line under them: one you put right goes at once, and shows again if it comes back. They take at most half of the messages' height, and with none they take no room. Under them, what happened: what was opened and saved, what a run is doing. A message repeated at once is shown once, with how many times, for example *(×3)*. Scroll up to read earlier ones. The bin at the top right clears what happened; the errors and warnings stay.
 
 An **Error** stops a run from starting until it is put right. A **Warning** lets the run go, but says something is probably not what you meant. Section 14 lists the common ones.
 

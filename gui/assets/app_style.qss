@@ -68,6 +68,7 @@ QLabel#legend { background: rgba(255, 255, 255, 235); color: #1f2933; border: 1p
 QLabel#legend[dark="true"] { background: rgba(31, 40, 56, 235); color: #e6e9ee; border-color: #3b4762; }
 QFrame#logFrame { background: #ffffff; border: 1px solid #dfe4ec; border-radius: 10px; }
 QTextEdit#log, QTextEdit#problems { background: #ffffff; border: none; font-size: 9.5pt; color: #3d4756; }
+QSplitter#viewSplitter::handle { background: transparent; }
 QFrame#problemsLine { background: #e3e7ee; border: none; }
 QToolButton#clearLog { border: none; background: transparent; padding: 2px; }
 QToolButton#clearLog:hover { background: #eef2ff; border-radius: 4px; }

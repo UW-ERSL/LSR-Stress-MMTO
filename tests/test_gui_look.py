@@ -383,6 +383,60 @@ def test_message_panel_problems_then_log():
     w.close()
 
 
+def test_message_panel_resizable():
+    """The divider between the 3D view and the message panel drags: the panel and its log get taller, the
+    problems take at most half of the panel and the log the rest (all of it with no problems); a dragged
+    height comes back in a new window (three lines at first); the start page, the legend and the banner stay
+    in their places on the 3D view as it changes size."""
+    G.view_settings().remove("message panel height")
+    try:
+        w = G.MMTOWindow()
+        w.resize(1366, 860)
+        w.show()
+        settle()
+        line = QtGui.QFontMetrics(w.message_text.font()).lineSpacing()
+        assert w.message_frame.height() == G.MESSAGE_LINES * line + 48                # as it starts
+        view, log = w.pv_frame.height(), w.message_text.height()
+        w.splitter.setSizes([sum(w.splitter.sizes()) - 300, 300])                   # dragged taller
+        settle()
+        assert w.message_frame.height() == 300 and w.message_text.height() > log + 150
+        assert w.pv_frame.height() < view - 150
+        assert w.start_page.geometry() == w.pv_frame.rect().adjusted(1, 1, -1, -1)  # the start page follows
+        w.open_project(os.path.join(PROJECTS, "L-bracket.mmto"))
+        w.view, w.design_legend = "design", [[("#ff0000", "Red", 0.6), ("#0000ff", "Blue", 0.4)]]
+        w.show_legend()
+        w.banner.say("Exporting STL...")
+        settle()
+        panel = w.problems.panel
+        w.problems.show_lines([("Warning", f"warning {k}") for k in range(30)])     # many problems: half
+        settle()
+        line = w.problems.fontMetrics().lineSpacing()
+        assert panel.height() // 2 - line < w.problems.height() <= panel.height() // 2       # in whole lines
+        assert w.message_text.height() >= panel.height() - w.problems.height() - 10
+        w.problems.show_lines([])                                                  # none: the log has it all
+        w.problems_line.hide()
+        settle()
+        assert w.message_text.height() == panel.height()
+        w.splitter.setSizes([sum(w.splitter.sizes()) - 160, 160])
+        settle()
+        assert w.legend.geometry().topLeft() == QtCore.QPoint(12, 12) and w.legend.isVisible()
+        assert w.banner.y() == 14 and w.banner.x() == max((w.pv_frame.width() - w.banner.width()) // 2, 8)
+        sizes = w.splitter.sizes()
+        w.splitter.moveSplitter(sizes[0] - 90, 1)                                   # a drag by the mouse
+        kept = w.splitter.sizes()[1]
+        assert kept == 250 and G.view_settings().value("message panel height", type=int) == kept
+        w.view = "setup"
+        w.close()
+        w2 = G.MMTOWindow()
+        w2.resize(1366, 860)
+        w2.show()
+        settle()
+        assert w2.message_frame.height() == kept                                    # the next session
+        w2.close()
+    finally:
+        G.view_settings().remove("message panel height")
+
+
 def test_run_layout():
     """While a run goes the sidebar steps aside and Current run takes about half the window; afterwards
     both are back as they were."""

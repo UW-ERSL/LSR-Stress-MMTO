@@ -67,7 +67,7 @@ SIDEBAR_STEPS = {"Units": "units", "Materials": "materials", "Supports and loads
 SIDEBAR_ICONS = {"Units": "units", "Materials": "materials", "Supports and loads": "supports",
                  "Formulation": "formulation", "Settings": "settings", "Run": "run", "Results": "results",
                  "Display Options": "display"}
-MESSAGE_LINES = 3                                        # the message panel shows the last three lines
+MESSAGE_LINES = 3                                        # the message panel starts three lines high
 SIDEBAR = ("Units", "Materials", "Supports and loads", "Formulation", "Settings", "Run",
            "Results", "Display Options")
 FOLDER_HELP = ("A project keeps everything it uses in its own folder: the project file, the part (in part), "
@@ -96,13 +96,17 @@ def without_minus_zero(text):
 
 
 class MessageLog(QtWidgets.QTextEdit):
-    """The message panel: read-only, scrolled to the last line, and a line repeated at once shown once
-    with how many times, Selected 5 triangles (x3)."""
+    """The message panel: read-only, scrolled to the last line (also when the panel's height changes), and a
+    line repeated at once shown once with how many times, Selected 5 triangles (x3)."""
 
     def __init__(self):
         super().__init__()
         self.setReadOnly(True)
         self._last, self._count = None, 0
+        bar = self.verticalScrollBar()                              # at the last line, it stays there when
+        self._at_end = True                                         # the panel is made taller or shorter
+        bar.valueChanged.connect(lambda v: setattr(self, "_at_end", v >= bar.maximum()))
+        bar.rangeChanged.connect(lambda _, most: bar.setValue(most) if self._at_end else None)
 
     def append(self, text):
         text = str(text)
@@ -129,14 +133,15 @@ class MessageLog(QtWidgets.QTextEdit):
 
 class ProblemList(QtWidgets.QTextEdit):
     """The top of the message panel: the project's errors (red) and warnings (amber) as they are now, as high
-    as they need up to most of the panel (scrolled past that); hidden when there are none."""
+    as they need up to half of the panel (scrolled past that); hidden when there are none."""
     COLOURS = {"Error": "#b00000", "Warning": "#9a5b00"}
 
-    def __init__(self, most):
+    def __init__(self, panel):
         super().__init__()
         self.setReadOnly(True)
         self.document().setDocumentMargin(2)
-        self.most = most                                            # the most lines it grows to
+        self.panel = panel                                          # the panel it takes at most half of
+        panel.installEventFilter(self)
         self.lines = []
 
     def show_lines(self, lines):
@@ -150,15 +155,24 @@ class ProblemList(QtWidgets.QTextEdit):
         self.fit()
 
     def fit(self):
-        self.document().setTextWidth(self.viewport().width())
-        edge = 2 * (self.frameWidth() + 2)
-        most = self.most * self.fontMetrics().lineSpacing() + edge
-        self.setFixedHeight(min(int(np.ceil(self.document().size().height())) + 2 * self.frameWidth(), most))
+        """As high as its lines, at most half of the panel in whole lines (one at least), so no line shows cut."""
+        doc = self.document()
+        doc.setTextWidth(self.viewport().width())
+        edge = self.height() - self.viewport().height() + 2 * doc.documentMargin()     # frame, padding, margin
+        first = doc.firstBlock().layout()
+        line = first.lineAt(0).height() if first.lineCount() else self.fontMetrics().lineSpacing()
+        most = max(1, int((self.panel.height() // 2 - edge) // line)) * line + edge
+        self.setFixedHeight(int(np.ceil(min(doc.size().height() - 2 * doc.documentMargin() + edge, most))))
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if event.size().width() != event.oldSize().width():
             self.fit()
+
+    def eventFilter(self, obj, event):
+        if obj is self.panel and event.type() == QtCore.QEvent.Resize:
+            self.fit()
+        return False
 
 
 class Banner(QtWidgets.QLabel):
@@ -204,6 +218,11 @@ class Banner(QtWidgets.QLabel):
         self.fade.setStartValue(1.0)
         self.fade.setEndValue(0.0)
         self.fade.start()
+
+
+def view_settings():
+    """What the window keeps between sessions (a settings file of the user's): the message panel's height."""
+    return QtCore.QSettings(QtCore.QSettings.IniFormat, QtCore.QSettings.UserScope, APP, APP)
 
 
 class StartPage(QtWidgets.QFrame):
@@ -821,8 +840,6 @@ class MMTOWindow(MainWindow):
                                   f".mmto project.")
         self.dark_view = False                                      # the 3D view: light unless switched
         self._shown_run, self.exporting, self.exported_last = None, False, None
-        self.sidebar.setObjectName("sidebar")
-        self.pv_frame.setObjectName("viewFrame")
         view_mode.install(self.plotter, lambda: self.dark_view)
         self._build_menu()
         self._build_top_row()
@@ -873,19 +890,20 @@ class MMTOWindow(MainWindow):
         self._view_changed()
 
     def create_message_frame(self):
-        """PyTO-AD's message panel, three lines high: at the top the project's errors and warnings as they are
-        now (ProblemList) and a thin line under them, when there are any; then what happened, with a
-        repeated line shown once (MessageLog); a Clear button at the top right empties what happened."""
+        """PyTO-AD's message panel under the 3D view, the divider between them dragged to make it taller or
+        shorter (its height kept for the next session; three lines at first): at the top the project's errors
+        and warnings as they are now (ProblemList, at most half of the panel) and a thin line under them, when
+        there are any; then what happened, with a repeated line shown once (MessageLog), in the rest; a Clear
+        button at the top right empties what happened."""
         super().create_message_frame()
         old, log = self.message_text, MessageLog()
         line = QtGui.QFontMetrics(log.font()).lineSpacing()
         body = QtWidgets.QWidget()
-        body.setFixedHeight(MESSAGE_LINES * line + 26)
         row = QtWidgets.QHBoxLayout(body)
         row.setContentsMargins(0, 0, 0, 0)
         column = QtWidgets.QVBoxLayout()
         column.setSpacing(3)
-        self.problems = ProblemList(most=MESSAGE_LINES - 1)
+        self.problems = ProblemList(body)
         self.problems.setObjectName("problems")
         self.problems.hide()
         self.problems_line = QtWidgets.QFrame()
@@ -908,9 +926,29 @@ class MMTOWindow(MainWindow):
         old.deleteLater()
         self.message_text = log
         log.setObjectName("log")
+        log.setMinimumHeight(line + 8)
         self.message_frame.setObjectName("logFrame")
         self.message_frame.setFrameStyle(QtWidgets.QFrame.NoFrame)
-        self.message_frame.setMaximumHeight(MESSAGE_LINES * line + 48)
+        self.sidebar.setObjectName("sidebar")                       # named before they move: a widget takes
+        self.pv_frame.setObjectName("viewFrame")                    # its style from its name as it moves
+        top = QtWidgets.QWidget()                                   # the 3D view and the sidebar beside it
+        self.main_layout.removeItem(self.h_layout)
+        self.main_layout.removeWidget(self.message_frame)
+        self.h_layout.setParent(None)
+        top.setLayout(self.h_layout)
+        self.splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
+        self.splitter.setObjectName("viewSplitter")
+        self.splitter.setChildrenCollapsible(False)
+        self.splitter.setHandleWidth(max(self.main_layout.spacing(), 6))
+        self.splitter.addWidget(top)
+        self.splitter.addWidget(self.message_frame)
+        self.splitter.setStretchFactor(0, 1)                        # a taller window makes the 3D view taller
+        self.splitter.setStretchFactor(1, 0)
+        self.main_layout.addWidget(self.splitter)
+        height = view_settings().value("message panel height", MESSAGE_LINES * line + 48, type=int)
+        self.splitter.setSizes([10000, height])
+        self.splitter.splitterMoved.connect(
+            lambda *_: view_settings().setValue("message panel height", self.splitter.sizes()[1]))
 
     def show_problems(self, errors=None):
         """The project's errors (Project.validate, as Run uses it; errors when already found) and warnings
