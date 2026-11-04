@@ -127,6 +127,40 @@ class MessageLog(QtWidgets.QTextEdit):
         super().clear()
 
 
+class ProblemList(QtWidgets.QTextEdit):
+    """The top of the message panel: the project's errors (red) and warnings (amber) as they are now, as high
+    as they need up to most of the panel (scrolled past that); hidden when there are none."""
+    COLOURS = {"Error": "#b00000", "Warning": "#9a5b00"}
+
+    def __init__(self, most):
+        super().__init__()
+        self.setReadOnly(True)
+        self.document().setDocumentMargin(2)
+        self.most = most                                            # the most lines it grows to
+        self.lines = []
+
+    def show_lines(self, lines):
+        """lines: [(kind, text)], kind Error or Warning."""
+        if lines == self.lines:
+            return
+        self.lines = list(lines)
+        self.setHtml("".join(f"<div style='color:{self.COLOURS[kind]}'>{kind}: {html_escape(str(text))}</div>"
+                             for kind, text in lines))
+        self.setVisible(bool(lines))
+        self.fit()
+
+    def fit(self):
+        self.document().setTextWidth(self.viewport().width())
+        edge = 2 * (self.frameWidth() + 2)
+        most = self.most * self.fontMetrics().lineSpacing() + edge
+        self.setFixedHeight(min(int(np.ceil(self.document().size().height())) + 2 * self.frameWidth(), most))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if event.size().width() != event.oldSize().width():
+            self.fit()
+
+
 class Banner(QtWidgets.QLabel):
     """A short note at the top of the 3D view that fades by itself: an export under way, then its result
     with a link to the folder."""
@@ -808,7 +842,6 @@ class MMTOWindow(MainWindow):
         self._mesh, self._mesh_key, self.preview_on = None, None, False
         self.design_bars = set()                                    # colour scales of the design
         self.design_legend = []                                     # its materials: a column per design drawn
-        self._said = set()                                          # errors and warnings already shown
         self.message_text.setText(f"{APP}. File > New starts a project from an STL; File > Open opens a "
                                   f".mmto project.")
         self.dark_view = False                                      # the 3D view: light unless switched
@@ -835,12 +868,13 @@ class MMTOWindow(MainWindow):
         """PyTO-AD's own marks (its Units dialog ticks Units) give way to update_side_marks."""
         self.update_side_marks()
 
-    def update_side_marks(self):
-        """The buttons of SIDEBAR_STEPS marked by the run's own check (Project.validate, as Run uses it): a
-        tick once the step is set up and the check finds nothing wrong in it, a red mark when it finds an
-        error in it, and the button's own picture while the step is not set up yet. Warnings mark nothing."""
+    def update_side_marks(self, errors=None):
+        """The buttons of SIDEBAR_STEPS marked by the run's own check (Project.validate, as Run uses it; errors
+        when already found): a tick once the step is set up and the check finds nothing wrong in it, a red
+        mark when it finds an error in it, and the button's own picture while the step is not set up yet.
+        Warnings mark nothing."""
         p = getattr(self, "project", None)                          # (PyTO-AD may ask before there is one)
-        wrong = {e.step for e in p.validate()} if p is not None else set()
+        wrong = {e.step for e in (p.validate() if errors is None else errors)} if p is not None else set()
         for name, step in SIDEBAR_STEPS.items():
             btn = getattr(self, "sidebar_buttons", {}).get(name)
             if btn is None:
@@ -864,11 +898,36 @@ class MMTOWindow(MainWindow):
         self._view_changed()
 
     def create_message_frame(self):
-        """PyTO-AD's message panel, three lines high, with a repeated line shown once (MessageLog)."""
+        """PyTO-AD's message panel, three lines high: at the top the project's errors and warnings as they are
+        now (ProblemList) and a thin line under them, when there are any; then what happened, with a
+        repeated line shown once (MessageLog); a Clear button at the top right empties what happened."""
         super().create_message_frame()
         old, log = self.message_text, MessageLog()
+        line = QtGui.QFontMetrics(log.font()).lineSpacing()
+        body = QtWidgets.QWidget()
+        body.setFixedHeight(MESSAGE_LINES * line + 26)
+        row = QtWidgets.QHBoxLayout(body)
+        row.setContentsMargins(0, 0, 0, 0)
+        column = QtWidgets.QVBoxLayout()
+        column.setSpacing(3)
+        self.problems = ProblemList(most=MESSAGE_LINES - 1)
+        self.problems.setObjectName("problems")
+        self.problems.hide()
+        self.problems_line = QtWidgets.QFrame()
+        self.problems_line.setObjectName("problemsLine")
+        self.problems_line.setFixedHeight(1)
+        self.problems_line.hide()
+        for widget in (self.problems, self.problems_line, log):
+            column.addWidget(widget)
+        row.addLayout(column, stretch=1)
+        self.clear_log = QtWidgets.QToolButton()
+        self.clear_log.setObjectName("clearLog")
+        self.clear_log.setIcon(icon("clear"))
+        self.clear_log.setToolTip("Clear the messages (the errors and warnings stay)")
+        self.clear_log.clicked.connect(log.clear)
+        row.addWidget(self.clear_log, alignment=QtCore.Qt.AlignTop)
         layout = self.message_frame.layout()
-        layout.replaceWidget(old, log)
+        layout.replaceWidget(old, body)
         old.hide()
         old.setParent(None)
         old.deleteLater()
@@ -876,9 +935,19 @@ class MMTOWindow(MainWindow):
         log.setObjectName("log")
         self.message_frame.setObjectName("logFrame")
         self.message_frame.setFrameStyle(QtWidgets.QFrame.NoFrame)
-        line = QtGui.QFontMetrics(log.font()).lineSpacing()
-        log.setFixedHeight(MESSAGE_LINES * line + 26)
         self.message_frame.setMaximumHeight(MESSAGE_LINES * line + 48)
+
+    def show_problems(self, errors=None):
+        """The project's errors (Project.validate, as Run uses it; errors when already found) and warnings
+        at the top of the message panel, as they are now: a problem fixed goes, one back shows again."""
+        p = getattr(self, "project", None)
+        if p is None:
+            lines = []
+        else:
+            lines = [("Error", e) for e in (p.validate() if errors is None else errors)] + \
+                    [("Warning", w) for w in p.warnings()]
+        self.problems.show_lines(lines)
+        self.problems_line.setVisible(bool(lines))
 
     def _build_top_row(self):
         """One row along the top: LSR MMTO, the File and Help menus, the Part / Design switch, the light /
@@ -1523,8 +1592,11 @@ class MMTOWindow(MainWindow):
         return self.project is not None and (self.path is None or self._state() != self._saved)
 
     def _refresh_title(self):
-        """The title, and the side buttons' marks, after any change of the project."""
-        self.update_side_marks()
+        """The title, the side buttons' marks and the errors and warnings in the message panel, after any
+        change of the project."""
+        errors = self.project.validate() if self.project is not None else []
+        self.update_side_marks(errors)
+        self.show_problems(errors)
         if self.project is None:
             self.setWindowTitle(APP)
             return
@@ -1813,19 +1885,9 @@ class MMTOWindow(MainWindow):
         if filled:
             self.message_text.append(f"{len(filled)} settings missing from the file were set to their defaults; "
                                      f"Save writes them.")
-        self._said = set()
-        self._say_checks()
         self._refresh_title()
         remember_project(path)
         self._project_or_not()
-
-    def _say_checks(self):
-        """The project's errors and warnings in the message panel, each once: a later change repeats none."""
-        for line in [f"Error: {e}" for e in self.project.validate()] + \
-                    [f"Warning: {w}" for w in self.project.warnings()]:
-            if line not in self._said:
-                self._said.add(line)
-                self.message_text.append(line)
 
     # ------------------------------------------------------------------ units
     def _units_to_window(self):
@@ -1844,7 +1906,6 @@ class MMTOWindow(MainWindow):
             self.project.units = self.settings.unit_system
             self.draw_ruler()
             self.message_text.append(f"Project units: {self.project.units}. Numbers are not converted.")
-            self._say_checks()
             self._refresh_title()
 
     # ------------------------------------------------------------------ Materials, Formulation, Settings
@@ -1871,8 +1932,6 @@ class MMTOWindow(MainWindow):
         self.update_part_facts()
         for line in lines:
             self.message_text.append(line)
-        if lines:
-            self._say_checks()
         self._refresh_title()
 
     def database_folder(self):
@@ -2314,7 +2373,6 @@ class MMTOWindow(MainWindow):
         if names:
             self.message_text.append(f"Check the selections {', '.join(names)}: they are triangle numbers "
                                      f"of the old STL.")
-        self._say_checks()
         self._refresh_title()
         return True
 

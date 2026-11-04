@@ -350,6 +350,39 @@ def test_message_panel_merges_repeats():
     w.close()
 
 
+def test_message_panel_problems_then_log():
+    """The message panel: the project's errors (red) and warnings (amber) as they are now at the top, a
+    thin line, then what happened. A problem fixed disappears, and shows again when it comes back; with no
+    problems only the log is there. Clear empties the log and keeps the problems; the panel keeps its
+    height."""
+    w = window()
+    height = w.message_frame.height()
+    young = "Warning: the database gives Young's modulus"
+    assert w.problems.isVisible() and w.problems_line.isVisible()
+    assert young in w.problems.toPlainText() and young not in w.message_text.toPlainText()
+    assert "#9a5b00" in w.problems.toHtml()                               # amber
+    w.project.units = "MKS"                                               # fixed: the database is in MKS
+    w._refresh_title()
+    settle()
+    assert not w.problems.isVisible() and not w.problems_line.isVisible() and w.message_text.isVisible()
+    w.project.units = "no such units"                                     # an error
+    w._refresh_title()
+    assert w.problems.toPlainText().startswith("Error: units") and "#b00000" in w.problems.toHtml()
+    w.project.units = "mmKS"                                              # broken again: shown again
+    w._refresh_title()
+    settle()
+    assert w.problems.isVisible() and w.problems.toPlainText().count(young) == 1
+    assert "Error" not in w.problems.toPlainText()
+    w.message_text.append("Saved.")
+    assert "Saved." in w.message_text.toPlainText()
+    assert w.clear_log.toolTip() and not w.clear_log.icon().isNull()
+    w.clear_log.click()
+    assert w.message_text.toPlainText() == "" and young in w.problems.toPlainText()
+    assert w.problems.height() < w.message_text.height() + w.problems.height() <= w.message_frame.height()
+    assert w.message_frame.height() == height
+    w.close()
+
+
 def test_run_layout():
     """While a run goes the sidebar steps aside and Current run takes about half the window; afterwards
     both are back as they were."""

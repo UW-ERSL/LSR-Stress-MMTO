@@ -1145,10 +1145,10 @@ def test_add_flow():
         assert panel._selected(panel.bcs) == len(w.project.bcs) - 1
         assert not hasattr(w, "structural_loads_window")                     # gone, and nothing points at it
         G.UnitsWindow(w, w.settings).apply_settings()                         # once crashed on the deleted Pick
-        text = w.message_text.toPlainText()
+        text = w.problems.toPlainText()
         assert text.count("Warning: the database gives Young's modulus") == 1
-        w.apply_panel(type("P", (), {"apply": lambda self, p: ["changed"]})())   # a change: said again? no
-        assert w.message_text.toPlainText().count("Warning: the database gives Young's modulus") == 1
+        w.apply_panel(type("P", (), {"apply": lambda self, p: ["changed"]})())   # a change: shown twice? no
+        assert w.problems.toPlainText().count("Warning: the database gives Young's modulus") == 1
 
 
 def test_scale():

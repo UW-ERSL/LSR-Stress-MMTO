@@ -70,7 +70,10 @@ QLabel#legend { background: rgba(255, 255, 255, 235); color: #1f2933; border: 1p
     padding: 8px 12px; font-size: 9.5pt; }
 QLabel#legend[dark="true"] { background: rgba(31, 40, 56, 235); color: #e6e9ee; border-color: #3b4762; }
 QFrame#logFrame { background: #ffffff; border: 1px solid #dfe4ec; border-radius: 10px; }
-QTextEdit#log { background: #ffffff; border: none; font-size: 9.5pt; color: #3d4756; }
+QTextEdit#log, QTextEdit#problems { background: #ffffff; border: none; font-size: 9.5pt; color: #3d4756; }
+QFrame#problemsLine { background: #e3e7ee; border: none; }
+QToolButton#clearLog { border: none; background: transparent; padding: 2px; }
+QToolButton#clearLog:hover { background: #eef2ff; border-radius: 4px; }
 QStatusBar { background: #ffffff; border-top: 1px solid #e3e7ee; color: #4b5563; }
 QStatusBar QLabel, QStatusBar QCheckBox { color: #4b5563; }
 QStatusBar::item { border: none; }
