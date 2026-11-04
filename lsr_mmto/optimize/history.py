@@ -70,14 +70,11 @@ def compute_mass_from_x_and_z(
 # ============================================================================
 
 def init_run_history():
-    """Return a fresh history dict for a topopt run."""
+    """Return a fresh history dict for a topopt run; the loop adds each penalty's keys (Penalty.keys)."""
     return {
         "objective": [],
         "constraints": [],
         "J_phys": [],
-        "P": [],
-        "Pn": [],
-        "Pz_n": [],
         "grey": [],
         "mass_ratio": [],
         "max_failure_factor": [],
@@ -145,11 +142,11 @@ def constraints_over_limit(history, to_params, material_labels=None):
     return lines
 
 
-def log_objective_and_constraints(history, obj, J_phys, Jn, P, Pn, Pzn, cons,
+def log_objective_and_constraints(history, obj, J_phys, Jn, penalties, cons,
                                   to_params, verbose=True, material_labels=None):
-    """Record objective/constraint history. In verbose mode print the full
-    Obj line + per-constraint lines; in simple mode print one compact per-iteration
-    line. Each constraint is named as the app names it."""
+    """Record objective/constraint history; penalties is {history key: value} of the penalties
+    (add_penalties in the loop). In verbose mode print the full Obj line + per-constraint lines; in
+    simple mode print one compact per-iteration line. Each constraint is named as the app names it."""
     from lsr_mmto.formulation.quantities import quantity_label
     cons_flat = np.asarray(cons).flatten()
     constraint_names = [quantity_label(c[0], c[1], material_labels) for c in to_params.Constraints]
@@ -157,14 +154,14 @@ def log_objective_and_constraints(history, obj, J_phys, Jn, P, Pn, Pzn, cons,
     history["objective"].append(float(obj))
     history["constraints"].append(cons_flat.copy())
     history["J_phys"].append(J_phys)
-    history["P"].append(P)
-    history["Pn"].append(Pn)
-    history["Pz_n"].append(Pzn)
+    for key, value in penalties.items():
+        history[key].append(value)
 
     if verbose:
         print(
-            f"Obj: J={J_phys:.4g} | Jn={Jn:.4g} | P={P:.3g} | "
-            f"Pn={Pn:.3g} | Pz_n={Pzn:.3g} | f={float(obj):.4g}"
+            f"Obj: J={J_phys:.4g} | Jn={Jn:.4g} | "
+            + "".join(f"{key}={value:.3g} | " for key, value in penalties.items())
+            + f"f={float(obj):.4g}"
         )
         for idx, val in enumerate(cons_flat):
             print(

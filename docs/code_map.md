@@ -32,7 +32,8 @@ LSR MMTO
 │   ├── design/                   how the optimizer's numbers become what the physics uses
 │   │   ├── density_filter_and_projection.py   densities to physical densities
 │   │   ├── latent_to_properties.py            each element's latent point to its material properties
-│   │   └── latent_penalties.py                the distance penalty and latent smoothing
+│   │   └── latent_penalties.py                slot: a penalty every physics has (PENALTIES):
+│   │                                          latent smoothing, the distance penalty
 │   ├── formulation/              what is minimized and limited
 │   │   ├── quantities.py         slot: a quantity for every physics (Mass, Cost, the volume fractions)
 │   │   └── formulation_text.py   reads the objective and constraints as written in a project
@@ -92,6 +93,9 @@ Is it about one physics only?
 │   ├── a result to show after a run?
 │   │     RESULT_FIELDS on the front page, its values returned by final_summary (<name>_quantities.py)
 │   │     test: tests/test_template_physics.py · docs: "A physics"
+│   ├── a term added to the objective (a penalty) of this physics only?
+│   │     PENALTIES on the front page, one entry
+│   │     test: tests/test_template_physics.py · docs: "A penalty"
 │   ├── a setting of this physics only?
 │   │     SETTINGS on the front page
 │   │     test: tests/test_run_project.py · docs: "A setting"
@@ -117,7 +121,10 @@ Is it about one physics only?
     ├── a new way to treat the constraints?
     │     one entry of CONSTRAINT_METHODS, lsr_mmto/optimize/optimization_loop.py
     │     test: tests/test_regression.py · docs: "A constraint method"
-    ├── another step of each iteration (a penalty, a continuation)?
+    ├── a term added to the objective (a penalty) every physics has?
+    │     one entry of PENALTIES, lsr_mmto/design/latent_penalties.py
+    │     test: tests/test_template_physics.py, tests/test_regression.py · docs: "A penalty"
+    ├── another step of each iteration (a continuation)?
     │     one step of ITERATION_STEPS, lsr_mmto/optimize/optimization_loop.py
     │     test: tests/test_regression.py · docs: CONTRIBUTING, "Where a change goes"
     ├── something in the project file itself?

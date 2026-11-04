@@ -19,8 +19,8 @@ To make a physics of your own:
     2. Rename the four files (heat_module.py, heat_physics.py, heat_supports_and_loads.py,
        heat_quantities.py) and the imports between them.
     3. Change every line marked FILL. The lines marked "keep as is" stay.
-    4. Give it names of its own: NAME below, each kind in SUPPORT_AND_LOAD_KINDS, each quantity and
-       each setting key must not be used by another physics.
+    4. Give it names of its own: NAME below, each kind in SUPPORT_AND_LOAD_KINDS, each quantity, each
+       penalty and each setting key must not be used by another physics.
     5. Add one line to physics/available_physics.py: import your front page, and put it in MODULES.
     6. Copy tests/test_template_physics.py for your physics and run it.
 
@@ -73,6 +73,25 @@ SETTINGS = [
     dict(section="advanced", key="template_coefficient_scale", default=1.0, label="Coefficient scale",
          help="Multiplies every material's diffusion coefficient.", group="Material model"),   # FILL
 ]
+
+# PENALTIES: terms this physics adds to the objective besides the two every physics has (latent smoothing
+# and the distance penalty), each the arguments of a Penalty (design/latent_penalties.py, which says what
+# each piece is): its name, its name in the app and its help, its value fn(m) in torch from the model's
+# state, its weight(state, it) this iteration (0 is off: its schedule goes there), its scale ("raw" or
+# "first value", always stated) and its history key. Its settings go in SETTINGS above. The loop adds them
+# after the two every physics has, in this order. May be empty. For example, a push towards fully solid or
+# fully empty elements (with torch imported and a setting template_greyness_weight in SETTINGS):
+#
+#   def _greyness(m):
+#       return torch.mean(m.x_phys * (1 - m.x_phys))                  # 0 for a design of only 0 and 1
+#
+#   PENALTIES = [
+#       dict(name="TemplateGreyness", shown="Greyness", help="Pushes each element towards solid or empty.",
+#            fn=_greyness,                                              # off from iteration 100 on:
+#            weight=lambda state, it: 0.0 if state.iteration >= 100 else state.s.template_greyness_weight,
+#            scale="first value", key="template_greyness"),
+#   ]
+PENALTIES = []                                                     # FILL, if your physics needs one
 
 # The other entries come from the other files (imported above):
 #   make_solver, analyse                         template_physics.py

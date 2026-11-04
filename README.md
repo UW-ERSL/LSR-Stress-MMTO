@@ -173,7 +173,7 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad_imp
 |---|---|
 | `density_filter_and_projection.py` | the density filter and the Heaviside projection |
 | `latent_to_properties.py` | each element's material properties from its point in the latent space |
-| `latent_penalties.py` | the distance penalty and latent smoothing |
+| `latent_penalties.py` | the terms added to the objective: latent smoothing, the distance penalty, and those of a physics |
 
 #### `lsr_mmto/formulation/`
 

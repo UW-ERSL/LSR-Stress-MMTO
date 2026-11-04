@@ -21,7 +21,7 @@ different material in each element, a subclass does that (`MultiMaterialHexFEA` 
 | `problem/` | the project (`Project`, `run(p)`), its settings, selections, supports and loads, the mesh, the project folder |
 | `materials/` | material databases, the material network (VAE), training and loading it |
 | `elements/` | the hexahedral element: strain matrix and Lame parameters |
-| `design/` | density filter and Heaviside projection, latent points to material properties (`decode`), the latent penalties |
+| `design/` | density filter and Heaviside projection, latent points to material properties (`decode`), the penalties added to the objective (`PENALTIES`) |
 | `formulation/` | the quantities an objective or a constraint can name, and the formula text |
 | `physics/` | `available_physics.py`, the list of physics, and one folder per physics |
 | `optimize/` | the optimization loop, one iteration's model, the history, the final design analysis, saving a run |
@@ -44,8 +44,8 @@ different material in each element, a subclass does that (`MultiMaterialHexFEA` 
         x_phys, props -> physics.analyse   (structural: E, nu -> solve -> u -> von Mises)
         -> objective and constraints (QUANTITIES), by name
 
-   autograd gives their gradients with respect to `x_phys` and `z`. The loop adds the latent
-   penalties, carries the gradient back through the projection and the filter to `x`, and the
+   autograd gives their gradients with respect to `x_phys` and `z`. The loop adds the penalties
+   (`PENALTIES`), carries the gradient back through the projection and the filter to `x`, and the
    physics records what each iteration measures (`iteration_diagnostics`).
 4. After the last iteration, `optimize/final_design_analysis.py` binarizes the design and snaps
    the materials, the physics prints its numbers for each and returns its results (`final_summary`), and
@@ -70,11 +70,12 @@ the code takes from it. `MODULE_ENTRIES` in `physics/available_physics.py` lists
 | `deflation_space` | for DPCG on problems above the direct solver's limit; `None` keeps the direct solver |
 | `supports_and_loads_error` | why the supports and loads leave no solution, or None |
 | `QUANTITIES` | its objectives and constraints |
+| `PENALTIES` | the terms it adds to the objective besides those every physics has (may be empty) |
 | `SETTINGS` | its own settings |
 | `RESULT_FIELDS` | the per-element results a run saves: their names, views and units |
 | `iteration_diagnostics` | what each iteration records and prints |
 | `final_summary` | the final check's numbers, printed; it returns the values of `RESULT_FIELDS` for the last design |
 
 The core's lists are made from the modules: `QUANTITIES` (`formulation/quantities.py`),
-`BC_KINDS` (`problem/boundary_conditions.py`) and `SETTINGS` (`problem/settings.py`). No core file
-imports a physics by name. `docs/how_to_add_features.md` says how to add one.
+`PENALTIES` (`design/latent_penalties.py`), `BC_KINDS` (`problem/boundary_conditions.py`) and
+`SETTINGS` (`problem/settings.py`). No core file imports a physics by name. `docs/how_to_add_features.md` says how to add one.
