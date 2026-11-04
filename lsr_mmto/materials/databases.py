@@ -221,6 +221,12 @@ def _read(path):
         return pd.read_excel(path, header=None)
 
 
+def log_scaled(name):
+    """True for a column whose attribute says log_scaled: normalize scales log10 of its values, and the
+    network's output is turned back with 10 ** (encoder.getMaterialProperties)."""
+    return name in ATTRIBUTES and ATTRIBUTES[name].log_scaled
+
+
 def normalize(values, attribute_names):
     """Each column scaled to [0, 1] (log10 first for an attribute that says log_scaled):
     the normalized data, and each column's minimum and maximum before scaling."""
@@ -230,7 +236,7 @@ def normalize(values, attribute_names):
     scale_max = np.zeros(values.shape[1])
     for i, name in enumerate(attribute_names):
         col = values[:, i]
-        if name in ATTRIBUTES and ATTRIBUTES[name].log_scaled:
+        if log_scaled(name):
             col = np.log10(col)
         scale_min[i] = col.min()
         scale_max[i] = col.max()

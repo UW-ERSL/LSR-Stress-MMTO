@@ -63,6 +63,29 @@ def test_shipped_databases():
         assert abs(enc.intrinsic_dim - d_eff) < 1e-5, (name, enc.intrinsic_dim, d_eff)
 
 
+def test_decode_undoes_normalize_by_the_attributes_flag(monkeypatch):
+    """The network's output is turned back into values by the same flag normalize scales by: a column whose
+    attribute is log_scaled comes back through 10 **, a linear one directly; each round trip gives the
+    database's values to 1e-10. Nothing is named by hand: a column named E0 is linear like any other."""
+    import numpy as np
+    from lsr_mmto.materials.encoder import MaterialEncoder
+    monkeypatch.setattr(ATTRIBUTES["Youngs_Modulus"], "log_scaled", True)
+    with tempfile.TemporaryDirectory() as d:
+        rows = [r[:] for r in GOOD]
+        rows[2][2], rows[3][2], rows[4][2] = 2e9, 2e11, 7e10              # three orders of magnitude
+        for r, v in zip(rows, ["E0", "-", 1.0, 10.0, 100.0]):             # a name once decoded by hand
+            r.append(v)
+        enc = MaterialEncoder(VAEParams())
+        enc.readExcel(write(os.path.join(d, "db.xlsx"), rows))
+    props = enc.getMaterialProperties(enc.scaledMaterialData)            # normalize, then decode
+    for name, a in enc.materialAttributes.items():
+        raw = np.asarray(enc.rawData, dtype=float)[:, a["idx"]]
+        assert np.allclose(props[name].numpy(), raw, rtol=1e-10, atol=0), (name, props[name], raw)
+    E = enc.scaledMaterialData[:, enc.materialAttributes["Youngs_Modulus"]["idx"]].numpy()
+    logs = np.log10([2e9, 2e11, 7e10])
+    assert np.allclose(E, (logs - logs.min()) / (logs.max() - logs.min()), rtol=0, atol=1e-9)   # log-scaled in
+
+
 def test_errors_name_the_cell():
     assert errors_of(GOOD) == ([], [])
     cases = [

@@ -9,7 +9,8 @@ import matplotlib.cm as cm
 import os
 import sys
 import warnings
-from lsr_mmto.materials.databases import SHOWN, once_per_file_version, attribute_name, normalize, participation_ratio
+from lsr_mmto.materials.databases import (SHOWN, once_per_file_version, attribute_name, log_scaled, normalize,
+                                          participation_ratio)
 
 STOP_CHECK_EVERY = 100            # epochs between two asks of trainAutoencoder's should_stop
 
@@ -163,7 +164,7 @@ class MaterialEncoder:
         """Every material's every property as the database gives it and as the network gives it back
         (encoded to its latent point, then decoded), one dict each: material, property, unit, database,
         network, difference (network - database, in the unit), percent_of_range (the difference in % of
-        the property's range over the database; for E0..E3, Y0..Y3 of the range of their log10)."""
+        the property's range over the database; for a log-scaled attribute, of the range of its log10)."""
         was = self.vaeNet.encoder.isTraining                # put back as found: left on, the encoder samples at random
         self.vaeNet.encoder.isTraining = False
         with torch.no_grad():
@@ -353,7 +354,7 @@ class MaterialEncoder:
             idx = attribute['idx']
             scaleMax = attribute['scaleMax']
             scaleMin = attribute['scaleMin']
-            if name in ['E0', 'E1', 'E2', 'E3', 'Y0', 'Y1', 'Y2', 'Y3']:
+            if log_scaled(name):                            # scaled as log10 by normalize: undone the same way
                 properties[name] = 10 ** (decoded[:, idx] * (scaleMax - scaleMin) + scaleMin)
             else:
                 properties[name] = (decoded[:, idx] * (scaleMax - scaleMin) + scaleMin)
