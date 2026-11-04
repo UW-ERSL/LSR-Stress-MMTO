@@ -7,8 +7,9 @@ gives every entry in MODULE_ENTRIES, and the core takes what it needs of the phy
 there. A new physics is one folder and one line in MODULES.
 
 A module's files import the layers below them (elements/, design/, the PyTO-AD solvers), never
-the core's lists: a module gives its quantities, its kinds of support and load and its settings
-as plain arguments, and the core makes them into Quantity, BCKind and Setting entries.
+the core's lists: a module gives its quantities, its penalties, its kinds of support and load and
+its settings as plain arguments, and the core makes them into Quantity, Penalty, BCKind and
+Setting entries.
 """
 from lsr_mmto.physics.structural import structural_module
 
@@ -37,6 +38,8 @@ MODULE_ENTRIES = {
     "supports_and_loads_error": "supports_and_loads_error(mesh, bcs): why the supports and loads leave the "
                                 "problem without a solution (the part free to move), or None",
     "QUANTITIES": "its objectives and constraints, each as the arguments of a Quantity",
+    "PENALTIES": "the terms it adds to the objective besides those every physics has, each as the arguments "
+                 "of a Penalty (design/latent_penalties.py); may be empty",
     "SETTINGS": "its own settings, each as the arguments of a Setting",
     "RESULT_FIELDS": "the per-element results a run saves, {name: dict(view, title, measures)}; final_summary "
                      "returns their values",

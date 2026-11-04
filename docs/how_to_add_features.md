@@ -54,6 +54,40 @@ as torch from the model's state; autograd gives the gradient.
   finite differences. What else to run: both generators above (the reference page and the user
   guide list every quantity).
 
+## A penalty (a term added to the objective)
+
+`lsr_mmto/physics/template/template_module.py` has one penalty of a physics, commented: what it is
+given, its weight and its scale.
+
+A penalty every physics has (latent smoothing, the distance penalty) is one entry in `PENALTIES` in
+`lsr_mmto/design/latent_penalties.py`. A penalty of one physics is one entry in `PENALTIES` on that
+physics' front page, given as the arguments of a `Penalty` without `physics`. Each iteration the loop
+adds them in that order, those every physics has first. Its function computes it as torch from the
+model's state; autograd gives the gradient.
+
+    Penalty("LatentSmoothing", "Latent smoothing",
+            "Discourages neighbouring elements from flickering between materials.",
+            lambda m: latent_smoothing(m.x_phys, m.z, m.Hm, m.Hsm), _latent_smoothing_weight, "raw", "Pz_n"),
+
+- `fn(m)`: its value, from `m` as for a quantity. `m.x_phys.detach()` keeps the density out of its
+  gradient, as the distance penalty does.
+- `weight(state, it)`: its weight this iteration; 0 leaves it out of that iteration. Its schedule
+  lives here: latent smoothing gives `z_smoothing_weight` until `z_smoothing_disable_after_iter`,
+  then 0; the distance penalty's weight grows each iteration it is on. `state.s` holds the settings,
+  `state.iteration` the iteration, `it.Jn` the objective divided by its first value.
+- `scale`: stated in every entry, `"raw"` (the weight multiplies the value) or `"first value"` (the
+  value is divided by its value at the first iteration it is on). An entry without it is refused
+  when the app starts.
+- `key`, and `raw_key` if wanted: the history keys of what it adds to the objective and of its value
+  before weight and scale. The run saves them; both are 0 at an iteration it is off.
+- Its settings are entries of `SETTINGS` (see "A setting"), on the physics' front page for a penalty
+  of one physics.
+
+`tests/test_template_physics.py` registers a penalty on the template, checks the gradient against
+finite differences and reads its history key; copy those tests for a penalty of your own. A new
+penalty every physics has changes every run unless its weight is 0 by default:
+`tests/test_regression.py` shows it.
+
 ## A selection type
 
 `lsr_mmto/problem/selections.py`. Subclass `Selection`, give it a `TYPE`, a `fields` tuple and

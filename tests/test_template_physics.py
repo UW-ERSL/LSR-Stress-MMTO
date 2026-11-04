@@ -29,14 +29,17 @@ BAR = os.path.join(ROOT, "data", "models", "RectangularBeam")
 def registered(module):
     """The core's lists with module added, as its line in available_physics.MODULES adds it when they are
     made, and taken out again afterwards."""
+    from lsr_mmto.design import latent_penalties
     from lsr_mmto.formulation import quantities
     from lsr_mmto.problem import boundary_conditions, settings
     available_physics._checked(module)
     added_q = [quantities.Quantity(physics=[module.NAME], **q) for q in module.QUANTITIES]
+    added_p = [latent_penalties.Penalty(physics=[module.NAME], **p) for p in module.PENALTIES]
     added_s = [settings.Setting(physics=module.NAME, **a) for a in module.SETTINGS]
     available_physics.MODULES.append(module)
     available_physics.PHYSICS[module.NAME] = module
     quantities.QUANTITIES.extend(added_q)
+    latent_penalties.PENALTIES.extend(added_p)
     boundary_conditions.BC_KINDS.update(boundary_conditions.kinds_of(module))
     settings.SETTINGS.extend(added_s)
     settings._make_views()
@@ -47,6 +50,8 @@ def registered(module):
         del available_physics.PHYSICS[module.NAME]
         for q in added_q:
             quantities.QUANTITIES.remove(q)
+        for p in added_p:
+            latent_penalties.PENALTIES.remove(p)
         for k in module.SUPPORT_AND_LOAD_KINDS:
             del boundary_conditions.BC_KINDS[k]
         for s in added_s:
@@ -259,6 +264,100 @@ def test_a_large_structural_problem_still_uses_dpcg(monkeypatch, capsys):
     with tempfile.TemporaryDirectory() as d:
         run(p, save_dir=d, verbose=True)
     assert "Solver: DPCG" in capsys.readouterr().out
+
+
+def _test_penalty(weight, scale="first value"):
+    """A penalty of the template for these tests: greyness of the densities plus the latent points' distance
+    to 0.1, so its gradient has an x block and a z block."""
+    return dict(name="TemplateTestPenalty", shown="Test penalty", help="A penalty for the tests only.",
+                fn=lambda m: torch.mean(m.x_phys * (1 - m.x_phys)) + torch.mean((m.z - 0.1) ** 2),
+                weight=weight, scale=scale, key="template_test_penalty")
+
+
+def _held_and_sourced(name):
+    from lsr_mmto.problem import selections as S
+    p = _project(name, "UBracket.STL", UBRACKET, 3000)
+    p.add_selection("bottom", S.face("ymin"))
+    p.add_selection("top_right", S.box([0.75, 0.9, -1], [1.0, 1.0, 1]))
+    p.bcs += [{"kind": "set_value", "on": "bottom", "value": 0.0},
+              {"kind": "source", "on": "top_right", "total": 1.0}]
+    return p
+
+
+def test_a_physics_penalty_is_added_with_its_gradient(monkeypatch):
+    """A penalty on the template's front page is added after the two every physics has, divided by its first
+    value and times its weight, and the gradient of the objective with it agrees with central differences
+    (the two every physics has are switched off, so the objective is mass plus this penalty)."""
+    from lsr_mmto.optimize import optimization_loop as M
+    from lsr_mmto.problem.project import _prepared, _run_arguments
+    monkeypatch.setattr(TEMPLATE, "PENALTIES", [_test_penalty(lambda state, it: 5.0)])
+    with registered(TEMPLATE), tempfile.TemporaryDirectory() as d:
+        p = _held_and_sourced("penalty")
+        p.objective("Mass()")
+        p.settings["advanced"].update(use_penalization=False, use_z_smoothing=False)
+        state = M.setup(**_run_arguments(_prepared(p), save_dir=d, verbose=False))
+        assert [q.name for q in state.penalties] == ["LatentSmoothing", "DistancePenalty", "TemplateTestPenalty"]
+        n = state.num_elems
+        rng = np.random.default_rng(0)
+        zeta = state.zeta0.flatten().copy()
+        zeta[:n] = rng.uniform(0.2, 0.8, n)
+        zeta[n:] = rng.uniform(state.lower.ravel()[n:], state.upper.ravel()[n:]) * 0.5
+        f, g, _, _ = M.evaluate(state, zeta)              # the first: mass 1 (its first value), penalty 5
+        assert np.isclose(float(f), 6.0)
+        assert state.history["template_test_penalty"] == [5.0]
+        assert state.history["Pz_n"] == state.history["Pn"] == state.history["P"] == [0.0]
+
+        everything = state.penalties
+        state.penalties = everything[:2]                  # the same design without it: the mass's gradient alone
+        g_mass = M.evaluate(state, zeta)[1]
+        state.penalties = everything
+        h = 1e-5
+        for block in (rng.choice(n, 3, replace=False), n + rng.choice(len(zeta) - n, 3, replace=False)):
+            for i in block:
+                plus, minus = zeta.copy(), zeta.copy()
+                plus[i] += h
+                minus[i] -= h
+                fd = (float(M.evaluate(state, plus)[0]) - float(M.evaluate(state, minus)[0])) / (2 * h)
+                assert abs(fd - g[i, 0]) <= 1e-5 * abs(g[i, 0]), (i, fd, g[i, 0])
+            share = np.abs(g[block, 0] - g_mass[block, 0]).sum() / np.abs(g[block, 0]).sum()
+            assert share > 0.1, share                     # the penalty's part of the gradient is not lost in it
+
+
+def test_a_physics_penalty_keeps_its_history_and_its_schedule(monkeypatch):
+    """A short template run with the test penalty on for its first iteration only: the saved run's history has
+    its key, 0.5 at the first iteration (its first value, times 0.5) and 0 from then on; the history keys of
+    the two every physics has are kept."""
+    from lsr_mmto.problem.project import run
+    from lsr_mmto.results import load_results
+    monkeypatch.setattr(TEMPLATE, "PENALTIES", [_test_penalty(lambda state, it: 0.5 if state.iteration < 1 else 0)])
+    with registered(TEMPLATE):
+        p = _held_and_sourced("penalty")
+        p.settings["common"]["maxIterations"] = 2
+        with tempfile.TemporaryDirectory() as d:
+            run(p, save_dir=d, verbose=False)
+            r = load_results.load(os.path.join(d, "run_data.npz"))
+    values = list(r.history["template_test_penalty"])
+    assert len(values) >= 2 and values[0] == 0.5 and all(v == 0 for v in values[1:]), values
+    assert all(len(r.history[k]) == len(values) for k in ("P", "Pn", "Pz_n"))
+
+
+def test_a_penalty_must_state_its_scale(monkeypatch):
+    """A penalty entry without its scale, or with one that is not "raw" or "first value", is refused when the
+    core's lists are made (at start-up), and nothing of it is added."""
+    import pytest
+    from lsr_mmto.design import latent_penalties
+    entry = _test_penalty(lambda state, it: 0.5)
+    del entry["scale"]
+    monkeypatch.setattr(TEMPLATE, "PENALTIES", [entry])
+    with pytest.raises(TypeError, match="scale"):
+        with registered(TEMPLATE):
+            pass
+    monkeypatch.setattr(TEMPLATE, "PENALTIES", [_test_penalty(lambda state, it: 0.5, scale="normalised")])
+    with pytest.raises(ValueError, match="scale must be one of 'raw', 'first value'"):
+        with registered(TEMPLATE):
+            pass
+    assert [q.name for q in latent_penalties.PENALTIES] == ["LatentSmoothing", "DistancePenalty"]
+    assert "template" not in available_physics.PHYSICS
 
 
 if __name__ == "__main__":

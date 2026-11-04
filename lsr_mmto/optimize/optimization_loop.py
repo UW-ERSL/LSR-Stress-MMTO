@@ -9,9 +9,8 @@ setup(...)          builds everything before the first design: the problem, the 
                     and the bounds; returns the RunState
 evaluate(state, zeta)
                     one design through ITERATION_STEPS, in order (each a function step(state, it)):
-                    stop_if_asked, penalties_switched_off_on_schedule, analyse_design,
-                    objective_and_constraints, keep_solid, latent_sensitivity_filter,
-                    latent_smoothing_penalty, distance_penalty_step, chain_to_design_variables, record,
+                    stop_if_asked, analyse_design, objective_and_constraints, keep_solid,
+                    latent_sensitivity_filter, add_penalties, chain_to_design_variables, record,
                     continuation; returns the objective (scaled by its first value, with the penalties),
                     its gradient, the constraints and their gradients, with respect to the optimizer's
                     variables
@@ -26,7 +25,8 @@ THE DESIGN THROUGH ONE ITERATION:
     the physics' analyse (its front page): the solve(x_phys) and what its quantities read
       -> objective/constraints
     all of the above is one torch tree; gradients by autograd, through PyTO-AD's solve
-    optional penalties (latent z-smoothing, distance-to-real-material) added to the objective
+    the penalties (PENALTIES, design/latent_penalties.py: latent smoothing, the distance to the real
+      materials, and the physics' own) added to the objective, each with its weight this iteration
     gradient carried back through Heaviside + density filter by autograd -> w.r.t. x
 
 Latents z are raw design variables (no forward filter); their *gradients* are optionally smoothed by
@@ -60,8 +60,7 @@ from lsr_mmto.pyto_ad_imports import (
 )
 from lsr_mmto.materials.encoder import MaterialEncoder, NetworkRunCancelled, network_warning
 from lsr_mmto.physics.available_physics import physics_module
-from lsr_mmto.design.latent_penalties import (distance_penalty, latent_smoothing,
-                                              smooth_latent_constraint_gradient_inplace,
+from lsr_mmto.design.latent_penalties import (PENALTIES, smooth_latent_constraint_gradient_inplace,
                                               smooth_latent_gradient_inplace)
 from lsr_mmto.design.latent_to_properties import decode
 from lsr_mmto.optimize.design_model import MMTOModelAD
@@ -169,7 +168,8 @@ def setup(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, plotter,
     Latents:
       z are raw MMA variables; no direct filtering of z is performed.
 
-    Optional latent smoothing penalty (density-weighted):
+    The penalties added to the objective: PENALTIES (design/latent_penalties.py), those of the run's
+    physics, in order; e.g. latent smoothing (density-weighted):
       Pz = lambda * sum_ell sum_e x_e * ( z_e^(ell) - ((H z^(ell))/Hs)_e )^2
     """
     _args_at_start = dict(s.as_dict(), to_problem=to_problem, save_dir=save_dir, verbose=verbose,
@@ -183,6 +183,11 @@ def setup(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, plotter,
         raise TypeError(f"to_problem must be a Project, e.g. Project.load('projects/L-bracket.mmto'), "
                         f"not {to_problem!r}; the coded examples are now the project files in projects/")
     physics = physics_module(to_problem.physics)            # the front page of the project's physics
+    penalties = [p for p in PENALTIES if p.applies_to(physics.NAME)]
+    for key in (k for p in penalties for k in p.keys()):    # each penalty's history keys, new ones
+        if key in history:
+            raise ValueError(f"penalty history key {key!r} is used twice")
+        history[key] = []
     problem = to_problem
     mesh, mat_prop, bcs, elem_body_force, to_params, vae_params = problem.build()
     print(f"[SWEEP] nDOFDesired={to_params.nDOFDesired}  "
@@ -356,7 +361,8 @@ def setup(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, plotter,
         iteration=0,                        # designs evaluated so far
         beta=float(beta_schedule["beta_init"]),
         objective_scale=None,               # the first objective; later ones are divided by it
-        distance_scale=None,                # the distance penalty's own first value, its scale
+        penalties=penalties,                # the penalties of the run's physics, in the order they are added
+        penalty_scales={},                  # the first value of each penalty scaled by it, by name
         gamma=float(s.gamma_init),          # the distance penalty's weight
         objective_history=[],               # scaled objectives, for the start of the weight's ramp
         gamma_ramp_started=False,
@@ -375,31 +381,6 @@ def stop_if_asked(state, it):
     """The window's Stop: the run ends before this design is evaluated."""
     if state.should_stop is not None and state.should_stop():
         raise _StopRequested
-
-
-def penalties_switched_off_on_schedule(state, it):
-    """The latent smoothing and the distance penalty, each switched off from its set iteration on."""
-    s = state.s
-    if (
-        state.use_z_smoothing
-        and s.z_smoothing_disable_after_iter is not None
-        and state.iteration >= s.z_smoothing_disable_after_iter
-    ):
-        state.use_z_smoothing = False
-        state.during_run["z_smoothing_off_at_iter"] = int(state.iteration)
-        if state.verbose:
-            print(f"[INFO] z-smoothing penalty disabled at iteration {state.iteration}")
-    # Disable distance-based penalty after specified iteration
-    if (
-        state.use_distance_penalty
-        and not s.use_dynamic_gamma_scheduling
-        and s.distance_penalty_disable_after_iter is not None
-        and state.iteration >= s.distance_penalty_disable_after_iter
-    ):
-        state.use_distance_penalty = False
-        state.during_run["distance_penalty_off_at_iter"] = int(state.iteration)
-        if state.verbose:
-            print(f"[INFO] Distance-based penalty disabled at iteration {state.iteration}")
 
 
 def analyse_design(state, it):
@@ -457,68 +438,32 @@ def latent_sensitivity_filter(state, it):
                                                   state.num_elems, state.latent_dim)
 
 
-def latent_smoothing_penalty(state, it):
-    """The latent smoothing penalty added to the objective, while it is switched on."""
-    s, model = state.s, state.model
-    if state.use_z_smoothing:
-        # RAW scaling, applied consistently every iteration. The z-smoothing
-        # penalty is ZERO at a spatially-uniform start, so it has no valid
-        # own-initial-value to normalize by (dividing by it would blow up).
-        # z_smoothing_weight multiplies the raw roughness directly.
-        Pz_t = latent_smoothing(model.x_phys, model.z, model.Hm, model.Hsm)
-        it.Pzn = float(s.z_smoothing_weight) * float(Pz_t.detach())
-        it.obj = it.obj + it.Pzn
-        it.grad_obj += float(s.z_smoothing_weight) * model.grad_phys(Pz_t)
-    else:
-        it.Pzn = 0.0
-
-
-def distance_penalty_step(state, it):
-    """The distance-to-real-material penalty added to the objective, and its weight's growth."""
-    s, model = state.s, state.model
-    it.P = 0.0
-    it.Pn = 0.0
-    if state.use_distance_penalty and (s.use_dynamic_gamma_scheduling or state.iteration >= int(s.penalty_start_iter)):
-        # RAW penalty (gamma = 1); weighting + normalization applied here
-        Dp_t = distance_penalty(model.x_phys, model.z, model.z_real)
-        penalty_raw = float(Dp_t.detach())
-
-        if state.distance_scale is None:
-            state.distance_scale = max(float(penalty_raw), 1e-12)   # freeze initial scale (once)
-
-        # gamma is now a pure ratio: penalty's initial share of the objective
-        it.P = float(penalty_raw)
-        it.Pn = float(state.gamma) * (it.P / state.distance_scale)
-        it.obj = it.obj + it.Pn
-        # x enters the realizability penalty as a frozen weight (detached in the AD
-        # model), so its x block is zero by construction, as before.
-        it.grad_obj += float(state.gamma) * model.grad_phys(Dp_t) / state.distance_scale
-
-        if s.use_dynamic_gamma_scheduling:
-            state.objective_history.append(float(it.Jn))
-            if not state.gamma_ramp_started:
-                # the ramp starts once J changed by less than the plateau tolerance over the last window
-                # iterations (not before the earliest start), or in time to reach gamma_max end_margin
-                # iterations before the last
-                _K, _rel_tol = int(s.gamma_plateau_window), float(s.gamma_plateau_tolerance)
-                _min_iter = int(s.gamma_plateau_earliest_iter)
-                _n_ramp = int(np.ceil(np.log(max(s.gamma_max / s.gamma_init, 1 + 1e-9))
-                                      / np.log(max(s.gamma_factor, 1 + 1e-9))))
-                _deadline = int(state.to_params.MaxIterations) - _n_ramp - int(s.gamma_ramp_end_margin)
-                _J_hist = state.objective_history
-                _settled = (state.iteration >= _min_iter and len(_J_hist) > _K and
-                            abs(_J_hist[-1] - _J_hist[-1 - _K])
-                            <= _rel_tol * max(abs(_J_hist[-1 - _K]), 1e-12))
-                if _settled or state.iteration >= _deadline:
-                    state.gamma_ramp_started = True
-                    state.during_run["gamma_ramp_started_at_iter"] = int(state.iteration)
-                    if state.verbose:
-                        print(f"[DYN-GAMMA] ramp started at iter {state.iteration} "
-                              f"({'plateau' if _settled else 'deadline'})")
-            if state.gamma_ramp_started:
-                state.gamma = min(state.gamma * s.gamma_factor, s.gamma_max)
-        else:
-            state.gamma = min(state.gamma * s.gamma_factor, s.gamma_max)
+def add_penalties(state, it):
+    """Each penalty of the run (PENALTIES), in order, with its weight this iteration: weight * value /
+    scale added to the objective and the same times the value's gradient to the objective's gradient;
+    its history keys get what it added and its raw value (0 while its weight is 0)."""
+    model = state.model
+    it.penalties = {}
+    for p in state.penalties:
+        w = p.weight(state, it)
+        raw = added = 0.0
+        if w:
+            value_t = p.fn(model)
+            raw = float(value_t.detach())
+            if p.scale == "first value":
+                if p.name not in state.penalty_scales:
+                    state.penalty_scales[p.name] = max(float(raw), 1e-12)   # its first value, kept
+                scale = state.penalty_scales[p.name]
+                added = float(w) * (raw / scale)
+                it.obj = it.obj + added
+                it.grad_obj += float(w) * model.grad_phys(value_t) / scale
+            else:
+                added = float(w) * raw
+                it.obj = it.obj + added
+                it.grad_obj += float(w) * model.grad_phys(value_t)
+        if p.raw_key:
+            it.penalties[p.raw_key] = raw
+        it.penalties[p.key] = added
 
 
 def chain_to_design_variables(state, it):
@@ -535,7 +480,7 @@ def chain_to_design_variables(state, it):
 
 def record(state, it):
     """The iteration's line in the history and the log, and what the window's progress hears."""
-    log_objective_and_constraints(state.history, it.obj, it.J_phys, it.Jn, it.P, it.Pn, it.Pzn, it.cons,
+    log_objective_and_constraints(state.history, it.obj, it.J_phys, it.Jn, it.penalties, it.cons,
                                   state.to_params, verbose=state.verbose, material_labels=state.material_labels)
     state.last_zeta = it.zeta.copy()
     if state.progress is not None:
@@ -565,13 +510,11 @@ def continuation(state, it):
 
 ITERATION_STEPS = [
     stop_if_asked,
-    penalties_switched_off_on_schedule,
     analyse_design,
     objective_and_constraints,
     keep_solid,
     latent_sensitivity_filter,
-    latent_smoothing_penalty,
-    distance_penalty_step,
+    add_penalties,
     chain_to_design_variables,
     record,
     continuation,

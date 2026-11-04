@@ -22,6 +22,7 @@ DOC = "linear elasticity, small strain"
 FIELDS = {"u": 3}                                   # the displacement, three unknowns per node
 PROPERTIES = ["Youngs_Modulus"]                     # Poisson's ratio may be one value for all (SETTINGS)
 NEEDS = ("support", "load")                         # a structural problem with no load has nothing to solve
+PENALTIES = []                                      # none besides those every physics has
 
 # the kinds of quantity of its own values and quantities (forces, stresses), with their units' values in SI
 # and each unit system's unit; the core has length, density, mass and cost per mass already
