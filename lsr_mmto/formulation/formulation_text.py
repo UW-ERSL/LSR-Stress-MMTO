@@ -9,7 +9,8 @@ import re
 
 
 def parse_expression(text):
-    """'Name(a, b=1)' -> ('Name', [a], {'b': 1}). Only a single quantity is accepted."""
+    """'Name(a, b=1)' -> ('Name', [a], {'b': 1}). Only a single quantity is accepted. An argument written by
+    position may be a word (a material word: 'MassFraction(lightest)'), kept as text; the rest are numbers."""
     m = re.fullmatch(r"\s*([A-Za-z_]\w*)\s*\(([^()]*)\)\s*", text or "")
     if not m:
         raise ValueError(f"expression {text!r}: write one quantity, e.g. 'Mass()'; "
@@ -21,7 +22,9 @@ def parse_expression(text):
         try:
             v = float(value if eq else key)
         except ValueError:
-            raise ValueError(f"expression {text!r}: argument {part!r} is not a number") from None
+            if eq or not part.isidentifier():
+                raise ValueError(f"expression {text!r}: argument {part!r} is not a number") from None
+            v = part
         if eq:
             kwargs[key.strip()] = v
         else:
@@ -53,5 +56,17 @@ def to_params_form(text, role, bound=None):
             form = ", ".join([a[0] for a in required] + [f"{a[0]}=..." for a in optional])
             raise ValueError(f"expression {text!r}: write {name}({form})")
         given = dict(zip((a[0] for a in required), args), **kwargs)
-        opt = {a: (int if typ == "material" else float)(given.get(a, default)) for a, typ, default in q.arguments}
+        opt = {a: _argument(text, typ, words, given.get(a, default)) for a, typ, default, words in q.arguments}
     return (name, opt) if role == "objective" else (name, opt, float(bound))
+
+
+def _argument(text, typ, words, value):
+    """An argument's value as to_params holds it: a whole number for a material (or one of the material words
+    it takes, as the word), a number otherwise."""
+    if isinstance(value, str):
+        if typ == "material" and value in words:
+            return value
+        allowed = ("a number" if typ != "material" else
+                   f"a material number or one of {', '.join(words)}" if words else "a material number")
+        raise ValueError(f"expression {text!r}: {value!r} is not {allowed}")
+    return int(value) if typ == "material" else float(value)

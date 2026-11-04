@@ -83,6 +83,10 @@ class NumberEdit(QtWidgets.QLineEdit):
             return False
         return math.isfinite(v) and (not self.integer or v == int(v))
 
+    def edited(self):
+        """True when the text is no longer what set_value showed (the user typed a change)."""
+        return self.text() != self._shown
+
     def value(self):
         if self.text() == self._shown:
             return self._exact

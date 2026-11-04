@@ -125,11 +125,12 @@ def _loading_bc_summary(mesh, bc, ndof_per_node=3):
         out["load_node_count"] = int(load_nodes.size)
         out["net_force_xyz"] = net
         out["total_force_magnitude"] = float(np.linalg.norm(net))
-        try:
-            c = np.asarray(mesh.node_xyz)[load_nodes].mean(axis=0)
-            out["load_centroid_xyz"] = [float(v) for v in c]
-        except Exception:
-            pass
+        if load_nodes.size:                         # no loads on this field: no centroid to give
+            try:
+                c = np.asarray(mesh.node_xyz)[load_nodes].mean(axis=0)
+                out["load_centroid_xyz"] = [float(v) for v in c]
+            except Exception:
+                pass
     except Exception as e:
         out["load_summary_error"] = str(e)
     try:

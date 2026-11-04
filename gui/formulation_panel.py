@@ -45,6 +45,7 @@ class FormulationPanel(QtWidgets.QDialog):
         self.setWindowTitle("Formulation")
         self.resize(760, 420)
         self.original = project.formulation
+        self.project = project
         self.units = project.units
         self.quantities = {q.name: q for q in QUANTITIES if q.applies_to(project.physics)}   # this physics
         self.columns, self.labels, self.colours = database_columns(project)
@@ -142,19 +143,19 @@ class FormulationPanel(QtWidgets.QDialog):
         combo.setCurrentIndex(combo.findData(name) if name else -1)
 
     def add_row(self, constraint):
-        """A constraint row: quantity, material (a quantity that takes one), <=, bound, unit."""
+        """A constraint row: quantity, of material (a quantity that takes one), <=, bound, unit, (i)."""
         from lsr_mmto.formulation.formulation_text import parse_expression
         row = QtWidgets.QHBoxLayout()
-        widgets = {"quantity": self._quantity_combo("constraint"), "material": QtWidgets.QComboBox(),
-                   "bound": NumberEdit(0.0), "unit": QtWidgets.QLabel(),
-                   "why": QtWidgets.QLabel(), "remove": QtWidgets.QPushButton("Remove")}
+        widgets = {"quantity": self._quantity_combo("constraint"), "of": QtWidgets.QLabel("of"),
+                   "material": QtWidgets.QComboBox(), "bound": NumberEdit(0.0), "unit": QtWidgets.QLabel(),
+                   "info": Info(""), "why": QtWidgets.QLabel(), "remove": QtWidgets.QPushButton("Remove")}
         n = len(self.labels) if self.labels else 0
         for i in range(n):
             widgets["material"].addItem(swatch(self.colours[i]), self.labels[i], i)
         widgets["bound"].setFixedWidth(150)
         widgets["unit"].setStyleSheet(GREY)
         widgets["why"].setStyleSheet("color: #b00000;")
-        for key in ("quantity", "material", "<=", "bound", "unit", "why"):
+        for key in ("quantity", "of", "material", "<=", "bound", "unit", "info", "why"):
             row.addWidget(QtWidgets.QLabel("<=") if key == "<=" else widgets[key])
         row.addStretch()
         row.addWidget(widgets["remove"])
@@ -165,10 +166,11 @@ class FormulationPanel(QtWidgets.QDialog):
             try:
                 name, args, kwargs = parse_expression(constraint["expression"])
                 if self._takes(name, "material") and args:
-                    i = int(args[0])
-                    if i >= widgets["material"].count():
-                        widgets["material"].addItem(f"material {i}", i)
-                    widgets["material"].setCurrentIndex(widgets["material"].findData(i))
+                    self._material_words(widgets["material"], name)
+                    value = args[0] if isinstance(args[0], str) else int(args[0])
+                    if widgets["material"].findData(value) < 0:
+                        widgets["material"].addItem(f"material {value}", value)
+                    widgets["material"].setCurrentIndex(widgets["material"].findData(value))
             except ValueError:
                 pass
         widgets["quantity"].currentIndexChanged.connect(lambda _=None, e=entry: self._update_row(e))
@@ -178,10 +180,33 @@ class FormulationPanel(QtWidgets.QDialog):
         self._update_row(entry)
         return entry
 
+    def _material_words(self, combo, name):
+        """The material list with, after the materials, the words the quantity's material takes in their
+        place (the heaviest, the lightest); the choice is kept when the new list has it."""
+        from lsr_mmto.formulation.quantities import MATERIAL_WORDS
+        words = self.quantities[name].words("material") if name in self.quantities else ()
+        if [combo.itemData(i) for i in range(combo.count()) if isinstance(combo.itemData(i), str)] == list(words):
+            return
+        chosen = combo.currentData()
+        for i in reversed(range(combo.count())):
+            if isinstance(combo.itemData(i), str):
+                combo.removeItem(i)
+        for word in words:
+            combo.addItem(MATERIAL_WORDS[word][0], word)
+        combo.setCurrentIndex(max(0, combo.findData(chosen)))
+
     def _update_row(self, entry):
         w = entry["widgets"]
         name = w["quantity"].currentData()
-        w["material"].setVisible(self._takes(name, "material"))
+        material = self._takes(name, "material")
+        if material:
+            self._material_words(w["material"], name)
+        w["of"].setVisible(material)
+        w["material"].setVisible(material)
+        w["info"].setVisible(bool(name))
+        w["info"].setToolTip(self.quantities[name].help if name in self.quantities else "")
+        if not entry["original"] and name in self.quantities and not w["bound"].edited():
+            w["bound"].set_value(self.quantities[name].first_bound(self.project) or 0.0)   # a new row's limit
         unit = bound_unit(name, self.units) if name else ""
         w["unit"].setText("" if unit in ("fraction of the design domain", "no units") else unit)
         w["why"].setText(self.reason(name) or "" if name else "")
@@ -268,11 +293,10 @@ def formulation_lines(f, project):
             name, args, _ = parse_expression(expression)
         except ValueError:
             return expression
-        from lsr_mmto.formulation.quantities import QUANTITIES, takes
+        from lsr_mmto.formulation.quantities import QUANTITIES, material_text, takes
         shown = next((q.shown for q in QUANTITIES if q.name == name), name)
         if takes(name, "material") and args:
-            i = int(args[0])
-            shown += f" of {labels[i] if labels and i < len(labels) else f'material {i}'}"
+            shown += f" of {material_text(args[0], labels)}"
         return shown
 
     obj = f.get("objective")

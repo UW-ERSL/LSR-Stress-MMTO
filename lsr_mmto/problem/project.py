@@ -432,8 +432,8 @@ class Project:
 
     def warnings(self):
         """What is allowed but deserves a look before a run: the database's warnings, a
-        database in units other than the project's, and a latent dimension other than the
-        one recommended for the database."""
+        database in units other than the project's, a latent dimension other than the
+        one recommended for the database, and what a constraint's quantity says about its limit."""
         out = []
         if self.database is None:
             return out
@@ -444,6 +444,22 @@ class Project:
         out += [f"material database {os.path.basename(xlsx)}: {w}" for w in db_warnings]
         out += self._unit_warnings(xlsx)
         out += self.vae_check()[1]
+        out += self._bound_warnings()
+        return out
+
+    def _bound_warnings(self):
+        """What each constraint's quantity says about its limit (Quantity.bound_warning)."""
+        from lsr_mmto.formulation.quantities import QUANTITIES
+        by_name = {q.name: q for q in QUANTITIES}
+        out = []
+        for i, c in enumerate(self.formulation.get("constraints", []), 1):
+            try:
+                q = by_name.get(parse_expression(c["expression"])[0])
+                said = q.bound_warning(self, float(c["bound"])) if q and q.bound_warning else None
+            except Exception:                                                          # noqa: BLE001
+                continue                                    # a bad constraint is an error of its own
+            if said:
+                out.append(f"constraint {i} ({q.shown} <= {float(c['bound']):g}): {said}")
         return out
 
     def network_path(self):

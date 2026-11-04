@@ -94,6 +94,23 @@ def test_start_menu_and_the_question():
     assert not S.ask_desktop(answered("n")) and not S.ask_desktop(answered(" No "))
 
 
+def test_setup_step_lines_count_the_real_steps(capsys):
+    """The install prints [n/N] with N the number of steps it really goes through: 6 on Windows (the
+    Start menu step), 5 elsewhere, and main() calls step() once for each of them."""
+    import inspect
+    import re
+    import setup_environment as S
+    for windows, total in ((True, 6), (False, 5)):
+        all_steps = S.steps(windows, desktop=True)
+        assert len(all_steps) == total
+        for n in range(1, total + 1):
+            S.step(n, all_steps)
+        lines = re.findall(r"^\[(\d+)/(\d+)\]", capsys.readouterr().out, re.M)
+        assert lines == [(str(n), str(total)) for n in range(1, total + 1)]
+    called = sorted(int(n) for n in re.findall(r"\bstep\((\d+), all_steps\)", inspect.getsource(S.main)))
+    assert called == list(range(1, len(S.steps(True, True)) + 1))
+
+
 def test_run_record_starts_git_without_a_window():
     """A run looks up the code's git commit for its record: with no console window on Windows (started from
     the shortcut, each git call otherwise flashes a black window up)."""

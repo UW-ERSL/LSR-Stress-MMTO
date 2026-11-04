@@ -97,9 +97,13 @@ def generate():
             "| physics | model | needs columns |", "|---|---|---|"]
     out += [f"| `{k}` | {v.DOC} | {', '.join(v.PROPERTIES)} |" for k, v in PHYSICS.items()]
 
+    worded = "".join(f" `{q.name}` also takes {' or '.join(f'`{w}`' for w in q.words('material'))} in its "
+                     f"place, e.g. `{q.name}({q.words('material')[-1]})`."
+                     for q in QUANTITIES if q.words("material"))
     out += ["", "## Quantities", "",
             "An objective or a constraint is one quantity, e.g. `Mass()` or "
-            "`MaterialVolumeFraction(2, tau=0.5)`. A constraint is value / bound - 1 <= 0.", "",
+            "`MaterialVolumeFraction(2, tau=0.5)`. A material is its row in the database, counted from 0."
+            + worded + " A constraint is value / bound - 1 <= 0.", "",
             "| name | shown as | objective | constraint | needs columns | value | meaning |",
             "|---|---|---|---|---|---|---|"]
     for q in QUANTITIES:

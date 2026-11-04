@@ -288,6 +288,9 @@ def constraint_name(run, i):
     spec = run.constraint_spec[i]
     q = _quantity(spec[0])
     opt = spec[1] if len(spec) > 1 and isinstance(spec[1], dict) else {}
+    if q is not None and q.takes("material") and isinstance(opt.get("material_id"), str):
+        from lsr_mmto.formulation.quantities import quantity_label
+        return quantity_label(spec[0], opt)                       # a material word: 'Mass fraction of the lightest'
     if q is not None and q.takes("material") and "material_id" in opt:
         k = int(opt["material_id"])
         labels = run.material_labels
