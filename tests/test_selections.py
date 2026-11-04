@@ -100,6 +100,15 @@ def test_cylinder():
     # a vector axis gives the same as the named one
     v = S.cylinder(center=[5, 5, 0], axis=[0, 0, 2], radius=1.5, inner_radius=1.0, pad=0)
     assert np.array_equal(v.evaluate(MESH), S.cylinder(radius=1.5, inner_radius=1.0, **c).evaluate(MESH))
+    # Surface nodes only: the ends of the cylinder on the z = 0 and z = 10 faces, none inside
+    whole = S.cylinder(radius=1.0, **c)
+    surface = S.cylinder(radius=1.0, boundary=True, **c)
+    boundary = MESH.get_boundary_nodes()
+    assert np.array_equal(surface.evaluate(MESH), np.intersect1d(whole.evaluate(MESH), boundary))
+    assert count(surface) == 5 * 2
+    assert "boundary" not in whole.to_dict() and "boundary" not in repr(whole)    # off: written as before
+    assert surface.to_dict()["boundary"] is True and repr(surface).endswith("boundary=True)")
+    assert S.from_dict({k: v for k, v in whole.to_dict().items()}).boundary is False
 
 
 def test_sphere_nearest_ids():
@@ -208,7 +217,7 @@ def test_combinations():
 
 def test_json_round_trip():
     sels = [S.box([0, 0, 0], [2, 2, 2]), S.cylinder([5, 5, 0], "z", 1.5, 1.0, (0, 2), pad=0),
-            S.cylinder([5, 5, 0], [0, 0, 1], 1.0), S.sphere([5, 5, 5], 1.0), S.plane("y", 3.0),
+            S.cylinder([5, 5, 0], [0, 0, 1], 1.0), S.cylinder([5, 5, 0], "z", 1.0, boundary=True), S.sphere([5, 5, 5], 1.0), S.plane("y", 3.0),
             S.face("xmax"), S.near_face("zmin", 2.0), S.near_face("zmax", "1.5h"), S.nearest([1, 2, 3]),
             S.ids([1, 2]), S.rows("xmax", "y", 3), S.nearest([1, 2, 3], boundary=True),
             S.halfspaces([[1, 0, 0]], [[2, 0, 0]]), S.halfspaces([[1, 0, 0]], [[2, 0, 0]], boundary=False),

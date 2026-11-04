@@ -45,7 +45,8 @@ FORM = {
                  "along x, y or z the ends are coordinates, e.g. x from 22 to 61; along a tilted axis they "
                  "are distances from the point on the axis.",
                  {"center": "Point on the axis", "axis": "Axis direction", "radius": "Radius",
-                  "inner_radius": "Inner radius (0 = solid)", "along": ("From", "To")}),
+                  "inner_radius": "Inner radius (0 = solid)", "along": ("From", "To"),
+                  "boundary": "Surface nodes only"}),
     "nearest": ("Closest node", "The one node closest to a point.",
                 {"point": "Point", "boundary": "Surface nodes only"}),
     "inside_stl": ("Inside an STL", "Nodes inside a closed surface loaded from an STL file. Move by moves the "
@@ -279,10 +280,10 @@ def _number_text(value):
 def fill_from_hole(dialog, normals, corners):
     """The Cylinder form filled in from the inside wall of a hole (hole_from_wall): Point on the axis, Axis
     direction, Radius (the hole's radius: Tolerance Automatic already takes nodes half an element outside it),
-    Inner radius 0, and the ends; then its preview, with a note when the hole's radius is under 2 element
-    sizes (h, the largest) of the preview's mesh. The outside of a round face fills a tube one element size each
-    side of it (Radius r + 1h, Inner radius r - 1h), so it takes the nodes of that face only. A face that is
-    flat or not round fills nothing and says so."""
+    Inner radius 0, the ends and Surface nodes only; then its preview, with a note when the hole's radius is
+    under 2 element sizes (h, the largest) of the preview's mesh. The outside of a round face fills a tube one
+    element size each side of it (Radius r + 1h, Inner radius r - 1h), so it takes the nodes of that face
+    only. A face that is flat or not round fills nothing and says so."""
     try:
         centre, axis, r, start, end, outside = hole_from_wall(normals, corners)
     except ValueError as e:
@@ -294,6 +295,7 @@ def fill_from_hole(dialog, normals, corners):
     boxes["axis"].setCurrentText(letter or ", ".join(_number_text(c) for c in axis))
     boxes["radius"].setText(f"{_number_text(r)} + 1h" if outside else _number_text(r))
     boxes["inner_radius"].setText(f"{_number_text(r)} - 1h" if outside else "0")
+    boxes["boundary"].setChecked(True)                              # the nodes on the face, none inside
     ends = (start, end) if letter else (0.0, end - start)          # coordinates along x, y, z; else distances
     for box, value in zip(boxes["along"], ends):
         box.setText(_number_text(value))

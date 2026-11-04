@@ -1298,9 +1298,11 @@ def test_click_a_hole_on_the_rotor():
     """Click a hole on a brake rotor saved in metres: every triangle of the inside wall of the bore, the six
     bolt holes and the six rim notches gives its centre and radius (within 1 %); a bolt hole, under two element
     sizes in radius on the run's mesh, gets the note that it is only a few elements across, the bore does not;
+    Surface nodes only is ticked, and the bore with it has no node off the mesh surface (without it, 12);
     a click on a flat face says so; the outside of the rim fills a tube about it, which takes the nodes of the
     rim, not the whole part."""
     from gui.supports_and_loads_panel import hole_from_wall
+    from lsr_mmto.problem import selections as S
     with scratch() as d:
         w = G.MMTOWindow()
         assert w.new_project(os.path.join(ROOT, "tests", "data", "brake_rotor.stl"), os.path.join(d, "rotor"))
@@ -1349,6 +1351,14 @@ def test_click_a_hole_on_the_rotor():
             note = f"This hole is only {2 * radius / h:.1f} elements across on the run's mesh"
             assert "nodes on the run's mesh" in r.result.text()
             assert (note in r.result.text()) == (radius < 2 * h) == (known == 0.00282), r.result.text()
+            assert r.inputs["boundary"].isChecked()
+        mesh = w.preview_mesh()                                               # the bore, at 30000 dofs
+        assert w.project.n_dof == 30000
+        surface = set(np.asarray(mesh.get_boundary_nodes()).tolist())
+        bore_on_surface = r.selection()
+        bore_through = S.from_dict(dict(bore_on_surface.to_dict(), boundary=False))
+        assert not set(w.project.evaluate(bore_on_surface, mesh, "nodes").tolist()) - surface
+        assert len(set(w.project.evaluate(bore_through, mesh, "nodes").tolist()) - surface) == 12
         button.click()
         w.on_left_button_press(c[rim[0]].tolist(), Picker(int(rim[0])))      # the outside of the rim: a tube
         radius, inner = r.inputs["radius"].text(), r.inputs["inner_radius"].text()

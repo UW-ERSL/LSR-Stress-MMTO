@@ -27,7 +27,7 @@ Lengths are numbers in model units, or text in numbers, pi and h, the largest el
 | type | fields | selects |
 |---|---|---|
 | `box` | lo, hi, pad | Points with lo <= p <= hi; the corners may come in any order. By default pad is half the element size along each axis, so a box thinner than an element still catches the nearest layer. |
-| `cylinder` | center, axis, radius, inner_radius, along, pad | Points whose distance to the axis is in [inner_radius, radius]; along = (t0, t1) limits (p - center) . axis. |
+| `cylinder` | center, axis, radius, inner_radius, along, pad, boundary | Points whose distance to the axis is in [inner_radius, radius]; along = (t0, t1) limits (p - center) . axis. boundary=True keeps only nodes on the mesh boundary; it is written only when on. |
 | `difference` | parts | Points in the first part but not the second. |
 | `face` | side, pad | The plane at the mesh's extreme on one side: xmin, xmax, ymin, ymax, zmin or zmax. |
 | `function` | ref | Whatever a Python function name(mesh, on) in file.py returns. |
