@@ -8,7 +8,7 @@ A region is made three ways: picked with the mouse in PyTO-AD's Structural Loads
 Apply is adopted into the project at once, by Project.adopt_picks), filled in on a form made
 from the selection type's own fields, or typed as a code line, e.g.
 rows(face="xmax", axis="y", n=8, end="max"). A code line is read, never run: only selection
-types with plain numbers, text and lists are accepted.
+types with plain numbers, text and lists are accepted; a number may be plain arithmetic (38/2, 2*pi*5).
 
 The panel works on the project directly (it stays open while you pick); File > Save keeps the
 changes, and closing without saving drops them.
@@ -20,7 +20,7 @@ import os
 import numpy as np
 from PyQt5 import QtCore, QtWidgets
 
-from .panel_widgets import GREY, Info, NumberEdit
+from .panel_widgets import GREY, Info, NumberEdit, plain_value
 
 SUPPORT_COLOUR, LOAD_COLOUR, KEEP_COLOUR, OTHER_COLOUR = "#1f5fd6", "#d62020", "#808080", "#e08a00"
 
@@ -48,7 +48,8 @@ FORM = {
                   "inner_radius": "Inner radius (0 = solid)", "along": ("From", "To")}),
     "nearest": ("Closest node", "The one node closest to a point.",
                 {"point": "Point", "boundary": "Surface nodes only"}),
-    "inside_stl": ("Inside an STL", "Nodes inside a closed surface loaded from an STL file.", {"path": "File"}),
+    "inside_stl": ("Inside an STL", "Nodes inside a closed surface loaded from an STL file. Move by moves the "
+                   "shape first.", {"path": "File", "shift": "Move by"}),
     "combined": ("Combined selections", "Two selections of this project joined, overlapped or one taken from "
                  "the other. It follows them: edit Selection A or Selection B later and this selection changes "
                  "with it.",
@@ -103,7 +104,8 @@ def selection_types():
 
 def parse_selection(text):
     """A Selection from a code line such as box(lo=[0, 0, 0], hi=[1, 2, 1]). Only selection types,
-    with numbers, text, lists and other selections as arguments; anything else is refused."""
+    with numbers (plain arithmetic too: 38/2), text, lists and other selections as arguments; anything
+    else is refused."""
     types = selection_types()
     try:
         tree = ast.parse(text.strip(), mode="eval").body
@@ -124,7 +126,7 @@ def parse_selection(text):
             except TypeError as e:
                 raise ValueError(f"{node.func.id}: {e}") from None
         try:
-            return ast.literal_eval(node)
+            return plain_value(node)
         except ValueError:
             raise ValueError(f"{ast.unparse(node)!r}: only numbers, text, lists and selections are "
                              f"accepted") from None
@@ -176,8 +178,8 @@ def describe(selection):
     parts = []
     for field in selection.fields:
         value = getattr(selection, field)
-        if value == defaults.get(field) or value is None:
-            continue
+        if value is None or value == defaults.get(field) or show_value(value) == show_value(defaults.get(field)):
+            continue                                                # as by default (0, 0, 0 as a list too)
         if field == "along":
             axis = getattr(selection, "axis", None)
             if isinstance(axis, str) and axis in "xyz" and all(isinstance(v, (int, float)) for v in value):
@@ -202,6 +204,89 @@ def used_by(project, name):
     out = [f"{bc_name(bc['kind'])} {i}" for i, bc in enumerate(project.bcs, 1) if bc.get("on") == name]
     out += [f"combined selection {k}" for k, s in project.selections.items() if name in S.names_in(s)]
     return out + (["keep solid"] if name in project.keep_solid_names else [])
+
+
+def enter_previews(buttons, preview):
+    """Enter in a form previews, it does not press OK: the Preview button is the default one, and no
+    button is pressed by Enter just because it has the focus."""
+    for button in buttons.buttons():
+        button.setAutoDefault(False)
+    preview.setDefault(True)
+
+
+def preview_on_enter(dialog, event):
+    """Enter or Return in the form: dialog.show_preview() and True; the window stays open."""
+    if event.key() in (QtCore.Qt.Key_Return, QtCore.Qt.Key_Enter):
+        dialog.show_preview()
+        return True
+    return False
+
+
+NOT_ROUND = "This doesn't look like a round hole"
+
+
+def hole_from_wall(normals, corners):
+    """(point on the axis, axis, radius, start, end) of a round hole, from the triangles of its inside wall
+    (their normals, and their corners as an (n, 3, 3) array). The axis is the direction the wall's normals
+    avoid: the eigenvector of the smallest eigenvalue of the sum of n n^T, exactly x, y or z when within
+    0.01 % of one. The centre and radius are the least-squares circle (algebraic fit) through the corners
+    seen along the axis; start and end are the wall's extent along the axis, and the point is on the axis
+    at start. ValueError when the corners are far from a circle: rms off it over 5 % of the radius, or all
+    on one line (no circle to fit)."""
+    n = np.asarray(normals, dtype=float)
+    n = n / np.linalg.norm(n, axis=1)[:, None]
+    p = np.unique(np.asarray(corners, dtype=float).reshape(-1, 3), axis=0)
+    axis = np.linalg.eigh(n.T @ n)[1][:, 0]
+    k = int(np.argmax(np.abs(axis)))
+    axis = axis * np.sign(axis[k])
+    if abs(axis[k]) > 0.9999:
+        axis = np.eye(3)[k]
+    u = np.cross(axis, np.eye(3)[(k + 1) % 3])
+    u /= np.linalg.norm(u)
+    v = np.cross(axis, u)
+    middle = p.mean(axis=0)                                         # the fit about the corners' middle
+    x, y, t = (p - middle) @ u, (p - middle) @ v, p @ axis
+    fit = np.column_stack([x, y, np.ones_like(x)])
+    (d, e, f), _, _, s = np.linalg.lstsq(fit, -(x * x + y * y), rcond=None)
+    cx, cy = -d / 2, -e / 2
+    r2 = cx * cx + cy * cy - f
+    if s[-1] < 1e-6 * s[0] or r2 <= 0:
+        raise ValueError(NOT_ROUND)
+    r = float(np.sqrt(r2))
+    if np.sqrt(np.mean((np.hypot(x - cx, y - cy) - r) ** 2)) > 0.05 * r:
+        raise ValueError(NOT_ROUND)
+    centre = middle - (middle @ axis) * axis + cx * u + cy * v + t.min() * axis
+    return centre, axis, r, float(t.min()), float(t.max())
+
+
+def _number_text(value):
+    return format(round(float(value), 9) + 0.0, ".6g")
+
+
+def fill_from_hole(dialog, normals, corners, element_size):
+    """The Cylinder form filled in from the inside wall of a hole (hole_from_wall): Point on the axis, Axis
+    direction, Radius (the hole's radius plus one element size, so the nodes of the wall are in), and the
+    ends; then its preview. A wall that is not round fills nothing and says so."""
+    try:
+        centre, axis, r, start, end = hole_from_wall(normals, corners)
+    except ValueError as e:
+        dialog.result.setText(f"<span style='color:#b00000'>{e}</span>")
+        return
+    letter = next((a for a, e in zip("xyz", np.eye(3)) if np.array_equal(axis, e)), None)
+    boxes = dialog.inputs
+    boxes["center"].setText(", ".join(_number_text(c) for c in centre))
+    boxes["axis"].setCurrentText(letter or ", ".join(_number_text(c) for c in axis))
+    boxes["radius"].setText(_number_text(r + element_size))
+    ends = (start, end) if letter else (0.0, end - start)          # coordinates along x, y, z; else distances
+    for box, value in zip(boxes["along"], ends):
+        box.setText(_number_text(value))
+    dialog.show_preview()
+
+
+# A button of the form that fills it in from a click on the part: (its text, its (i), the filling, given the
+# dialog, the normals and corners of the face clicked, and the element size).
+CLICK_TO_FILL = {"cylinder": ("Click a hole", "Then click the inside wall of a round hole on the part: the "
+                              "point, axis, radius and ends are filled in from it.", fill_from_hole)}
 
 
 # ---------------------------------------------------------------------- a region
@@ -241,6 +326,8 @@ class RegionDialog(QtWidgets.QDialog):
         main = parent                                               # the main window: the part's extent
         while main is not None and not hasattr(main, "part_extent_text"):
             main = main.parentWidget()
+        self.main = main
+        self.on_click = None                                        # a click on the part it waits for
         extent = QtWidgets.QLabel(main.part_extent_text() if main is not None else "")
         extent.setStyleSheet(GREY)
         extent.setVisible(bool(extent.text()))
@@ -268,6 +355,7 @@ class RegionDialog(QtWidgets.QDialog):
         layout.addWidget(self.result)
         buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         show = buttons.addButton("Preview", QtWidgets.QDialogButtonBox.ActionRole)
+        show.setToolTip("Check what you typed and show it on the part (Enter)")
         show.clicked.connect(self.show_preview)
         clear = buttons.addButton("Clear", QtWidgets.QDialogButtonBox.ActionRole)
         clear.setToolTip("Clear this preview from the part")
@@ -275,6 +363,7 @@ class RegionDialog(QtWidgets.QDialog):
         self.shown = False                                          # a preview of this form is on the part
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
+        enter_previews(buttons, show)
         layout.addWidget(buttons)
 
         self.inputs = {}
@@ -303,6 +392,7 @@ class RegionDialog(QtWidgets.QDialog):
         cls = self.types[kind]
         self.type_info.setToolTip(FORM[kind][1])
         self.inputs = {}
+        self.on_click = None
         if kind == "combined":                                      # How, Selection A, Selection B: by name, live
             how, a, b = combined_parts(selection) if selection is not None else ("union", None, None)
             boxes = {"how": QtWidgets.QComboBox(), "a": QtWidgets.QComboBox(), "b": QtWidgets.QComboBox()}
@@ -367,6 +457,7 @@ class RegionDialog(QtWidgets.QDialog):
                 options = how.choices
                 box = QtWidgets.QComboBox()
                 box.setEditable(how.editable)
+                box.setInsertPolicy(QtWidgets.QComboBox.NoInsert)      # Enter previews; it adds no choice
                 for shown, v in options:
                     box.addItem(shown, v)
                 text = show_value(value if value is not None else options[0][1], options)
@@ -395,15 +486,30 @@ class RegionDialog(QtWidgets.QDialog):
                 if how.optional:
                     box.setPlaceholderText("automatic")
             unit = self.length_unit if how.kind in ("length", "point") else ""
-            if unit or field == "pad":
-                widget = self._beside(widget, unit, TOLERANCE[1] if field == "pad" else None)
+            info = TOLERANCE[1] if field == "pad" else how.help
+            if unit or info:
+                widget = self._beside(widget, unit, info)
             self.form.addRow(field_label(kind, field), widget)
             self.inputs[field] = box
             for signal in (("textChanged", "currentTextChanged", "toggled")):
                 if hasattr(box, signal):
                     getattr(box, signal).connect(self.changed)
                     break
+        if kind in CLICK_TO_FILL and self.main is not None:
+            text, info, fill = CLICK_TO_FILL[kind]
+            button = QtWidgets.QPushButton(text)
+            button.setAutoDefault(False)
+            button.clicked.connect(lambda _=False, f=fill: self._wait_for_click(f))
+            self.form.addRow(self._beside(button, "", info))
         QtCore.QTimer.singleShot(0, self._fit)
+
+    def _wait_for_click(self, fill):
+        """The next click on the part fills the form in (CLICK_TO_FILL), from the face it lands on."""
+        def take(cell):
+            normals, corners = self.main.wall_triangles(cell)
+            fill(self, normals, corners, float(np.max(self.main.preview_mesh().elem_size)))
+        self.on_click = take
+        self.result.setText("Click the inside wall of the hole on the part.")
 
     def _fit(self):
         """Tall enough for every row of the form: a long form is not squashed."""
@@ -484,9 +590,10 @@ class RegionDialog(QtWidgets.QDialog):
 
     @staticmethod
     def _value(label, text):
-        """A typed value: a number, a point (0, 38, 0, brackets optional), a list, or a word such as 1.5h."""
+        """A typed value: a number, a point (0, 38, 0, brackets optional), a list, or a word such as 1.5h;
+        a number may be plain arithmetic (38/2, 2*pi*5, also inside a point: 0, 38/2, 0)."""
         try:
-            value = ast.literal_eval(text)
+            value = plain_value(ast.parse(text, mode="eval").body)
         except (ValueError, SyntaxError):
             if text.endswith("h") or text.replace("_", "").isalnum():         # "1.5h", xmax without quotes
                 return text
@@ -575,6 +682,10 @@ class RegionDialog(QtWidgets.QDialog):
         except ValueError as e:
             out.append(str(e))
         return out
+
+    def keyPressEvent(self, event):
+        if not preview_on_enter(self, event):
+            super().keyPressEvent(event)
 
     def show_preview(self):
         problems = self.problems()
@@ -713,12 +824,21 @@ class BCDialog(QtWidgets.QDialog):
         self.form = QtWidgets.QFormLayout()
         layout.addLayout(self.form)
         layout.addStretch()
+        self.result = QtWidgets.QLabel()                            # the check and the preview's node count
+        self.result.setWordWrap(True)
+        layout.addWidget(self.result)
         buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        show = buttons.addButton("Preview", QtWidgets.QDialogButtonBox.ActionRole)
+        show.setToolTip("Check what you typed and show it on the part (Enter)")
+        show.clicked.connect(self.show_preview)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
+        enter_previews(buttons, show)
         layout.addWidget(buttons)
+        self.shown = False                                          # a preview of this form is on the part
         self.inputs = {}
-        self.kind.currentIndexChanged.connect(lambda _: self._fill(self.kind.currentData(), None))
+        self.kind.currentIndexChanged.connect(lambda _: (self.changed(), self._fill(self.kind.currentData(), None)))
+        self.on.currentIndexChanged.connect(self.changed)
         if bc:
             self.kind.blockSignals(True)
             self.kind.setCurrentIndex(self.kind.findData(bc["kind"]))
@@ -745,20 +865,20 @@ class BCDialog(QtWidgets.QDialog):
                     row.addWidget(b)
                 widget = boxes
             elif typ == "vector":
-                widget = [NumberEdit((value or [0.0, 0.0, 0.0])[i]) for i in range(3)]
+                widget = [NumberEdit((value or [0.0, 0.0, 0.0])[i], arithmetic=True) for i in range(3)]
                 for label, w in zip("xyz", widget):
                     row.addWidget(QtWidgets.QLabel(label))
                     row.addWidget(w)
             elif typ == "area":
                 widget = (QtWidgets.QCheckBox("from the selection"),
-                          NumberEdit(0.0 if value in (None, "bbox") else value))
+                          NumberEdit(0.0 if value in (None, "bbox") else value, arithmetic=True))
                 widget[0].setChecked(value in (None, "bbox"))
                 widget[1].setEnabled(value not in (None, "bbox"))
                 widget[0].toggled.connect(lambda on, w=widget[1]: w.setEnabled(not on))
                 row.addWidget(widget[0])
                 row.addWidget(widget[1])
             else:
-                widget = NumberEdit(0.0 if value is None else value)
+                widget = NumberEdit(0.0 if value is None else value, arithmetic=True)
                 row.addWidget(widget)
             if unit:
                 u = QtWidgets.QLabel(unit)
@@ -767,6 +887,9 @@ class BCDialog(QtWidgets.QDialog):
             label = QtWidgets.QLabel(v.label)
             self.form.addRow(label, row)
             self.inputs[name] = (typ, widget)
+            for w in (widget.values() if isinstance(widget, dict) else widget if isinstance(widget, (list, tuple))
+                      else [widget]):
+                (w.toggled if isinstance(w, QtWidgets.QCheckBox) else w.textChanged).connect(self.changed)
 
     def new_shape(self):
         """A new selection from the selection form, a page over this one when docked; it joins the project when
@@ -822,6 +945,38 @@ class BCDialog(QtWidgets.QDialog):
         if not out:
             out += self.kinds[self.kind.currentData()].errors(self.bc())
         return out
+
+    def keyPressEvent(self, event):
+        if not preview_on_enter(self, event):
+            super().keyPressEvent(event)
+
+    def show_preview(self):
+        """The support or load checked; with no mistake, its selection on the part (and a load's arrow)."""
+        problems = self.problems()
+        if problems:
+            self.result.setText("<span style='color:#b00000'>" + "<br>".join(problems) + "</span>")
+            return
+        if self.preview is None:
+            self.result.setText("")
+            return
+        name = self.on.currentText()
+        selection = self.new_regions.get(name) or self.project.selections[name]
+        try:
+            self.result.setText(self.preview(selection, self.bc()))
+            self.shown = True
+        except Exception as e:                                      # noqa: BLE001
+            self.result.setText(f"<span style='color:#b00000'>Error: {e}</span>")
+
+    def changed(self, *_):
+        """An edit: the preview no longer shows this form, so it goes."""
+        if self.shown and self.preview is not None:
+            self.preview(None)
+        self.shown = False
+        self.result.setText("")
+
+    def done(self, result):
+        self.changed()                                              # OK or Cancel: nothing left behind
+        super().done(result)
 
     def accept(self):
         problems = self.problems()
@@ -970,6 +1125,17 @@ class SupportsPanel(QtWidgets.QDialog):
             page.deleteLater()
         dialog.finished.connect(finished)
         return dialog
+
+    def take_click(self, cell):
+        """A click on triangle cell of the part, for the form in front when it waits for one (Click a hole):
+        True when the form took it."""
+        form = self.stack.currentWidget().findChild(QtWidgets.QDialog)
+        take = getattr(form, "on_click", None)
+        if take is None:
+            return False
+        form.on_click = None
+        take(cell)
+        return True
 
     def show_copied(self, text):
         """A click on the part while a form is open: what went to the clipboard."""
@@ -1173,18 +1339,28 @@ class SupportsPanel(QtWidgets.QDialog):
             self.report.setText("")
             self.report_info.setVisible(False)
 
-    def preview_one(self, selection):
-        """A region being edited, on the run's mesh: its node count, drawn in orange. None clears it."""
+    def preview_one(self, selection, bc=None):
+        """A region being edited, on the run's mesh: its node count, drawn in orange; with bc, the support
+        or load on it being edited: blue for a support, red with its arrow for a load. None clears it."""
+        from lsr_mmto.problem.boundary_conditions import BC_KINDS
+        from .main_window import load_direction
         self.window.show_setup_view()
+        for name in ("mmto_region", "mmto_region_outline", "mmto_arrow_region"):
+            self.window.plotter.remove_actor(name, reset_camera=False)
         if selection is None:
-            for name in ("mmto_region", "mmto_region_outline"):
-                self.window.plotter.remove_actor(name, reset_camera=False)
             self.window.plotter.render()
             return ""
         mesh = self.window.preview_mesh()
         nodes = self.project.evaluate(selection, mesh, "nodes")
-        self.window.draw_points("mmto_region", np.asarray(mesh.node_xyz)[nodes], OTHER_COLOUR)
-        self.window.draw_outline("mmto_region_outline", selection, OTHER_COLOUR)
+        xyz = np.asarray(mesh.node_xyz, dtype=float)
+        colour = OTHER_COLOUR if bc is None else \
+            SUPPORT_COLOUR if BC_KINDS[bc["kind"]].role == "support" else LOAD_COLOUR
+        self.window.draw_points("mmto_region", xyz[nodes], colour)
+        self.window.draw_outline("mmto_region_outline", selection, colour)
+        d = load_direction(bc) if bc is not None else None
+        if d is not None and len(nodes) and np.linalg.norm(d) > 0:
+            self.window._arrow("_region", d, xyz[nodes], float(np.linalg.norm(np.ptp(xyz, axis=0))))
+        self.window.plotter.render()
         return f"{len(nodes)} nodes on the run's mesh ({mesh.num_elems} elements)."
 
     def preview(self):

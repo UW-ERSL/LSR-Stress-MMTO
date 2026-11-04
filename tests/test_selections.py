@@ -212,6 +212,20 @@ def test_function_and_inside_stl():
         assert count(inside, "elements", base_dir=d) == 8         # centers 2.5 and 3.5
         assert np.array_equal(inside.evaluate(MESH, "elements", base_dir=d),
                               S.box([2, 2, 2], [4, 4, 4], pad=0).evaluate(MESH, "elements"))
+        assert inside.to_dict() == {"type": "inside_stl", "path": "c.stl"} and repr(inside) == "inside_stl(path='c.stl')"
+
+        # the same cube saved shifted to 0, 0, 0, moved back by Move by: the same nodes and elements
+        pv.Cube(center=(0, 0, 0), x_length=2, y_length=2, z_length=2).triangulate().save(os.path.join(d, "c0.stl"))
+        moved = S.inside_stl("c0.stl", shift=[3, 3, 3])
+        for on in ("nodes", "elements"):
+            assert len(inside.evaluate(MESH, on, base_dir=d))
+            assert np.array_equal(moved.evaluate(MESH, on, base_dir=d), inside.evaluate(MESH, on, base_dir=d))
+        assert not np.array_equal(S.inside_stl("c0.stl").evaluate(MESH, "nodes", base_dir=d),
+                                  inside.evaluate(MESH, "nodes", base_dir=d))
+        assert moved.to_dict() == {"type": "inside_stl", "path": "c0.stl", "shift": [3.0, 3.0, 3.0]}
+        assert S.from_dict(moved.to_dict()).to_dict() == moved.to_dict()
+        assert repr(moved) == "inside_stl(path='c0.stl', shift=[3.0, 3.0, 3.0])"
+        assert S.from_dict({"type": "inside_stl", "path": "c.stl"}).shift == [0.0, 0.0, 0.0]   # old files
 
 
 if __name__ == "__main__":

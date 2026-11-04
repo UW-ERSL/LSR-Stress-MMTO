@@ -628,13 +628,60 @@ def test_code_line():
     for bad, says in (('__import__("os").system("dir")', "is not a selection type"),
                       ('box(lo=[0, 0, 0], hi=open("x"))', "open is not a selection type"),
                       ('face(**{"side": "xmin"})', "** arguments"), ('function("f.py:g")', "not a selection type"),
-                      ("2 + 2", "only numbers, text, lists and selections"), ("face(", "not a selection")):
+                      ("2 + 2", "write a selection"), ("face(", "not a selection"),
+                      ("sphere([0, 0, 0], radius=r)", "only numbers, text, lists and selections"),
+                      ("sphere([0, 0, 0], radius=math.pi)", "only numbers, text, lists and selections"),
+                      ("sphere([0, 0, 0], radius=abs(-2))", "abs is not a selection type"),
+                      ("sphere([0, 0, 0], radius=9**9**9)", "only numbers, text, lists and selections")):
         try:
             SP.parse_selection(bad)
         except ValueError as e:
             assert says in str(e), (bad, e)
         else:
             raise AssertionError(f"accepted {bad}")
+
+
+def test_arithmetic_in_number_boxes():
+    """Every number of the Selection form, the Code line and the support or load form takes plain
+    arithmetic (38/2, 0.5*76, 2*pi*5, inside a point too); the selection or value keeps the number."""
+    import math
+    from lsr_mmto.problem import selections as S
+    from gui.panel_widgets import number
+    assert number("38/2") == 19 and number("0.5*76") == 38 and number("2*pi*5") == 10 * math.pi
+    assert number("-(1 + 2)**2") == -9 and number(" 4 ") == 4
+    for bad in ("x", "pi()", "math.pi", "1/0", "[1, 2]", "'5'", "True", "9**9**9", "1e999", ""):
+        try:
+            number(bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"accepted {bad!r}")
+    assert SP.parse_selection("sphere(center=[0, 38/2, 0], radius=2*pi*5)").to_dict() == \
+        S.sphere([0, 19.0, 0], 10 * math.pi).to_dict()
+    assert SP.parse_selection("plane('y', 76/2, limits={'x': [0, 80/2]})").to_dict() == \
+        S.plane("y", 38.0, limits={"x": [0, 40.0]}).to_dict()
+    assert SP.RegionDialog._value("At", "38/2") == 19 and SP.RegionDialog._value("Point", "0, 38/2, 0") == [0, 19, 0]
+    assert SP.RegionDialog._value("Radius", "1.5h") == "1.5h" and SP.RegionDialog._value("Side", "xmax") == "xmax"
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        r = SP.RegionDialog(w, w.project)
+        r.type.setCurrentText("Cylinder")
+        r.inputs["center"].setText("52, 228/2, 1")
+        r.inputs["axis"].setCurrentText("x")
+        r.inputs["radius"].setText("10/2")
+        r.inputs["along"][0].setText("44/2")
+        r.inputs["along"][1].setText("61")
+        assert r.selection().to_dict() == S.cylinder([52, 114.0, 1], "x", 5.0, along=[-30.0, 9]).to_dict()
+        r.tabs.setCurrentIndex(1)                                             # the Code line keeps the numbers
+        assert "114.0" in r.code.text() and "/" not in r.code.text()
+        r.code.setText("box(lo=[0, 0, 0], hi=[200/10, 2*10, 1])")
+        assert r.problems() == [] and r.selection().to_dict() == S.box([0, 0, 0], [20.0, 20, 1]).to_dict()
+        b = SP.BCDialog(w, w.project)
+        b.kind.setCurrentText("Force")
+        b.inputs["total"][1][1].setText("-100/4")
+        assert b.problems() == [] and b.bc()["total"] == [0.0, -25.0, 0.0]
+        b.inputs["total"][1][1].setText("-100/x")
+        assert b.problems() == ["Total force is not a number"]
 
 
 def test_region_and_bc_forms():
@@ -765,6 +812,53 @@ def test_picks_are_adopted():
         assert "A torque is not one of LSR MMTO's loads" in w.message_text.toPlainText()
 
 
+def test_pick_window_clear_picks():
+    """The Pick window has no Box select nodes; Clear picks (and a right click) removes every face and node
+    picked; picks not applied go when the window closes. A project with a Dragged box opens, shows and runs."""
+    from lsr_mmto.problem import selections as S
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        w.show()
+        w.open_structural_loads_window()
+        pick = w.structural_loads_window
+        buttons = [b.text() for b in pick.findChildren(QtWidgets.QPushButton)]
+        assert "Box select nodes" not in buttons and "Clear picks" in buttons
+        pick.selection_combo.setCurrentText("Node")
+        assert not [b for b in pick.findChildren(QtWidgets.QPushButton) if "Box" in b.text()]
+
+        def picked():
+            w.select_triangles(10)
+            w.update_highlights()
+            w.selected_points = [[0.0, 0.0, 0.0]]
+            w.update_point_markers()
+            assert w.picked_count() and "selected_points" in w.plotter.actors
+        picked()
+        pick.clear_button.click()
+        assert w.picked_count() == 0 and w.selected_points == [] and "selected_points" not in w.plotter.actors
+        picked()
+        w.on_right_button_press(None, None)                                   # a right click: the same
+        assert w.picked_count() == 0 and "selected_points" not in w.plotter.actors
+        picked()
+        pick.parentWidget().close()                                           # the strip's x: picks go
+        APP.processEvents()
+        assert w.picked_count() == 0 and w.selected_points == [] and "selected_points" not in w.plotter.actors
+
+        p = w.project                                                         # a Dragged box, made earlier
+        p.add_selection("dragged", S.halfspaces([[1, 0, 0], [-1, 0, 0]], [[20, 0, 0], [0, 0, 0]]))
+        p.bcs.append({"kind": "fixed", "on": "dragged", "dofs": "xyz"})
+        w.save_project()
+        assert w.open_project(w.path) and w.project.selections["dragged"].TYPE == "halfspaces"
+        panel = w.open_supports_and_loads_panel()
+        r = panel.edit_region("dragged")
+        assert r.kind() == "halfspaces" and r.from_form().to_dict() == w.project.selections["dragged"].to_dict()
+        r.reject()
+        panel.preview()
+        assert panel.counts["dragged"] > 0 and "Error" not in panel.report.text()
+        mesh = w.preview_mesh()
+        bcs, _ = w.project.supports_and_loads(mesh)
+        assert w.project.supports_and_loads_error(mesh, bcs) is None
+
+
 def test_docked():
     """Supports and loads and the Pick window sit on the right edge of the window, not over the 3D view;
     a second click raises the open one; Close (or a new project) removes the strip."""
@@ -883,6 +977,144 @@ def test_region_preview_clears():
         r.show_preview()
         r.reject()                                                            # Cancel: nothing left behind
         assert not on_part()
+
+
+def test_inside_stl_move_by():
+    """Inside an STL has a Move by row (x, y, z with the length unit and an (i)); the selection keeps the move,
+    the project file and the code line only when it is not zero, and the preview draws the moved shape."""
+    from lsr_mmto.problem import selections as S
+    airplane = Project.load(os.path.join(PROJECTS, "Airplane bracket.mmto"))
+    collar = airplane.selections["collar"]
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        r = SP.RegionDialog(w, airplane, "collar")
+        box = r.inputs["shift"]
+        assert r.form.labelForField(box.parentWidget()).text() == "Move by" and box.text() == "0, 0, 0"
+        row = [x for x in box.parentWidget().children() if isinstance(x, QtWidgets.QWidget)]
+        assert any(isinstance(x, QtWidgets.QLabel) and x.text() == "mm" for x in row)
+        assert any(isinstance(x, SP.Info) and x.toolTip().startswith("Moves the shape before nodes") for x in row)
+        assert r.from_form().to_dict() == collar.to_dict() and "shift" not in collar.to_dict()
+        assert SP.describe(collar).startswith("Inside an STL: File ") and "Move by" not in SP.describe(collar)
+        box.setText("10, 0, 0")
+        moved = r.selection()
+        assert moved.shift == [10.0, 0.0, 0.0] and moved.to_dict()["shift"] == [10.0, 0.0, 0.0]
+        assert SP.describe(moved).endswith("Move by 10, 0, 0")
+        r.tabs.setCurrentIndex(1)
+        assert r.code.text().endswith("shift=[10.0, 0.0, 0.0])")
+        assert SP.parse_selection(r.code.text()).to_dict() == moved.to_dict()
+        mesh = w.preview_mesh()
+        here = G.place_outline(collar, mesh, airplane.base_dir)
+        there = G.place_outline(moved, mesh, airplane.base_dir)
+        assert np.allclose(np.array(there.bounds) - np.array(here.bounds), [10, 10, 0, 0, 0, 0])
+
+
+def test_click_a_hole():
+    """Click a hole in the Cylinder form, then a click on the inside wall of a hole: the wall is grown as a
+    Facet pick grows, and the form gets the hole's centre, axis, radius (plus one element size) and ends.
+    A wall that is not round fills nothing."""
+    import pyvista as pv
+    with scratch() as d:
+        stl = os.path.join(d, "washer.stl")                           # a plate (a washer) with a hole of
+        pv.Disc(center=(40, 30, 0), inner=8, outer=20, r_res=2, c_res=48).extrude(   # radius 8 at x 40, y 30,
+            (0, 0, 10), capping=True).triangulate().clean().save(stl)                # through z 0 to 10
+        w = G.MMTOWindow()
+        assert w.new_project(stl, os.path.join(d, "washer"))
+        w.show()
+        geom = w.stl_geom
+        v = np.asarray(geom.mesh.vectors, dtype=float)
+        n = np.asarray(geom.tri_normals, dtype=float)
+        c = v.mean(axis=1)
+        on_wall = (np.abs(np.hypot(c[:, 0] - 40, c[:, 1] - 30) - 8) < 0.5) & (np.abs(n[:, 2]) < 0.1)
+        wall, top = int(np.flatnonzero(on_wall)[0]), int(np.flatnonzero(n[:, 2] > 0.99)[0])
+
+        class Picker:                                                         # a click on the part
+            def __init__(self, cell):
+                self.cell = cell
+
+            def GetCellId(self):
+                return self.cell
+        panel = w.open_supports_and_loads_panel()
+        r = panel.add_region()
+        r.type.setCurrentText("Cylinder")
+        button = next(b for b in r.findChildren(QtWidgets.QPushButton) if b.text() == "Click a hole")
+        button.click()
+        assert "Click the inside wall" in r.result.text()
+        w.on_left_button_press(c[top].tolist(), Picker(top))                  # a flat face: not round
+        assert "doesn't look like a round hole" in r.result.text() and r.inputs["radius"].text() == ""
+        geom.tri_highlight[5] = True                                          # a pick in the Pick window, kept
+        button.click()
+        w.on_left_button_press(c[wall].tolist(), Picker(wall))
+        h = float(np.max(w.preview_mesh().elem_size))
+        centre = [float(x) for x in r.inputs["center"].text().split(",")]
+        assert np.allclose(centre[:2], [40, 30], rtol=0.01) and abs(centre[2]) < 1e-6
+        assert r.inputs["axis"].currentText() == "z"
+        assert abs(float(r.inputs["radius"].text()) - h - 8) < 0.08          # within 1 %
+        assert [float(b.text()) for b in r.inputs["along"]] == [0.0, 10.0]
+        assert "nodes on the run's mesh" in r.result.text() and "mmto_region" in w.plotter.actors
+        assert np.flatnonzero(geom.tri_highlight).tolist() == [5]
+        w.on_left_button_press(c[wall].tolist(), Picker(wall))                # one fill per click of the button
+        assert "Copied" in panel.stack.currentWidget().copied.text()
+        r.reject()
+
+    from gui.supports_and_loads_panel import hole_from_wall                   # a tilted hole
+    axis = np.array([1.0, 1.0, 1.0]) / np.sqrt(3)
+    tube = pv.Cylinder(center=(5, 6, 7), direction=axis, radius=3, height=4, resolution=60, capping=False)
+    tube = tube.triangulate().compute_normals(cell_normals=True, point_normals=False)
+    corners = tube.points[tube.faces.reshape(-1, 4)[:, 1:]]
+    point, got, radius, start, end = hole_from_wall(tube.cell_data["Normals"], corners)
+    assert np.allclose(got, axis) and abs(radius - 3) < 0.03 and abs(end - start - 4) < 1e-6
+    assert np.allclose(point + 2 * axis, [5, 6, 7])                         # the middle of the tube
+
+
+def test_enter_previews():
+    """Enter in the Selection form and in the support or load form checks what was typed and shows it on
+    the part; the window stays open, a mistake shows in its message line; only OK saves and closes."""
+    from PyQt5 import QtTest
+    enter = lambda box: QtTest.QTest.keyClick(box, QtCore.Qt.Key_Return)   # noqa: E731
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        w.show()
+        panel = w.open_supports_and_loads_panel()
+        r = panel.add_region()
+        ok = lambda dialog: next(b for b in dialog.findChildren(QtWidgets.QPushButton)   # noqa: E731
+                                 if b.text() == "OK")
+        assert not ok(r).isDefault()
+        r.type.setCurrentText("Cylinder")
+        r.inputs["center"].setText("52, 114, 1")
+        r.inputs["radius"].setText("5")
+        enter(r.inputs["radius"])
+        assert r.isVisible() and "nodes on the run's mesh" in r.result.text() and "mmto_region" in w.plotter.actors
+        r.inputs["axis"].setCurrentText("1, 1, 0")                            # an edit: the preview goes
+        assert "mmto_region" not in w.plotter.actors
+        enter(r.inputs["axis"].lineEdit())                                    # in an editable list too
+        assert r.isVisible() and "mmto_region" in w.plotter.actors
+        assert r.inputs["axis"].findText("1, 1, 0") < 0                       # Enter adds no choice
+        r.inputs["radius"].setText("five")
+        enter(r.inputs["radius"])
+        assert r.isVisible() and "#b00000" in r.result.text() and "'five'" in r.result.text()
+        assert "mmto_region" not in w.plotter.actors
+        r.inputs["radius"].setText("5")
+        r.name.setText("bore")
+        ok(r).click()                                                         # OK: saved and closed
+        assert "bore" in w.project.selections and panel.stack.count() == 1
+
+        b = panel.add_bc()
+        assert not ok(b).isDefault()
+        b.kind.setCurrentText("Force")
+        b.on.setCurrentText("bore")
+        b.inputs["total"][1][1].setText("-10/2")
+        enter(b.inputs["total"][1][1])
+        assert b.isVisible() and "nodes on the run's mesh" in b.result.text()
+        assert {"mmto_region", "mmto_arrow_region"} <= set(w.plotter.actors)  # the load, with its arrow
+        b.inputs["total"][1][0].setText("x")
+        enter(b.inputs["total"][1][0])
+        assert b.isVisible() and "Total force is not a number" in b.result.text()
+        b.inputs["total"][1][0].setText("0")
+        n = len(w.project.bcs)
+        ok(b).click()
+        assert len(w.project.bcs) == n + 1 and w.project.bcs[-1] == {"kind": "force", "on": "bore",
+                                                                     "total": [0.0, -5.0, 0.0]}
+        assert panel.stack.count() == 1 and "mmto_arrow_region" not in w.plotter.actors
 
 
 def test_pages():

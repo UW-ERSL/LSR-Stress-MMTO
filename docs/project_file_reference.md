@@ -33,7 +33,7 @@ Lengths are numbers in model units, or `"<k>h"` for k times the largest element 
 | `function` | ref | Whatever a Python function name(mesh, on) in file.py returns. |
 | `halfspaces` | normals, origins, boundary | Points on the inner side of every plane: n . (p - o) <= 1e-12 for each normal n and origin o. A box dragged in the PyTO-AD GUI is six such planes. boundary=True keeps only nodes on the mesh boundary, as the GUI does. |
 | `ids` | indices | Explicit node or element numbers; tied to one mesh. |
-| `inside_stl` | path | Points inside a closed STL surface. |
+| `inside_stl` | path, shift | Points inside a closed STL surface, the surface first moved by shift (x, y, z in model units), e.g. when the STL was saved shifted to 0, 0, 0. shift is written only when it is not zero. |
 | `intersect` | parts | Points in all of the parts. |
 | `near_face` | side, distance | Points strictly within distance of the mesh's extreme on one side. |
 | `nearest` | point, boundary | The single node or element closest to point; boundary=True only looks at nodes on the mesh boundary, as the PyTO-AD GUI does for a picked point. |

@@ -218,7 +218,7 @@ Changes go into the project at once. Use File > Save to keep them.
 Click **Add** and choose one of:
 
 - **Click on the part...** opens the **Pick** window. You click faces on the part, choose what they are, and press **Apply**. This is the quickest way for a face you can see.
-- **Enter by hand...** opens a form. You choose the **Type**, choose the selection under **Where** (or make one there with **New selection...**), and fill in the values. Use this when a face is hard to click, when you need exact numbers, or when the place is not a face at all (a hole, a patch, a point).
+- **Enter by hand...** opens a form. You choose the **Type**, choose the selection under **Where** (or make one there with **New selection...**), and fill in the values. **Preview**, or Enter, checks the values and shows the selection on the part (with an arrow for a load), and the form stays open; **OK** keeps it. Use this when a face is hard to click, when you need exact numbers, or when the place is not a face at all (a hole, a patch, a point).
 
 Both end up in the same list, and you can change either one later by double-clicking it.
 
@@ -229,14 +229,14 @@ Click **Add**, then **Click on the part...**. The Pick window opens beside the p
 1. Under **Selection**, choose how a click selects:
    - **Facet**: the face you click and every face joined to it with no sharp edge in between (an edge that bends more than about 15 degrees stops it). One click selects a whole flat side, or a whole smoothly curved surface such as the inside of a hole.
    - **Triangle**: only the single triangle you click. The edges of the triangles show, so you can see them. Use it for a small area.
-   - **Node**: the point of the part nearest to your click. **Box select nodes** then lets you drag a rectangle: every node inside it is selected, through the whole depth of the part.
-2. Click the part. Each click adds to what is selected; clicking a selected face again takes it off. A right click clears everything selected so far.
+   - **Node**: the point of the part nearest to your click. Click again for each node you want.
+2. Click the part. Each click adds to what is selected; clicking a selected face again takes it off. **Clear picks**, or a right click on the part, clears everything selected so far.
 3. Under **Type**, choose **Fixed XYZ**, **Fixed X**, **Fixed Y** or **Fixed Z** for a support, or **Force** for a load. For a force, give its X, Y and Z under **Force Components**: this is the total force on everything you selected.
 4. Press **Apply**.
 
 The pick becomes a support or load in the list, on a new selection named gui_support1, gui_load1 and so on. Rename the selection under Selections if you like.
 
-Faces are only picked while the Pick window is open. With it closed, clicking and dragging on the part just turns the view.
+Faces are only picked while the Pick window is open. Closing it clears whatever was picked and not applied. With it closed, clicking and dragging on the part just turns the view.
 
 A picked selection remembers the triangles of the STL by their numbers. If you load a different STL for the part, the same numbers are different faces, so pick them again.
 
@@ -249,6 +249,8 @@ The Selection form has a **Name** (letters, digits and _, not starting with a di
 - **Preview** draws the selection on the part in orange, and says how many nodes it has on the mesh the run will use.
 - **Clear** removes that drawing again.
 
+Pressing Enter in the form does the same as **Preview**: it checks what you typed and shows the selection on the part, and the form stays open. A mistake shows in red under the form. Only **OK** keeps the selection and closes the form.
+
 While the form is open, rest the mouse on the part to read the coordinates under it. Click the part to copy that point; paste it into a field with Ctrl+V.
 
 The types of selection:
@@ -259,16 +261,18 @@ The types of selection:
 - **Flat cut**: the nodes on a flat cut through the part, across x, y or z. *Example: every node where y is 38: Cut across y, At 38.* To keep only part of the cut, fill in the from and to of the other directions, for example x from 0 to 40. Leave them empty for the whole cut.
 - **Box**: every node inside a box, given by two opposite corners (**Corner 1** and **Corner 2**, each as x, y, z). The corners can be in any order. A box thinner than an element still catches the nearest layer of nodes.
 - **Sphere**: every node within a **Radius** of a **Centre**.
-- **Cylinder**: every node inside a cylinder, or inside a tube if you give an **Inner radius**. Good for holes and bolt bores. Give a **Point on the axis**, the **Axis direction** (x, y, z, or a direction such as 1, 1, 0) and the **Radius**. Leave the two ends empty for a cylinder through the whole part. With the axis along x, y or z, the ends are coordinates, for example x from 22 to 61. Along a tilted axis they are distances from the point on the axis. *Example: the inside of a bolt hole of radius 5 through z at x 20, y 30: Point on the axis 20, 30, 0, Axis direction z, Radius 5.5, Inner radius 4.5.*
+- **Cylinder**: every node inside a cylinder, or inside a tube if you give an **Inner radius**. Good for holes and bolt bores. Give a **Point on the axis**, the **Axis direction** (x, y, z, or a direction such as 1, 1, 0) and the **Radius**. Leave the two ends empty for a cylinder through the whole part. With the axis along x, y or z, the ends are coordinates, for example x from 22 to 61. Along a tilted axis they are distances from the point on the axis. *Example: the inside of a bolt hole of radius 5 through z at x 20, y 30: Point on the axis 20, 30, 0, Axis direction z, Radius 5.5, Inner radius 4.5.* For a round hole in the part, click **Click a hole** and then click the inside wall of the hole: the form is filled in with the point on its axis, its axis, its ends, and a Radius one element size larger than the hole, so the nodes of the wall are in. If the wall is not round, the form says *This doesn't look like a round hole* and fills nothing.
 - **Closest node**: the one node nearest to a **Point**. Tick **Surface nodes only** to stay on the outside of the part. Use it for a load at one point.
-- **Inside an STL**: every node inside a closed surface loaded from another STL file (**File**, with **Browse...**). Use it for a shape no other type describes, such as a collar around a bore.
+- **Inside an STL**: every node inside a closed surface loaded from another STL file (**File**, with **Browse...**). Use it for a shape no other type describes, such as a collar around a bore. **Move by** (x, y, z, default 0, 0, 0) moves the shape before nodes are selected, for example when the STL was saved shifted to 0, 0, 0. Preview draws the shape where it ends up.
 - **Combined selections**: two selections of the project joined, overlapped, or one taken from the other. **How** is one of **Join: in A or in B**, **Overlap: in both A and B**, or **A minus B: in A, not in B**. It follows them: change Selection A or Selection B later and this selection changes too. It appears once the project has at least two selections. *Example: the left face without its bottom rows: A minus B, with A a face and B the rows.*
 
-Three more types are made with the mouse, and show up when you open such a selection: **Picked faces** (faces you clicked), **Dragged box** (a box you dragged in Node mode) and **Node numbers** (single nodes, by number; they stay right only while the mesh does not change).
+Three more types are made with the mouse, and show up when you open such a selection: **Picked faces** (faces you clicked), **Node numbers** (single nodes, by number; they stay right only while the mesh does not change) and **Dragged box** (a box dragged over the part in earlier versions; a project that has one still opens and runs as before).
 
 Most types have a **Tolerance**: how far outside the selection a node may sit and still count. **Automatic** is right almost always.
 
 The **Code line** tab shows the same selection as one line of text, for example `rows(face="xmax", axis="y", n=8, end="max")`. You can type a selection there instead of filling in the form.
+
+A number can be typed as plain arithmetic, in the Selection form, on the Code line and in the support or load form: for example 38/2, 0.5*76 or 2*pi*5, also inside a point (0, 38/2, 0). You can use + - * / ** ( ) and pi. The project keeps the number it comes to.
 
 Every selection type at a glance:
 
@@ -284,7 +288,7 @@ Every selection type at a glance:
 | Sphere | Nodes within a radius of a point. |
 | Cylinder | Nodes inside a cylinder, or a tube if you give an inner radius. Good for holes and bolt bores. Leave the ends empty for a cylinder through the whole part. With the axis along x, y or z the ends are coordinates, e.g. x from 22 to 61; along a tilted axis they are distances from the point on the axis. |
 | Closest node | The one node closest to a point. |
-| Inside an STL | Nodes inside a closed surface loaded from an STL file. |
+| Inside an STL | Nodes inside a closed surface loaded from an STL file. Move by moves the shape first. |
 | Combined selections | Two selections of this project joined, overlapped or one taken from the other. It follows them: edit Selection A or Selection B later and this selection changes with it. |
 | Picked faces | Faces you clicked with the mouse. Snap distance is how close a node must be to a face to count, in element sizes; leave it empty for the usual 0.7. Made with the mouse; open it from Selections to change it. |
 | Dragged box | A box you dragged with the mouse, as the planes that bound it. Made with the mouse; open it from Selections to change it. |

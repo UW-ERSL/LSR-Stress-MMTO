@@ -39,7 +39,7 @@ Types (to_dict / from_dict give the JSON form a project file stores):
     rows(face, axis, n, end="max")               the n outermost node rows of a face along an
                                                  axis, e.g. rows("xmax", "y", 8) (nodes only)
     ids(indices)                                 explicit indices; tied to one mesh
-    inside_stl(path)                             inside a closed STL surface
+    inside_stl(path, shift=(0, 0, 0))            inside a closed STL surface, moved by shift first
     function("file.py:name")                     name(mesh, on) returns the indices
     union(a, b, ...), intersect(a, b, ...), difference(a, b)
     selection("name")                            another selection of the project, by name: a live
@@ -119,12 +119,13 @@ class Field:
     (one of choices), "tick" (true or false), "file" (a file; files: the kinds of file offered),
     "number", "numbers" (a list of numbers) or "limits" (the from and to of other directions).
     choices: (shown, value) pairs offered in a list, for any kind; editable: a value of your own may
-    be typed too. optional: may be left empty, which means None."""
-    __slots__ = ("kind", "choices", "editable", "optional", "files")
+    be typed too. optional: may be left empty, which means None. help: what the field does, in plain
+    words, for the form's (i)."""
+    __slots__ = ("kind", "choices", "editable", "optional", "files", "help")
 
-    def __init__(self, kind, choices=(), editable=False, optional=False, files=None):
+    def __init__(self, kind, choices=(), editable=False, optional=False, files=None, help=None):
         self.kind, self.choices, self.editable = kind, tuple(choices), editable
-        self.optional, self.files = optional, files
+        self.optional, self.files, self.help = optional, files, help
 
 
 SIDES = (("Left (x min)", "xmin"), ("Right (x max)", "xmax"), ("Bottom (y min)", "ymin"),
@@ -437,21 +438,43 @@ def _resolve(path, base_dir):
 
 
 class inside_stl(Selection):
-    """Points inside a closed STL surface."""
-    TYPE, fields = "inside_stl", ("path",)
-    field_kinds = {"path": Field("file", files="STL files (*.stl *.STL)")}
+    """Points inside a closed STL surface, the surface first moved by shift (x, y, z in model units), e.g.
+    when the STL was saved shifted to 0, 0, 0. shift is written only when it is not zero."""
+    TYPE, fields = "inside_stl", ("path", "shift")
+    field_kinds = {"path": Field("file", files="STL files (*.stl *.STL)"),
+                   "shift": Field("point", help="Moves the shape before nodes are selected, for example when "
+                                                "the STL was saved shifted to 0, 0, 0.")}
 
-    def __init__(self, path):
+    def __init__(self, path, shift=(0.0, 0.0, 0.0)):
         self.path = path
+        self.shift = [float(v) for v in shift]
+        if len(self.shift) != 3:
+            raise ValueError(f"shift needs x, y and z, not {shift!r}")
 
-    def evaluate(self, mesh, on="nodes", base_dir=None):
+    def surface(self, base_dir=None):
+        """The closed surface, moved by shift."""
         import pyvista as pv
         path = _resolve(self.path, base_dir)
         if not os.path.isfile(path):
             raise FileNotFoundError(f"inside_stl: {path} does not exist")
+        surface = pv.read(path)
+        return surface.translate(self.shift, inplace=False) if any(self.shift) else surface
+
+    def evaluate(self, mesh, on="nodes", base_dir=None):
+        import pyvista as pv
         pts = pv.PolyData(_points(mesh, on))
-        sel = pts.select_enclosed_points(pv.read(path), tolerance=0.0, check_surface=False)
+        sel = pts.select_enclosed_points(self.surface(base_dir), tolerance=0.0, check_surface=False)
         return np.flatnonzero(np.asarray(sel.point_data["SelectedPoints"]).astype(bool)).astype(int)
+
+    def to_dict(self):
+        d = super().to_dict()
+        if not any(d["shift"]):                                     # files without a move stay as they were
+            del d["shift"]
+        return d
+
+    def __repr__(self):                                             # the code line: shift only when not zero
+        args = ", ".join(f"{k}={v!r}" for k, v in self.to_dict().items() if k != "type")
+        return f"{self.TYPE}({args})"
 
 
 class function(Selection):

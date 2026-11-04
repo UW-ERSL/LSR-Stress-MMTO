@@ -220,9 +220,10 @@ def in_open_strip(widget):
         return False
 
 
-def place_outline(selection, mesh):
+def place_outline(selection, mesh, base_dir=None):
     """A solid showing a selection's shape (drawn as its edges), or None for one with no shape of its own (picked
-    faces, rows, a node, a list of numbers). selection has every selection(name) in it resolved."""
+    faces, rows, a node, a list of numbers). selection has every selection(name) in it resolved; base_dir is
+    where the files a selection names (an STL) are found."""
     import pyvista as pv
     from lsr_mmto.problem import selections as S
     xyz = np.asarray(mesh.node_xyz, dtype=float)
@@ -230,8 +231,10 @@ def place_outline(selection, mesh):
     h = 0.5 * np.asarray(mesh.elem_size, dtype=float)
     kind = selection.TYPE
     if kind in ("union", "intersect", "difference"):
-        parts = [o for o in (place_outline(s, mesh) for s in selection.parts) if o is not None]
+        parts = [o for o in (place_outline(s, mesh, base_dir) for s in selection.parts) if o is not None]
         return parts[0].merge(parts[1:]) if len(parts) > 1 else (parts[0] if parts else None)
+    if kind == "inside_stl":                                        # the surface, moved as the selection moves it
+        return selection.surface(base_dir)
     if kind == "sphere":
         return pv.Sphere(radius=S._length(mesh, selection.radius), center=selection.center,
                          theta_resolution=12, phi_resolution=8)              # a light wire ball
@@ -273,13 +276,35 @@ def place_outline(selection, mesh):
 
 
 class PickWindow(StructuralLoadsWindow):
-    """Picking supports and loads with the mouse: Selection, Type, the force, Apply. Each Apply goes
-    straight into the project (MMTOWindow.adopt_picks), so there is no list of applied loads here, no
-    load set (one load case) and no torque (not one of LSR MMTO's loads)."""
+    """Picking supports and loads with the mouse: Selection, Type, the force, Apply, Clear picks. Each Apply
+    goes straight into the project (MMTOWindow.adopt_picks), so there is no list of applied loads here, no
+    load set (one load case) and no torque (not one of LSR MMTO's loads). Nodes are picked one click at a
+    time (no box select); picks not applied are cleared when the window closes."""
 
     def init_window(self):
         super().init_window()
         self.setWindowTitle("Pick")
+
+    def create_selection_control(self, parent_layout):
+        layout = QtWidgets.QHBoxLayout()                            # Facet, Triangle, Node: no Box select nodes
+        layout.addWidget(QtWidgets.QLabel("Selection"))
+        self.selection_combo = QtWidgets.QComboBox()
+        self.selection_combo.addItems(list(self.SELECTION_MODES))
+        layout.addWidget(self.selection_combo)
+        parent_layout.addLayout(layout)
+
+    def _take_selected_points(self):
+        points = list(getattr(self.parent, "selected_points", []) or [])
+        regions = list(getattr(self.parent, "selected_regions", []) or [])
+        if not points and not regions:
+            QtWidgets.QMessageBox.warning(self, "No Selection", "No nodes selected. In Node mode, click the part "
+                                                                "near a node.")
+            return None
+        return points, regions
+
+    def closeEvent(self, event):
+        self.parent.clear_picks()                                   # picks not applied go with the window
+        super().closeEvent(event)
 
     def create_load_set_control(self, parent_layout):
         self.load_set_spin = QtWidgets.QSpinBox(self)               # read when a load is applied: always 0
@@ -294,8 +319,15 @@ class PickWindow(StructuralLoadsWindow):
         parent_layout.addLayout(layout)
 
     def create_buttons(self, parent_layout):
+        row = QtWidgets.QHBoxLayout()
         self.apply_button = QtWidgets.QPushButton("Apply")
-        parent_layout.addWidget(self.apply_button)
+        row.addWidget(self.apply_button)
+        self.clear_button = QtWidgets.QPushButton("Clear picks")
+        self.clear_button.setToolTip("Remove every face and node picked and not applied yet. A right click on "
+                                     "the part does the same.")
+        self.clear_button.clicked.connect(lambda: self.parent.clear_picks())
+        row.addWidget(self.clear_button)
+        parent_layout.addLayout(row)
 
     def init_ui(self):
         super().init_ui()
@@ -1149,6 +1181,10 @@ class MMTOWindow(MainWindow):
         if not self.measure.isChecked():
             form_open = in_open_strip(panel) and panel.stack.currentIndex() > 0
             if form_open and not in_open_strip(getattr(self, "structural_loads_window", None)):
+                actor = picker.GetActor() if hasattr(picker, "GetActor") else None
+                if picker is not None and picker.GetCellId() >= 0 and actor in (None, self.part_actor()) and \
+                        panel.take_click(picker.GetCellId()):                # a form waiting for a click: its
+                    return None                                             # Click a hole
                 if picker is not None and picker.GetCellId() >= 0:
                     text = point_text(self.snapped(picked_point))
                     QtWidgets.QApplication.clipboard().setText(text)
@@ -1170,6 +1206,20 @@ class MMTOWindow(MainWindow):
             d, unit, f = b - a, self.length_unit(), "%.4g"
             self.measured.setText(f"Distance {f % np.linalg.norm(d)} {unit}  (dx {f % d[0]}, dy {f % d[1]}, "
                                   f"dz {f % d[2]})")
+
+    def wall_triangles(self, cell):
+        """(normals, corners) of the triangles joined to triangle cell with no sharp edge between, grown as
+        a click in the Pick window's Facet mode grows (select_triangles). What is picked there stays as it was."""
+        geom = self.stl_geom
+        kept, mode = list(geom.tri_highlight), getattr(self, "highlight_mode", "coarse")
+        geom.tri_highlight = [False] * len(kept)
+        self.highlight_mode = "coarse"
+        try:
+            self.select_triangles(cell)
+            wall = np.flatnonzero(geom.tri_highlight)
+        finally:
+            geom.tri_highlight, self.highlight_mode = kept, mode
+        return np.asarray(geom.tri_normals, dtype=float)[wall], np.asarray(geom.mesh.vectors, dtype=float)[wall]
 
     def picked_count(self):
         """How many triangles are selected in the Pick strip."""
@@ -1199,16 +1249,10 @@ class MMTOWindow(MainWindow):
         return None
 
     def on_right_button_press(self, obj, event):
-        """A right click with the Pick strip open clears what is selected in it; otherwise it does nothing."""
-        if not in_open_strip(getattr(self, "structural_loads_window", None)) or not self.stl_geom:
-            return
-        if getattr(self, "selected_points", None) or getattr(self, "selected_regions", None):
-            self.selected_points, self.selected_regions = [], []
-            self.update_point_markers()
-        if self.picked_count():
-            self.stl_geom.tri_highlight = [False] * len(self.stl_geom.tri_highlight)
-            self.update_highlights()
-        self.show_picked_count()
+        """A right click with the Pick strip open clears what is selected in it (as its Clear picks does);
+        otherwise it does nothing."""
+        if in_open_strip(getattr(self, "structural_loads_window", None)) and self.stl_geom:
+            self.clear_picks()
 
     def _draw_measure(self):
         import pyvista as pv
@@ -1893,7 +1937,8 @@ class MMTOWindow(MainWindow):
         (place_outline); nothing for a place without one. colour is the nodes', kept for the call."""
         from lsr_mmto.problem import selections as S
         self.plotter.remove_actor(name, reset_camera=False)
-        shape = place_outline(S.resolved(selection, self.project.selections), self.preview_mesh())
+        shape = place_outline(S.resolved(selection, self.project.selections), self.preview_mesh(),
+                              self.project.base_dir)
         if shape is not None:
             self.plotter.add_mesh(shape, color=OUTLINE_COLOUR, style="wireframe", line_width=2, pickable=False, name=name,
                                   reset_camera=False)       # edges, not a see-through surface: transparency
