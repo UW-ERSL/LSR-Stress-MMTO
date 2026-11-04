@@ -45,7 +45,8 @@ FORM = {
                  "along x, y or z the ends are coordinates, e.g. x from 22 to 61; along a tilted axis they "
                  "are distances from the point on the axis.",
                  {"center": "Point on the axis", "axis": "Axis direction", "radius": "Radius",
-                  "inner_radius": "Inner radius (0 = solid)", "along": ("From", "To")}),
+                  "inner_radius": "Inner radius (0 = solid)", "along": ("From", "To"),
+                  "boundary": "Surface nodes only"}),
     "nearest": ("Closest node", "The one node closest to a point.",
                 {"point": "Point", "boundary": "Surface nodes only"}),
     "inside_stl": ("Inside an STL", "Nodes inside a closed surface loaded from an STL file. Move by moves the "
@@ -223,19 +224,29 @@ def preview_on_enter(dialog, event):
 
 
 NOT_ROUND = "This doesn't look like a round hole"
+FLAT_FACE = ("That click was on a flat face, not the inside wall of a hole. Turn the part so the wall shows, "
+             "then click on it.")
 
 
 def hole_from_wall(normals, corners):
-    """(point on the axis, axis, radius, start, end) of a round hole, from the triangles of its inside wall
-    (their normals, and their corners as an (n, 3, 3) array). The axis is the direction the wall's normals
+    """(point on the axis, axis, radius, start, end, outside) of a round hole, from the triangles of its inside
+    wall (their normals, and their corners as an (n, 3, 3) array). The axis is the direction the wall's normals
     avoid: the eigenvector of the smallest eigenvalue of the sum of n n^T, exactly x, y or z when within
     0.01 % of one. The centre and radius are the least-squares circle (algebraic fit) through the corners
     seen along the axis; start and end are the wall's extent along the axis, and the point is on the axis
-    at start. ValueError when the corners are far from a circle: rms off it over 5 % of the radius, or all
-    on one line (no circle to fit)."""
+    at start. outside is True when the normals point away from the axis: the outside of a round face, not a
+    hole. ValueError(FLAT_FACE) when over half of the triangles' area faces within 5 degrees of their mean
+    normal; ValueError(NOT_ROUND) when the corners are far from a circle: rms off it over 5 % of the radius,
+    or all on one line (no circle to fit)."""
     n = np.asarray(normals, dtype=float)
     n = n / np.linalg.norm(n, axis=1)[:, None]
-    p = np.unique(np.asarray(corners, dtype=float).reshape(-1, 3), axis=0)
+    tri = np.asarray(corners, dtype=float)
+    area = 0.5 * np.linalg.norm(np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0]), axis=1)
+    mean = area @ n
+    if np.linalg.norm(mean) > 1e-6 * area.sum() and \
+            area[n @ mean > np.cos(np.radians(5)) * np.linalg.norm(mean)].sum() > 0.5 * area.sum():
+        raise ValueError(FLAT_FACE)
+    p = np.unique(tri.reshape(-1, 3), axis=0)
     axis = np.linalg.eigh(n.T @ n)[1][:, 0]
     k = int(np.argmax(np.abs(axis)))
     axis = axis * np.sign(axis[k])
@@ -256,31 +267,55 @@ def hole_from_wall(normals, corners):
     if np.sqrt(np.mean((np.hypot(x - cx, y - cy) - r) ** 2)) > 0.05 * r:
         raise ValueError(NOT_ROUND)
     centre = middle - (middle @ axis) * axis + cx * u + cy * v + t.min() * axis
-    return centre, axis, r, float(t.min()), float(t.max())
+    away = tri.mean(axis=1) - centre                                # from the axis to each triangle
+    away -= np.outer(away @ axis, axis)
+    outside = bool(np.sum(area * np.sum(n * away, axis=1)) > 0)
+    return centre, axis, r, float(t.min()), float(t.max()), outside
 
 
-def _number_text(value):
-    return format(round(float(value), 9) + 0.0, ".6g")
+def _number_text(value, size=None):
+    """A number filled into the form, to 6 significant digits. With size (the part's largest extent), to the
+    part's own precision: under 1e-6 x size it is 0, and nothing finer than that is kept, so the noise of a
+    fit on a small part does not show."""
+    value = float(value)
+    if size:
+        digits = -int(np.floor(np.log10(1e-6 * size)))
+        value = 0.0 if abs(value) < 1e-6 * size else round(value, digits)
+    return format(round(value, 9) + 0.0, ".6g")
 
 
 def fill_from_hole(dialog, normals, corners):
     """The Cylinder form filled in from the inside wall of a hole (hole_from_wall): Point on the axis, Axis
-    direction, Radius (the hole's radius + 1h, one element size of whatever mesh it is used on, so the nodes
-    of the wall are in), and the ends; then its preview. A wall that is not round fills nothing and says so."""
+    direction, Radius (the hole's radius: Tolerance Automatic already takes nodes half an element outside it),
+    Inner radius 0, the ends and Surface nodes only; then its preview, with a note when the hole's radius is
+    under 2 element sizes (h, the largest) of the preview's mesh. The outside of a round face fills a tube one
+    element size each side of it (Radius r + 1h, Inner radius r - 1h), so it takes the nodes of that face
+    only. A face that is flat or not round fills nothing and says so."""
     try:
-        centre, axis, r, start, end = hole_from_wall(normals, corners)
+        centre, axis, r, start, end, outside = hole_from_wall(normals, corners)
     except ValueError as e:
         dialog.result.setText(f"<span style='color:#b00000'>{e}</span>")
         return
     letter = next((a for a, e in zip("xyz", np.eye(3)) if np.array_equal(axis, e)), None)
     boxes = dialog.inputs
-    boxes["center"].setText(", ".join(_number_text(c) for c in centre))
+    lo, hi = dialog.main.part_bounds()
+    size = float(np.max(hi - lo))                                   # lengths to the part's own precision
+    boxes["center"].setText(", ".join(_number_text(c, size) for c in centre))
     boxes["axis"].setCurrentText(letter or ", ".join(_number_text(c) for c in axis))
-    boxes["radius"].setText(f"{_number_text(r)} + 1h")
+    radius = _number_text(r, size)
+    boxes["radius"].setText(f"{radius} + 1h" if outside else radius)
+    boxes["inner_radius"].setText(f"{radius} - 1h" if outside else "0")
+    boxes["boundary"].setChecked(True)                              # the nodes on the face, none inside
     ends = (start, end) if letter else (0.0, end - start)          # coordinates along x, y, z; else distances
     for box, value in zip(boxes["along"], ends):
-        box.setText(_number_text(value))
+        box.setText(_number_text(value, size))
     dialog.show_preview()
+    if dialog.shown and not outside:                                # the preview's mesh, already built
+        h = float(np.max(dialog.main.preview_mesh().elem_size))
+        if r < 2 * h:
+            dialog.result.setText(f"{dialog.result.text()}<br>This hole is only {2 * r / h:.1f} elements across "
+                                  f"on the run's mesh; some of its nodes may be missed. Check with Preview, or "
+                                  f"use more dofs.")
 
 
 # A button of the form that fills it in from a click on the part: (its text, its (i), the filling, given the
@@ -358,8 +393,8 @@ class RegionDialog(QtWidgets.QDialog):
         show.setToolTip("Check what you typed and show it on the part (Enter)")
         show.clicked.connect(self.show_preview)
         clear = buttons.addButton("Clear", QtWidgets.QDialogButtonBox.ActionRole)
-        clear.setToolTip("Clear this preview from the part")
-        clear.clicked.connect(self.clear_shown)
+        clear.setToolTip("Empty the form and remove its preview")
+        clear.clicked.connect(self.clear_form)
         self.shown = False                                          # a preview of this form is on the part
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -624,6 +659,7 @@ class RegionDialog(QtWidgets.QDialog):
                 S.selection(a), S.selection(b))
         cls = self.types[kind]
         kwargs = {}
+        defaults = dict(type_fields(cls))
         for field, box in self.inputs.items():
             label = field_label(kind, field)
             if field == "limits":
@@ -668,6 +704,8 @@ class RegionDialog(QtWidgets.QDialog):
                 if how.optional:
                     kwargs[field] = None
                     continue
+                if defaults.get(field, inspect.Parameter.empty) is not inspect.Parameter.empty:
+                    continue                                                # empty: the field's default
                 raise ValueError(f"{label}: no value")
             kwargs[field] = self._value(label, text)
             if how.kind == "numbers" and isinstance(kwargs[field], int):        # one number: a list of one
@@ -714,6 +752,13 @@ class RegionDialog(QtWidgets.QDialog):
             self.preview(None)
         self.shown = False
         self.result.setText("")
+
+    def clear_form(self):
+        """Clear: the form's fields back to their defaults for the type chosen, the code line empty, and the
+        preview off the part."""
+        self.clear_shown()
+        self._fill_form(self.kind())
+        self.code.clear()
 
     def changed(self, *_):
         """An edit: the preview no longer shows this form, so it goes."""

@@ -1246,8 +1246,8 @@ def test_region_preview_clears():
         assert not on_part() and r.result.text() == ""
         r.show_preview()
         assert on_part()
-        r.clear_shown()                                                       # the Clear button
-        assert not on_part()
+        r.clear_form()                                                        # the Clear button
+        assert not on_part() and r.inputs["value"].text() == ""
         r.show_preview()
         r.type.setCurrentText("Box")                                          # another type: goes too
         assert not on_part()
@@ -1289,13 +1289,14 @@ def test_inside_stl_move_by():
 
 def test_click_a_hole():
     """Click a hole in the Cylinder form, then a click on the inside wall of a hole: the wall is grown as a
-    Facet pick grows, and the form gets the hole's centre, axis, radius (plus one element size) and ends.
-    A wall that is not round fills nothing."""
+    Facet pick grows, and the form gets the hole's centre, axis, radius and ends; Tolerance Automatic takes
+    the wall's nodes half an element outside the radius. A flat face fills nothing."""
     import pyvista as pv
     with scratch() as d:
         stl = os.path.join(d, "washer.stl")                           # a plate (a washer) with a hole of
         pv.Disc(center=(40, 30, 0), inner=8, outer=20, r_res=2, c_res=48).extrude(   # radius 8 at x 40, y 30,
-            (0, 0, 10), capping=True).triangulate().clean().save(stl)                # through z 0 to 10
+            (0, 0, 10), capping=True).triangulate().clean().compute_normals(          # through z 0 to 10, its
+            auto_orient_normals=True).save(stl)                                     # faces facing out
         w = G.MMTOWindow()
         assert w.new_project(stl, os.path.join(d, "washer"))
         w.show()
@@ -1318,31 +1319,32 @@ def test_click_a_hole():
         button = next(b for b in r.findChildren(QtWidgets.QPushButton) if b.text() == "Click a hole")
         button.click()
         assert "Click the inside wall" in r.result.text()
-        w.on_left_button_press(c[top].tolist(), Picker(top))                  # a flat face: not round
-        assert "doesn't look like a round hole" in r.result.text() and r.inputs["radius"].text() == ""
+        w.on_left_button_press(c[top].tolist(), Picker(top))                  # a flat face: said so
+        assert "on a flat face" in r.result.text() and r.inputs["radius"].text() == ""
         geom.tri_highlight[5] = True                                          # a pick in the Pick window, kept
         button.click()
         w.on_left_button_press(c[wall].tolist(), Picker(wall))
         centre = [float(x) for x in r.inputs["center"].text().split(",")]
         assert np.allclose(centre[:2], [40, 30], rtol=0.01) and abs(centre[2]) < 1e-6
         assert r.inputs["axis"].currentText() == "z"
-        radius, plus = r.inputs["radius"].text().split(" + ")
-        assert abs(float(radius) - 8) < 0.08 and plus == "1h"              # within 1 %, and one element size
+        assert abs(float(r.inputs["radius"].text()) - 8) < 0.08              # within 1 %, the hole's own
         assert [float(b.text()) for b in r.inputs["along"]] == [0.0, 10.0]
+        assert r.inputs["inner_radius"].text() == "0"
         assert "nodes on the run's mesh" in r.result.text() and "mmto_region" in w.plotter.actors
+        assert "elements across" not in r.result.text()                     # a hole many elements across
         bore = r.selection()
-        assert bore.radius == r.inputs["radius"].text()                     # kept as typed: follows the mesh
+        radius = float(r.inputs["radius"].text())
         from lsr_mmto.problem.mesh import make_mesh
         p = w.project
         for n_dof in (p.n_dof, 4 * p.n_dof):                                # the wall nodes on two mesh sizes
             mesh = make_mesh(os.path.abspath(p.stl_path()), n_dof, p.single_layer, p.unknowns_per_node())
             xyz = np.asarray(mesh.node_xyz, dtype=float)
-            h = float(np.max(mesh.elem_size))
+            pad = 0.5 * float(np.min(mesh.elem_size))                       # Tolerance Automatic
             boundary = np.asarray(mesh.get_boundary_nodes())
-            wall_nodes = boundary[np.hypot(xyz[boundary, 0] - 40, xyz[boundary, 1] - 30) < 8 + 0.5 * h]
+            wall_nodes = boundary[np.hypot(xyz[boundary, 0] - 40, xyz[boundary, 1] - 30) < radius + pad - 1e-9]
             taken = p.evaluate(bore, mesh, "nodes")
             assert len(wall_nodes) and set(wall_nodes) <= set(taken), n_dof
-            assert np.hypot(xyz[taken, 0] - 40, xyz[taken, 1] - 30).max() <= 8 + 1.6 * h
+            assert np.hypot(xyz[taken, 0] - 40, xyz[taken, 1] - 30).max() <= radius + pad + 1e-9
         assert np.flatnonzero(geom.tri_highlight).tolist() == [5]
         w.on_left_button_press(c[wall].tolist(), Picker(wall))                # one fill per click of the button
         assert "Copied" in panel.stack.currentWidget().copied.text()
@@ -1353,9 +1355,149 @@ def test_click_a_hole():
     tube = pv.Cylinder(center=(5, 6, 7), direction=axis, radius=3, height=4, resolution=60, capping=False)
     tube = tube.triangulate().compute_normals(cell_normals=True, point_normals=False)
     corners = tube.points[tube.faces.reshape(-1, 4)[:, 1:]]
-    point, got, radius, start, end = hole_from_wall(tube.cell_data["Normals"], corners)
+    point, got, radius, start, end, outside = hole_from_wall(tube.cell_data["Normals"], corners)
     assert np.allclose(got, axis) and abs(radius - 3) < 0.03 and abs(end - start - 4) < 1e-6
     assert np.allclose(point + 2 * axis, [5, 6, 7])                         # the middle of the tube
+    assert outside and not hole_from_wall(-tube.cell_data["Normals"], corners)[5]   # normals out: a round face
+
+
+def test_filled_numbers_to_the_parts_precision():
+    """The numbers Click a hole fills in keep the part's own precision: under 1e-6 x its largest extent is 0;
+    on a 200 mm part the values are as they were."""
+    from gui.supports_and_loads_panel import _number_text
+    assert _number_text(-2.4e-08, 0.22) == "0" and _number_text(-0.00876, 0.22) == "-0.00876"
+    assert _number_text(0.0028199999489, 0.22) == "0.00282" and _number_text(-0.0325626, 0.22) == "-0.0325626"
+    for v in (40.0, 30.000000049, 7.999999699, 0.0, 10.0, -52.5, 123.456789, 0.25, 1e-3):
+        assert _number_text(v, 200.0) == format(round(v, 9) + 0.0, ".6g"), v
+
+
+def test_click_a_hole_on_the_rotor():
+    """Click a hole on a brake rotor saved in metres: every triangle of the inside wall of the bore, the six
+    bolt holes and the six rim notches gives its centre and radius (within 1 %); a bolt hole, under two element
+    sizes in radius on the run's mesh, gets the note that it is only a few elements across, the bore does not;
+    Surface nodes only is ticked, and the bore with it has no node off the mesh surface (without it, 12);
+    a click on a flat face says so; the outside of the rim fills a tube about it, which takes the nodes of the
+    rim, not the whole part."""
+    from gui.supports_and_loads_panel import hole_from_wall
+    from lsr_mmto.problem import selections as S
+    with scratch() as d:
+        w = G.MMTOWindow()
+        assert w.new_project(os.path.join(ROOT, "tests", "data", "brake_rotor.stl"), os.path.join(d, "rotor"))
+        w.show()
+        geom = w.stl_geom
+        n = np.asarray(geom.tri_normals, dtype=float)
+        v = np.asarray(geom.mesh.vectors, dtype=float)
+        c = v.mean(axis=1)
+        bore = np.array([0.0, -0.00876])
+        side = np.flatnonzero(np.abs(n[:, 2]) < 0.1)                         # the walls across the disc
+        rim = side[np.abs(np.hypot(*(c[side, :2] - bore).T) - 0.1096) < 0.0005]
+        walls = np.setdiff1d(side, rim)
+        found, first = {}, {}
+        for t in walls:
+            centre, axis, r, start, end, outside = hole_from_wall(*w.wall_triangles(int(t)))
+            assert not outside and np.array_equal(axis, [0, 0, 1]), t
+            known = min((0.0141, 0.00282, 0.0115), key=lambda k: abs(k - r))
+            assert abs(r - known) < 0.01 * known, (t, r)
+            assert np.all(np.abs(np.hypot(*(v[t, :, :2] - centre[:2]).T) - r) < 0.01 * r), t   # on that circle
+            found.setdefault(known, set()).add(tuple(np.round(centre[:2], 4)))
+            first.setdefault(known, int(t))
+        assert {k: len(cs) for k, cs in found.items()} == {0.0141: 1, 0.00282: 6, 0.0115: 6}
+        assert np.allclose(next(iter(found[0.0141])), bore, atol=0.01 * 0.0141)
+
+        class Picker:                                                         # a click on the part
+            def __init__(self, cell):
+                self.cell = cell
+
+            def GetCellId(self):
+                return self.cell
+        panel = w.open_supports_and_loads_panel()
+        r = panel.add_region()
+        r.type.setCurrentText("Cylinder")
+        button = next(b for b in r.findChildren(QtWidgets.QPushButton) if b.text() == "Click a hole")
+        flat = int(np.flatnonzero(n[:, 2] < -0.99)[0])
+        button.click()
+        w.on_left_button_press(c[flat].tolist(), Picker(flat))
+        assert "That click was on a flat face, not the inside wall of a hole" in r.result.text()
+        assert r.inputs["radius"].text() == ""
+        for known in (0.00282, 0.0141):                                      # a bolt hole, the bore
+            button.click()
+            w.on_left_button_press(c[first[known]].tolist(), Picker(first[known]))
+            radius = float(r.inputs["radius"].text())
+            assert abs(radius - known) < 0.01 * known and r.inputs["inner_radius"].text() == "0"
+            h = float(np.max(w.preview_mesh().elem_size))
+            note = f"This hole is only {2 * radius / h:.1f} elements across on the run's mesh"
+            assert "nodes on the run's mesh" in r.result.text()
+            assert (note in r.result.text()) == (radius < 2 * h) == (known == 0.00282), r.result.text()
+            assert r.inputs["boundary"].isChecked()
+        assert r.inputs["center"].text().split(", ")[1] == "-0.00876"          # the bore's y, to the part's
+        mesh = w.preview_mesh()                                               # precision; at 30000 dofs
+        assert w.project.n_dof == 30000
+        surface = set(np.asarray(mesh.get_boundary_nodes()).tolist())
+        bore_on_surface = r.selection()
+        bore_through = S.from_dict(dict(bore_on_surface.to_dict(), boundary=False))
+        assert not set(w.project.evaluate(bore_on_surface, mesh, "nodes").tolist()) - surface
+        assert len(set(w.project.evaluate(bore_through, mesh, "nodes").tolist()) - surface) == 12
+        button.click()
+        w.on_left_button_press(c[rim[0]].tolist(), Picker(int(rim[0])))      # the outside of the rim: a tube
+        radius, inner = r.inputs["radius"].text(), r.inputs["inner_radius"].text()
+        assert radius.endswith(" + 1h") and inner.endswith(" - 1h") and radius.split()[0] == inner.split()[0]
+        assert abs(float(radius.split()[0]) - 0.1096) < 0.001
+        assert r.inputs["center"].text().split(", ")[0] == "0"                 # the fit's noise in x is gone
+        mesh = w.preview_mesh()
+        xyz = np.asarray(mesh.node_xyz, dtype=float)
+        h = float(np.max(mesh.elem_size))
+        taken = w.project.evaluate(r.selection(), mesh, "nodes")
+        out = np.hypot(*(xyz[taken, :2] - bore).T)
+        assert len(taken) and len(taken) < 0.2 * mesh.num_nodes
+        assert out.min() >= 0.1096 - 1.6 * h and out.max() <= 0.1096 + 1.6 * h
+        r.reject()
+
+
+def test_empty_inner_radius_is_zero():
+    """An empty Inner radius is its default, 0 (a solid cylinder), on the form and the code line; an empty
+    Radius, which has no default, is still refused."""
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        panel = w.open_supports_and_loads_panel()
+        r = panel.add_region()
+        r.type.setCurrentText("Cylinder")
+        r.inputs["center"].setText("52, 114, 1")
+        r.inputs["radius"].setText("5")
+        r.inputs["inner_radius"].setText("")
+        bore = r.selection()
+        assert bore.inner_radius == 0 and not r.problems()
+        r.tabs.setCurrentIndex(1)
+        assert "inner_radius=0.0" in r.code.text()
+        r.tabs.setCurrentIndex(0)
+        r.inputs["radius"].setText("")
+        assert any("Radius: no value" in e for e in r.problems())
+        r.reject()
+
+
+def test_clear_empties_the_form():
+    """Clear in the Selection form puts every field back to its default and removes the form's preview."""
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        w.show()
+        panel = w.open_supports_and_loads_panel()
+        r = panel.add_region()
+        r.type.setCurrentText("Cylinder")
+        r.inputs["center"].setText("52, 114, 1")
+        r.inputs["radius"].setText("5")
+        r.inputs["inner_radius"].setText("2")
+        r.inputs["along"][0].setText("0")
+        r.inputs["along"][1].setText("3")
+        r.show_preview()
+        assert "mmto_region" in w.plotter.actors
+        clear = next(b for b in r.findChildren(QtWidgets.QPushButton) if b.text() == "Clear")
+        assert clear.toolTip() == "Empty the form and remove its preview"
+        clear.click()
+        assert "mmto_region" not in w.plotter.actors and r.result.text() == ""
+        assert r.kind() == "cylinder" and r.code.text() == ""
+        assert [r.inputs[f].text() for f in ("center", "radius", "inner_radius")] == ["", "", "0"]
+        assert [b.text() for b in r.inputs["along"]] == ["", ""]
+        assert r.inputs["pad"].currentText() == "Automatic" and r.inputs["axis"].currentText() == "x"
+        r.reject()
 
 
 def test_enter_previews():

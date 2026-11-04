@@ -24,9 +24,10 @@ forces half an element; pad=0 is exact.
 
 Types (to_dict / from_dict give the JSON form a project file stores):
     box(lo, hi)                                  lo <= p <= hi
-    cylinder(center, axis, radius, inner_radius=0, along=None)
+    cylinder(center, axis, radius, inner_radius=0, along=None, boundary=False)
                                                  distance to the axis in [inner_radius, radius];
-                                                 along = (t0, t1) limits (p - center) . axis
+                                                 along = (t0, t1) limits (p - center) . axis;
+                                                 boundary=True: mesh boundary nodes only
     sphere(center, radius)
     plane(axis, value, limits=None)              |p_axis - value| <= pad; limits={"y": [lo, hi]}
                                                  keeps part of the cut
@@ -256,17 +257,37 @@ class box(Selection):
 
 
 class cylinder(Selection):
-    """Points whose distance to the axis is in [inner_radius, radius]; along = (t0, t1) limits (p - center) . axis."""
-    TYPE, fields = "cylinder", ("center", "axis", "radius", "inner_radius", "along", "pad")
+    """Points whose distance to the axis is in [inner_radius, radius]; along = (t0, t1) limits (p - center) . axis.
+    boundary=True keeps only nodes on the mesh boundary; it is written only when on."""
+    TYPE, fields = "cylinder", ("center", "axis", "radius", "inner_radius", "along", "pad", "boundary")
     field_kinds = {"center": POINT, "axis": AXIS, "radius": LENGTH, "inner_radius": LENGTH,
-                   "along": Field("length", optional=True), "pad": PAD}
+                   "along": Field("length", optional=True), "pad": PAD, "boundary": Field("tick")}
 
-    def __init__(self, center, axis, radius, inner_radius=0.0, along=None, pad="auto"):
+    def __init__(self, center, axis, radius, inner_radius=0.0, along=None, pad="auto", boundary=False):
         self.center = list(map(float, center))
         self.axis = axis if isinstance(axis, str) else list(map(float, axis))
         self.radius, self.inner_radius = _keep(radius), _keep(inner_radius)
         self.along = None if along is None else [_keep(along[0]), _keep(along[1])]
         self.pad = pad
+        self.boundary = bool(boundary)
+
+    def evaluate(self, mesh, on="nodes", base_dir=None):
+        found = super().evaluate(mesh, on, base_dir)
+        if not self.boundary:
+            return found
+        if on != "nodes":
+            raise ValueError("cylinder with boundary=True selects nodes only")
+        return np.intersect1d(found, np.asarray(mesh.get_boundary_nodes())).astype(int)
+
+    def to_dict(self):
+        d = super().to_dict()
+        if not d["boundary"]:                                       # files without it stay as they were
+            del d["boundary"]
+        return d
+
+    def __repr__(self):                                             # the code line: boundary only when on
+        args = ", ".join(f"{k}={v!r}" for k, v in self.to_dict().items() if k != "type")
+        return f"{self.TYPE}({args})"
 
     def _mask(self, p, mesh, on):
         t = _pad(mesh, self.pad, on)
