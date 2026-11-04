@@ -12,6 +12,9 @@ chosen from elsewhere is copied in. Every save also writes the project's setup s
 <name>_setup.py, again, so it always matches the project. The example projects in projects/ open as templates: Save
 asks for a folder of your own, so the examples never change.
 
+While no project is open, the 3D view holds the start page (StartPage): New, Open, the examples and the
+projects opened or saved last; the side buttons, Run, Export STL and Part / Design wait for a project.
+
 The 3D view shows either the part (the Setup view: supports, loads, previews) or a design (the
 Design view: a run's result, drawn by draw_design.py). Anything about the setup switches to the
 Setup view; the design is kept until the next run, so Design in the top row always brings it back.
@@ -69,6 +72,10 @@ FOLDER_HELP = ("A project keeps everything it uses in its own folder: the projec
                "the material database and its trained network (in materials), and the results of every run "
                "(in results). Zip the folder to send the whole project.")
 PANELS = {"Materials": MaterialsPanel, "Formulation": FormulationPanel, "Settings": SettingsPanel}
+NO_PROJECT = "Open or start a project first"            # the tip of what waits for a project
+START_EXAMPLES = (("L-bracket", "L-bracket.mmto"), ("U-bracket", "U-bracket.mmto"), ("Beam", "beam.mmto"),
+                  ("Airplane bracket", "Airplane bracket.mmto"))        # the start page's examples, in projects/
+RECENT = 5                                               # projects listed under Recent on the start page
 
 
 def icon(name):
@@ -162,6 +169,150 @@ class Banner(QtWidgets.QLabel):
         self.fade.setStartValue(1.0)
         self.fade.setEndValue(0.0)
         self.fade.start()
+
+
+def recent_store():
+    """Where the projects opened or saved last are kept for the start page (a settings file of the user's)."""
+    return QtCore.QSettings(QtCore.QSettings.IniFormat, QtCore.QSettings.UserScope, APP, APP)
+
+
+def recent_projects():
+    """The projects opened or saved last, newest first, those no longer there left out."""
+    paths = recent_store().value("recent", []) or []
+    paths = [paths] if isinstance(paths, str) else list(paths)
+    return [p for p in paths if os.path.isfile(p)][:RECENT]
+
+
+def remember_project(path):
+    """path first in the start page's Recent list (an example is not listed: it has its own button)."""
+    if not path or is_example(path):
+        return
+    path = os.path.abspath(path)
+    kept = [p for p in recent_projects() if os.path.normcase(p) != os.path.normcase(path)]
+    recent_store().setValue("recent", [path] + kept[:RECENT - 1])
+
+
+class RecentRow(QtWidgets.QFrame):
+    """One recent project on the start page: its name, and its folder under it. A click opens it."""
+
+    def __init__(self, path, open_it):
+        super().__init__()
+        self.setObjectName("recent")
+        self.path, self.open_it = path, open_it
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 9, 0, 9)
+        layout.setSpacing(2)
+        for text, name in ((os.path.splitext(os.path.basename(path))[0], "recentName"),
+                           (os.path.dirname(path), "recentPath")):
+            label = QtWidgets.QLabel(text)
+            label.setObjectName(name)
+            layout.addWidget(label)
+        self.setCursor(QtCore.Qt.PointingHandCursor)
+        self.setToolTip(path)
+
+    def mousePressEvent(self, event):
+        self.open_it(self.path)
+
+
+class StartPage(QtWidgets.QFrame):
+    """Over the empty 3D view while no project is open: New project, Open, the examples, and the projects
+    opened or saved last. It covers the view whatever its size."""
+
+    WIDTH = 600                                              # one column, every edge on it
+
+    def __init__(self, window):
+        super().__init__(window.pv_frame)
+        self.setObjectName("startPage")
+        self.window_ = window
+        outer = QtWidgets.QVBoxLayout(self)
+        outer.addStretch(2)
+        row = QtWidgets.QHBoxLayout()
+        outer.addLayout(row)
+        outer.addStretch(3)
+        row.addStretch(1)
+        body = QtWidgets.QWidget()
+        body.setFixedWidth(self.WIDTH)
+        row.addWidget(body)
+        row.addStretch(1)
+        col = QtWidgets.QVBoxLayout(body)
+        col.setContentsMargins(0, 0, 0, 0)
+        col.setSpacing(0)
+        col.addWidget(self._label("Start a project", "h1"))
+        col.addSpacing(6)
+        sub = self._label("A project keeps the part, its materials, supports, loads and runs in one folder.", "sub")
+        sub.setWordWrap(True)
+        col.addWidget(sub)
+        col.addSpacing(24)
+        self.new_button = self._button("New project from an STL...", "primary", window.new_project)
+        self.open_button = self._button("Open a project...", "secondary", window.open_project)
+        col.addWidget(self.new_button)
+        col.addSpacing(10)
+        col.addWidget(self.open_button)
+        col.addSpacing(36)
+        col.addWidget(self._label("Try an example", "h2"))
+        col.addSpacing(10)
+        grid = QtWidgets.QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(10)
+        self.examples = {}
+        shown = [(name, os.path.join(EXAMPLES, f)) for name, f in START_EXAMPLES if os.path.isfile(os.path.join(EXAMPLES, f))]
+        for k, (name, path) in enumerate(shown):
+            self.examples[name] = self._button(name, "example", lambda p=path: window.open_project(p))
+            grid.addWidget(self.examples[name], k // 2, k % 2)
+        col.addLayout(grid)
+        self.recent_box = QtWidgets.QWidget()
+        self.recent_rows = QtWidgets.QVBoxLayout(self.recent_box)
+        self.recent_rows.setContentsMargins(0, 36, 0, 0)
+        self.recent_rows.setSpacing(0)
+        self.recent_rows.addWidget(self._label("Recent", "h2"))
+        self.recent_rows.addSpacing(4)
+        col.addWidget(self.recent_box)
+        window.pv_frame.installEventFilter(self)
+        self.hide()
+
+    @staticmethod
+    def _label(text, name):
+        label = QtWidgets.QLabel(text)
+        label.setObjectName(name)
+        return label
+
+    @staticmethod
+    def _button(text, name, slot):
+        b = QtWidgets.QPushButton(text)
+        b.setObjectName(name)
+        b.setCursor(QtCore.Qt.PointingHandCursor)
+        b.clicked.connect(lambda _=False: slot())
+        return b
+
+    def recent(self):
+        """The paths of the Recent rows shown."""
+        return [self.recent_rows.itemAt(i).widget().path for i in range(self.recent_rows.count())
+                if isinstance(self.recent_rows.itemAt(i).widget(), RecentRow)]
+
+    def fill_recent(self):
+        """The Recent rows from recent_projects(); the section hidden when there are none."""
+        for i in reversed(range(self.recent_rows.count())):
+            row = self.recent_rows.itemAt(i).widget()
+            if isinstance(row, RecentRow):
+                self.recent_rows.removeWidget(row)
+                row.deleteLater()
+        paths = recent_projects()
+        for path in paths:
+            self.recent_rows.addWidget(RecentRow(path, self.window_.open_project))
+        self.recent_box.setVisible(bool(paths))
+
+    def cover(self):
+        """Shown over the whole 3D view, its Recent list up to date."""
+        self.fill_recent()
+        self.setGeometry(self.parentWidget().rect().adjusted(1, 1, -1, -1))
+        self.show()
+        self.raise_()
+
+    def eventFilter(self, obj, event):
+        if obj is self.parentWidget() and event.type() == QtCore.QEvent.Resize:
+            self.setGeometry(obj.rect().adjusted(1, 1, -1, -1))
+        return False
 
 
 def point_text(p):
@@ -621,6 +772,8 @@ class MMTOWindow(MainWindow):
         self._build_menu()
         self._build_top_row()
         self.set_dark_view(False)
+        self.start_page = StartPage(self)
+        self._project_or_not()
         self._refresh_title()
 
     def create_button(self, config, style):
@@ -636,6 +789,20 @@ class MMTOWindow(MainWindow):
         btn = self.sidebar_buttons.get(button_text)
         if btn is not None:
             btn.setIcon(icon("check") if icon_type == "check" else icon(SIDEBAR_ICONS.get(button_text, "units")))
+
+    def _project_or_not(self):
+        """With no project open, the start page over the 3D view, and the side buttons, Run, Export STL and
+        Part / Design greyed; with one, the page hidden and they work."""
+        none = self.project is None
+        if none:
+            self.start_page.cover()
+        else:
+            self.start_page.hide()
+        for b in self.sidebar_buttons.values():
+            b.setEnabled(not none)
+            b.setToolTip(NO_PROJECT if none else "")
+        self.update_top_row()
+        self._view_changed()
 
     def create_message_frame(self):
         """PyTO-AD's message panel, three lines high, with a repeated line shown once (MessageLog)."""
@@ -712,7 +879,6 @@ class MMTOWindow(MainWindow):
             b.setCheckable(True)
             group.addButton(b)
             two.addWidget(b)
-        self.part_button.setToolTip("Show the part, with its supports and loads")
         self.part_button.clicked.connect(lambda: self.show_setup_view())
         self.design_button.clicked.connect(lambda: self.show_design_view())
         row.addWidget(switch)
@@ -779,12 +945,13 @@ class MMTOWindow(MainWindow):
             self.run_button.setEnabled(not getattr(rw, "stop_requested", False))
             self.progress_text.setText(re.sub(r"<[^>]+>", " ", rw.status.text()))
         else:
-            self.run_button.setEnabled(True)
+            self.run_button.setEnabled(self.project is not None)
             self.progress_text.setText("")
+        self.run_button.setToolTip("" if self.project is not None else NO_PROJECT)
         shown = self.shown_run()
         self.export_button.setEnabled(shown is not None and not self.exporting)
         self.export_button.setToolTip(
-            "Exporting..." if self.exporting else
+            NO_PROJECT if self.project is None else "Exporting..." if self.exporting else
             "Write the design shown as smooth STL files into its run's folder: the whole part, and one file "
             "per material" if shown is not None else "Show a finished run's design to export it")
         if self.banner.isVisible():
@@ -1504,6 +1671,7 @@ class MMTOWindow(MainWindow):
             QtWidgets.QMessageBox.warning(self, "Save project", f"Not saved: {e}")
             return False
         self.path, self._saved = os.path.abspath(path), self._state()
+        remember_project(self.path)
         self.message_text.append(f"Saved {self.path}")
         try:
             write_setup_script(self.project)
@@ -1555,6 +1723,8 @@ class MMTOWindow(MainWindow):
         self._said = set()
         self._say_checks()
         self._refresh_title()
+        remember_project(path)
+        self._project_or_not()
 
     def _say_checks(self):
         """The project's errors and warnings in the message panel, each once: a later change repeats none."""
@@ -1862,9 +2032,12 @@ class MMTOWindow(MainWindow):
         """The Part / Design switch follows the view; Design is greyed while there is no design."""
         if not hasattr(self, "design_button"):
             return
+        self.part_button.setEnabled(self.project is not None)
+        self.part_button.setToolTip("Show the part, with its supports and loads" if self.project is not None else
+                                    NO_PROJECT)
         self.design_button.setEnabled(self._design is not None)
-        self.design_button.setToolTip("Show the design" if self._design is not None else
-                                      "A design shows here once a run has made one")
+        self.design_button.setToolTip(NO_PROJECT if self.project is None else "Show the design" if
+                                      self._design is not None else "A design shows here once a run has made one")
         (self.design_button if self.view == "design" and self._design is not None else self.part_button).setChecked(True)
 
     def _arrow(self, i, direction, points, size):

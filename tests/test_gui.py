@@ -269,6 +269,41 @@ def test_replace_part():
         assert any(line.startswith("Part replaced") for line in w.message_text.toPlainText().splitlines())
 
 
+def test_start_page():
+    """With no project open the start page covers the 3D view, and the side buttons, Run, Export STL and Part /
+    Design are greyed with a tip; opening a project hides the page and they work. Recent lists the projects
+    opened or saved last, newest first, and drops one that is gone; an example is not listed."""
+    G.recent_store().clear()
+    w = G.MMTOWindow()
+    w.show()
+    APP.processEvents()
+    page = w.start_page
+    assert page.isVisible() and page.geometry().width() >= w.pv_frame.width() - 2
+    assert list(page.examples) == ["L-bracket", "U-bracket", "Beam", "Airplane bracket"]
+    assert page.recent_box.isHidden() and page.recent() == []
+    waiting = list(w.sidebar_buttons.values()) + [w.run_button, w.export_button, w.part_button, w.design_button]
+    assert not any(b.isEnabled() for b in waiting)
+    assert all(b.toolTip() == G.NO_PROJECT for b in waiting)
+    with scratch() as d:
+        first = shutil.copy(os.path.join(PROJECTS, "beam.mmto"), os.path.join(d, "first.mmto"))
+        second = shutil.copy(os.path.join(PROJECTS, "beam.mmto"), os.path.join(d, "second.mmto"))
+        assert w.open_project(os.path.join(PROJECTS, "L-bracket.mmto"))      # an example: not in Recent
+        assert page.isHidden() and G.recent_projects() == []
+        assert all(b.isEnabled() for b in w.sidebar_buttons.values()) and w.run_button.isEnabled()
+        assert w.part_button.isEnabled() and not w.export_button.isEnabled() and w.sidebar_buttons["Units"].toolTip() == ""
+        assert w.open_project(first) and w.open_project(second)
+        assert G.recent_projects() == [os.path.abspath(second), os.path.abspath(first)]
+        os.remove(second)
+        w2 = G.MMTOWindow()
+        assert w2.start_page.recent() == [os.path.abspath(first)] and not w2.start_page.recent_box.isHidden()
+        row = w2.start_page.recent_rows.itemAt(w2.start_page.recent_rows.count() - 1).widget()
+        assert [lab.text() for lab in row.findChildren(QtWidgets.QLabel)] == ["first", os.path.abspath(d)]
+        row.mousePressEvent(None)                                              # a click opens it
+        assert w2.path == os.path.abspath(first) and w2.start_page.isHidden()
+        w2.close()
+    w.close()
+
+
 # ---------------------------------------------------------------------- Materials, Formulation, Settings
 from gui import formulation_panel, materials_panel, settings_panel  # noqa: E402
 

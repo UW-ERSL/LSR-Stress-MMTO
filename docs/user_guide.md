@@ -23,9 +23,11 @@ Settings (section 9) has everything else, and most projects can leave it as it i
 
 Next to most fields there is a small (i). Click it, or rest the mouse on it, to see what that field means and what its numbers are. When a field puzzles you, the (i) is the quickest answer. This guide gives the bigger picture.
 
-To try LSR MMTO before making a project of your own, open one of the examples with File > Open: the beam, the L-bracket, the U-bracket and the airplane bracket. They are complete, so you can press Run at once. An example never changes: when you save it, or run it, LSR MMTO asks for a folder of your own and saves a copy there.
+To try LSR MMTO before making a project of your own, open one of the examples: click it under **Try an example** on the start page, or use File > Open. The examples are the L-bracket, the U-bracket, the beam and the airplane bracket. They are complete, so you can press Run at once. An example never changes: when you save it, or run it, LSR MMTO asks for a folder of your own and saves a copy there.
 
 ## 2. The window
+
+While no project is open, the 3D view shows the start page: **New project from an STL...** (the same as File > New), **Open a project...** (File > Open), four examples under **Try an example**, and under **Recent** the last five projects you opened or saved, each with its folder under its name. Click one to open it. Until a project is open, the buttons on the right, Run, Export STL and Part / Design are greyed.
 
 ### 2.1 The top row
 
