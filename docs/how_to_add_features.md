@@ -37,7 +37,12 @@ as torch from the model's state; autograd gives the gradient.
 - `needs`: the database columns it reads. A database without them gives a clear error.
 - `arguments`: what its formula takes, e.g. `MaterialVolumeFraction(2, tau=0.5)` takes a material
   by position and `tau` by name. The formula text, the project's checks and the Formulation panel
-  read them from there; a quantity with none is written `Name()`.
+  read them from there; a quantity with none is written `Name()`. A material argument may also
+  take words in place of a material's row, given as a fourth item: `MassFraction` declares
+  `("material_id", "material", None, ("heaviest", "lightest"))`, so `MassFraction(lightest)` is
+  allowed and the panel offers *the heaviest* and *the lightest* after the materials. A word is an
+  entry of `MATERIAL_WORDS` (its text in the app and the database column that picks the row), and
+  the quantity's function gets the word: `material_row` turns it into the row.
 - `bound_warning` (optional): `bound_warning(project, bound)` gives a warning about a constraint's
   limit, shown with the project's other warnings before a run, or None. Mass warns about a limit
   below 1 % of the part solid in the lightest material.

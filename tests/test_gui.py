@@ -388,6 +388,38 @@ def test_formulation_panel():
         "no unit system declared"
 
 
+def test_formulation_mass_fraction_row():
+    """A Mass fraction row reads 'Mass fraction of [material] <= [limit] of a solid part in that material':
+    its choices are the materials' labels, then the heaviest and the lightest; it is saved with the material
+    word, opens again with it chosen, and is named in words in the messages. A material volume fraction row
+    keeps only the materials."""
+    with scratch() as d:
+        w = opened("U-bracket", d)                                            # 6Materials: labels A to F
+        f = formulation_panel.FormulationPanel(w, w.project)
+        row = f.add_row(None)
+        wd = row["widgets"]
+        wd["quantity"].setCurrentText("Mass fraction")
+        choices = [wd["material"].itemText(i) for i in range(wd["material"].count())]
+        assert choices == list("ABCDEF") + ["the heaviest", "the lightest"], choices
+        assert wd["of"].isVisibleTo(f) and wd["of"].text() == "of" and wd["material"].isVisibleTo(f)
+        assert wd["unit"].text() == "of a solid part in that material"
+        assert wd["info"].isVisibleTo(f) and "made solid in one material" in wd["info"].toolTip()
+        wd["material"].setCurrentText("the lightest")
+        wd["bound"].set_value(0.4)
+        lines = f.apply(w.project)
+        assert w.project.formulation["constraints"][-1] == {"expression": "MassFraction(lightest)", "op": "<=",
+                                                             "bound": 0.4}
+        assert "Constraint: Mass fraction of the lightest <= 0.4 of a solid part in that material" in lines, lines
+        assert w.project.validate() == []
+        f = formulation_panel.FormulationPanel(w, w.project)
+        assert f.rows[-1]["widgets"]["material"].currentText() == "the lightest"
+        wd = f.rows[-1]["widgets"]
+        wd["quantity"].setCurrentText("Material volume fraction")             # takes no words: only materials
+        assert [wd["material"].itemText(i) for i in range(wd["material"].count())] == list("ABCDEF")
+        wd["quantity"].setCurrentText("Mass")
+        assert not wd["of"].isVisibleTo(f) and not wd["material"].isVisibleTo(f)
+
+
 def test_materials_panel():
     from lsr_mmto.materials.databases import DATABASE_DIR
     with scratch() as d:

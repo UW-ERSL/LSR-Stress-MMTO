@@ -365,8 +365,9 @@ Every type of support and load at a glance:
 **Formulation** says what the optimization is for: one quantity to make as small as possible (the objective), and limits other quantities must keep to (the constraints).
 
 - **Minimize**: choose the objective. For example **Compliance**, to make the part as stiff as it can be, or **Mass**, to make it as light as it can be.
-- **Constraints**: one row per constraint: the quantity, then **<=** and its limit, with the limit's unit beside it. For example *Mass <= 0.002 t*, or *Volume fraction <= 0.3* (at most 30 % of the design space filled). **Add constraint** adds a row; **Remove** takes one away.
+- **Constraints**: one row per constraint: the quantity, then **<=** and its limit, with the limit's unit beside it. For example *Mass <= 0.002 t*, or *Volume fraction <= 0.3* (at most 30 % of the design space filled). The (i) at the end of the row says what the quantity is. **Add constraint** adds a row; **Remove** takes one away.
 - A **Material volume fraction** constraint also names its material, chosen from the database's materials in their colours: *Material volume fraction of Mat1_Red <= 0.15* keeps that material to at most 15 % of the design space. With one or more of these, **Material sharpness (tau)** appears above the rows: how sharply an element counts as its nearest material when the volumes are measured. One value is used for all of them; the usual value is right in most cases.
+- A **Mass fraction** constraint compares the part's mass with the mass of the whole part made solid in one material: *Mass fraction of the lightest <= 0.4 of a solid part in that material* allows 40 % of what the part would weigh solid in the lightest material of the database. The material is one of the database's, or **the heaviest** or **the lightest** of them. The limit has no unit, so it stays right when the units or the part's size change.
 
 A quantity the database cannot give is greyed out in the list, and resting the mouse on it says why, for example *needs a Yield_Strength column in the database*. Choose another database, or add that property to yours (section 6.3).
 
@@ -392,6 +393,7 @@ What the objective and the constraints can be:
 | Cost | Constraint | The cost of the part, from each material's density and cost per mass. |
 | Volume fraction | Constraint | The share of the design space filled with material, 0 to 1. |
 | Material volume fraction | Constraint | The share of the design space filled with one chosen material, 0 to 1. |
+| Mass fraction | Constraint | The part's mass compared with the whole part made solid in one material: 0.4 allows 40 % of that mass. Choose the material, or the heaviest or the lightest of the database. |
 
 <!-- end of list -->
 

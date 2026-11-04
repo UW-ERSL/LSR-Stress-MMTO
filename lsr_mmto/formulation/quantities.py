@@ -3,7 +3,7 @@ quantities.py
 =============
 Every objective and constraint a formula can name, by name: QUANTITIES, find_quantity and
 quantity_label. The quantities every physics has (mass, cost, volume fraction, material volume
-fraction) are computed here; each physics module gives its own (the structural ones are in
+fraction, mass fraction) are computed here; each physics module gives its own (the structural ones are in
 physics/structural/structural_quantities.py), listed after these.
 """
 import numpy as np
@@ -44,9 +44,11 @@ def material_volume_fraction(xb, z, z_real, material_id, tau):
 #   scales_with  how its value follows a database column given in the wrong unit: {column: power}; a column
 #                whose numbers are k times what they should be makes the value k**power times its own
 #                (mass {"Density": 1}, compliance {"Youngs_Modulus": -1}); the project's unit warnings read it
-#   arguments    what its formula takes, in order, as (name, type, default): type "material" (a material's
-#                row in the database, a whole number) or "number"; one without a default is required and
-#                written by position, one with a default may be written by name: Name(2, tau=0.5)
+#   arguments    what its formula takes, in order, as (name, type, default) or (name, type, default, words):
+#                type "material" (a material's row in the database, a whole number) or "number"; one without
+#                a default is required and written by position, one with a default may be written by name:
+#                Name(2, tau=0.5). words: the MATERIAL_WORDS a material argument also takes in place of a
+#                row, written as the word: MassFraction(lightest)
 #   sets_start_density  True for a constraint whose bound is the density every element starts the run at
 #                (the volume fraction); the first such constraint sets it, else every element starts at 0.5
 #   bound_warning  bound_warning(project, bound): a warning about a constraint's limit before a run (the
@@ -61,21 +63,64 @@ class Quantity:
                  scales_with=None, sets_start_density=False, bound_warning=None):
         self.name, self.objective, self.constraint = name, objective, constraint
         self.physics, self.needs, self.fn, self.doc = frozenset(physics), tuple(needs), fn, doc
-        self.shown, self.help, self.unit, self.arguments = shown, help, unit, tuple(arguments)
+        self.shown, self.help, self.unit = shown, help, unit
+        self.arguments = tuple((a[0], a[1], a[2], tuple(a[3]) if len(a) > 3 else ()) for a in arguments)
         self.scales_with, self.sets_start_density = dict(scales_with or {}), bool(sets_start_density)
         self.bound_warning = bound_warning
 
     def takes(self, argument):
         """True when the formula takes the argument of that name or type ("material", "tau")."""
-        return any(argument in (name, typ) for name, typ, _ in self.arguments)
+        return any(argument in (name, typ) for name, typ, _, _ in self.arguments)
+
+    def words(self, argument):
+        """The MATERIAL_WORDS the argument of that name or type takes in place of a material's row."""
+        return next((words for name, typ, _, words in self.arguments if argument in (name, typ)), ())
 
     def applies_to(self, physics):
         """True for a quantity of that physics, or one every physics has."""
         return not self.physics or physics in self.physics
 
 
+# Words a material argument may take in place of a material's row, if it declares them: the word, how the
+# app shows it, and the row it means, picked from each material's value of a database column.
+MATERIAL_WORDS = {
+    "heaviest": ("the heaviest", "Density", np.argmax),
+    "lightest": ("the lightest", "Density", np.argmin),
+}
+
+
+def material_row(value, values_of):
+    """The database row a material argument means: the row itself, or the row a material word picks from
+    values_of(column), each material's value of that column, in the database's order."""
+    if isinstance(value, str):
+        _, column, pick = MATERIAL_WORDS[value]
+        return int(pick(np.asarray(values_of(column), dtype=float)))
+    return int(value)
+
+
+def material_text(value, material_labels=None):
+    """A material argument as the app shows it: the material's label ('Ti-6Al-4V'), or 'the lightest'."""
+    if isinstance(value, str):
+        return MATERIAL_WORDS[value][0] if value in MATERIAL_WORDS else value
+    i = int(value)
+    return material_labels[i] if material_labels is not None and 0 <= i < len(material_labels) else f"material {i}"
+
+
+def database_values(m, column):
+    """Each database material's value of a column, as the database gives it (not through the network)."""
+    a = m.enc.materialAttributes[column]
+    return np.asarray(m.enc.rawData, dtype=float)[:, a["idx"]]
+
+
 def _mass(m, opt):
     return torch.sum(m.props["Density"] * m.x_phys) * m.elem_volume
+
+
+def _mass_fraction(m, opt):
+    """mass / (reference density * design domain volume); the reference density is the database's, a constant."""
+    k = material_row(opt["material_id"], lambda column: database_values(m, column))
+    reference = float(database_values(m, "Density")[k])
+    return _mass(m, opt) / (reference * m.x_phys.shape[0] * m.elem_volume)
 
 
 @once_per_file_version
@@ -85,15 +130,15 @@ def part_volume(stl):
     return abs(float(pyvista.read(stl).volume))
 
 
-def solid_part_mass(project, pick):
+def solid_part_mass(project, material):
     """The mass of the whole part (its STL's volume) solid in one material of the project's database, in the
-    unit Mass is in: pick(densities) gives that material's row from each material's Density. None when the
-    part or the database cannot be read or the database has no Density column."""
+    unit Mass is in: material is its row or a material word ("lightest"). None when the part or the database
+    cannot be read or the database has no Density column."""
     from lsr_mmto.materials.databases import database_table
     try:
         _, attributes, _, values = database_table(project.database_paths()[0])
-        densities = values[:, attributes.index("Density")]
-        return float(densities[int(pick(densities))]) * part_volume(project.stl_path())
+        values_of = lambda column: values[:, attributes.index(column)]                 # noqa: E731
+        return float(values_of("Density")[material_row(material, values_of)]) * part_volume(project.stl_path())
     except Exception:                                                                  # noqa: BLE001
         return None
 
@@ -104,7 +149,7 @@ LOW_MASS_SHARE = 0.01        # a mass limit below this share of the lightest sol
 def _mass_limit_warning(project, bound):
     """A mass limit below 1 % of the part solid in the lightest material: a design this light is barely
     there, and usually the limit was typed in the wrong unit."""
-    lightest = solid_part_mass(project, np.argmin)
+    lightest = solid_part_mass(project, "lightest")
     if not lightest or not 0 < bound < LOW_MASS_SHARE * lightest:
         return None
     return f"This limit allows at most {100 * bound / lightest:.2g}% of the part even in the lightest material."
@@ -140,6 +185,12 @@ QUANTITIES = [Quantity(physics=[m.NAME], **q) for m in MODULES for q in m.QUANTI
              _material_volume_fraction, "volume fraction of one database material, softmax weights",
              "Material volume fraction", "The share of the design space filled with one chosen material, 0 to 1.",
              "fraction of the design domain", (("material_id", "material", None), ("tau", "number", DEFAULT_TAU))),
+    Quantity("MassFraction", False, True, [], ["Density"],
+             _mass_fraction, "mass / (reference density * design domain volume), reference from the database",
+             "Mass fraction",
+             "The part's mass compared with the whole part made solid in one material: 0.4 allows 40 % of that "
+             "mass. Choose the material, or the heaviest or the lightest of the database.",
+             "of a solid part in that material", (("material_id", "material", None, ("heaviest", "lightest")),)),
 ]
 
 
@@ -158,14 +209,13 @@ def takes(name, argument):
 
 def default_of(name, argument):
     """The default of a quantity's argument (the tau of a material volume fraction)."""
-    return next(d for q in QUANTITIES if q.name == name for a, _, d in q.arguments if a == argument)
+    return next(d for q in QUANTITIES if q.name == name for a, _, d, _ in q.arguments if a == argument)
 
 
 def quantity_label(name, opt=None, material_labels=None):
-    """A quantity's name as the app shows it, with the material for a material volume fraction:
-    'Material volume fraction of Ti-6Al-4V'."""
+    """A quantity's name as the app shows it, with the material for a quantity of one material:
+    'Material volume fraction of Ti-6Al-4V', 'Mass fraction of the lightest'."""
     shown = next((q.shown for q in QUANTITIES if q.name == name), str(name))
     if isinstance(opt, dict) and "material_id" in opt:
-        i = int(opt["material_id"])
-        shown += f" of {material_labels[i] if material_labels is not None and 0 <= i < len(material_labels) else f'material {i}'}"
+        shown += f" of {material_text(opt['material_id'], material_labels)}"
     return shown

@@ -44,8 +44,10 @@ QUANTITIES = [
     ("constraint VolumeFraction", None, ("VolumeFraction", None, 0.4)),
     ("constraint MaterialVolumeFraction, material 2", None,
      ("MaterialVolumeFraction", {"material_id": 2, "tau": 0.5}, 0.15)),
+    ("constraint MassFraction, the lightest", None, ("MassFraction", {"material_id": "lightest"}, 0.4)),
 ]
 # Cost is the one entry not checked here: no database with a Cost column is small enough.
+# Mass fraction is also checked against a hand calculation (test_mass_fraction_by_hand).
 
 _SETUP = {}
 
@@ -151,6 +153,46 @@ def test_missing_column_is_named():
         raise AssertionError("Cost without a Cost column did not raise")
     finally:
         model.to_params.Objective, model.to_params.Constraints = saved
+
+
+def test_mass_fraction_by_hand():
+    """Mass fraction = mass / (reference density * design domain volume), the reference density the
+    database's. Four elements of volume 0.002 (domain 0.008), x_phys 1, 0.5, 0, 0.25 with decoded densities
+    2000, 4000, 6000, 8000: mass (2000 + 2000 + 0 + 2000) * 0.002 = 12. Database densities 1500, 7800, 2700:
+    the lightest solid part weighs 1500 * 0.008 = 12 (fraction 1), the heaviest 62.4 (12 / 62.4), the third
+    21.6 (12 / 21.6). As a constraint it is fraction / limit - 1."""
+    from types import SimpleNamespace
+    import torch
+    from lsr_mmto.formulation.formulation_text import to_params_form
+    from lsr_mmto.formulation.quantities import find_quantity
+    enc = SimpleNamespace(rawData=np.array([[1500.0, 1e9], [7800.0, 2e11], [2700.0, 7e10]]),
+                          materialAttributes={"Density": {"idx": 0}, "Youngs_Modulus": {"idx": 1}})
+    m = SimpleNamespace(x_phys=torch.tensor([1.0, 0.5, 0.0, 0.25]), elem_volume=0.002, enc=enc,
+                        props={"Density": torch.tensor([2000.0, 4000.0, 6000.0, 8000.0])})
+    fn = find_quantity("MassFraction").fn
+    for reference, expected in (("lightest", 1.0), ("heaviest", 12 / 62.4), (2, 12 / 21.6), (0, 1.0)):
+        _, opt, _ = to_params_form(f"MassFraction({reference})", "constraint", 0.4)
+        assert abs(float(fn(m, opt)) - expected) < 1e-12, (reference, float(fn(m, opt)), expected)
+
+
+def test_mass_fraction_on_the_model():
+    """On the U-bracket model at a random design: Mass fraction of the heaviest is the Mass quantity divided
+    by the heaviest density the database file gives (read here on its own) times the number of elements
+    times the element volume; and the constraint's value is that over its limit, minus 1."""
+    from lsr_mmto.materials.databases import database_table
+    s = _setup()
+    model = s["model"]
+    saved = (model.to_params.Objective, list(model.to_params.Constraints))
+    model.to_params.Objective = ("Mass", None)
+    model.to_params.Constraints = [("MassFraction", {"material_id": "heaviest"}, 0.4)]
+    try:
+        J, cons = model.evaluate(s["zeta"], s["beta"], s["eta"])
+    finally:
+        model.to_params.Objective, model.to_params.Constraints = saved
+    _, attributes, _, values = database_table(model.to_params.MaterialsExcelFile)
+    heaviest = values[:, attributes.index("Density")].max()
+    expected = float(J.detach()) / (heaviest * model.N * model.elem_volume)
+    assert 0 < expected < 1 and abs((float(cons[0].detach()) + 1) * 0.4 - expected) < 1e-12 * expected
 
 
 def test_registry():

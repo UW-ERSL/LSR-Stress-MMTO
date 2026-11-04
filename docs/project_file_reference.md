@@ -89,7 +89,7 @@ The `physics` of a project names the model its optimization uses.
 
 ## Quantities
 
-An objective or a constraint is one quantity, e.g. `Mass()` or `MaterialVolumeFraction(2, tau=0.5)`. A constraint is value / bound - 1 <= 0.
+An objective or a constraint is one quantity, e.g. `Mass()` or `MaterialVolumeFraction(2, tau=0.5)`. A material is its row in the database, counted from 0. `MassFraction` also takes `heaviest` or `lightest` in its place, e.g. `MassFraction(lightest)`. A constraint is value / bound - 1 <= 0.
 
 | name | shown as | objective | constraint | needs columns | value | meaning |
 |---|---|---|---|---|---|---|
@@ -100,6 +100,7 @@ An objective or a constraint is one quantity, e.g. `Mass()` or `MaterialVolumeFr
 | `Cost` | Cost |  | yes | Density, Cost | sum of density * cost * x_phys * element volume | The cost of the part, from each material's density and cost per mass. |
 | `VolumeFraction` | Volume fraction |  | yes |  | mean of x_phys | The share of the design space filled with material, 0 to 1. |
 | `MaterialVolumeFraction` | Material volume fraction |  | yes |  | volume fraction of one database material, softmax weights | The share of the design space filled with one chosen material, 0 to 1. |
+| `MassFraction` | Mass fraction |  | yes | Density | mass / (reference density * design domain volume), reference from the database | The part's mass compared with the whole part made solid in one material: 0.4 allows 40 % of that mass. Choose the material, or the heaviest or the lightest of the database. |
 
 ## Settings
 

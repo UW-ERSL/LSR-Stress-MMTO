@@ -139,6 +139,29 @@ def test_optimizer_failure_names_the_constraint_over_its_limit():
         M.runMMA = real
 
 
+def test_a_run_with_a_mass_fraction_constraint():
+    """A short run with Mass fraction of the lightest <= 0.4 as its constraint goes through: every iteration's
+    constraint is a finite number, the run keeps the constraint with its material word, names it as the app
+    does, and the project it rebuilds from the record is the one that ran."""
+    from lsr_mmto.formulation.quantities import quantity_label
+    p = ubracket_project()
+    p.formulation["constraints"] = []
+    p.constraint("MassFraction(lightest)", "<=", 0.4)
+    p.settings["common"]["maxIterations"] = 3
+    assert p.validate() == []
+    with tempfile.TemporaryDirectory() as d:
+        out = _run(p, _run_arguments(p, save_dir=d, verbose=False))
+    g = np.asarray(out["history"]["constraints"], dtype=float)
+    assert g.shape[0] >= 3 and g.shape[1] == 1 and np.all(np.isfinite(g))
+    fraction = (g[:, 0] + 1) * 0.4
+    assert np.all((fraction > 0) & (fraction < 2)), fraction
+    spec = out["config"]["topopt_params"]["Constraints"][0]
+    assert list(spec) == ["MassFraction", {"material_id": "lightest"}, 0.4], spec
+    assert quantity_label(spec[0], spec[1], list("ABCDEF")) == "Mass fraction of the lightest"
+    rec = json.loads(json.dumps(out["config"]["arguments_resolved"]["to_problem"]))
+    assert Project.from_record(rec).to_dict() == p.to_dict()
+
+
 def test_unknown_and_missing_settings():
     p = ubracket_project()
     p.settings["advanced"]["gama_max"] = 5.0                       # a typo

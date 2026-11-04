@@ -68,10 +68,17 @@ def test_expressions():
     assert to_params_form("FailureFactorPNorm()", "constraint", 1) == ("FailureFactorPNorm", None, 1.0)
     assert to_params_form("MaterialVolumeFraction(2, tau=0.5)", "constraint", 0.15) == \
         ("MaterialVolumeFraction", {"material_id": 2, "tau": 0.5}, 0.15)
+    assert to_params_form("MassFraction(3)", "constraint", 0.4) == ("MassFraction", {"material_id": 3}, 0.4)
+    assert to_params_form("MassFraction(lightest)", "constraint", 0.4) == \
+        ("MassFraction", {"material_id": "lightest"}, 0.4)                 # a material word, kept as the word
     for bad, role, says in [("Compliance() + 0.1*Mass()", "objective", "one quantity"),
                             ("Volume()", "constraint", "unknown quantity"),
                             ("VolumeFraction()", "objective", "cannot be the objective"),
-                            ("Mass(3)", "constraint", "takes no arguments")]:
+                            ("Mass(3)", "constraint", "takes no arguments"),
+                            ("MassFraction(lighter)", "constraint", "'lighter' is not a material number or one of "
+                                                                     "heaviest, lightest"),
+                            ("MaterialVolumeFraction(lightest)", "constraint", "'lightest' is not a material number"),
+                            ("MaterialVolumeFraction(1, tau=sharp)", "constraint", "is not a number")]:
         try:
             to_params_form(bad, role, 1.0)
         except ValueError as e:
