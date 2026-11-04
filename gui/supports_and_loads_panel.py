@@ -278,10 +278,11 @@ def _number_text(value):
 
 def fill_from_hole(dialog, normals, corners):
     """The Cylinder form filled in from the inside wall of a hole (hole_from_wall): Point on the axis, Axis
-    direction, Radius (the hole's radius + 1h, one element size of whatever mesh it is used on, so the nodes
-    of the wall are in), Inner radius 0, and the ends; then its preview. The outside of a round face fills a
-    tube one element size each side of it (Radius r + 1h, Inner radius r - 1h), so it takes the nodes of that
-    face only. A face that is flat or not round fills nothing and says so."""
+    direction, Radius (the hole's radius: Tolerance Automatic already takes nodes half an element outside it),
+    Inner radius 0, and the ends; then its preview, with a note when the hole's radius is under 2 element
+    sizes (h, the largest) of the preview's mesh. The outside of a round face fills a tube one element size each
+    side of it (Radius r + 1h, Inner radius r - 1h), so it takes the nodes of that face only. A face that is
+    flat or not round fills nothing and says so."""
     try:
         centre, axis, r, start, end, outside = hole_from_wall(normals, corners)
     except ValueError as e:
@@ -291,12 +292,18 @@ def fill_from_hole(dialog, normals, corners):
     boxes = dialog.inputs
     boxes["center"].setText(", ".join(_number_text(c) for c in centre))
     boxes["axis"].setCurrentText(letter or ", ".join(_number_text(c) for c in axis))
-    boxes["radius"].setText(f"{_number_text(r)} + 1h")
+    boxes["radius"].setText(f"{_number_text(r)} + 1h" if outside else _number_text(r))
     boxes["inner_radius"].setText(f"{_number_text(r)} - 1h" if outside else "0")
     ends = (start, end) if letter else (0.0, end - start)          # coordinates along x, y, z; else distances
     for box, value in zip(boxes["along"], ends):
         box.setText(_number_text(value))
     dialog.show_preview()
+    if dialog.shown and not outside:                                # the preview's mesh, already built
+        h = float(np.max(dialog.main.preview_mesh().elem_size))
+        if r < 2 * h:
+            dialog.result.setText(f"{dialog.result.text()}<br>This hole is only {2 * r / h:.1f} elements across "
+                                  f"on the run's mesh; some of its nodes may be missed. Check with Preview, or "
+                                  f"use more dofs.")
 
 
 # A button of the form that fills it in from a click on the part: (its text, its (i), the filling, given the

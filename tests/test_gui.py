@@ -1222,8 +1222,8 @@ def test_inside_stl_move_by():
 
 def test_click_a_hole():
     """Click a hole in the Cylinder form, then a click on the inside wall of a hole: the wall is grown as a
-    Facet pick grows, and the form gets the hole's centre, axis, radius (plus one element size) and ends.
-    A wall that is not round fills nothing."""
+    Facet pick grows, and the form gets the hole's centre, axis, radius and ends; Tolerance Automatic takes
+    the wall's nodes half an element outside the radius. A flat face fills nothing."""
     import pyvista as pv
     with scratch() as d:
         stl = os.path.join(d, "washer.stl")                           # a plate (a washer) with a hole of
@@ -1260,24 +1260,24 @@ def test_click_a_hole():
         centre = [float(x) for x in r.inputs["center"].text().split(",")]
         assert np.allclose(centre[:2], [40, 30], rtol=0.01) and abs(centre[2]) < 1e-6
         assert r.inputs["axis"].currentText() == "z"
-        radius, plus = r.inputs["radius"].text().split(" + ")
-        assert abs(float(radius) - 8) < 0.08 and plus == "1h"              # within 1 %, and one element size
+        assert abs(float(r.inputs["radius"].text()) - 8) < 0.08              # within 1 %, the hole's own
         assert [float(b.text()) for b in r.inputs["along"]] == [0.0, 10.0]
         assert r.inputs["inner_radius"].text() == "0"
         assert "nodes on the run's mesh" in r.result.text() and "mmto_region" in w.plotter.actors
+        assert "elements across" not in r.result.text()                     # a hole many elements across
         bore = r.selection()
-        assert bore.radius == r.inputs["radius"].text()                     # kept as typed: follows the mesh
+        radius = float(r.inputs["radius"].text())
         from lsr_mmto.problem.mesh import make_mesh
         p = w.project
         for n_dof in (p.n_dof, 4 * p.n_dof):                                # the wall nodes on two mesh sizes
             mesh = make_mesh(os.path.abspath(p.stl_path()), n_dof, p.single_layer, p.unknowns_per_node())
             xyz = np.asarray(mesh.node_xyz, dtype=float)
-            h = float(np.max(mesh.elem_size))
+            pad = 0.5 * float(np.min(mesh.elem_size))                       # Tolerance Automatic
             boundary = np.asarray(mesh.get_boundary_nodes())
-            wall_nodes = boundary[np.hypot(xyz[boundary, 0] - 40, xyz[boundary, 1] - 30) < 8 + 0.5 * h]
+            wall_nodes = boundary[np.hypot(xyz[boundary, 0] - 40, xyz[boundary, 1] - 30) < radius + pad - 1e-9]
             taken = p.evaluate(bore, mesh, "nodes")
             assert len(wall_nodes) and set(wall_nodes) <= set(taken), n_dof
-            assert np.hypot(xyz[taken, 0] - 40, xyz[taken, 1] - 30).max() <= 8 + 1.6 * h
+            assert np.hypot(xyz[taken, 0] - 40, xyz[taken, 1] - 30).max() <= radius + pad + 1e-9
         assert np.flatnonzero(geom.tri_highlight).tolist() == [5]
         w.on_left_button_press(c[wall].tolist(), Picker(wall))                # one fill per click of the button
         assert "Copied" in panel.stack.currentWidget().copied.text()
@@ -1296,8 +1296,10 @@ def test_click_a_hole():
 
 def test_click_a_hole_on_the_rotor():
     """Click a hole on a brake rotor saved in metres: every triangle of the inside wall of the bore, the six
-    bolt holes and the six rim notches gives its centre and radius (within 1 %); a click on a flat face says
-    so; the outside of the rim fills a tube about it, which takes the nodes of the rim, not the whole part."""
+    bolt holes and the six rim notches gives its centre and radius (within 1 %); a bolt hole, under two element
+    sizes in radius on the run's mesh, gets the note that it is only a few elements across, the bore does not;
+    a click on a flat face says so; the outside of the rim fills a tube about it, which takes the nodes of the
+    rim, not the whole part."""
     from gui.supports_and_loads_panel import hole_from_wall
     with scratch() as d:
         w = G.MMTOWindow()
@@ -1311,7 +1313,7 @@ def test_click_a_hole_on_the_rotor():
         side = np.flatnonzero(np.abs(n[:, 2]) < 0.1)                         # the walls across the disc
         rim = side[np.abs(np.hypot(*(c[side, :2] - bore).T) - 0.1096) < 0.0005]
         walls = np.setdiff1d(side, rim)
-        found = {}
+        found, first = {}, {}
         for t in walls:
             centre, axis, r, start, end, outside = hole_from_wall(*w.wall_triangles(int(t)))
             assert not outside and np.array_equal(axis, [0, 0, 1]), t
@@ -1319,6 +1321,7 @@ def test_click_a_hole_on_the_rotor():
             assert abs(r - known) < 0.01 * known, (t, r)
             assert np.all(np.abs(np.hypot(*(v[t, :, :2] - centre[:2]).T) - r) < 0.01 * r), t   # on that circle
             found.setdefault(known, set()).add(tuple(np.round(centre[:2], 4)))
+            first.setdefault(known, int(t))
         assert {k: len(cs) for k, cs in found.items()} == {0.0141: 1, 0.00282: 6, 0.0115: 6}
         assert np.allclose(next(iter(found[0.0141])), bore, atol=0.01 * 0.0141)
 
@@ -1337,6 +1340,15 @@ def test_click_a_hole_on_the_rotor():
         w.on_left_button_press(c[flat].tolist(), Picker(flat))
         assert "That click was on a flat face, not the inside wall of a hole" in r.result.text()
         assert r.inputs["radius"].text() == ""
+        for known in (0.00282, 0.0141):                                      # a bolt hole, the bore
+            button.click()
+            w.on_left_button_press(c[first[known]].tolist(), Picker(first[known]))
+            radius = float(r.inputs["radius"].text())
+            assert abs(radius - known) < 0.01 * known and r.inputs["inner_radius"].text() == "0"
+            h = float(np.max(w.preview_mesh().elem_size))
+            note = f"This hole is only {2 * radius / h:.1f} elements across on the run's mesh"
+            assert "nodes on the run's mesh" in r.result.text()
+            assert (note in r.result.text()) == (radius < 2 * h) == (known == 0.00282), r.result.text()
         button.click()
         w.on_left_button_press(c[rim[0]].tolist(), Picker(int(rim[0])))      # the outside of the rim: a tube
         radius, inner = r.inputs["radius"].text(), r.inputs["inner_radius"].text()
