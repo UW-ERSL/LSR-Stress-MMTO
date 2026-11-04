@@ -38,6 +38,9 @@ as torch from the model's state; autograd gives the gradient.
 - `arguments`: what its formula takes, e.g. `MaterialVolumeFraction(2, tau=0.5)` takes a material
   by position and `tau` by name. The formula text, the project's checks and the Formulation panel
   read them from there; a quantity with none is written `Name()`.
+- `bound_warning` (optional): `bound_warning(project, bound)` gives a warning about a constraint's
+  limit, shown with the project's other warnings before a run, or None. Mass warns about a limit
+  below 1 % of the part solid in the lightest material.
 - A project names it by its name; the objective and the constraints are kept by that name.
 - Add it to `QUANTITIES` in `tests/test_ad_quantities.py`, which checks the gradient against
   finite differences. What else to run: both generators above (the reference page and the user

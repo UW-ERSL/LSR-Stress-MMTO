@@ -587,6 +587,7 @@ These appear in the messages as **Error:** lines, and under *Cannot start:* in t
 - **material database: the structural model needs a Youngs_Modulus column**, or **material database: FailureFactorPNorm needs a Yield_Strength column**: the database lacks a property the problem needs (FailureFactorPNorm is the Failure factor (p-norm); Youngs_Modulus is Young's modulus). Add the column in the database editor, or choose another database or objective.
 - **material database my_materials.xlsx: ...**: a problem in the database itself, with the cell it is in, for example *C5 (Steel, Density): 'abc' is not a number*, *... is outside the allowed range*, *no units for Density*, or *Steel, Steel2 have the same value in every attribute, so the VAE cannot tell them apart*. Correct it in the database editor.
 - **constraint 1: the bound must be a nonzero number**: a constraint's limit is 0 or empty. Give it a limit under Formulation.
+- Warning **constraint 1 (Mass <= 0.0035): This limit allows at most 0.027% of the part even in the lightest material.**: the mass limit is less than 1 % of what the whole part weighs solid in the lightest material of the database, so almost no material can be used. Often the limit is in another unit than meant (g for kg, say). Check it under Formulation, and the project's units (section 4).
 - **the material volume fraction constraints use different tau (0.5, 1)**: give them all the same Material sharpness.
 - **STL file ... does not exist**: the part's file has moved or been deleted. Load it again under Geometry (section 5).
 

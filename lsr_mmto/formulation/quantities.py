@@ -6,9 +6,11 @@ quantity_label. The quantities every physics has (mass, cost, volume fraction, m
 fraction) are computed here; each physics module gives its own (the structural ones are in
 physics/structural/structural_quantities.py), listed after these.
 """
+import numpy as np
 import torch
 
 import lsr_mmto.pyto_ad_imports  # noqa: F401  puts PyTO-AD on sys.path (and its float64 default)
+from lsr_mmto.materials.databases import once_per_file_version
 from lsr_mmto.physics.available_physics import MODULES
 
 DEFAULT_TAU = 0.5        # sharpness of the material assignment, the same for every material volume fraction
@@ -47,18 +49,21 @@ def material_volume_fraction(xb, z, z_real, material_id, tau):
 #                written by position, one with a default may be written by name: Name(2, tau=0.5)
 #   sets_start_density  True for a constraint whose bound is the density every element starts the run at
 #                (the volume fraction); the first such constraint sets it, else every element starts at 0.5
+#   bound_warning  bound_warning(project, bound): a warning about a constraint's limit before a run (the
+#                project's warnings show it), or None; e.g. a mass limit too low for any part to meet
 
 
 class Quantity:
     __slots__ = ("name", "objective", "constraint", "physics", "needs", "fn", "doc", "shown", "help", "unit",
-                 "arguments", "scales_with", "sets_start_density")
+                 "arguments", "scales_with", "sets_start_density", "bound_warning")
 
     def __init__(self, name, objective, constraint, physics, needs, fn, doc, shown, help, unit="", arguments=(),
-                 scales_with=None, sets_start_density=False):
+                 scales_with=None, sets_start_density=False, bound_warning=None):
         self.name, self.objective, self.constraint = name, objective, constraint
         self.physics, self.needs, self.fn, self.doc = frozenset(physics), tuple(needs), fn, doc
         self.shown, self.help, self.unit, self.arguments = shown, help, unit, tuple(arguments)
         self.scales_with, self.sets_start_density = dict(scales_with or {}), bool(sets_start_density)
+        self.bound_warning = bound_warning
 
     def takes(self, argument):
         """True when the formula takes the argument of that name or type ("material", "tau")."""
@@ -71,6 +76,38 @@ class Quantity:
 
 def _mass(m, opt):
     return torch.sum(m.props["Density"] * m.x_phys) * m.elem_volume
+
+
+@once_per_file_version
+def part_volume(stl):
+    """The volume of the part, its STL's, in the model's length unit cubed."""
+    import pyvista
+    return abs(float(pyvista.read(stl).volume))
+
+
+def solid_part_mass(project, pick):
+    """The mass of the whole part (its STL's volume) solid in one material of the project's database, in the
+    unit Mass is in: pick(densities) gives that material's row from each material's Density. None when the
+    part or the database cannot be read or the database has no Density column."""
+    from lsr_mmto.materials.databases import database_table
+    try:
+        _, attributes, _, values = database_table(project.database_paths()[0])
+        densities = values[:, attributes.index("Density")]
+        return float(densities[int(pick(densities))]) * part_volume(project.stl_path())
+    except Exception:                                                                  # noqa: BLE001
+        return None
+
+
+LOW_MASS_SHARE = 0.01        # a mass limit below this share of the lightest solid part is warned about
+
+
+def _mass_limit_warning(project, bound):
+    """A mass limit below 1 % of the part solid in the lightest material: a design this light is barely
+    there, and usually the limit was typed in the wrong unit."""
+    lightest = solid_part_mass(project, np.argmin)
+    if not lightest or not 0 < bound < LOW_MASS_SHARE * lightest:
+        return None
+    return f"This limit allows at most {100 * bound / lightest:.2g}% of the part even in the lightest material."
 
 
 def _cost(m, opt):
@@ -89,7 +126,8 @@ def _material_volume_fraction(m, opt):
 QUANTITIES = [Quantity(physics=[m.NAME], **q) for m in MODULES for q in m.QUANTITIES] + [
     Quantity("Mass", True, True, [], ["Density"],
              _mass, "sum of density * x_phys * element volume", "Mass",
-             "The mass of the part, from each material's density.", "{mass}", scales_with={"Density": 1}),
+             "The mass of the part, from each material's density.", "{mass}", scales_with={"Density": 1},
+             bound_warning=_mass_limit_warning),
     Quantity("Cost", False, True, [], ["Density", "Cost"],
              _cost, "sum of density * cost * x_phys * element volume", "Cost",
              "The cost of the part, from each material's density and cost per mass.", "USD",

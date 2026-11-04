@@ -225,6 +225,24 @@ def test_benchmark_unit_warnings():
     assert "limit of 4e+07 is really a limit of 4e-05 t" in w[0] and "limit of 7.5e+08 is really a limit of 0.75 USD" in w[2]
 
 
+def test_a_mass_limit_far_below_the_lightest_solid_part_is_warned():
+    """A Mass limit below 1 % of the part solid in the lightest material is a warning (not an error), with
+    the share it allows to 2 significant digits: the U-bracket (volume 0.00875) with Beam_8Mats (lightest
+    density 1500) and Mass <= 0.0035 kg allows 0.0035 / (1500 * 0.00875) = 0.027 %."""
+    from lsr_mmto.problem.project import Project
+    p = Project.load(os.path.join(ROOT, "projects", "U-bracket.mmto"))
+    p.database, p.units = "Beam_8Mats_3Attr_v4_spectrum2D", "MKS"
+    p.formulation["constraints"] = []
+    p.constraint("Mass()", "<=", 0.0035)
+    assert f"{100 * 0.0035 / (1500 * 0.00875):.2g}" == "0.027"
+    said = "constraint 1 (Mass <= 0.0035): This limit allows at most 0.027% of the part even in the lightest material."
+    assert said in p.warnings() and not any("lightest" in e for e in p.validate())
+    p.formulation["constraints"][0]["bound"] = 0.01 * 1500 * 0.00875 * 1.001     # just above 1 %: no warning
+    assert not any("lightest material" in w for w in p.warnings())
+    p.formulation["constraints"][0]["bound"] = 0.01 * 1500 * 0.00875 * 0.999
+    assert any("at most 1% of the part" in w for w in p.warnings())
+
+
 def test_project_uses_the_check():
     from lsr_mmto.problem.project import Project
     ubracket = os.path.join(ROOT, "data", "models", "UBracket")
