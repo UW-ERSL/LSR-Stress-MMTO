@@ -50,12 +50,25 @@ SOLVER_PATH = os.path.join(PARENT, SOLVER_DIR)
 _T0 = [time.time()]
 
 
-def step(n, text, estimate=None):
+def steps(windows, desktop):
+    """The install's steps in order, as (what it does, how long it usually takes). The [n/N] lines count
+    this list, so a step added here is counted without changing a number anywhere else."""
+    out = [("conda environment", "1 to 3 min"),
+           ("PyTO-AD, the differentiable topology optimization code", "under a minute"),
+           ("dependencies", "roughly 10 min; pip shows progress below"),
+           ("Jupyter kernel", "a few seconds"),
+           ("verification", "under a minute")]
+    if windows:
+        out.append(("Start menu" + (" and desktop" if desktop else ""), "a few seconds"))
+    return out
+
+
+def step(n, all_steps):
     if n > 1:
         print(f"      done in {_fmt(time.time() - _T0[0])}", flush=True)
     _T0[0] = time.time()
-    tail = f"   (usually {estimate})" if estimate else ""
-    print(f"\n[{n}/5] {text}{tail}", flush=True)
+    text, estimate = all_steps[n - 1]
+    print(f"\n[{n}/{len(all_steps)}] {text}   (usually {estimate})", flush=True)
 
 
 def _fmt(sec):
@@ -211,8 +224,8 @@ def main():
     print(f"repository : {HERE}", flush=True)
     print(f"PyTO-AD    : {SOLVER_PATH}", flush=True)
     print(f"environment: {ENV}", flush=True)
-    print(f"\n{'Six' if os.name == 'nt' else 'Five'} steps. Step 3 downloads a few GB and is the slow one.",
-          flush=True)
+    all_steps = steps(os.name == "nt", desktop)
+    print(f"\n{len(all_steps)} steps. Step 3 downloads a few GB and is the slow one.", flush=True)
 
     conda = conda_exe()
 
@@ -221,7 +234,7 @@ def main():
              f"(`conda deactivate` first), so the environment can be rebuilt.")
 
     # ------------------------------------------------------------------ 1
-    step(1, "conda environment", "1 to 3 min")
+    step(1, all_steps)
     if env_exists(conda):
         print(f"      {ENV} exists, skipping")
     # Python from conda-forge rather than Anaconda's default channel, which
@@ -231,7 +244,7 @@ def main():
         fail(f"could not create {ENV}")
 
     # ------------------------------------------------------------------ 2
-    step(2, "PyTO-AD, the differentiable topology optimization code", "under a minute")
+    step(2, all_steps)
     others = pyto_like_siblings()
     if os.path.isdir(os.path.join(SOLVER_PATH, "src")):
         report_existing_solver()
@@ -254,7 +267,7 @@ def main():
         download_solver()
 
     # ------------------------------------------------------------------ 3
-    step(3, "dependencies", "roughly 10 min; pip shows progress below")
+    step(3, all_steps)
     py = env_python(conda)
     print(f"      using {py}", flush=True)
     req = os.path.join(HERE, "requirements.txt")
@@ -267,14 +280,14 @@ def main():
         fail("could not install this repository as the package lsr_mmto")
 
     # ------------------------------------------------------------------ 4
-    step(4, "Jupyter kernel", "a few seconds")
+    step(4, all_steps)
     py = env_python(conda)
     if in_env(py, "-m", "ipykernel", "install", "--user",
               "--name", ENV, "--display-name", f"Python ({ENV})") != 0:
         fail("could not register the Jupyter kernel")
 
     # ------------------------------------------------------------------ 5
-    step(5, "verification", "under a minute")
+    step(5, all_steps)
     check = os.path.join(HERE, "_verify_environment.py")
     with open(check, "w") as fh:
         fh.write(VERIFY)
@@ -288,7 +301,7 @@ def main():
     # ------------------------------------------------------------------ 6
     opened = ""
     if os.name == "nt":
-        step(6, "Start menu" + (" and desktop" if desktop else ""), "a few seconds")
+        step(6, all_steps)
         args = [os.path.join(HERE, "make_shortcut.py")] + ([] if desktop else ["--no-desktop"])
         if in_env(env_python(conda), *args) == 0:
             opened = ("\nOpen LSR MMTO from the Start menu (type LSR)"
