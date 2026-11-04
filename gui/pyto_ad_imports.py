@@ -7,7 +7,6 @@ the GUI.
 
     MainWindow         the window: viewer, sidebar (BUTTON_CONFIG), message panel
     UnitsWindow        the unit system dialog, editing MainWindow.settings
-    GeometryWindow     loading an STL (also from SolidWorks)
     ProjectsWindow     its load_geometry draws an STL and turns picking on
     STLGeom            an STL read in: its triangles, normals, areas and neighbours
     MATERIAL_COLOR     the colour a part is drawn in
@@ -21,7 +20,7 @@ _raise_if_open; and the Structural Loads window's redraw_loads and refresh_appli
 """
 import lsr_mmto.pyto_ad_imports  # noqa: F401  # puts PyTO-AD on sys.path
 from pyto.gui.PyTOGUI import (FILE_DIALOG_OPTIONS, MATERIAL_COLOR, DisplayOptionsWindow,  # noqa: F401
-                              GeometryWindow, MainWindow, ProjectsWindow, StructuralLoadsWindow, StructuralTopOptWindow,
+                              MainWindow, ProjectsWindow, StructuralLoadsWindow, StructuralTopOptWindow,
                               UnitsWindow)
 from pyto.io.stl_reader import STLGeom  # noqa: F401  # type: ignore
 

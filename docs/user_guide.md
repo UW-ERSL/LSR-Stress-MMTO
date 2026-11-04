@@ -10,7 +10,7 @@ LSR MMTO designs a part made of several materials. You give it the shape the par
 
 The work always goes in the same order, and the buttons on the right of the window follow it from top to bottom:
 
-1. **The part.** File > New makes a project from an STL file of the space the part may fill. See Geometry, section 5.
+1. **The part.** File > New makes a project from an STL file of the space the part may fill. See The part, section 5.
 2. **The units.** The unit system all your numbers are in. See Units, section 4.
 3. **The materials.** A material database: one row per material, with its properties. See Materials, section 6.
 4. **Supports and loads.** Where the part is held, and where and how hard it is pushed. See section 7.
@@ -39,9 +39,9 @@ From left to right:
 
 ### 2.2 The buttons on the right
 
-**Units**, **Geometry**, **Materials**, **Supports and loads**, **Formulation**, **Settings**, **Current run**, **Results** and **Display Options**. Geometry shows a green tick once the part is loaded, and Units once the units are applied.
+**Units**, **Materials**, **Supports and loads**, **Formulation**, **Settings**, **Current run**, **Results** and **Display Options**. Units shows a green tick once the units are applied.
 
-Units, Geometry, Materials, Formulation, Settings and Display Options open as windows with OK and Cancel (or Apply and Close): OK puts your changes into the project, and Cancel leaves the project as it was.
+Units, Materials, Formulation, Settings and Display Options open as windows with OK and Cancel (or Apply and Close): OK puts your changes into the project, and Cancel leaves the project as it was.
 
 Supports and loads, Current run and Results open as panels beside the 3D view, so you can work on the part while they are open. When more than one is open they share the space as tabs. A panel can be made wider or narrower by dragging its edge.
 
@@ -79,6 +79,7 @@ An **Error** stops a run from starting until it is put right. A **Warning** lets
 - **Open...** opens a project, a file ending in .mmto. Only LSR MMTO projects open here.
 - **Save** saves the project in its file. A project never saved, or an example, is saved with Save As instead.
 - **Save As...** saves the project as a new one, in a new folder, with everything it uses copied in. The new project takes the new name; the runs made so far stay with the old one.
+- **Replace part...** changes the project's STL for another one. See section 5.
 - **Export as script** writes the project as a short Python script, *name*_setup.py, in the project's folder. Every save writes it again, so it always matches the project; this entry saves first if needed and says where the script is. Open it in any text editor to see the whole project written out, or to change it.
 - **Run script...** runs a Python script, such as one written by Export as script and then changed. What the script prints goes to the messages. When the script saves a project in its folder, that project opens in the window.
 - **Exit** closes LSR MMTO.
@@ -114,11 +115,11 @@ The material database has its own units, in its second row. When they do not mat
 
 **Temperature Unit** and **Angle Unit** are in the same window; LSR MMTO does not use them yet.
 
-## 5. Geometry
+## 5. The part
 
 The part is an STL file of the space the part may fill: the design domain. The optimization decides where, inside it, material goes. The surface of the STL is the outside of that space.
 
-The part comes in when you make the project (File > New). To use a different STL, open **Geometry** and press **Load STL Geometry**. If some selections are faces you picked on the old STL, LSR MMTO says so first: picked faces are stored by triangle number, and on another STL the same numbers are other faces. Pick them again afterwards. In a project folder of its own, the new STL is copied into the part folder.
+The part comes in when you make the project (File > New). To use a different STL, choose File > **Replace part...** and choose the new STL. If some selections are faces you picked on the old STL, LSR MMTO says so first: picked faces are stored by triangle number, and on another STL the same numbers are other faces. Pick them again afterwards. In a project folder of its own, the new STL is copied into the part folder.
 
 The STL should be closed (watertight) and in the project's length unit. The size in the bottom bar (section 2.5) is a quick check: a part that should be 200 mm long and reads *x 0 to 0.2 mm* was drawn in metres.
 
@@ -588,7 +589,7 @@ These appear in the messages as **Error:** lines, and under *Cannot start:* in t
 - **material database my_materials.xlsx: ...**: a problem in the database itself, with the cell it is in, for example *C5 (Steel, Density): 'abc' is not a number*, *... is outside the allowed range*, *no units for Density*, or *Steel, Steel2 have the same value in every attribute, so the VAE cannot tell them apart*. Correct it in the database editor.
 - **constraint 1: the bound must be a nonzero number**: a constraint's limit is 0 or empty. Give it a limit under Formulation.
 - **the material volume fraction constraints use different tau (0.5, 1)**: give them all the same Material sharpness.
-- **STL file ... does not exist**: the part's file has moved or been deleted. Load it again under Geometry (section 5).
+- **STL file ... does not exist**: the part's file has moved or been deleted. Choose it again with File > Replace part... (section 5).
 
 ### 14.2 The material network
 
@@ -619,7 +620,7 @@ These appear in the messages as **Error:** lines, and under *Cannot start:* in t
 
 ### 14.6 Opening and saving
 
-- **STL not found: ...**, when a project opens: the part's file is not where the project says. Load it again under Geometry.
+- **STL not found: ...**, when a project opens: the part's file is not where the project says. Choose it again with File > Replace part... (section 5).
 - **3 settings missing from the file were set to their defaults; Save writes them.**: the project was made by an older version. Nothing to do; save to keep the values.
 - **Not saved: ...**: the project could not be written, for example the folder is read-only or the file is open elsewhere. Save it somewhere else with Save As.
 - **Start a project first: File > New or File > Open.**: the panel needs a project. Make or open one.

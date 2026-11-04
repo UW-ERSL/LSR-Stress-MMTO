@@ -242,9 +242,31 @@ def test_triangle_selections():
     with scratch() as d:
         assert w.open_project(shutil.copy(os.path.join(PROJECTS, "L-bracket.mmto"), d))
         stl = w.project.stl
+        other = os.path.join(ROOT, "data", "models", "Beam_Liao", "Ex1_Beam_design.stl")
         with answers(Box.No):
-            w.open_geometry_window()                                           # warned, and declined
+            assert not w.replace_part(other)                                   # warned, and declined
         assert w.project.stl == stl and not w.is_dirty()
+
+
+def test_replace_part():
+    """File > Replace part changes the project's STL (copied into the part folder of a project of its own),
+    draws the new part and drops the design of the old one. There is no Geometry button."""
+    assert "Geometry" not in G.SIDEBAR
+    w = G.MMTOWindow()
+    entry = [a for m in w.menuBar().actions() if m.menu() for a in m.menu().actions()
+             if a.text().replace("&", "") == "Replace part..."]
+    assert len(entry) == 1
+    other = os.path.join(ROOT, "data", "models", "Beam_Liao", "Ex1_Beam_design.stl")
+    with scratch() as d:
+        assert w.open_project(shutil.copy(os.path.join(PROJECTS, "L-bracket.mmto"), d))
+        assert w.save_project_as(os.path.join(d, "P", "P.mmto"))
+        w.set_design(lambda _: None, show=True)
+        with answers(Box.Yes):
+            assert w.replace_part(other)                                       # warned (clamp), and accepted
+        assert w.project.stl == "part/Ex1_Beam_design.stl" and os.path.isfile(w.project.stl_path())
+        assert os.path.normcase(w.stl_geom.file_path) == os.path.normcase(w.project.stl_path())
+        assert w._design is None and w.view == "setup" and w.is_dirty()
+        assert any(line.startswith("Part replaced") for line in w.message_text.toPlainText().splitlines())
 
 
 # ---------------------------------------------------------------------- Materials, Formulation, Settings

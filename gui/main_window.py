@@ -20,7 +20,7 @@ view; Snap, Measure and Ruler are in the status bar.
 
     python run_gui.py [project.mmto]        (from the repository folder)
 
-The sidebar keeps PyTO-AD's Units, Geometry and Display Options, and adds Materials,
+The sidebar keeps PyTO-AD's Units and Display Options, and adds Materials,
 Formulation and Settings (materials_panel.py, formulation_panel.py, settings_panel.py) and
 Supports and loads (supports_and_loads_panel.py). Picking with the
 mouse is PyTO-AD's Structural Loads window; each Apply in it is adopted into the project.
@@ -43,8 +43,7 @@ from .panel_widgets import GREY, Info, ok_cancel
 from .settings_panel import SettingsPanel
 from .supports_and_loads_panel import KEEP_COLOUR, LOAD_COLOUR, OTHER_COLOUR, SUPPORT_COLOUR, SupportsPanel, bc_name, bc_value
 from .pyto_ad_imports import (FILE_DIALOG_OPTIONS, MATERIAL_COLOR, UNIT_SYSTEMS, DisplayOptionsWindow,
-                              GeometryWindow, MainWindow,
-                              ProjectsWindow, STLGeom, StructuralLoadsWindow, UnitsWindow)
+                              MainWindow, ProjectsWindow, STLGeom, StructuralLoadsWindow, UnitsWindow)
 from .user_guide_window import open_user_guide
 
 APP = "LSR MMTO"
@@ -59,11 +58,11 @@ ICON = os.path.join(ASSETS, "lsr_mmto.ico")
 STYLE = os.path.join(ASSETS, "app_style.qss")           # the window's colours and shapes
 ICONS = os.path.join(ASSETS, "icons")                    # the buttons' pictures
 SIDEBAR_WORDS = {"Run": "Current run"}                   # a sidebar button's text, where not its name
-SIDEBAR_ICONS = {"Units": "units", "Geometry": "geometry", "Materials": "materials", "Supports and loads": "supports",
+SIDEBAR_ICONS = {"Units": "units", "Materials": "materials", "Supports and loads": "supports",
                  "Formulation": "formulation", "Settings": "settings", "Run": "run", "Results": "results",
                  "Display Options": "display"}
 MESSAGE_LINES = 3                                        # the message panel shows the last three lines
-SIDEBAR = ("Units", "Geometry", "Materials", "Supports and loads", "Formulation", "Settings", "Run",
+SIDEBAR = ("Units", "Materials", "Supports and loads", "Formulation", "Settings", "Run",
            "Results", "Display Options")
 FOLDER_HELP = ("A project keeps everything it uses in its own folder: the project file, the part (in part), "
                "the material database and its trained network (in materials), and the results of every run "
@@ -454,8 +453,6 @@ class PartLoader(ProjectsWindow):
                                             show_message=False, left_clicking=True, show_point=False)
         window.plotter.iren.add_observer("RightButtonPressEvent", window.on_right_button_press)
         window.update_LivVar("geometry_loaded", True)
-        window.set_sidebar_icon("Geometry", "check")
-        window.set_sidebar_icon("Material", "arrow")
 
 
 def mmto_file_error(path):
@@ -1237,6 +1234,8 @@ class MMTOWindow(MainWindow):
             action.setShortcut(key)
             action.triggered.connect(lambda _=False, s=slot: s())
         file_menu.addSeparator()
+        file_menu.addAction("Replace &part...").triggered.connect(lambda: self.replace_part())
+        file_menu.addSeparator()
         file_menu.addAction("&Export as script").triggered.connect(lambda: self.export_script())
         file_menu.addAction("&Run script...").triggered.connect(lambda: self.run_script())
         file_menu.addSeparator()
@@ -1967,41 +1966,51 @@ class MMTOWindow(MainWindow):
         self.plotter.render()
         return lines, counts
 
-    # ------------------------------------------------------------------ geometry
-    def open_geometry_window(self):
-        """With no project, a new one. Otherwise PyTO-AD's Geometry dialog changes the project's STL,
-        after a warning when selections are triangle numbers of the current one."""
+    # ------------------------------------------------------------------ the part
+    def replace_part(self, stl=None):
+        """File > Replace part: the project's STL changed to another one, after a warning when selections are
+        triangle numbers of the current one. stl: the new STL, or None to choose it in a dialog. In a
+        project folder of its own, the new STL is copied into its part folder. True when it was replaced."""
         if self.project is None:
-            self.new_project()
-            return
+            return False
         self.show_setup_view()
         names = triangle_selections(self.project)
         if names:
             answer = QtWidgets.QMessageBox.question(
-                self, "Change the STL",
+                self, "Replace part",
                 f"These selections are triangle numbers of the current STL: {', '.join(names)}. On another "
-                f"STL the same numbers are other triangles. Change the STL anyway?")
+                f"STL the same numbers are other triangles. Replace the part anyway?")
             if answer != QtWidgets.QMessageBox.Yes:
-                return
-        before = self.stl_geom.file_path if self.stl_geom else None
-        dialog = GeometryWindow(self)
-        dialog.exec_()
-        after = self.stl_geom.file_path if self.stl_geom else None
-        self.plotter.remove_actor("geometry_info", reset_camera=False)
-        if after and after != before:
-            self.project.stl = os.path.abspath(after)
-            if self.own_folder():                                   # the new part goes into the project folder
-                from lsr_mmto.problem.project_folder import PART, copy_in
-                self.project.stl = copy_in(self.project.stl, self.project.base_dir, PART)
-            self._design, self._shown_run = None, None              # a design of the old part no longer fits
-            self.view = "setup"
-            self._view_changed()
-            self.draw_ruler()
-            if names:
-                self.message_text.append(f"Check the selections {', '.join(names)}: they are triangle numbers "
-                                         f"of the old STL.")
-            self._refresh_title()
-
+                return False
+        if stl is None:
+            stl, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Replace part", os.path.dirname(self.project.stl_path()),
+                                                           "STL Files (*.stl *.STL)", options=FILE_DIALOG_OPTIONS)
+            if not stl:
+                return False
+        stl = os.path.abspath(stl)
+        if os.path.normcase(stl) == os.path.normcase(os.path.abspath(self.project.stl_path())):
+            return False
+        if self.own_folder():                                       # the new part goes into the project folder
+            from lsr_mmto.problem.project_folder import PART, copy_in
+            stl = copy_in(stl, self.project.base_dir, PART)
+        self.project.stl = stl
+        self.constrained_triangles.clear()                          # picks on the old part
+        self.constraint_data, self.force_data, self.selected_points, self.selected_regions = [], [], [], []
+        loader = PartLoader(self)                                   # draws the new STL, picking on
+        loader.load_geometry(self.project.stl_path())
+        loader.deleteLater()
+        self.preview_on = False                                     # the old drawings went with the old part
+        self._design, self._shown_run = None, None                  # a design of the old part no longer fits
+        self.view = "setup"
+        self._view_changed()
+        self.draw_ruler()
+        self.message_text.append(f"Part replaced: {os.path.basename(self.project.stl_path())}")
+        if names:
+            self.message_text.append(f"Check the selections {', '.join(names)}: they are triangle numbers "
+                                     f"of the old STL.")
+        self._say_checks()
+        self._refresh_title()
+        return True
 
 def install_error_handler(window):
     """An error inside the app (in what a button or a field does) shown in a message box and written to the
