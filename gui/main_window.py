@@ -1837,10 +1837,12 @@ class MMTOWindow(MainWindow):
 
     def open_units_window(self):
         """PyTO-AD's Units dialog (as MainWindow.open_units_window); Apply sets the project's units.
-        Nothing is converted: the numbers stay as written, the unit warnings are checked again."""
+        Nothing is converted: the numbers stay as written, the unit warnings are checked again, and the
+        lengths shown with their unit (the part's extent, the ruler, the Snap steps) are written again."""
         dialog = UnitsWindow(self, self.settings)
         if dialog.exec_() and self.project is not None and self.project.units != self.settings.unit_system:
             self.project.units = self.settings.unit_system
+            self.draw_ruler()
             self.message_text.append(f"Project units: {self.project.units}. Numbers are not converted.")
             self._say_checks()
             self._refresh_title()

@@ -213,6 +213,8 @@ def test_unsaved_changes():
 
 
 def test_units_both_ways():
+    """Units go from the project to the dialog and back; Apply writes the part's extent, the ruler and the
+    Snap steps again in the new length unit."""
     w = G.MMTOWindow()
     real_exec = G.UnitsWindow.exec_
     with scratch() as d:
@@ -225,9 +227,13 @@ def test_units_both_ways():
             def apply_ips(self):
                 self.settings.update_settings("IPS", self.settings.temperature_unit, self.settings.angle_unit)
                 return 1
+            w.ruler_box.setChecked(True)
             G.UnitsWindow.exec_ = apply_ips                                    # dialog -> project
             w.open_units_window()
             assert w.project.units == "IPS" and w.is_dirty()
+            assert w.extent.text().endswith(" in") and "mm" not in w.extent.text()   # the lengths shown follow
+            assert w.snap.itemText(1) == "Snap: 0.2 in" and "in" in w.facts.toolTip()
+            assert w.plotter.actors and any(r.GetTitle() == "in" for r in w._rulers if hasattr(r, "GetTitle"))
         finally:
             G.UnitsWindow.exec_ = real_exec
         with answers(Box.Discard):

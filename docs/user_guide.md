@@ -109,7 +109,7 @@ Zip the folder to send the whole project to someone else.
 | mmKS | mm | N | MPa | t/mm^3 | t |
 | IPS | in | lbf | psi | lbf*s^2/in^4 | lbf*s^2/in |
 
-Press **Apply**. The messages say *Project units: mmKS. Numbers are not converted.*
+Press **Apply**. The messages say *Project units: mmKS. Numbers are not converted.* The part's size at the bottom left, the ruler and the Snap steps show the new length unit at once.
 
 Nothing is converted. The numbers you typed stay as they are, and only their unit changes. Choose the unit system first, then type the numbers in it: the part's size, forces, pressures and distances, and the bounds of the constraints. The units show beside every field that has one.
 
