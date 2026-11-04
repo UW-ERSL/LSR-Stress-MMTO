@@ -1202,6 +1202,34 @@ def test_snap_steps_follow_the_part():
         assert w.extent.text() == "Part: x 0.0000 to 0.0290 \u00b7 y 0.0000 to 0.0100 \u00b7 z 0.0000 to 0.0010 mm"
 
 
+def test_selection_form_extent_follows_the_part_and_units():
+    """The Selection form's "The part spans ..." line is written again when the part is replaced and when
+    the units change, while the form stays open."""
+    import pyvista as pv
+    real_exec = G.UnitsWindow.exec_
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        panel = w.open_supports_and_loads_panel()
+        panel.add_region()
+        form = panel.stack.currentWidget().findChild(SP.RegionDialog)
+        assert form.extent.text() == "The part spans x 0 to 200, y 0 to 200, z 0 to 1 mm."
+        small = os.path.join(d, "small.stl")
+        pv.Box(bounds=(0, 50, 0, 20, 0, 2)).triangulate().save(small)
+        with answers(Box.Yes):
+            assert w.replace_part(small)
+        assert form.extent.text() == "The part spans x 0.0 to 50.0, y 0.0 to 20.0, z 0.0 to 2.0 mm."
+        try:
+            def apply_ips(self):
+                self.settings.update_settings("IPS", self.settings.temperature_unit, self.settings.angle_unit)
+                return 1
+            G.UnitsWindow.exec_ = apply_ips
+            w.open_units_window()
+        finally:
+            G.UnitsWindow.exec_ = real_exec
+        assert form.extent.text() == "The part spans x 0.0 to 50.0, y 0.0 to 20.0, z 0.0 to 2.0 in."
+        form.reject()
+
+
 def test_region_preview_clears():
     """In the region form, Clear takes the preview off the part, any edit does too, and so does closing."""
     with scratch() as d:

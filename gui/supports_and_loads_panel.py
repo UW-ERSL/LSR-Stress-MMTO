@@ -328,10 +328,10 @@ class RegionDialog(QtWidgets.QDialog):
             main = main.parentWidget()
         self.main = main
         self.on_click = None                                        # a click on the part it waits for
-        extent = QtWidgets.QLabel(main.part_extent_text() if main is not None else "")
-        extent.setStyleSheet(GREY)
-        extent.setVisible(bool(extent.text()))
-        form_layout.addWidget(extent)
+        self.extent = QtWidgets.QLabel("")
+        self.extent.setStyleSheet(GREY)
+        self.show_extent()
+        form_layout.addWidget(self.extent)
         self.form = QtWidgets.QFormLayout()
         form_layout.addLayout(self.form)
         form_layout.addStretch()
@@ -382,6 +382,12 @@ class RegionDialog(QtWidgets.QDialog):
                 self.tabs.setCurrentIndex(1)
         self.tabs.currentChanged.connect(self._switch)              # after: opening on the code line copies nothing
         self.code.textChanged.connect(self.changed)
+
+    def show_extent(self):
+        """The part's extent over the form (The part spans ...), written again when the part or the units
+        change."""
+        self.extent.setText(self.main.part_extent_text() if self.main is not None else "")
+        self.extent.setVisible(bool(self.extent.text()))
 
     def kind(self):
         return self.type.currentData()

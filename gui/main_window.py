@@ -44,7 +44,8 @@ from .formulation_panel import FormulationPanel
 from .materials_panel import MaterialsPanel
 from .panel_widgets import GREY, Info, ok_cancel
 from .settings_panel import SettingsPanel
-from .supports_and_loads_panel import KEEP_COLOUR, LOAD_COLOUR, OTHER_COLOUR, SUPPORT_COLOUR, SupportsPanel, bc_name, bc_value
+from .supports_and_loads_panel import (KEEP_COLOUR, LOAD_COLOUR, OTHER_COLOUR, SUPPORT_COLOUR, RegionDialog, SupportsPanel,
+                                       bc_name, bc_value)
 from .pyto_ad_imports import (FILE_DIALOG_OPTIONS, MATERIAL_COLOR, UNIT_SYSTEMS, DisplayOptionsWindow,
                               MainWindow, ProjectsWindow, STLGeom, StructuralLoadsWindow, UnitsWindow)
 from .user_guide_window import open_user_guide
@@ -1343,6 +1344,8 @@ class MMTOWindow(MainWindow):
                             "Part: " + self.part_extent_text()[len("The part spans "):-1].replace(", ", " \u00b7 "))
         self.update_part_facts()
         self.update_snaps()
+        for form in self.findChildren(RegionDialog):                # an open Selection form says it too
+            form.show_extent()
         if b is not None and self.ruler_box.isChecked():
             lo, hi = b
             size = float(np.max(hi - lo))
