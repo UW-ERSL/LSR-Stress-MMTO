@@ -9,6 +9,7 @@ were made at, so the panels holding them do not creep wider.
 """
 import glob
 import os
+import re
 import sys
 import tempfile
 import time
@@ -22,7 +23,7 @@ if sys.platform.startswith("win"):                         # off-screen Qt on Wi
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from PyQt5 import QtCore, QtWidgets  # noqa: E402
+from PyQt5 import QtCore, QtGui, QtWidgets  # noqa: E402
 
 APP = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
@@ -238,6 +239,50 @@ def test_top_row_and_bottom_buttons():
         assert w.measured.text() == ""
         w.snap.setCurrentIndex(2)
         assert w.snapped(np.array([0.4, 1.6, 0.0])).tolist() == [0.0, 2.0, 0.0]
+        w.close()
+    finally:
+        APP.setStyleSheet("")
+
+
+def test_every_tab_text_fits_its_tab():
+    """The tab shown is marked by a line along its top, not bold text, so Qt's tab sizes (worked out with
+    the plain font) hold its text: in the Settings window and Results (and the strips' own tabs) every
+    tab's text and padding fit inside its tab, whichever tab is shown."""
+    from gui import settings_panel
+    styled()
+    try:
+        w = window()
+        settings = settings_panel.SettingsPanel(w, w.project)
+        settings.show()
+        w.open_supports_and_loads_panel()
+        w.open_run_panel()
+        res = w.open_results_panel()
+        for title in ("Convergence", "Latent space", "Summary"):           # the tabs a run shows
+            res.tabs.addTab(QtWidgets.QLabel(title), title)
+        settle(0.2)
+        bars = settings.findChildren(QtWidgets.QTabBar) + w.findChildren(QtWidgets.QTabBar)
+        assert any(b.count() >= 2 for b in settings.findChildren(QtWidgets.QTabBar))
+        assert res.tabs.tabBar() in bars
+        with open(G.STYLE, encoding="utf-8") as f:
+            selected = re.search(r"QTabBar::tab:selected\s*\{([^}]*)\}", f.read()).group(1)
+        assert "border-top: 2px solid #2f5fe0" in selected                  # the mark of the tab shown
+        checked = 0
+        for bar in bars:
+            if not bar.isVisible():
+                continue
+            shown = QtGui.QFont(bar.font())                                # the font the tab shown is drawn in
+            shown.setBold("font-weight" in selected and "normal" not in selected)
+            for current in range(bar.count()):
+                bar.setCurrentIndex(current)
+                settle()
+                for i in range(bar.count()):
+                    text = bar.tabText(i).replace("&", "")
+                    font = QtGui.QFontMetrics(shown) if i == current else bar.fontMetrics()
+                    need = font.horizontalAdvance(text) + 2 * 14 + 2 * 1 + 2       # padding, borders, margin
+                    assert need <= bar.tabRect(i).width(), (text, need, bar.tabRect(i).width())
+                    checked += 1
+        assert checked > 20
+        settings.close()
         w.close()
     finally:
         APP.setStyleSheet("")
