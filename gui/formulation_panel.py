@@ -205,6 +205,8 @@ class FormulationPanel(QtWidgets.QDialog):
         w["material"].setVisible(material)
         w["info"].setVisible(bool(name))
         w["info"].setToolTip(self.quantities[name].help if name in self.quantities else "")
+        if not entry["original"] and name in self.quantities and not w["bound"].edited():
+            w["bound"].set_value(self.quantities[name].first_bound(self.project) or 0.0)   # a new row's limit
         unit = bound_unit(name, self.units) if name else ""
         w["unit"].setText("" if unit in ("fraction of the design domain", "no units") else unit)
         w["why"].setText(self.reason(name) or "" if name else "")

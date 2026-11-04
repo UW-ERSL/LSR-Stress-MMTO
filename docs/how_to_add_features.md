@@ -46,6 +46,9 @@ as torch from the model's state; autograd gives the gradient.
 - `bound_warning` (optional): `bound_warning(project, bound)` gives a warning about a constraint's
   limit, shown with the project's other warnings before a run, or None. Mass warns about a limit
   below 1 % of the part solid in the lightest material.
+- `start_bound` (optional): the limit a new constraint row in the Formulation panel starts at, a
+  number or a function of the project (the fractions give 0.4, the failure factor 1, Mass 0.4 times
+  the part solid in the lightest material). Without it a new row starts at 0.
 - A project names it by its name; the objective and the constraints are kept by that name.
 - Add it to `QUANTITIES` in `tests/test_ad_quantities.py`, which checks the gradient against
   finite differences. What else to run: both generators above (the reference page and the user

@@ -420,6 +420,37 @@ def test_formulation_mass_fraction_row():
         assert not wd["of"].isVisibleTo(f) and not wd["material"].isVisibleTo(f)
 
 
+def test_a_new_constraint_row_starts_at_its_quantity_limit():
+    """A new row starts at the limit its quantity declares (start_bound): 0.4 for the fractions, 1 for the
+    failure factor, and for Mass 0.4 times the part solid in the lightest material (far above the low-mass
+    warning); a quantity that declares none starts at 0 as before. A limit typed by the user is kept when
+    the quantity changes, and an existing row keeps its own."""
+    from lsr_mmto.formulation.quantities import part_volume
+    from lsr_mmto.materials.databases import database_table
+    with scratch() as d:
+        w = opened("U-bracket", d)
+        _, attributes, _, values = database_table(w.project.database_paths()[0])
+        lightest = values[:, attributes.index("Density")].min() * part_volume(w.project.stl_path())
+        f = formulation_panel.FormulationPanel(w, w.project)
+        before = f.rows[0]["widgets"]["bound"].value()
+        row = f.add_row(None)["widgets"]
+        assert row["bound"].value() == 0.0                                    # no quantity yet
+        for shown, start in (("Volume fraction", 0.4), ("Material volume fraction", 0.4), ("Mass fraction", 0.4),
+                             ("Failure factor (p-norm)", 1.0), ("Mass", 0.4 * lightest), ("Compliance", 0.0)):
+            row["quantity"].setCurrentText(shown)
+            assert abs(row["bound"].value() - start) <= 1e-12 * max(start, 1), (shown, row["bound"].value(), start)
+        row["quantity"].setCurrentText("Mass")
+        assert w.project.formulation["constraints"][0]["expression"] == "Mass()"
+        row["bound"].setText("0.002")                                          # typed: kept from now on
+        row["quantity"].setCurrentText("Volume fraction")
+        assert row["bound"].value() == 0.002
+        f.rows[0]["widgets"]["quantity"].setCurrentText("Volume fraction")    # an existing row keeps its limit
+        assert f.rows[0]["widgets"]["bound"].value() == before
+        f.add_row(None)["widgets"]["quantity"].setCurrentText("Mass")
+        f.apply(w.project)
+        assert not any("lightest material" in x for x in w.project.warnings())
+
+
 def test_materials_panel():
     from lsr_mmto.materials.databases import DATABASE_DIR
     with scratch() as d:
