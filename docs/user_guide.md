@@ -82,6 +82,7 @@ An **Error** stops a run from starting until it is put right. A **Warning** lets
 - **Save** saves the project in its file. A project never saved, or an example, is saved with Save As instead.
 - **Save As...** saves the project as a new one, in a new folder, with everything it uses copied in. The new project takes the new name; the runs made so far stay with the old one.
 - **Replace part...** changes the project's STL for another one. See section 5.
+- **Scale part...** multiplies every coordinate of the part by a number, for a part drawn in another unit. See section 5.
 - **Export as script** writes the project as a short Python script, *name*_setup.py, in the project's folder. Every save writes it again, so it always matches the project; this entry saves first if needed and says where the script is. Open it in any text editor to see the whole project written out, or to change it.
 - **Run script...** runs a Python script, such as one written by Export as script and then changed. What the script prints goes to the messages. When the script saves a project in its folder, that project opens in the window.
 - **Exit** closes LSR MMTO.
@@ -124,6 +125,8 @@ The part is an STL file of the space the part may fill: the design domain. The o
 The part comes in when you make the project (File > New). To use a different STL, choose File > **Replace part...** and choose the new STL. If some selections are faces you picked on the old STL, LSR MMTO says so first: picked faces are stored by triangle number, and on another STL the same numbers are other faces. Pick them again afterwards. In a project folder of its own, the new STL is copied into the part folder.
 
 The STL should be closed (watertight) and in the project's length unit. The size in the bottom bar (section 2.5) is a quick check: a part that should be 200 mm long and reads *x 0 to 0.2 mm* was drawn in metres.
+
+To fix that, choose File > **Scale part...** and type in **Scale by** the number every coordinate is multiplied by: 1000 from metres to millimetres, 1/1000 back, 25.4 from inches to millimetres. The window shows the size the part will have. OK changes the project's own copy of the part, in its part folder, so scaling again multiplies again (by 2, then by 3, is by 6). An example, or a project whose part is not in a folder of its own, is first saved as a project of your own: the STL the part came from never changes. Only the part is scaled. The units, the loads, the limits and the materials stay as they are. Faces you picked stay picked. Selections with coordinates or lengths you typed (a Box, a Cylinder, ...) are not scaled, so LSR MMTO names them first: check them afterwards. A length in element sizes, such as 1.5h, follows the mesh by itself.
 
 ### 5.1 The mesh
 

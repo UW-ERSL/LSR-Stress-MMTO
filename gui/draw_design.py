@@ -205,6 +205,12 @@ def mesh_of(window, project):
     return _MESHES[key]
 
 
+def forget_meshes(stl):
+    """The meshes kept for the STL at stl dropped, after its file changed (File > Scale part)."""
+    for key in [k for k in _MESHES if os.path.normcase(k[0]) == os.path.normcase(os.path.abspath(stl))]:
+        del _MESHES[key]
+
+
 def run_mesh(window, folder, run):
     """The mesh a saved run was made on, rebuilt from the project its record keeps (the window's own
     mesh when it is the same one). MeshError when it cannot match the run."""

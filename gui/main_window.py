@@ -42,7 +42,7 @@ from . import dark_and_light_3d_view as view_mode
 
 from .formulation_panel import FormulationPanel
 from .materials_panel import MaterialsPanel
-from .panel_widgets import GREY, Info, ok_cancel
+from .panel_widgets import GREY, Info, NumberEdit, ok_cancel, with_info
 from .settings_panel import SettingsPanel
 from .supports_and_loads_panel import KEEP_COLOUR, LOAD_COLOUR, OTHER_COLOUR, SUPPORT_COLOUR, SupportsPanel, bc_name, bc_value
 from .pyto_ad_imports import (FILE_DIALOG_OPTIONS, MATERIAL_COLOR, UNIT_SYSTEMS, DisplayOptionsWindow,
@@ -768,6 +768,50 @@ class ProjectFolderDialog(QtWidgets.QDialog):
         super().accept()
 
 
+SCALE_HELP = ("Every coordinate of the part is multiplied by this number: 1/1000 for a part drawn in millimetres "
+              "that should be in metres, 25.4 from inches to millimetres. The project's own copy of the part "
+              "is changed; the units, loads, limits and materials stay as they are.")
+
+
+class ScalePartDialog(QtWidgets.QDialog):
+    """File > Scale part: the number every coordinate of the part is multiplied by, and the size the part
+    will then have. size: the part's size along x, y and z now; unit: the length unit."""
+
+    def __init__(self, parent, size, unit):
+        super().__init__(parent)
+        self.setWindowTitle("Scale part")
+        self.resize(420, 0)
+        self.size, self.unit = np.asarray(size, dtype=float), unit
+        layout = QtWidgets.QVBoxLayout(self)
+        form = QtWidgets.QFormLayout()
+        self.by = NumberEdit(1.0, arithmetic=True)
+        form.addRow("Scale by", with_info(self.by, SCALE_HELP))
+        layout.addLayout(form)
+        self.will_be = QtWidgets.QLabel("")
+        self.will_be.setStyleSheet(GREY)
+        layout.addWidget(self.will_be)
+        self.buttons = ok_cancel(self, layout)
+        self.by.textChanged.connect(self._show_size)
+        self._show_size()
+
+    def factor(self):
+        """The number typed, or None when it is not a number above 0."""
+        try:
+            value = self.by.value()
+        except ValueError:
+            return None
+        return value if np.isfinite(value) and value > 0 else None
+
+    def _show_size(self):
+        factor = self.factor()
+        self.buttons.button(QtWidgets.QDialogButtonBox.Ok).setEnabled(factor is not None)
+        if factor is None:
+            self.will_be.setText("Write a number above 0, for example 1/1000 or 25.4.")
+            return
+        size = " \u00d7 ".join(f"{float(f'{v * factor:.3g}'):g}" for v in self.size)
+        self.will_be.setText(f"The part will be {size} {self.unit}".rstrip())
+
+
 def physics_choice():
     """A list of the physics a new project can have, each shown by its name with what it is beside it
     ("Structural: linear elasticity, small strain"); the first is chosen."""
@@ -1471,6 +1515,7 @@ class MMTOWindow(MainWindow):
             action.triggered.connect(lambda _=False, s=slot: s())
         file_menu.addSeparator()
         file_menu.addAction("Replace &part...").triggered.connect(lambda: self.replace_part())
+        file_menu.addAction("Sca&le part...").triggered.connect(lambda: self.scale_part())
         file_menu.addSeparator()
         file_menu.addAction("&Export as script").triggered.connect(lambda: self.export_script())
         file_menu.addAction("&Run script...").triggered.connect(lambda: self.run_script())
@@ -2270,6 +2315,59 @@ class MMTOWindow(MainWindow):
             from lsr_mmto.problem.project_folder import PART, copy_in
             stl = copy_in(stl, self.project.base_dir, PART)
         self.project.stl = stl
+        lines = [f"Part replaced: {os.path.basename(self.project.stl_path())}"]
+        if names:
+            lines.append(f"Check the selections {', '.join(names)}: they are triangle numbers of the old STL.")
+        self._part_changed(lines)
+        return True
+
+    def scale_part(self, factor=None):
+        """File > Scale part: every coordinate of the project's part multiplied by factor (None: asked in a
+        window), in the project's own copy of the part (project_folder.scale_part). The selections typed in
+        lengths are named first, since they are not scaled. A project not in a folder of its own (an example)
+        is saved as one first, so no STL outside the project's folder is ever written. True when scaled."""
+        from lsr_mmto.problem import project_folder
+        from lsr_mmto.problem.selections import holds_typed_lengths
+        from .draw_design import forget_meshes
+        if self.project is None or self.part_bounds() is None:
+            return False
+        self.show_setup_view()
+        if factor is None:
+            lo, hi = self.part_bounds()
+            dialog = ScalePartDialog(self, hi - lo, self.length_unit())
+            if not dialog.exec_():
+                return False
+            factor = dialog.factor()
+        if factor is None or factor == 1:
+            return False
+        typed = [name for name, s in self.project.selections.items() if holds_typed_lengths(s)]
+        if typed:
+            answer = QtWidgets.QMessageBox.question(
+                self, "Scale part", f"These selections were typed for the old size and are not scaled: "
+                                    f"{', '.join(typed)}.", QtWidgets.QMessageBox.Ok | QtWidgets.QMessageBox.Cancel)
+            if answer != QtWidgets.QMessageBox.Ok:
+                return False
+        if not self.own_folder():
+            answer = QtWidgets.QMessageBox.question(
+                self, "Scale part", "The part is scaled in a project folder of your own, so the STL it came from "
+                                    "stays as it is. Save the project there first?",
+                QtWidgets.QMessageBox.Save | QtWidgets.QMessageBox.Cancel)
+            if answer != QtWidgets.QMessageBox.Save or not self.save_project() or not self.own_folder():
+                return False
+        try:
+            stl = project_folder.scale_part(self.project, factor)
+        except (OSError, ValueError) as e:
+            QtWidgets.QMessageBox.warning(self, "Scale part", f"The part was not scaled: {e}")
+            return False
+        self._mesh, self._mesh_key = None, None                     # the same file at a new size: built again
+        forget_meshes(stl)
+        self._part_changed([f"Part scaled by {factor:.12g}"])
+        return True
+
+    def _part_changed(self, lines):
+        """The part drawn again after its STL changed (Replace part, Scale part): the picks and drawings on the
+        old part go, and a design of it; the extent, the ruler and the checks follow; lines go to the
+        messages."""
         self.constrained_triangles.clear()                          # picks on the old part
         self.constraint_data, self.force_data, self.selected_points, self.selected_regions = [], [], [], []
         loader = PartLoader(self)                                   # draws the new STL, picking on
@@ -2280,13 +2378,10 @@ class MMTOWindow(MainWindow):
         self.view = "setup"
         self._view_changed()
         self.draw_ruler()
-        self.message_text.append(f"Part replaced: {os.path.basename(self.project.stl_path())}")
-        if names:
-            self.message_text.append(f"Check the selections {', '.join(names)}: they are triangle numbers "
-                                     f"of the old STL.")
+        for line in lines:
+            self.message_text.append(line)
         self._say_checks()
         self._refresh_title()
-        return True
 
 def install_error_handler(window):
     """An error inside the app (in what a button or a field does) shown in a message box and written to the

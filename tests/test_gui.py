@@ -269,6 +269,99 @@ def test_replace_part():
         assert any(line.startswith("Part replaced") for line in w.message_text.toPlainText().splitlines())
 
 
+@contextlib.contextmanager
+def answered_in_turn(*replies):
+    """Questions answered with replies, one after the other, without showing them; the texts asked are kept
+    in the list given back. warning() and information() give OK."""
+    asked, saved = [], (Box.question, Box.warning, Box.information)
+    Box.question = staticmethod(lambda _parent, _title, text, *a, **k: asked.append(text) or replies[len(asked) - 1])
+    Box.warning = staticmethod(lambda *a, **k: Box.Ok)
+    Box.information = staticmethod(lambda *a, **k: Box.Ok)
+    try:
+        yield asked
+    finally:
+        Box.question, Box.warning, Box.information = saved
+
+
+def test_scale_part():
+    """File > Scale part: the window shows the size the part will have; the selections typed for the old size
+    (a Box, a Cylinder) are named first, not picked faces or a length in element sizes; a project not in a
+    folder of its own is saved as one first and only its part/ is written, every coordinate exactly times the
+    factor; scaling again multiplies again, one STL in part/; the extent follows; Cancel changes nothing."""
+    from stl import mesh as stl_mesh
+    from lsr_mmto.problem import selections as S
+
+    def vectors(path):
+        return stl_mesh.Mesh.from_file(path).vectors
+
+    entry = [a for m in G.MMTOWindow().menuBar().actions() if m.menu() for a in m.menu().actions()
+             if a.text().replace("&", "") == "Scale part..."]
+    assert len(entry) == 1
+    shipped = os.path.join(ROOT, "data", "models", "LBracket_BM1", "LBracket_BM1.STL")
+    before, original = open(shipped, "rb").read(), vectors(shipped).copy()
+    with scratch() as d:
+        w = opened("L-bracket", d)                                  # a project file of its own, the STL shipped
+        lo, hi = w.part_bounds()
+        dialog = G.ScalePartDialog(w, hi - lo, w.length_unit())
+        dialog.by.setText("1/1000")
+        size = hi - lo
+        assert dialog.factor() == 0.001 and dialog.will_be.text() == \
+            "The part will be " + " \u00d7 ".join(f"{float(f'{v / 1000:.3g}'):g}" for v in size) + f" {w.length_unit()}"
+        dialog.by.setText("0")
+        assert dialog.factor() is None and not dialog.buttons.button(QtWidgets.QDialogButtonBox.Ok).isEnabled()
+        saved_exec = G.ScalePartDialog.exec_
+        G.ScalePartDialog.exec_ = lambda dialog: 0                  # the window's Cancel
+        try:
+            assert not w.scale_part()
+        finally:
+            G.ScalePartDialog.exec_ = saved_exec
+        w.project.selections.update(pad=S.box([0, 0, 0], [10, 10, 1]), bore=S.cylinder([5, 5, 0], "z", 2.0),
+                                    edge=S.near_face("xmin", "1.5h"))
+        project_file = open(w.path).read()
+        with answered_in_turn(Box.Cancel) as asked:                 # Cancel at the typed selections
+            assert not w.scale_part(2.0)
+        assert asked == ["These selections were typed for the old size and are not scaled: pad, bore."]
+        assert open(w.path).read() == project_file and not os.path.exists(os.path.join(d, "part"))
+        with answered_in_turn(Box.Ok, Box.Save) as asked:
+            assert w.scale_part(2.0)
+        assert len(asked) == 2 and "Save the project there first?" in asked[1] and w.own_folder()
+        assert os.listdir(os.path.join(d, "part")) == ["LBracket_BM1.STL"]
+        assert np.array_equal(vectors(w.project.stl_path()), original * 2.0)
+        assert open(shipped, "rb").read() == before                 # the STL it came from is untouched
+        assert np.allclose(w.part_bounds()[1], hi * 2.0) and w.extent.text() != "" and \
+            G.without_minus_zero(w.length_format(float(np.max(size * 2))) % (hi[0] * 2)) in w.extent.text()
+        assert "Part scaled by 2" in w.message_text.toPlainText().splitlines()
+        with answered_in_turn(Box.Ok):
+            assert w.scale_part(3)
+        with answered_in_turn(Box.Ok):
+            assert w.scale_part(0.5)
+        assert os.listdir(os.path.join(d, "part")) == ["LBracket_BM1.STL"]
+        assert np.array_equal(vectors(w.project.stl_path()), original * 6.0 * 0.5)
+        assert open(shipped, "rb").read() == before
+
+    example = os.path.join(PROJECTS, "L-bracket.mmto")              # an example: saved as a project of its own
+    example_text, models = open(example).read(), sorted(os.listdir(os.path.dirname(shipped)))
+    w = G.MMTOWindow()
+    assert w.open_project(example) and w.template
+    real = G.ProjectFolderDialog.exec_
+    with scratch() as d:
+        def fill(dialog):
+            dialog.location.setText(d)
+            dialog.name.setText("Mine")
+            return 1
+        G.ProjectFolderDialog.exec_ = fill
+        try:
+            with answered_in_turn(Box.Save) as asked:               # clamp and corner: nothing typed
+                assert w.scale_part(25.4)
+        finally:
+            G.ProjectFolderDialog.exec_ = real
+        assert len(asked) == 1 and not w.template and w.path == os.path.join(d, "Mine", "Mine.mmto")
+        assert os.listdir(os.path.join(d, "Mine", "part")) == ["LBracket_BM1.STL"]
+        assert np.array_equal(vectors(w.project.stl_path()), original * 25.4)
+        assert open(example).read() == example_text and open(shipped, "rb").read() == before
+        assert sorted(os.listdir(os.path.dirname(shipped))) == models
+
+
 def test_start_page():
     """With no project open the start page covers the 3D view, and the side buttons, Run, Export STL and Part /
     Design are greyed with a tip; opening a project hides the page and they work. Recent lists the projects

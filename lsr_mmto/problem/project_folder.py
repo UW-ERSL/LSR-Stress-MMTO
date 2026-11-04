@@ -25,6 +25,7 @@ script alone, so a script never rewrites itself.
     create(folder, stl)          a new project in a new folder
     pack(project, folder)        everything the project uses copied into folder (every save)
     bring_in_database(project)   the project's database and network copied into its folder
+    scale_part(project, factor)  the project's own part, in part/, scaled in place
     setup_script(project)        the path of the project's setup script
     write_setup_script(project)  the setup script written from the project (the window only)
     new_run_folder(project)      the folder for the next run's results
@@ -33,6 +34,7 @@ script alone, so a script never rewrites itself.
 import datetime
 import filecmp
 import json
+import math
 import os
 import shutil
 
@@ -184,6 +186,31 @@ def create(folder, stl, physics=None):
     path = os.path.join(folder, f"{name}.mmto")
     p.save(path)
     return p, path
+
+
+def scale_part(project, factor):
+    """Every coordinate of the project's part times factor, written over the same file in part/ as a
+    binary STL: part/ holds no more files than before, and scaling again multiplies again. Only the
+    part of a project in a folder of its own is written; an STL anywhere else (an example's, the one
+    the part came from) never is. Nothing else changes: the units, the loads, the limits and the
+    database stay as they are."""
+    from stl import mesh as stl_mesh
+    from stl import Mode
+    if not has_own_folder(project):
+        raise ValueError("only the part of a project in a folder of its own is scaled; save the project first")
+    if isinstance(factor, bool) or not isinstance(factor, (int, float)) or not math.isfinite(factor) or factor <= 0:
+        raise ValueError(f"the part is scaled by a number above 0, not {factor!r}")
+    path = os.path.abspath(project.stl_path())
+    part = stl_mesh.Mesh.from_file(path)
+    part.vectors *= factor                                  # the triangles' normals keep their direction
+    written = path + ".scaling"                             # written in full, then put in the part's place
+    try:
+        part.save(written, mode=Mode.BINARY, update_normals=False)
+        os.replace(written, path)
+    finally:
+        if os.path.exists(written):
+            os.remove(written)
+    return path
 
 
 def setup_script(project):
