@@ -50,7 +50,7 @@ import os
 import numpy as np
 
 from lsr_mmto.problem import selections as S
-from lsr_mmto.materials.databases import (ATTRIBUTES, DATABASE_DIR, DATABASE_VAE, UNIT_SYSTEMS, VAEParams,
+from lsr_mmto.materials.databases import (ATTRIBUTES, DATABASE_DIR, DATABASE_VAE, UNIT_SYSTEMS, UNITS, VAEParams,
                                          check_database, database_attributes, database_units, in_shipped_folder,
                                          recommended_latent_dim, unit_ratio)
 from lsr_mmto.formulation.formulation_text import parse_expression, to_params_form
@@ -399,6 +399,56 @@ class Project:
                     out.append(Problem("materials", f"material database: {q.name} needs a {c} column"))
         return out
 
+    def _unit_ratios(self, xlsx):
+        """(units, ratio): each database column's unit as written, and how many times larger the numbers of
+        each column with a unit (not a ratio) are than the same values in the project's units."""
+        units = database_units(xlsx)
+        return units, {n: unit_ratio(ATTRIBUTES[n].measures, u, self.units) for n, u in units.items()
+                       if u is not None and ATTRIBUTES[n].measures != "ratio"}
+
+    @staticmethod
+    def _quantity_ratio(q, ratio):
+        """How many times its real value a quantity comes out with columns that many times too large."""
+        return float(np.prod([ratio[c] ** k for c, k in q.scales_with.items() if c in ratio]))
+
+    def quantity_unit(self, q):
+        """A quantity's unit in the project's units, with a space before it; "" for one without units."""
+        system = UNIT_SYSTEMS[self.units]
+        unit = q.unit.format(**system) if "{" in q.unit else q.unit
+        return "" if unit == "no units" or unit.startswith("fraction") else f" {unit}"
+
+    def unit_conversion(self):
+        """What converting the database into the project's units changes: (columns, limits). columns: (name,
+        unit, the project's unit, factor) for each column in other units, its numbers to be multiplied by
+        factor; limits: (index of the constraint, its quantity, limit, converted limit) for each limit the
+        conversion changes the meaning of: the converted limit means for the converted database what the
+        limit means now. Both empty when there is nothing to convert (no units, no database, or one with
+        errors)."""
+        from lsr_mmto.formulation.quantities import QUANTITIES
+        if self.units not in UNIT_SYSTEMS or self.database is None:
+            return [], []
+        xlsx, _ = self.database_paths()
+        if check_database(xlsx)[0]:
+            return [], []
+        system = UNIT_SYSTEMS[self.units]
+        units, ratio = self._unit_ratios(xlsx)
+        ratio = {n: r for n, r in ratio.items() if abs(r - 1.0) >= 1e-12}
+        columns = []
+        for n in ratio:
+            kind = UNITS[ATTRIBUTES[n].measures]
+            target = system[ATTRIBUTES[n].measures]
+            columns.append((n, units[n], target, kind[units[n]] / kind[target]))
+        by_name, limits = {q.name: q for q in QUANTITIES}, []
+        for i, c in enumerate(self.formulation.get("constraints", [])):
+            try:
+                q = by_name.get(parse_expression(c["expression"])[0])
+            except Exception:                                                          # noqa: BLE001
+                continue
+            factor = self._quantity_ratio(q, ratio) if q is not None else 1.0
+            if abs(factor - 1.0) >= 1e-12:
+                limits.append((i, q, c["bound"], c["bound"] / factor))
+        return columns, limits
+
     def _unit_warnings(self, xlsx):
         """A database column in units other than the project's, with what it does to the results."""
         from lsr_mmto.formulation.quantities import QUANTITIES
@@ -413,9 +463,7 @@ class Project:
                 bounds.setdefault(parse_expression(c["expression"])[0], []).append(c["bound"])
             except Exception:                                                          # noqa: BLE001
                 pass
-        units = database_units(xlsx)
-        ratio = {n: unit_ratio(ATTRIBUTES[n].measures, u, self.units) for n, u in units.items()
-                 if u is not None and ATTRIBUTES[n].measures != "ratio"}
+        units, ratio = self._unit_ratios(xlsx)
 
         def times(r):
             e = np.log10(r)
@@ -441,12 +489,11 @@ class Project:
             q = by_name.get(name)
             if q is None:
                 continue
-            factor = float(np.prod([ratio[c] ** k for c, k in q.scales_with.items() if c in ratio]))
+            factor = self._quantity_ratio(q, ratio)
             off = [c for c in q.scales_with if c in at]
             if abs(factor - 1.0) < 1e-12 or not off:
                 continue
-            unit = q.unit.format(**system) if "{" in q.unit else q.unit
-            unit = "" if unit == "no units" or unit.startswith("fraction") else f" {unit}"
+            unit = self.quantity_unit(q)
             if bound is None:
                 out[at[off[0]]] += (f" {q.shown} comes out {times(factor)} times its real value. As the "
                                     f"objective that changes only the numbers shown, not the design.")

@@ -26,6 +26,7 @@ script alone, so a script never rewrites itself.
     pack(project, folder)        everything the project uses copied into folder (every save)
     bring_in_database(project)   the project's database and network copied into its folder
     scale_part(project, factor)  the project's own part, in part/, scaled in place
+    convert_database_units(project)  the project's own copy of its database in the project's units
     setup_script(project)        the path of the project's setup script
     write_setup_script(project)  the setup script written from the project (the window only)
     new_run_folder(project)      the folder for the next run's results
@@ -211,6 +212,39 @@ def scale_part(project, factor):
         if os.path.exists(written):
             os.remove(written)
     return path
+
+
+def convert_database_units(project, limits=True):
+    """The project's database in the project's units (Project.unit_conversion): each column in other units
+    multiplied by its factor, written over the project's own copy in its folder. A database from elsewhere
+    (a shipped one too) is first copied in with its network (bring_in_database), and only the copy is
+    written. The trained network is kept as it is: it learns each column scaled to 0 to 1, which a change
+    of unit leaves as it was. With limits, the limits that meant something for the old numbers are
+    converted too. Returns (columns, limits) converted, as Project.unit_conversion gives them."""
+    from lsr_mmto.materials.databases import database_table, material_display, write_database
+    if not has_own_folder(project):
+        raise ValueError("only a project in a folder of its own has a database of its own; save the project first")
+    columns, bounds = project.unit_conversion()
+    if not columns:
+        return [], []
+    bring_in_database(project)
+    xlsx, _ = project.database_paths()
+    if not inside(xlsx, project.base_dir):
+        raise ValueError(f"{xlsx} is not in the project's folder")
+    names, attributes, units, values = database_table(xlsx)
+    colours, labels = material_display(xlsx)
+    to = {name: (unit, factor) for name, _, unit, factor in columns}
+    for j, name in enumerate(attributes):
+        if name in to:
+            units[j] = to[name][0]
+            values[:, j] = values[:, j] * to[name][1]
+    write_database(xlsx, attributes, units, names, [None if label == name else label
+                                                     for label, name in zip(labels, names)], colours, values)
+    if not limits:
+        return columns, []
+    for i, _, _, bound in bounds:
+        project.formulation["constraints"][i]["bound"] = bound
+    return columns, bounds
 
 
 def setup_script(project):

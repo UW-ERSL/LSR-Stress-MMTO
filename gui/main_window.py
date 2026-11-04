@@ -1892,6 +1892,39 @@ class MMTOWindow(MainWindow):
             self._say_checks()
         self._refresh_title()
 
+    def convert_database_units(self, parent=None):
+        """Convert to <units> units (Materials): a window shows each database column in other units than the
+        project's and the limits written for the old numbers; its OK writes the converted database as the
+        project's own copy (project_folder.convert_database_units; a shipped one is never written), with its
+        network unchanged, converts the limits when ticked, says what was converted and saves the project, so
+        that its file and the database always go together. Returns those lines, or None when nothing was
+        converted."""
+        from lsr_mmto.problem.project_folder import convert_database_units
+        from .materials_panel import ConvertUnitsDialog, conversion_lines
+        columns, limits = self.project.unit_conversion() if self.project is not None else ([], [])
+        if not columns or not self.own_folder():
+            return None
+        dialog = ConvertUnitsDialog(parent or self, self.project, columns, limits)
+        if not dialog.exec_():
+            return None
+        try:
+            columns, limits = convert_database_units(self.project, limits=dialog.limits.isChecked())
+        except (OSError, ValueError) as e:
+            QtWidgets.QMessageBox.warning(parent or self, "Convert units", f"Nothing was converted: {e}")
+            return None
+        column_lines, limit_lines = conversion_lines(self.project, columns, limits)
+        lines = [f"Database converted to {self.project.units} units ({self.project.database}, its trained network "
+                 f"kept): {'; '.join(column_lines)}"]
+        if limit_lines:
+            lines.append(f"Limits converted: {'; '.join(limit_lines)}")
+        self.update_part_facts()
+        for line in lines:
+            self.message_text.append(line)
+        self._write(self.path)                                      # the project file matches the database
+        self._say_checks()
+        self._refresh_title()
+        return lines
+
     def database_folder(self):
         """Where New database... writes by default: the project's materials folder; for an example,
         not beside it (the examples never change)."""

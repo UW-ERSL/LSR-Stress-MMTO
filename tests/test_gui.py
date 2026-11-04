@@ -1803,6 +1803,61 @@ def test_snap_copy_outline_colour_new_database():
 
 
 
+def test_convert_units():
+    """Convert to <units> units (Materials), on a copy of the Airplane bracket project (mmKS, its database in
+    kg/m^3, Pa and USD/kg): the button shows only while the units differ; the window lists each column with its
+    factor and the limits; OK writes the project's own copy with the values times the factors exactly and the
+    limits converted, saves the project, and leaves no unit warning; the network file is byte-identical and
+    still gives the materials back as closely; the shipped database is untouched. Unticked, the limits stay."""
+    from lsr_mmto.materials.databases import DATABASE_DIR, database_table
+    from lsr_mmto.materials.encoder import network_reconstruction
+    shipped = os.path.join(DATABASE_DIR, "CustomAlloys20_3D")
+    before = {ext: open(shipped + ext, "rb").read() for ext in (".xlsx", ".nt")}
+    _, attributes, _, old = database_table(shipped + ".xlsx")
+    errors = [r["percent_of_range"] for r in network_reconstruction(shipped + ".xlsx", shipped + ".nt")]
+    factors = np.array([{"Density": 1e-12, "Youngs_Modulus": 1e-06, "Cost": 1000.0}.get(a, 1.0) for a in attributes])
+    real, seen = materials_panel.ConvertUnitsDialog.exec_, []
+    for tick in (True, False):
+        with scratch() as d:
+            w = opened("Airplane bracket", d)
+            assert w.save_project_as(os.path.join(d, "A", "A.mmto"))
+            bounds = [c["bound"] for c in w.project.formulation["constraints"]]
+            expected = [new for _, _, _, new in w.project.unit_conversion()[1]] if tick else bounds
+            m = materials_panel.MaterialsPanel(w, w.project)
+            assert not m.convert_button.isHidden() and m.convert_button.text() == "Convert to mmKS units..."
+
+            def answer(dialog):
+                seen.append([label.text().strip() for label in dialog.findChildren(QtWidgets.QLabel)])
+                dialog.limits.setChecked(tick)
+                return 1
+            materials_panel.ConvertUnitsDialog.exec_ = answer
+            try:
+                lines = m.convert_units()
+            finally:
+                materials_panel.ConvertUnitsDialog.exec_ = real
+            assert seen[-1][1:] == ["Density: kg/m^3 -> t/mm^3, x 1e-12", "Young's modulus: Pa -> MPa, x 1e-06",
+                                    "Cost: USD/kg -> USD/t, x 1000", "Limits written for the old numbers:",
+                                    "Mass <= 4e+07 -> 4e-05 t", "Cost <= 7.5e+08 -> 0.75 USD"], seen[-1]
+            p, folder = w.project, os.path.join(d, "A", "materials")
+            assert p.database == "materials/CustomAlloys20_3D.xlsx" and sorted(os.listdir(folder)) == \
+                ["CustomAlloys20_3D.nt", "CustomAlloys20_3D.xlsx"]
+            _, _, units, new = database_table(os.path.join(folder, "CustomAlloys20_3D.xlsx"))
+            stored = np.vectorize(lambda v: float("%.16g" % v))(old * factors)   # as an Excel file keeps them
+            assert units == ["t/mm^3", "MPa", "USD/t", "MPa"] and np.array_equal(new, stored)
+            assert [c["bound"] for c in p.formulation["constraints"]] == expected and (expected[0] == 4e7 / 1e12) == tick
+            assert not any("the database gives" in x for x in p.warnings()) and m.convert_button.isHidden()
+            assert open(os.path.join(folder, "CustomAlloys20_3D.nt"), "rb").read() == before[".nt"]
+            assert not w.is_dirty() and Project.load(w.path).formulation == p.formulation
+            assert lines[0].startswith("Database converted to mmKS units") and \
+                any(line.startswith("Limits converted: Mass <= 4e+07 -> 4e-05 t") for line in lines) == tick
+            again = [r["percent_of_range"] for r in network_reconstruction(os.path.join(folder, "CustomAlloys20_3D.xlsx"),
+                                                                            os.path.join(folder, "CustomAlloys20_3D.nt"))]
+            assert np.allclose(again, errors, atol=0.05), (max(again), max(errors))
+            w.apply_panel(m)                                            # OK of the panel: nothing more changes
+            assert p.database == "materials/CustomAlloys20_3D.xlsx" and not w.is_dirty()
+    assert {ext: open(shipped + ext, "rb").read() for ext in (".xlsx", ".nt")} == before
+
+
 def test_examples_open_as_templates():
     """An example opens as a template: Save asks for a project folder of one's own and copies everything
     into it, and the example's file never changes. In a project folder, a database chosen (a shipped one

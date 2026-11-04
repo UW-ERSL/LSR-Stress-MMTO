@@ -163,6 +163,8 @@ The buttons next to the list:
 
 New database and Import save into the project's folder, so the project must be saved first; LSR MMTO says so if it is not.
 
+When some columns of the database are in other units than the project's (section 4), a button **Convert to mmKS units...** (with the project's unit system) shows under the report. It opens a window that lists each of those columns with what its numbers are multiplied by, for example *Young's modulus: Pa -> MPa, x 1e-06*, and the limits of the formulation written for the old numbers with what they become, for example *Mass <= 4e+07 -> 4e-05 t*. **Convert these limits too** is ticked, so each limit keeps its meaning. **OK** writes the converted database as the project's own copy, in its materials folder (one that comes with LSR MMTO is never changed), keeps its trained network, which still fits, converts the ticked limits, saves the project and says in the messages what was converted.
+
 ### 6.2 Values and Network error
 
 Above the table, two buttons choose what the table shows:
@@ -618,7 +620,7 @@ These appear in the messages as **Error:** lines, and under *Cannot start:* in t
 
 ### 14.3 Units
 
-- Warning **the database gives Young's modulus in Pa, but the project's units (mmKS) expect MPa: its numbers are 10^6 times what they should be. Displacement and compliance come out 10^6 times too small; stress and failure factor are unaffected.** The database and the project use different unit systems. The message says what it changes, sometimes including what a constraint's limit then really means. Either change the project's units (section 4) to match the database, or make a database in the project's units.
+- Warning **the database gives Young's modulus in Pa, but the project's units (mmKS) expect MPa: its numbers are 10^6 times what they should be. Displacement and compliance come out 10^6 times too small; stress and failure factor are unaffected.** The database and the project use different unit systems. The message says what it changes, sometimes including what a constraint's limit then really means. Either change the project's units (section 4) to match the database, or convert the database into the project's units with **Convert to ... units...** in Materials (section 6.1).
 
 ### 14.4 Supports and loads
 
