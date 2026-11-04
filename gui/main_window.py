@@ -175,6 +175,21 @@ class ProblemList(QtWidgets.QTextEdit):
         return False
 
 
+class EllipsisLabel(QtWidgets.QLabel):
+    """A one-line label that, given less room than its text needs, shows its start and an ellipsis instead of
+    making the window wider (the progress beside Run)."""
+
+    def minimumSizeHint(self):
+        return QtCore.QSize(0, super().minimumSizeHint().height())
+
+    def paintEvent(self, event):
+        painter = QtGui.QPainter(self)
+        painter.setPen(self.palette().color(QtGui.QPalette.WindowText))
+        room = self.contentsRect()
+        painter.drawText(room, int(self.alignment()),
+                         self.fontMetrics().elidedText(self.text(), QtCore.Qt.ElideRight, room.width()))
+
+
 class Banner(QtWidgets.QLabel):
     """A short note at the top of the 3D view that fades by itself: an export under way, then its result
     with a link to the folder."""
@@ -966,7 +981,8 @@ class MMTOWindow(MainWindow):
         """One row along the top: LSR MMTO, the File and Help menus, the Part / Design switch, the light /
         dark switch of the 3D view, Export STL, and Run (Stop while a run goes) with its progress beside
         it. It is a tool bar: a tool bar lays itself out again when its contents change size, so a longer
-        progress text never squeezes the rest. The menu bar itself is hidden; its shortcuts stay."""
+        progress text never squeezes the rest; one longer than the room left ends in an ellipsis. The menu
+        bar itself is hidden; its shortcuts stay."""
         row_box = QtWidgets.QWidget()
         row_box.setObjectName("topButtons")
         row = QtWidgets.QHBoxLayout(row_box)
@@ -1044,7 +1060,7 @@ class MMTOWindow(MainWindow):
         self.run_button = button("Run", "run_white", "runButton")
         self.run_button.clicked.connect(self.run_or_stop)
         row.addWidget(self.run_button)
-        self.progress_text = QtWidgets.QLabel("")
+        self.progress_text = EllipsisLabel("")
         self.progress_text.setObjectName("progressText")
         row.addWidget(self.progress_text)
         self.top_row = QtWidgets.QToolBar()

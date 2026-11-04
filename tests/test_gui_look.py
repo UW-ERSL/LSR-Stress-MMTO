@@ -208,11 +208,13 @@ def styled():
 
 def test_top_row_and_bottom_buttons():
     """One top row: LSR MMTO, File and Help (their menus and shortcuts), Part / Design, the light / dark
-    switch, Export STL, Run; nothing in it cut short at 1225 px wide, even with a long progress text.
+    switch, Export STL, Run; in a window held at 1225 px the row fits and nothing in it is cut short; a
+    progress text longer than the room left ends in an ellipsis (a shorter one shows whole).
     Snap, Measure and Ruler at the bottom drive the window's measuring and scales."""
     styled()
     try:
         w = window()
+        w.setFixedWidth(1225)
         assert not w.menuBar().isVisible()
         menus = {b.text(): [a.text() for a in b.menu().actions()] for b in w.findChildren(QtWidgets.QToolButton)
                  if b.objectName() == "menuButton"}
@@ -223,14 +225,23 @@ def test_top_row_and_bottom_buttons():
         assert not w.design_button.isEnabled() and w.part_button.isChecked()      # no design yet
         w.update_top_row()
         assert not w.export_button.isEnabled() and w.shown_run() is None          # nothing to export
-        for text in ("Starting: building the mesh and the material network...",
-                     "Iteration 6 / 40 \u00b7 0:09 so far \u00b7 about 0:46 left"):
-            w.progress_text.setText(text)
-            settle(0.1)
+        p = w.progress_text
+        w._top_timer.stop()                                   # it would clear the text: no run goes
+        for text, whole in (("Starting: building the mesh and the material network...", False),
+                            ("Iteration 6 / 40 \u00b7 0:09 so far \u00b7 about 0:46 left", True)):
+            p.setText(text)
             row = w.top_row.widgetForAction(w.top_row.actions()[0])
+            room = w.top_row.layout().contentsRect().width()
+            end = time.time() + 5                               # the tool bar takes its new layout (animated)
+            while row.width() != min(row.sizeHint().width(), room) and time.time() < end:
+                APP.processEvents()
+            assert w.width() == 1225 and row.isVisible() and row.width() >= row.minimumSizeHint().width()
+            assert w.top_row.contentsRect().contains(row.geometry())
             cut = [x for x in row.findChildren((QtWidgets.QLabel, QtWidgets.QToolButton))
-                   if x.isVisible() and x.width() < x.sizeHint().width()]
+                   if x.isVisible() and x is not p and x.width() < x.sizeHint().width()]
             assert not cut, [(x.objectName(), x.text()) for x in cut]
+            shown = p.fontMetrics().elidedText(text, QtCore.Qt.ElideRight, p.contentsRect().width())
+            assert (shown == text) == whole and (whole or shown.startswith("Starting: building")), shown
         w.ruler_box.click()
         assert w.ruler_box.isChecked() and w._rulers
         w.measure.click()
