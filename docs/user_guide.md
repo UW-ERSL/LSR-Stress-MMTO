@@ -71,7 +71,7 @@ An **Error** stops a run from starting until it is put right. A **Warning** lets
 
 - On the left, the part's size, for example *Part: x 0 to 200 · y 0 to 200 · z 0 to 1 mm*. The (i) next to it gives the part's file, volume, size and material database.
 - In the middle, the point under the mouse on the part, and what Measure has measured.
-- **Snap**: rounds the point under the mouse, a copied point and Measure to a step (off, 0.1, 1, 5 or 10, in the project's length unit). With Snap: 1, a point at x 37.62 reads 38.
+- **Snap**: rounds the point under the mouse, a copied point and Measure to a step. The steps follow the part's size: a round number near a thousandth, a hundredth and a tenth of its largest extent, in the project's length unit (on a 200 mm part 0.2, 2 and 20 mm). With Snap: 2 mm, a point at x 37.62 reads 38.
 - **Measure**: click it, then click two points on the part to see the distance between them, and its x, y and z parts. A third click starts again. The line and its points are dark in the light 3D view and white in the dark one. Press Esc, or click Measure again, to stop.
 - **Ruler**: shows scales along the part, in the project's length unit. Click it again to hide them.
 

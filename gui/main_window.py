@@ -54,7 +54,6 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXAMPLES = os.path.join(REPO, "projects")   # the example projects: opened as templates, never changed
 OUTLINE_COLOUR = "#c400c4"                  # selection shapes: magenta, unlike the part, supports, loads
 MEASURE_COLOURS = ("#222222", "#ffffff")    # Measure's line and points: in the light view, in the dark view
-SNAPS = [("Snap: off", 0.0), ("Snap: 0.1", 0.1), ("Snap: 1", 1.0), ("Snap: 5", 5.0), ("Snap: 10", 10.0)]
 PROJECT_FILTER = "LSR MMTO project (*.mmto)"
 SCRIPT_FILTER = "Python script (*.py)"
 ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
@@ -315,6 +314,19 @@ class StartPage(QtWidgets.QFrame):
         if obj is self.parentWidget() and event.type() == QtCore.QEvent.Resize:
             self.setGeometry(obj.rect().adjusted(1, 1, -1, -1))
         return False
+
+
+def round_step(value):
+    """The round number (1, 2 or 5 times a power of ten) nearest to value at or below it: 0.029 gives 0.02."""
+    k = int(np.floor(np.log10(value)))
+    lead = value / 10.0 ** k * (1 + 1e-9)                       # 1 <= lead < 10, a hair over for 0.3 / 0.1
+    return float(f"{max(d for d in (1, 2, 5) if d <= lead)}e{k}")
+
+
+def snap_steps(size):
+    """The Snap steps for a part of this size (its largest extent): a round number at or below a thousandth,
+    a hundredth and a tenth of it; none with no size."""
+    return [round_step(size / n) for n in (1000, 100, 10)] if size > 0 else []
 
 
 def point_text(p):
@@ -1136,8 +1148,8 @@ class MMTOWindow(MainWindow):
         self.coords.setStyleSheet("color: #666666;")
         self.coords.setMinimumWidth(240)
         self.snap = QtWidgets.QComboBox()
-        for text, step in SNAPS:
-            self.snap.addItem(icon("magnet"), text, step)
+        self.snap.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToContents)   # its steps follow the part
+        self.update_snaps()
         self.snap.setToolTip("Round the point under the mouse, a copied point and Measure to this step, in the "
                              "project's length unit")
         self.measure = QtWidgets.QToolButton()
@@ -1188,12 +1200,25 @@ class MMTOWindow(MainWindow):
 
     @staticmethod
     def length_format(size):
-        """printf format for lengths on a part of this size: 200 mm as 200, 0.0285 m as 0.029."""
-        if size >= 20:
-            return "%.0f"
-        if size >= 1:
-            return "%.1f"
-        return f"%.{int(np.ceil(-np.log10(size))) + 1}f" if size > 0 else "%g"
+        """printf format for lengths on a part of this size, with the size to 3 significant digits: on a
+        200 mm part 200 and 16, on a 0.029 m part 0.0290 and 0.0160."""
+        if size <= 0:
+            return "%g"
+        return f"%.{max(0, 2 - int(np.floor(np.log10(size * (1 + 1e-9)))))}f"
+
+    def update_snaps(self):
+        """The Snap steps for the part shown (snap_steps), with the length unit: Snap: 0.2 mm. The step
+        chosen stays the same in the list (the finest stays the finest)."""
+        b = self.part_bounds() if hasattr(self, "project") else None
+        steps = snap_steps(float(np.max(b[1] - b[0]))) if b is not None else []
+        unit = self.length_unit() if hasattr(self, "project") else ""
+        chosen = self.snap.currentIndex()
+        self.snap.clear()
+        self.snap.addItem(icon("magnet"), "Snap: off", 0.0)
+        for step in steps:
+            self.snap.addItem(icon("magnet"), f"Snap: {np.format_float_positional(step, trim='-')} {unit}".rstrip(),
+                              step)
+        self.snap.setCurrentIndex(min(max(chosen, 0), self.snap.count() - 1))
 
     def part_extent_text(self):
         """The part's extent in words, for the region form: x 0 to 200, y 0 to 200, z 0 to 1 mm."""
@@ -1248,6 +1273,7 @@ class MMTOWindow(MainWindow):
         self.extent.setText(APP if b is None else
                             "Part: " + self.part_extent_text()[len("The part spans "):-1].replace(", ", " \u00b7 "))
         self.update_part_facts()
+        self.update_snaps()
         if b is not None and self.ruler_box.isChecked():
             lo, hi = b
             size = float(np.max(hi - lo))

@@ -1160,7 +1160,40 @@ def test_scale():
         assert w._rulers == [] and not [n for n in w.plotter.actors if str(n).startswith("mmto_origin")]
         r = SP.RegionDialog(w.open_supports_and_loads_panel(), w.project)
         assert any(label.text() == w.part_extent_text() for label in r.findChildren(QtWidgets.QLabel))
-    assert G.MMTOWindow.length_format(200) == "%.0f" and G.MMTOWindow.length_format(0.0285) % 0.0164 == "0.016"
+    assert G.MMTOWindow.length_format(200) == "%.0f" and G.MMTOWindow.length_format(0.029) % 0.016 == "0.0160"
+    assert G.MMTOWindow.length_format(20) % 16 == "16.0" and G.MMTOWindow.length_format(0.1) % 0.05 == "0.050"
+
+
+def test_snap_steps_follow_the_part():
+    """Snap offers off and three round steps (1, 2 or 5 times a power of ten, at or below) of a thousandth,
+    a hundredth and a tenth of the part's largest extent, with the length unit; they change with the part,
+    and a point snaps to the step chosen."""
+    import pyvista as pv
+    assert G.snap_steps(0.029) == [0.00002, 0.0002, 0.002] and G.snap_steps(200) == [0.2, 2.0, 20.0]
+    assert G.snap_steps(0.3) == [0.0002, 0.002, 0.02] and G.snap_steps(50) == [0.05, 0.5, 5.0]
+    assert G.snap_steps(0) == []
+    with scratch() as d:
+        w = G.MMTOWindow()
+        w.resize(1500, 900)
+        w.show()                                                              # shown before a part, as it opens
+        assert w.open_project(shutil.copy(os.path.join(PROJECTS, "L-bracket.mmto"), d))
+        texts = [w.snap.itemText(i) for i in range(w.snap.count())]
+        assert texts == ["Snap: off", "Snap: 0.2 mm", "Snap: 2 mm", "Snap: 20 mm"]
+        w.snap.setCurrentIndex(1)
+        assert w.snap.currentData() == 0.2 and np.allclose(w.snapped([119.76, 80.02, 1.0]), [119.8, 80.0, 1.0])
+        small = os.path.join(d, "small.stl")
+        pv.Box(bounds=(0, 0.029, 0, 0.01, 0, 0.001)).triangulate().save(small)
+        with answers(Box.Yes):
+            assert w.replace_part(small)
+        texts = [w.snap.itemText(i) for i in range(w.snap.count())]
+        assert texts == ["Snap: off", "Snap: 0.00002 mm", "Snap: 0.0002 mm", "Snap: 0.002 mm"]
+        assert w.snap.currentIndex() == 1                                     # still the finest
+        for _ in range(5):
+            APP.processEvents()
+        need = w.snap.fontMetrics().horizontalAdvance(w.snap.currentText()) + w.snap.iconSize().width() + 30
+        assert w.snap.width() >= need                                         # the longer step not cut short
+        assert np.allclose(w.snapped([0.01637, 0.0, 0.0]), [0.01636, 0.0, 0.0])
+        assert w.extent.text() == "Part: x 0.0000 to 0.0290 \u00b7 y 0.0000 to 0.0100 \u00b7 z 0.0000 to 0.0010 mm"
 
 
 def test_region_preview_clears():
@@ -1686,8 +1719,8 @@ def test_snap_copy_outline_colour_new_database():
     with scratch() as d:
         w = opened("L-bracket", d)
         w.show()
-        w.snap.setCurrentIndex([t for t, _ in G.SNAPS].index("Snap: 1"))
-        assert list(w.snapped([119.76, 80.02, 1.0])) == [120.0, 80.0, 1.0]
+        w.snap.setCurrentIndex(w.snap.findText("Snap: 2 mm"))
+        assert list(w.snapped([119.76, 80.02, 1.0])) == [120.0, 80.0, 0.0]
         w.measure.setChecked(True)
         w.on_left_button_press([0.2, 0.3, 1.0], Picker())
         w.on_left_button_press([29.7, 40.4, 1.0], Picker())
@@ -1697,8 +1730,8 @@ def test_snap_copy_outline_colour_new_database():
         panel = w.open_supports_and_loads_panel()
         panel.add_region()                                                    # a form open: a click copies
         w.on_left_button_press([119.76, 80.02, 1.0], Picker())
-        assert APP.clipboard().text() == "120, 80, 1"
-        assert panel.stack.currentWidget().copied.text() == "Copied 120, 80, 1: paste it with Ctrl+V"
+        assert APP.clipboard().text() == "120, 80, 0"
+        assert panel.stack.currentWidget().copied.text() == "Copied 120, 80, 0: paste it with Ctrl+V"
         panel.stack.currentWidget().findChild(SP.RegionDialog).reject()
 
         w.draw_outline("mmto_outline", S.box([0, 0, 0], [10, 10, 1]), SP.LOAD_COLOUR)
