@@ -5,6 +5,7 @@ A run's design as smooth STL files, for printing or for another program.
 
     export(run, mesh, folder)    writes design.stl and design_<material>.stl into folder,
                                  and returns a Report of the checks
+    exported(run, folder)        the files an earlier export wrote there, or None
 
 design.stl, the whole part: PyTO-AD's STL recovery (pyto/io/topopt_stl_recovery.py), as its
 GUI's Postprocess does. The density is smoothed by a Gaussian of SIGMA elements, the void
@@ -257,6 +258,34 @@ def safe_name(label):
     return re.sub(r"[^A-Za-z0-9._-]+", "_", str(label)).strip("_") or "material"
 
 
+def piece_stem(name, i, used):
+    """The file name (no .stl) of the piece of the material named name, label i of the grid: design_<name>,
+    or design_<name>_<i> when another piece took that name (two names that clean to the same file; Windows
+    ignores case). used: the stems taken so far, in lower case; this one is added."""
+    base = f"design_{safe_name(name)}"
+    stem = base if base.lower() not in used else f"{base}_{i}"
+    used.add(stem.lower())
+    return stem
+
+
+def exported(run, folder):
+    """The STL files an export of run wrote into folder: (design.stl, [(material index, path)]) for the
+    files there, or None when folder holds no design.stl. Each material is matched to its file by the
+    names export gives (piece_stem), in the order of the materials."""
+    whole = os.path.join(folder, "design.stl")
+    if not os.path.isfile(whole):
+        return None
+    files = {os.path.splitext(f)[0].lower(): os.path.join(folder, f) for f in os.listdir(folder)
+             if f.lower().endswith(".stl") and f.lower().startswith("design_")}
+    pieces = []
+    for m, name in enumerate(run.material_labels):
+        base = f"design_{safe_name(name)}".lower()
+        stem = next((s for s in (base, f"{base}_{m + 1}") if s in files), None)
+        if stem is not None:
+            pieces.append((m, files.pop(stem)))
+    return whole, pieces
+
+
 def export(run, mesh, folder, materials=True):
     """design.stl (and design_<material>.stl) into folder; returns the Report."""
     report = Report()
@@ -282,10 +311,7 @@ def export(run, mesh, folder, materials=True):
         m = i - 1
         name = run.material_labels[m] if m < len(run.material_labels) else f"material {m + 1}"
         t = piece(pts, quads, bl, behind, i)
-        base = f"design_{safe_name(name)}"
-        stem = base if base.lower() not in used else f"{base}_{i}"     # two names that clean to the same file
-        used.add(stem.lower())                                          # (Windows ignores case)
-        path = os.path.join(folder, stem + ".stl")
+        path = os.path.join(folder, piece_stem(name, i, used) + ".stl")
         t.export(path)
         report.pieces.append(Piece(name, path, bool(t.is_watertight), float(t.volume),
                                    float(np.count_nonzero(solid & (mat == m))) * h3))

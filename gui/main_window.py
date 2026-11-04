@@ -1025,7 +1025,7 @@ class MMTOWindow(MainWindow):
         results = getattr(self, "results_window", None)
         if results is not None:
             try:
-                results.show_exported(folder, report)
+                results.exported(folder)
             except RuntimeError:                                    # its strip was closed
                 pass
 

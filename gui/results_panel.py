@@ -9,7 +9,8 @@ convergence overlaid, their latent spaces side by side and their summaries in co
 designs side by side on the 3D view, each on its own mesh.
 
 Each run folder holds what showing it needs: the run's record and a copy of the project that
-ran. Nothing here changes the project open in the window.
+ran, and the STL files once Export STL has written them (Show: Smooth (exported) draws those). Nothing
+here changes the project open in the window.
 """
 import os
 
@@ -21,7 +22,8 @@ from .run_panel import ask_delete_run, open_folder, plot_canvas, result_tabs, su
 
 RESULTS_HELP = ("Each run of the project is listed here, newest first. Click one to see its design on the part "
                 "and its convergence, latent space and summary in the tabs. Show chooses what the part shows: "
-                "each element's material, its density, its stress, or only which elements are solid.\n\n"
+                "each element's material, its density, its stress, only which elements are solid, or the smooth "
+                "STL files Export STL wrote for the run.\n\n"
                 "Tick two runs and press Compare to see them side by side. Open other results... shows a run "
                 "from anywhere, another project's too; it changes nothing in your project.")
 OTHER = "Other: "
@@ -33,7 +35,10 @@ STL_HELP = ("Export STL, at the top, writes the design shown as two kinds of smo
             "Smoothing removes the staircase of the elements, but it cannot add detail finer than the mesh: "
             "features one element across are dropped and square corners round off. For a part to print, run on a "
             "finer mesh. The check written after each export says whether every file is closed and how its "
-            "volume compares with the design.")
+            "volume compares with the design.\n\n"
+            "Show > Smooth (exported) draws the files of a run that has been exported, each piece in its "
+            "material's colour. Pull the material pieces apart sets them side by side, so each can be seen alone.")
+SMOOTH = "Smooth (exported)"                             # the Show choice of a run's exported STL files
 RUN_COLOURS = ("#2b3a67", "#b2452e")                     # the left run, the right run
 
 
@@ -211,6 +216,10 @@ class ResultsWindow(QtWidgets.QDialog):
         self.field.addItems(draw_design.views())
         self.field.currentTextChanged.connect(lambda _: self.redraw())
         show.addWidget(self.field)
+        self.apart = QtWidgets.QCheckBox("Pull the material pieces apart")
+        self.apart.setVisible(False)
+        self.apart.toggled.connect(lambda _: self.redraw())
+        show.addWidget(self.apart)
         show.addStretch()
         layout.addLayout(show)
         self.status = QtWidgets.QLabel("")
@@ -231,11 +240,6 @@ class ResultsWindow(QtWidgets.QDialog):
         after.addStretch()
         after.addWidget(Info(STL_HELP))
         layout.addLayout(after)
-        self.apart = QtWidgets.QCheckBox("Pull the material pieces apart")
-        self.apart.setVisible(False)
-        self.apart.toggled.connect(lambda _: self._draw_smooth())
-        layout.addWidget(self.apart)
-        self.smooth = None                                          # (folder, report) last exported
         self.refresh()
 
     # ------------------------------------------------------------------ the list
@@ -336,8 +340,9 @@ class ResultsWindow(QtWidgets.QDialog):
         if item is None:
             return
         folder = item.data(QtCore.Qt.UserRole)
-        self.apart.setVisible(False)
+        self.apart.blockSignals(True)
         self.apart.setChecked(False)
+        self.apart.blockSignals(False)
         self.comparing = None                                      # a run clicked: the comparison ends
         self.end_compare()
         self.current = folder
@@ -353,15 +358,26 @@ class ResultsWindow(QtWidgets.QDialog):
         self.redraw()
 
     def _set_views(self, *runs):
-        """The Show list for the runs shown: the views their own physics saved; the choice kept when it is
-        still there, Material otherwise."""
-        items = draw_design.views(*runs)
-        if [self.field.itemText(i) for i in range(self.field.count())] == list(items):
-            return
+        """The Show list for the runs shown: the views their own physics saved, and for one run Smooth
+        (exported), greyed while its folder holds no exported STL; the choice kept when it can still be
+        made, Material otherwise."""
+        from lsr_mmto.results import stl_export
+        items = list(draw_design.views(*runs)) + ([SMOOTH] if len(runs) == 1 else [])
         choice = self.field.currentText()
         self.field.blockSignals(True)
-        self.field.clear()
-        self.field.addItems(items)
+        if [self.field.itemText(i) for i in range(self.field.count())] != items:
+            self.field.clear()
+            self.field.addItems(items)
+            self.field.ensurePolished()                             # the style sheet's font, not the default
+            longest = max(self.field.fontMetrics().horizontalAdvance(t) for t in items)
+            self.field.setMinimumWidth(longest + 60)                # each choice read whole, past the arrow
+        if len(runs) == 1:
+            smooth = self.field.model().item(items.index(SMOOTH))
+            done = self.current is not None and stl_export.exported(runs[0], self.current) is not None
+            smooth.setEnabled(done)
+            smooth.setToolTip("" if done else "Export STL first")
+            if choice == SMOOTH and not done:
+                choice = "Material"
         self.field.setCurrentText(choice if choice in items else "Material")
         self.field.blockSignals(False)
 
@@ -376,31 +392,37 @@ class ResultsWindow(QtWidgets.QDialog):
             return
         run, mesh = loaded
         field = self.field.currentText()
+        self.apart.setVisible(field == SMOOTH)
         mine = (self.current, run, mesh) if self.current not in self.others else None
+        if field == SMOOTH:
+            return self._draw_smooth(run, mine)
         self.window.set_design(lambda w: draw_design.record(w, run, mesh, field), run=mine)
 
     # ------------------------------------------------------------------ STL
-    def show_exported(self, folder, report):
-        """Export STL (top row) wrote the run's smooth pieces: they are drawn on the part when the run is the
-        one shown here, and can be pulled apart."""
-        self.smooth = (folder, report)
-        if folder == self.current:
-            self.apart.setVisible(bool(report.pieces))
-            self._draw_smooth()
-
-    def _draw_smooth(self):
-        """The exported pieces on the part, each in its material's colour (pulled apart when ticked)."""
-        if self.smooth is None or self.smooth[0] != self.current:
+    def exported(self, folder):
+        """Export STL (top row) wrote the run's STL files into folder: when it is the run shown here, Show
+        turns to Smooth (exported) and they are drawn."""
+        if self.current is None or os.path.normcase(os.path.abspath(folder)) != \
+                os.path.normcase(os.path.abspath(self.current)) or self.comparing:
             return
-        folder, report = self.smooth
-        run = self.records[folder]
-        colours = {lab: run.material_colors[i] for i, lab in enumerate(run.material_labels)}
-        pieces = [(p.path, colours.get(p.label, draw_design.SOLID_COLOUR)) for p in report.pieces]
-        if not pieces and report.whole_path:
-            pieces = [(report.whole_path, draw_design.SOLID_COLOUR)]
+        self._set_views(self.record(self.current))
+        if self.field.currentText() == SMOOTH:
+            self.redraw()
+        else:
+            self.field.setCurrentText(SMOOTH)                       # draws them
+
+    def _draw_smooth(self, run, mine):
+        """The STL files in the run's folder (stl_export.exported), each piece in its material's colour, with
+        its label in the legend; pulled apart when ticked."""
+        from lsr_mmto.results import stl_export
+        found = stl_export.exported(run, self.current)
+        if found is None:
+            return
+        whole, files = found
+        pieces = [(path, run.material_colors[m], run.material_labels[m]) for m, path in files]
+        if not pieces:
+            pieces = [(whole, draw_design.SOLID_COLOUR, "")]
         apart = self.apart.isChecked()
-        loaded = self._loaded(folder)
-        mine = (folder, *loaded) if loaded is not None and folder not in self.others else None
         self.window.set_design(lambda w: draw_design.smooth(w, pieces, apart), wide=apart, run=mine)
 
     def delete_run(self):

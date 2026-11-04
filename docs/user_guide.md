@@ -526,6 +526,7 @@ How long a run takes depends mostly on Mesh dofs and Max iterations: a few minut
 - **Density**: how solid each element is, from empty to solid.
 - **Stress**: the stress in each element.
 - **Solid**: only which elements are solid, in one colour.
+- **Smooth (exported)**: the STL files of the run, once it has been exported (section 12). Greyed until then.
 
 **Open folder** opens the run's folder. **Delete this run** removes it, after asking.
 
@@ -561,7 +562,7 @@ The files are smoothed, so they do not show the staircase of the elements. Smoot
 
 While it works, a note at the top of the 3D view says it is exporting. When it is done, the note says how many files were saved, with a link, **Open folder**. The messages list every file with its volume next to the design's, and say whether each file is closed. *NOT closed* after a file means it has holes, which some printers and CAD programs refuse; a finer mesh usually helps.
 
-After an export, Results shows the smooth pieces on the part, each in its material's colour. Tick **Pull the material pieces apart** to see each piece on its own.
+After an export, Results shows the smooth pieces on the part, each in its material's colour: **Show** turns to **Smooth (exported)**. It is there for every run whose folder holds the exported files, also later, and greyed for a run not exported yet. Beside it, tick **Pull the material pieces apart** to see each piece on its own.
 
 ## 13. Display options
 

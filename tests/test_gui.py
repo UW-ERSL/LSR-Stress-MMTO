@@ -1504,8 +1504,9 @@ def test_results_compare_delete():
         assert [res.tabs.tabText(i) for i in range(res.tabs.count())] == ["Convergence", "Latent space",
                                                                           "Summary"]
         shown = [res.field.itemText(i) for i in range(res.field.count())]
-        assert shown == ["Material", "Density", "Stress", "Solid"], shown     # the views a structural run saved
-        for field in shown:
+        assert shown == ["Material", "Density", "Stress", "Solid", "Smooth (exported)"], shown   # the views a
+        assert not res.field.model().item(4).isEnabled()                      # structural run saved; not exported
+        for field in shown[:-1]:
             res.field.setCurrentText(field)
             assert "result_design" in w.plotter.actors and w.view == "design", field
             assert bool(w.design_bars) == (field in ("Density", "Stress")), (field, w.design_bars)
@@ -1587,8 +1588,13 @@ def test_stop_while_training():
 
 def test_export_stl():
     """Export STL of the design shown: design.stl and a file per material used, in the run's folder, all closed;
-    the pieces add up to their whole; they are drawn on the part, and can be pulled apart."""
+    the pieces add up to their whole. Results' Show list has Smooth (exported), greyed with a tip until the
+    run's folder holds the files; after the export it is chosen and the pieces are drawn, and can be pulled
+    apart. What the folder holds decides: a Results panel opened later finds the files, and finds none once
+    they are gone."""
     import trimesh
+    from gui import results_panel
+    from gui.results_panel import SMOOTH
     with scratch() as d:
         w = opened("L-bracket", d)
         w.show()
@@ -1600,10 +1606,12 @@ def test_export_stl():
         res = w.open_results_panel(r.save_dir)
         w.update_top_row()
         assert res.current == r.save_dir and w.shown_run()[0] == r.save_dir and w.export_button.isEnabled()
+        smooth = res.field.model().item(res.field.findText(SMOOTH))
+        assert not smooth.isEnabled() and smooth.toolTip() == "Export STL first" and not res.apart.isVisible()
         assert w.export_stl()                                                 # Export STL, in the top row
         assert _wait(lambda: not w.exporting, 300)
         assert "STL files saved" in w.banner.text() and "Open folder" in w.banner.text()
-        folder, report = res.smooth
+        folder, report = w.exported_last
         assert folder == r.save_dir and not report.whole_error, report.whole_error
         assert os.path.isfile(os.path.join(folder, "design.stl")) and report.whole_closed
         assert report.pieces and all(p.closed and os.path.isfile(p.path) for p in report.pieces), report.lines()
@@ -1612,9 +1620,24 @@ def test_export_stl():
         for p in report.pieces:
             t = trimesh.load(p.path, force="mesh")
             assert t.is_watertight and t.volume > 0, p.label
+        assert res.field.currentText() == SMOOTH and smooth.isEnabled() and res.apart.isVisible()
         assert any(str(n).startswith("result_smooth") for n in w.plotter.actors)
         res.apart.setChecked(True)
         assert w.view == "design" and any(str(n).startswith("result_smooth") for n in w.plotter.actors)
+        assert w.shown_run()[0] == r.save_dir                                 # Export STL works on this view too
+        res.close()
+        res = results_panel.ResultsWindow(w)                                  # a new panel: the folder decides
+        res.select(r.save_dir)
+        smooth = res.field.model().item(res.field.findText(SMOOTH))
+        assert smooth.isEnabled() and res.field.currentText() == "Material"
+        res.field.setCurrentText(SMOOTH)
+        assert any(str(n).startswith("result_smooth") for n in w.plotter.actors)
+        res.field.setCurrentText("Material")
+        for f in os.listdir(folder):
+            if f.lower().endswith(".stl"):
+                os.remove(os.path.join(folder, f))
+        res.select(r.save_dir)
+        assert not res.field.model().item(res.field.findText(SMOOTH)).isEnabled()
 
 
 def test_constraints_named_in_the_plots():

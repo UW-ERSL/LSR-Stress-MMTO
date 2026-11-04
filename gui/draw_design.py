@@ -167,10 +167,10 @@ def record(window, run, mesh, field="Material", shift=0.0, clim=None, name="desi
 
 
 def smooth(window, pieces, apart=False):
-    """STL files on the part, each in its colour: [(path, colour)]. apart moves each piece away from the
+    """STL files on the part, each in its colour: [(path, colour, label)]. apart moves each piece away from the
     middle by a quarter of its distance from it, so each can be seen alone."""
     import pyvista as pv
-    meshes = [(pv.read(path), colour) for path, colour in pieces]
+    meshes = [(pv.read(path), colour) for path, colour, _ in pieces]
     middle = np.mean([m.center for m, _ in meshes], axis=0) if meshes else np.zeros(3)
     for k, (m, colour) in enumerate(meshes):
         if apart:
