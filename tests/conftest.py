@@ -5,8 +5,8 @@ No test waits for a click. Off-screen, a message box or a dialog that opens duri
 wait for an answer that never comes, and the whole run would hang. Here every message box and dialog
 answers at once (Cancel, or OK where that is its only button), and a test that met one it did not
 ask for fails at its end, naming the dialog's title and text. A test that means to answer a dialog
-says so, as test_gui.answers() does. The app's settings (the start page's Recent list) go to a folder of
-the test run's own.
+says so, as test_gui.answers() does. The app's settings (what a user's window keeps between sessions) go to
+a folder of the test run's own.
 """
 import tempfile
 
@@ -16,8 +16,7 @@ _unasked = []
 
 
 def _own_settings():
-    """The app's settings file (the start page's Recent list) in a folder of the test run's own, so tests
-    never change the user's."""
+    """The app's settings file in a folder of the test run's own, so tests never change the user's."""
     try:
         from PyQt5 import QtCore
     except ImportError:

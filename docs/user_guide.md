@@ -27,7 +27,7 @@ To try LSR MMTO before making a project of your own, open one of the examples: c
 
 ## 2. The window
 
-While no project is open, the 3D view shows the start page: **New project from an STL...** (the same as File > New), **Open a project...** (File > Open), four examples under **Try an example**, and under **Recent** the last five projects you opened or saved, each with its folder under its name. Click one to open it. Until a project is open, the buttons on the right, Run, Export STL and Part / Design are greyed.
+While no project is open, the 3D view shows the start page: **New project from an STL...** (the same as File > New), **Open a project...** (File > Open), and four examples under **Try an example**. Until a project is open, the buttons on the right, Run, Export STL and Part / Design are greyed.
 
 ### 2.1 The top row
 

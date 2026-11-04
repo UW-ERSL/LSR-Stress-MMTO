@@ -12,8 +12,8 @@ chosen from elsewhere is copied in. Every save also writes the project's setup s
 <name>_setup.py, again, so it always matches the project. The example projects in projects/ open as templates: Save
 asks for a folder of your own, so the examples never change.
 
-While no project is open, the 3D view holds the start page (StartPage): New, Open, the examples and the
-projects opened or saved last; the side buttons, Run, Export STL and Part / Design wait for a project.
+While no project is open, the 3D view holds the start page (StartPage): New, Open and the examples; the
+side buttons, Run, Export STL and Part / Design wait for a project.
 
 The 3D view shows either the part (the Setup view: supports, loads, previews) or a design (the
 Design view: a run's result, drawn by draw_design.py). Anything about the setup switches to the
@@ -77,7 +77,6 @@ PANELS = {"Materials": MaterialsPanel, "Formulation": FormulationPanel, "Setting
 NO_PROJECT = "Open or start a project first"            # the tip of what waits for a project
 START_EXAMPLES = (("L-bracket", "L-bracket.mmto"), ("U-bracket", "U-bracket.mmto"), ("Beam", "beam.mmto"),
                   ("Airplane bracket", "Airplane bracket.mmto"))        # the start page's examples, in projects/
-RECENT = 5                                               # projects listed under Recent on the start page
 
 
 def icon(name):
@@ -207,59 +206,15 @@ class Banner(QtWidgets.QLabel):
         self.fade.start()
 
 
-def recent_store():
-    """Where the projects opened or saved last are kept for the start page (a settings file of the user's)."""
-    return QtCore.QSettings(QtCore.QSettings.IniFormat, QtCore.QSettings.UserScope, APP, APP)
-
-
-def recent_projects():
-    """The projects opened or saved last, newest first, those no longer there left out."""
-    paths = recent_store().value("recent", []) or []
-    paths = [paths] if isinstance(paths, str) else list(paths)
-    return [p for p in paths if os.path.isfile(p)][:RECENT]
-
-
-def remember_project(path):
-    """path first in the start page's Recent list (an example is not listed: it has its own button)."""
-    if not path or is_example(path):
-        return
-    path = os.path.abspath(path)
-    kept = [p for p in recent_projects() if os.path.normcase(p) != os.path.normcase(path)]
-    recent_store().setValue("recent", [path] + kept[:RECENT - 1])
-
-
-class RecentRow(QtWidgets.QFrame):
-    """One recent project on the start page: its name, and its folder under it. A click opens it."""
-
-    def __init__(self, path, open_it):
-        super().__init__()
-        self.setObjectName("recent")
-        self.path, self.open_it = path, open_it
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(0, 9, 0, 9)
-        layout.setSpacing(2)
-        for text, name in ((os.path.splitext(os.path.basename(path))[0], "recentName"),
-                           (os.path.dirname(path), "recentPath")):
-            label = QtWidgets.QLabel(text)
-            label.setObjectName(name)
-            layout.addWidget(label)
-        self.setCursor(QtCore.Qt.PointingHandCursor)
-        self.setToolTip(path)
-
-    def mousePressEvent(self, event):
-        self.open_it(self.path)
-
-
 class StartPage(QtWidgets.QFrame):
-    """Over the empty 3D view while no project is open: New project, Open, the examples, and the projects
-    opened or saved last. It covers the view whatever its size."""
+    """Over the empty 3D view while no project is open: New project, Open and the examples. It covers the
+    view whatever its size."""
 
     WIDTH = 600                                              # one column, every edge on it
 
     def __init__(self, window):
         super().__init__(window.pv_frame)
         self.setObjectName("startPage")
-        self.window_ = window
         outer = QtWidgets.QVBoxLayout(self)
         outer.addStretch(2)
         row = QtWidgets.QHBoxLayout()
@@ -297,13 +252,6 @@ class StartPage(QtWidgets.QFrame):
             self.examples[name] = self._button(name, "example", lambda p=path: window.open_project(p))
             grid.addWidget(self.examples[name], k // 2, k % 2)
         col.addLayout(grid)
-        self.recent_box = QtWidgets.QWidget()
-        self.recent_rows = QtWidgets.QVBoxLayout(self.recent_box)
-        self.recent_rows.setContentsMargins(0, 36, 0, 0)
-        self.recent_rows.setSpacing(0)
-        self.recent_rows.addWidget(self._label("Recent", "h2"))
-        self.recent_rows.addSpacing(4)
-        col.addWidget(self.recent_box)
         window.pv_frame.installEventFilter(self)
         self.hide()
 
@@ -321,26 +269,8 @@ class StartPage(QtWidgets.QFrame):
         b.clicked.connect(lambda _=False: slot())
         return b
 
-    def recent(self):
-        """The paths of the Recent rows shown."""
-        return [self.recent_rows.itemAt(i).widget().path for i in range(self.recent_rows.count())
-                if isinstance(self.recent_rows.itemAt(i).widget(), RecentRow)]
-
-    def fill_recent(self):
-        """The Recent rows from recent_projects(); the section hidden when there are none."""
-        for i in reversed(range(self.recent_rows.count())):
-            row = self.recent_rows.itemAt(i).widget()
-            if isinstance(row, RecentRow):
-                self.recent_rows.removeWidget(row)
-                row.deleteLater()
-        paths = recent_projects()
-        for path in paths:
-            self.recent_rows.addWidget(RecentRow(path, self.window_.open_project))
-        self.recent_box.setVisible(bool(paths))
-
     def cover(self):
-        """Shown over the whole 3D view, its Recent list up to date."""
-        self.fill_recent()
+        """Shown over the whole 3D view."""
         self.setGeometry(self.parentWidget().rect().adjusted(1, 1, -1, -1))
         self.show()
         self.raise_()
@@ -1884,7 +1814,6 @@ class MMTOWindow(MainWindow):
             QtWidgets.QMessageBox.warning(self, "Save project", f"Not saved: {e}")
             return False
         self.path, self._saved = os.path.abspath(path), self._state()
-        remember_project(self.path)
         self.message_text.append(f"Saved {self.path}")
         try:
             write_setup_script(self.project)
@@ -1934,7 +1863,6 @@ class MMTOWindow(MainWindow):
             self.message_text.append(f"{len(filled)} settings missing from the file were set to their defaults; "
                                      f"Save writes them.")
         self._refresh_title()
-        remember_project(path)
         self._project_or_not()
 
     # ------------------------------------------------------------------ units
