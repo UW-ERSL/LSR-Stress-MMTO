@@ -1262,6 +1262,7 @@ def test_click_a_hole():
         radius, plus = r.inputs["radius"].text().split(" + ")
         assert abs(float(radius) - 8) < 0.08 and plus == "1h"              # within 1 %, and one element size
         assert [float(b.text()) for b in r.inputs["along"]] == [0.0, 10.0]
+        assert r.inputs["inner_radius"].text() == "0"
         assert "nodes on the run's mesh" in r.result.text() and "mmto_region" in w.plotter.actors
         bore = r.selection()
         assert bore.radius == r.inputs["radius"].text()                     # kept as typed: follows the mesh
@@ -1289,6 +1290,27 @@ def test_click_a_hole():
     point, got, radius, start, end = hole_from_wall(tube.cell_data["Normals"], corners)
     assert np.allclose(got, axis) and abs(radius - 3) < 0.03 and abs(end - start - 4) < 1e-6
     assert np.allclose(point + 2 * axis, [5, 6, 7])                         # the middle of the tube
+
+
+def test_empty_inner_radius_is_zero():
+    """An empty Inner radius is its default, 0 (a solid cylinder), on the form and the code line; an empty
+    Radius, which has no default, is still refused."""
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        panel = w.open_supports_and_loads_panel()
+        r = panel.add_region()
+        r.type.setCurrentText("Cylinder")
+        r.inputs["center"].setText("52, 114, 1")
+        r.inputs["radius"].setText("5")
+        r.inputs["inner_radius"].setText("")
+        bore = r.selection()
+        assert bore.inner_radius == 0 and not r.problems()
+        r.tabs.setCurrentIndex(1)
+        assert "inner_radius=0.0" in r.code.text()
+        r.tabs.setCurrentIndex(0)
+        r.inputs["radius"].setText("")
+        assert any("Radius: no value" in e for e in r.problems())
+        r.reject()
 
 
 def test_enter_previews():

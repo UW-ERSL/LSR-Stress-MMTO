@@ -277,6 +277,7 @@ def fill_from_hole(dialog, normals, corners):
     boxes["center"].setText(", ".join(_number_text(c) for c in centre))
     boxes["axis"].setCurrentText(letter or ", ".join(_number_text(c) for c in axis))
     boxes["radius"].setText(f"{_number_text(r)} + 1h")
+    boxes["inner_radius"].setText("0")
     ends = (start, end) if letter else (0.0, end - start)          # coordinates along x, y, z; else distances
     for box, value in zip(boxes["along"], ends):
         box.setText(_number_text(value))
@@ -618,6 +619,7 @@ class RegionDialog(QtWidgets.QDialog):
                 S.selection(a), S.selection(b))
         cls = self.types[kind]
         kwargs = {}
+        defaults = dict(type_fields(cls))
         for field, box in self.inputs.items():
             label = field_label(kind, field)
             if field == "limits":
@@ -662,6 +664,8 @@ class RegionDialog(QtWidgets.QDialog):
                 if how.optional:
                     kwargs[field] = None
                     continue
+                if defaults.get(field, inspect.Parameter.empty) is not inspect.Parameter.empty:
+                    continue                                                # empty: the field's default
                 raise ValueError(f"{label}: no value")
             kwargs[field] = self._value(label, text)
             if how.kind == "numbers" and isinstance(kwargs[field], int):        # one number: a list of one
