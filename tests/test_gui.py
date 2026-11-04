@@ -932,6 +932,57 @@ def test_region_preview_clears():
         assert not on_part()
 
 
+def test_enter_previews():
+    """Enter in the Selection form and in the support or load form checks what was typed and shows it on
+    the part; the window stays open, a mistake shows in its message line; only OK saves and closes."""
+    from PyQt5 import QtTest
+    enter = lambda box: QtTest.QTest.keyClick(box, QtCore.Qt.Key_Return)   # noqa: E731
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        w.show()
+        panel = w.open_supports_and_loads_panel()
+        r = panel.add_region()
+        ok = lambda dialog: next(b for b in dialog.findChildren(QtWidgets.QPushButton)   # noqa: E731
+                                 if b.text() == "OK")
+        assert not ok(r).isDefault()
+        r.type.setCurrentText("Cylinder")
+        r.inputs["center"].setText("52, 114, 1")
+        r.inputs["radius"].setText("5")
+        enter(r.inputs["radius"])
+        assert r.isVisible() and "nodes on the run's mesh" in r.result.text() and "mmto_region" in w.plotter.actors
+        r.inputs["axis"].setCurrentText("1, 1, 0")                            # an edit: the preview goes
+        assert "mmto_region" not in w.plotter.actors
+        enter(r.inputs["axis"].lineEdit())                                    # in an editable list too
+        assert r.isVisible() and "mmto_region" in w.plotter.actors
+        assert r.inputs["axis"].findText("1, 1, 0") < 0                       # Enter adds no choice
+        r.inputs["radius"].setText("five")
+        enter(r.inputs["radius"])
+        assert r.isVisible() and "#b00000" in r.result.text() and "'five'" in r.result.text()
+        assert "mmto_region" not in w.plotter.actors
+        r.inputs["radius"].setText("5")
+        r.name.setText("bore")
+        ok(r).click()                                                         # OK: saved and closed
+        assert "bore" in w.project.selections and panel.stack.count() == 1
+
+        b = panel.add_bc()
+        assert not ok(b).isDefault()
+        b.kind.setCurrentText("Force")
+        b.on.setCurrentText("bore")
+        b.inputs["total"][1][1].setText("-10/2")
+        enter(b.inputs["total"][1][1])
+        assert b.isVisible() and "nodes on the run's mesh" in b.result.text()
+        assert {"mmto_region", "mmto_arrow_region"} <= set(w.plotter.actors)  # the load, with its arrow
+        b.inputs["total"][1][0].setText("x")
+        enter(b.inputs["total"][1][0])
+        assert b.isVisible() and "Total force is not a number" in b.result.text()
+        b.inputs["total"][1][0].setText("0")
+        n = len(w.project.bcs)
+        ok(b).click()
+        assert len(w.project.bcs) == n + 1 and w.project.bcs[-1] == {"kind": "force", "on": "bore",
+                                                                     "total": [0.0, -5.0, 0.0]}
+        assert panel.stack.count() == 1 and "mmto_arrow_region" not in w.plotter.actors
+
+
 def test_pages():
     """Forms opened from Supports and loads are pages of its strip, one at a time: Enter by hand, then
     New selection over it; OK goes back one page each time. Combined selections follow their parts by name."""

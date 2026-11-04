@@ -218,7 +218,7 @@ Changes go into the project at once. Use File > Save to keep them.
 Click **Add** and choose one of:
 
 - **Click on the part...** opens the **Pick** window. You click faces on the part, choose what they are, and press **Apply**. This is the quickest way for a face you can see.
-- **Enter by hand...** opens a form. You choose the **Type**, choose the selection under **Where** (or make one there with **New selection...**), and fill in the values. Use this when a face is hard to click, when you need exact numbers, or when the place is not a face at all (a hole, a patch, a point).
+- **Enter by hand...** opens a form. You choose the **Type**, choose the selection under **Where** (or make one there with **New selection...**), and fill in the values. **Preview**, or Enter, checks the values and shows the selection on the part (with an arrow for a load), and the form stays open; **OK** keeps it. Use this when a face is hard to click, when you need exact numbers, or when the place is not a face at all (a hole, a patch, a point).
 
 Both end up in the same list, and you can change either one later by double-clicking it.
 
@@ -248,6 +248,8 @@ The Selection form has a **Name** (letters, digits and _, not starting with a di
 
 - **Preview** draws the selection on the part in orange, and says how many nodes it has on the mesh the run will use.
 - **Clear** removes that drawing again.
+
+Pressing Enter in the form does the same as **Preview**: it checks what you typed and shows the selection on the part, and the form stays open. A mistake shows in red under the form. Only **OK** keeps the selection and closes the form.
 
 While the form is open, rest the mouse on the part to read the coordinates under it. Click the part to copy that point; paste it into a field with Ctrl+V.
 

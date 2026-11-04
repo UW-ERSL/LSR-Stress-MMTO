@@ -205,6 +205,22 @@ def used_by(project, name):
     return out + (["keep solid"] if name in project.keep_solid_names else [])
 
 
+def enter_previews(buttons, preview):
+    """Enter in a form previews, it does not press OK: the Preview button is the default one, and no
+    button is pressed by Enter just because it has the focus."""
+    for button in buttons.buttons():
+        button.setAutoDefault(False)
+    preview.setDefault(True)
+
+
+def preview_on_enter(dialog, event):
+    """Enter or Return in the form: dialog.show_preview() and True; the window stays open."""
+    if event.key() in (QtCore.Qt.Key_Return, QtCore.Qt.Key_Enter):
+        dialog.show_preview()
+        return True
+    return False
+
+
 # ---------------------------------------------------------------------- a region
 class RegionDialog(QtWidgets.QDialog):
     """A region: its name, and its definition on a form or as a code line."""
@@ -269,6 +285,7 @@ class RegionDialog(QtWidgets.QDialog):
         layout.addWidget(self.result)
         buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         show = buttons.addButton("Preview", QtWidgets.QDialogButtonBox.ActionRole)
+        show.setToolTip("Check what you typed and show it on the part (Enter)")
         show.clicked.connect(self.show_preview)
         clear = buttons.addButton("Clear", QtWidgets.QDialogButtonBox.ActionRole)
         clear.setToolTip("Clear this preview from the part")
@@ -276,6 +293,7 @@ class RegionDialog(QtWidgets.QDialog):
         self.shown = False                                          # a preview of this form is on the part
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
+        enter_previews(buttons, show)
         layout.addWidget(buttons)
 
         self.inputs = {}
@@ -368,6 +386,7 @@ class RegionDialog(QtWidgets.QDialog):
                 options = how.choices
                 box = QtWidgets.QComboBox()
                 box.setEditable(how.editable)
+                box.setInsertPolicy(QtWidgets.QComboBox.NoInsert)      # Enter previews; it adds no choice
                 for shown, v in options:
                     box.addItem(shown, v)
                 text = show_value(value if value is not None else options[0][1], options)
@@ -578,6 +597,10 @@ class RegionDialog(QtWidgets.QDialog):
             out.append(str(e))
         return out
 
+    def keyPressEvent(self, event):
+        if not preview_on_enter(self, event):
+            super().keyPressEvent(event)
+
     def show_preview(self):
         problems = self.problems()
         if problems:
@@ -715,12 +738,21 @@ class BCDialog(QtWidgets.QDialog):
         self.form = QtWidgets.QFormLayout()
         layout.addLayout(self.form)
         layout.addStretch()
+        self.result = QtWidgets.QLabel()                            # the check and the preview's node count
+        self.result.setWordWrap(True)
+        layout.addWidget(self.result)
         buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        show = buttons.addButton("Preview", QtWidgets.QDialogButtonBox.ActionRole)
+        show.setToolTip("Check what you typed and show it on the part (Enter)")
+        show.clicked.connect(self.show_preview)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
+        enter_previews(buttons, show)
         layout.addWidget(buttons)
+        self.shown = False                                          # a preview of this form is on the part
         self.inputs = {}
-        self.kind.currentIndexChanged.connect(lambda _: self._fill(self.kind.currentData(), None))
+        self.kind.currentIndexChanged.connect(lambda _: (self.changed(), self._fill(self.kind.currentData(), None)))
+        self.on.currentIndexChanged.connect(self.changed)
         if bc:
             self.kind.blockSignals(True)
             self.kind.setCurrentIndex(self.kind.findData(bc["kind"]))
@@ -769,6 +801,9 @@ class BCDialog(QtWidgets.QDialog):
             label = QtWidgets.QLabel(v.label)
             self.form.addRow(label, row)
             self.inputs[name] = (typ, widget)
+            for w in (widget.values() if isinstance(widget, dict) else widget if isinstance(widget, (list, tuple))
+                      else [widget]):
+                (w.toggled if isinstance(w, QtWidgets.QCheckBox) else w.textChanged).connect(self.changed)
 
     def new_shape(self):
         """A new selection from the selection form, a page over this one when docked; it joins the project when
@@ -824,6 +859,38 @@ class BCDialog(QtWidgets.QDialog):
         if not out:
             out += self.kinds[self.kind.currentData()].errors(self.bc())
         return out
+
+    def keyPressEvent(self, event):
+        if not preview_on_enter(self, event):
+            super().keyPressEvent(event)
+
+    def show_preview(self):
+        """The support or load checked; with no mistake, its selection on the part (and a load's arrow)."""
+        problems = self.problems()
+        if problems:
+            self.result.setText("<span style='color:#b00000'>" + "<br>".join(problems) + "</span>")
+            return
+        if self.preview is None:
+            self.result.setText("")
+            return
+        name = self.on.currentText()
+        selection = self.new_regions.get(name) or self.project.selections[name]
+        try:
+            self.result.setText(self.preview(selection, self.bc()))
+            self.shown = True
+        except Exception as e:                                      # noqa: BLE001
+            self.result.setText(f"<span style='color:#b00000'>Error: {e}</span>")
+
+    def changed(self, *_):
+        """An edit: the preview no longer shows this form, so it goes."""
+        if self.shown and self.preview is not None:
+            self.preview(None)
+        self.shown = False
+        self.result.setText("")
+
+    def done(self, result):
+        self.changed()                                              # OK or Cancel: nothing left behind
+        super().done(result)
 
     def accept(self):
         problems = self.problems()
@@ -1175,18 +1242,28 @@ class SupportsPanel(QtWidgets.QDialog):
             self.report.setText("")
             self.report_info.setVisible(False)
 
-    def preview_one(self, selection):
-        """A region being edited, on the run's mesh: its node count, drawn in orange. None clears it."""
+    def preview_one(self, selection, bc=None):
+        """A region being edited, on the run's mesh: its node count, drawn in orange; with bc, the support
+        or load on it being edited: blue for a support, red with its arrow for a load. None clears it."""
+        from lsr_mmto.problem.boundary_conditions import BC_KINDS
+        from .main_window import load_direction
         self.window.show_setup_view()
+        for name in ("mmto_region", "mmto_region_outline", "mmto_arrow_region"):
+            self.window.plotter.remove_actor(name, reset_camera=False)
         if selection is None:
-            for name in ("mmto_region", "mmto_region_outline"):
-                self.window.plotter.remove_actor(name, reset_camera=False)
             self.window.plotter.render()
             return ""
         mesh = self.window.preview_mesh()
         nodes = self.project.evaluate(selection, mesh, "nodes")
-        self.window.draw_points("mmto_region", np.asarray(mesh.node_xyz)[nodes], OTHER_COLOUR)
-        self.window.draw_outline("mmto_region_outline", selection, OTHER_COLOUR)
+        xyz = np.asarray(mesh.node_xyz, dtype=float)
+        colour = OTHER_COLOUR if bc is None else \
+            SUPPORT_COLOUR if BC_KINDS[bc["kind"]].role == "support" else LOAD_COLOUR
+        self.window.draw_points("mmto_region", xyz[nodes], colour)
+        self.window.draw_outline("mmto_region_outline", selection, colour)
+        d = load_direction(bc) if bc is not None else None
+        if d is not None and len(nodes) and np.linalg.norm(d) > 0:
+            self.window._arrow("_region", d, xyz[nodes], float(np.linalg.norm(np.ptp(xyz, axis=0))))
+        self.window.plotter.render()
         return f"{len(nodes)} nodes on the run's mesh ({mesh.num_elems} elements)."
 
     def preview(self):
