@@ -374,8 +374,8 @@ class RegionDialog(QtWidgets.QDialog):
         show.setToolTip("Check what you typed and show it on the part (Enter)")
         show.clicked.connect(self.show_preview)
         clear = buttons.addButton("Clear", QtWidgets.QDialogButtonBox.ActionRole)
-        clear.setToolTip("Clear this preview from the part")
-        clear.clicked.connect(self.clear_shown)
+        clear.setToolTip("Empty the form and remove its preview")
+        clear.clicked.connect(self.clear_form)
         self.shown = False                                          # a preview of this form is on the part
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -727,6 +727,13 @@ class RegionDialog(QtWidgets.QDialog):
             self.preview(None)
         self.shown = False
         self.result.setText("")
+
+    def clear_form(self):
+        """Clear: the form's fields back to their defaults for the type chosen, the code line empty, and the
+        preview off the part."""
+        self.clear_shown()
+        self._fill_form(self.kind())
+        self.code.clear()
 
     def changed(self, *_):
         """An edit: the preview no longer shows this form, so it goes."""

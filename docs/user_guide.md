@@ -250,7 +250,7 @@ A selection is a named piece of the part. Several supports and loads can share o
 The Selection form has a **Name** (letters, digits and _, not starting with a digit), a type, and the type's own fields. The (i) next to the type says what it selects. The part's size is shown under the type, so you can see which numbers make sense. Two buttons help you check a selection before you keep it:
 
 - **Preview** draws the selection on the part in orange, and says how many nodes it has on the mesh the run will use.
-- **Clear** removes that drawing again.
+- **Clear** empties the form, every field back to its default, and removes that drawing.
 
 Pressing Enter in the form does the same as **Preview**: it checks what you typed and shows the selection on the part, and the form stays open. A mistake shows in red under the form. Only **OK** keeps the selection and closes the form.
 

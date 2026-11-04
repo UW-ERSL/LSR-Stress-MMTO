@@ -1179,8 +1179,8 @@ def test_region_preview_clears():
         assert not on_part() and r.result.text() == ""
         r.show_preview()
         assert on_part()
-        r.clear_shown()                                                       # the Clear button
-        assert not on_part()
+        r.clear_form()                                                        # the Clear button
+        assert not on_part() and r.inputs["value"].text() == ""
         r.show_preview()
         r.type.setCurrentText("Box")                                          # another type: goes too
         assert not on_part()
@@ -1370,6 +1370,32 @@ def test_empty_inner_radius_is_zero():
         r.tabs.setCurrentIndex(0)
         r.inputs["radius"].setText("")
         assert any("Radius: no value" in e for e in r.problems())
+        r.reject()
+
+
+def test_clear_empties_the_form():
+    """Clear in the Selection form puts every field back to its default and removes the form's preview."""
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        w.show()
+        panel = w.open_supports_and_loads_panel()
+        r = panel.add_region()
+        r.type.setCurrentText("Cylinder")
+        r.inputs["center"].setText("52, 114, 1")
+        r.inputs["radius"].setText("5")
+        r.inputs["inner_radius"].setText("2")
+        r.inputs["along"][0].setText("0")
+        r.inputs["along"][1].setText("3")
+        r.show_preview()
+        assert "mmto_region" in w.plotter.actors
+        clear = next(b for b in r.findChildren(QtWidgets.QPushButton) if b.text() == "Clear")
+        assert clear.toolTip() == "Empty the form and remove its preview"
+        clear.click()
+        assert "mmto_region" not in w.plotter.actors and r.result.text() == ""
+        assert r.kind() == "cylinder" and r.code.text() == ""
+        assert [r.inputs[f].text() for f in ("center", "radius", "inner_radius")] == ["", "", "0"]
+        assert [b.text() for b in r.inputs["along"]] == ["", ""]
+        assert r.inputs["pad"].currentText() == "Automatic" and r.inputs["axis"].currentText() == "x"
         r.reject()
 
 
