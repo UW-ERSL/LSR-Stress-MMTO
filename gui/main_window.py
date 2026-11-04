@@ -1181,6 +1181,10 @@ class MMTOWindow(MainWindow):
         if not self.measure.isChecked():
             form_open = in_open_strip(panel) and panel.stack.currentIndex() > 0
             if form_open and not in_open_strip(getattr(self, "structural_loads_window", None)):
+                actor = picker.GetActor() if hasattr(picker, "GetActor") else None
+                if picker is not None and picker.GetCellId() >= 0 and actor in (None, self.part_actor()) and \
+                        panel.take_click(picker.GetCellId()):                # a form waiting for a click: its
+                    return None                                             # Click a hole
                 if picker is not None and picker.GetCellId() >= 0:
                     text = point_text(self.snapped(picked_point))
                     QtWidgets.QApplication.clipboard().setText(text)
@@ -1202,6 +1206,20 @@ class MMTOWindow(MainWindow):
             d, unit, f = b - a, self.length_unit(), "%.4g"
             self.measured.setText(f"Distance {f % np.linalg.norm(d)} {unit}  (dx {f % d[0]}, dy {f % d[1]}, "
                                   f"dz {f % d[2]})")
+
+    def wall_triangles(self, cell):
+        """(normals, corners) of the triangles joined to triangle cell with no sharp edge between, grown as
+        a click in the Pick window's Facet mode grows (select_triangles). What is picked there stays as it was."""
+        geom = self.stl_geom
+        kept, mode = list(geom.tri_highlight), getattr(self, "highlight_mode", "coarse")
+        geom.tri_highlight = [False] * len(kept)
+        self.highlight_mode = "coarse"
+        try:
+            self.select_triangles(cell)
+            wall = np.flatnonzero(geom.tri_highlight)
+        finally:
+            geom.tri_highlight, self.highlight_mode = kept, mode
+        return np.asarray(geom.tri_normals, dtype=float)[wall], np.asarray(geom.mesh.vectors, dtype=float)[wall]
 
     def picked_count(self):
         """How many triangles are selected in the Pick strip."""

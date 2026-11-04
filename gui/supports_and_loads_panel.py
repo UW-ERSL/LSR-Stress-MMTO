@@ -222,6 +222,73 @@ def preview_on_enter(dialog, event):
     return False
 
 
+NOT_ROUND = "This doesn't look like a round hole"
+
+
+def hole_from_wall(normals, corners):
+    """(point on the axis, axis, radius, start, end) of a round hole, from the triangles of its inside wall
+    (their normals, and their corners as an (n, 3, 3) array). The axis is the direction the wall's normals
+    avoid: the eigenvector of the smallest eigenvalue of the sum of n n^T, exactly x, y or z when within
+    0.01 % of one. The centre and radius are the least-squares circle (algebraic fit) through the corners
+    seen along the axis; start and end are the wall's extent along the axis, and the point is on the axis
+    at start. ValueError when the corners are far from a circle: rms off it over 5 % of the radius, or all
+    on one line (no circle to fit)."""
+    n = np.asarray(normals, dtype=float)
+    n = n / np.linalg.norm(n, axis=1)[:, None]
+    p = np.unique(np.asarray(corners, dtype=float).reshape(-1, 3), axis=0)
+    axis = np.linalg.eigh(n.T @ n)[1][:, 0]
+    k = int(np.argmax(np.abs(axis)))
+    axis = axis * np.sign(axis[k])
+    if abs(axis[k]) > 0.9999:
+        axis = np.eye(3)[k]
+    u = np.cross(axis, np.eye(3)[(k + 1) % 3])
+    u /= np.linalg.norm(u)
+    v = np.cross(axis, u)
+    middle = p.mean(axis=0)                                         # the fit about the corners' middle
+    x, y, t = (p - middle) @ u, (p - middle) @ v, p @ axis
+    fit = np.column_stack([x, y, np.ones_like(x)])
+    (d, e, f), _, _, s = np.linalg.lstsq(fit, -(x * x + y * y), rcond=None)
+    cx, cy = -d / 2, -e / 2
+    r2 = cx * cx + cy * cy - f
+    if s[-1] < 1e-6 * s[0] or r2 <= 0:
+        raise ValueError(NOT_ROUND)
+    r = float(np.sqrt(r2))
+    if np.sqrt(np.mean((np.hypot(x - cx, y - cy) - r) ** 2)) > 0.05 * r:
+        raise ValueError(NOT_ROUND)
+    centre = middle - (middle @ axis) * axis + cx * u + cy * v + t.min() * axis
+    return centre, axis, r, float(t.min()), float(t.max())
+
+
+def _number_text(value):
+    return format(round(float(value), 9) + 0.0, ".6g")
+
+
+def fill_from_hole(dialog, normals, corners, element_size):
+    """The Cylinder form filled in from the inside wall of a hole (hole_from_wall): Point on the axis, Axis
+    direction, Radius (the hole's radius plus one element size, so the nodes of the wall are in), and the
+    ends; then its preview. A wall that is not round fills nothing and says so."""
+    try:
+        centre, axis, r, start, end = hole_from_wall(normals, corners)
+    except ValueError as e:
+        dialog.result.setText(f"<span style='color:#b00000'>{e}</span>")
+        return
+    letter = next((a for a, e in zip("xyz", np.eye(3)) if np.array_equal(axis, e)), None)
+    boxes = dialog.inputs
+    boxes["center"].setText(", ".join(_number_text(c) for c in centre))
+    boxes["axis"].setCurrentText(letter or ", ".join(_number_text(c) for c in axis))
+    boxes["radius"].setText(_number_text(r + element_size))
+    ends = (start, end) if letter else (0.0, end - start)          # coordinates along x, y, z; else distances
+    for box, value in zip(boxes["along"], ends):
+        box.setText(_number_text(value))
+    dialog.show_preview()
+
+
+# A button of the form that fills it in from a click on the part: (its text, its (i), the filling, given the
+# dialog, the normals and corners of the face clicked, and the element size).
+CLICK_TO_FILL = {"cylinder": ("Click a hole", "Then click the inside wall of a round hole on the part: the "
+                              "point, axis, radius and ends are filled in from it.", fill_from_hole)}
+
+
 # ---------------------------------------------------------------------- a region
 class RegionDialog(QtWidgets.QDialog):
     """A region: its name, and its definition on a form or as a code line."""
@@ -259,6 +326,8 @@ class RegionDialog(QtWidgets.QDialog):
         main = parent                                               # the main window: the part's extent
         while main is not None and not hasattr(main, "part_extent_text"):
             main = main.parentWidget()
+        self.main = main
+        self.on_click = None                                        # a click on the part it waits for
         extent = QtWidgets.QLabel(main.part_extent_text() if main is not None else "")
         extent.setStyleSheet(GREY)
         extent.setVisible(bool(extent.text()))
@@ -323,6 +392,7 @@ class RegionDialog(QtWidgets.QDialog):
         cls = self.types[kind]
         self.type_info.setToolTip(FORM[kind][1])
         self.inputs = {}
+        self.on_click = None
         if kind == "combined":                                      # How, Selection A, Selection B: by name, live
             how, a, b = combined_parts(selection) if selection is not None else ("union", None, None)
             boxes = {"how": QtWidgets.QComboBox(), "a": QtWidgets.QComboBox(), "b": QtWidgets.QComboBox()}
@@ -425,7 +495,21 @@ class RegionDialog(QtWidgets.QDialog):
                 if hasattr(box, signal):
                     getattr(box, signal).connect(self.changed)
                     break
+        if kind in CLICK_TO_FILL and self.main is not None:
+            text, info, fill = CLICK_TO_FILL[kind]
+            button = QtWidgets.QPushButton(text)
+            button.setAutoDefault(False)
+            button.clicked.connect(lambda _=False, f=fill: self._wait_for_click(f))
+            self.form.addRow(self._beside(button, "", info))
         QtCore.QTimer.singleShot(0, self._fit)
+
+    def _wait_for_click(self, fill):
+        """The next click on the part fills the form in (CLICK_TO_FILL), from the face it lands on."""
+        def take(cell):
+            normals, corners = self.main.wall_triangles(cell)
+            fill(self, normals, corners, float(np.max(self.main.preview_mesh().elem_size)))
+        self.on_click = take
+        self.result.setText("Click the inside wall of the hole on the part.")
 
     def _fit(self):
         """Tall enough for every row of the form: a long form is not squashed."""
@@ -1041,6 +1125,17 @@ class SupportsPanel(QtWidgets.QDialog):
             page.deleteLater()
         dialog.finished.connect(finished)
         return dialog
+
+    def take_click(self, cell):
+        """A click on triangle cell of the part, for the form in front when it waits for one (Click a hole):
+        True when the form took it."""
+        form = self.stack.currentWidget().findChild(QtWidgets.QDialog)
+        take = getattr(form, "on_click", None)
+        if take is None:
+            return False
+        form.on_click = None
+        take(cell)
+        return True
 
     def show_copied(self, text):
         """A click on the part while a form is open: what went to the clipboard."""

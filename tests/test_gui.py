@@ -1008,6 +1008,64 @@ def test_inside_stl_move_by():
         assert np.allclose(np.array(there.bounds) - np.array(here.bounds), [10, 10, 0, 0, 0, 0])
 
 
+def test_click_a_hole():
+    """Click a hole in the Cylinder form, then a click on the inside wall of a hole: the wall is grown as a
+    Facet pick grows, and the form gets the hole's centre, axis, radius (plus one element size) and ends.
+    A wall that is not round fills nothing."""
+    import pyvista as pv
+    with scratch() as d:
+        stl = os.path.join(d, "washer.stl")                           # a plate (a washer) with a hole of
+        pv.Disc(center=(40, 30, 0), inner=8, outer=20, r_res=2, c_res=48).extrude(   # radius 8 at x 40, y 30,
+            (0, 0, 10), capping=True).triangulate().clean().save(stl)                # through z 0 to 10
+        w = G.MMTOWindow()
+        assert w.new_project(stl, os.path.join(d, "washer"))
+        w.show()
+        geom = w.stl_geom
+        v = np.asarray(geom.mesh.vectors, dtype=float)
+        n = np.asarray(geom.tri_normals, dtype=float)
+        c = v.mean(axis=1)
+        on_wall = (np.abs(np.hypot(c[:, 0] - 40, c[:, 1] - 30) - 8) < 0.5) & (np.abs(n[:, 2]) < 0.1)
+        wall, top = int(np.flatnonzero(on_wall)[0]), int(np.flatnonzero(n[:, 2] > 0.99)[0])
+
+        class Picker:                                                         # a click on the part
+            def __init__(self, cell):
+                self.cell = cell
+
+            def GetCellId(self):
+                return self.cell
+        panel = w.open_supports_and_loads_panel()
+        r = panel.add_region()
+        r.type.setCurrentText("Cylinder")
+        button = next(b for b in r.findChildren(QtWidgets.QPushButton) if b.text() == "Click a hole")
+        button.click()
+        assert "Click the inside wall" in r.result.text()
+        w.on_left_button_press(c[top].tolist(), Picker(top))                  # a flat face: not round
+        assert "doesn't look like a round hole" in r.result.text() and r.inputs["radius"].text() == ""
+        geom.tri_highlight[5] = True                                          # a pick in the Pick window, kept
+        button.click()
+        w.on_left_button_press(c[wall].tolist(), Picker(wall))
+        h = float(np.max(w.preview_mesh().elem_size))
+        centre = [float(x) for x in r.inputs["center"].text().split(",")]
+        assert np.allclose(centre[:2], [40, 30], rtol=0.01) and abs(centre[2]) < 1e-6
+        assert r.inputs["axis"].currentText() == "z"
+        assert abs(float(r.inputs["radius"].text()) - h - 8) < 0.08          # within 1 %
+        assert [float(b.text()) for b in r.inputs["along"]] == [0.0, 10.0]
+        assert "nodes on the run's mesh" in r.result.text() and "mmto_region" in w.plotter.actors
+        assert np.flatnonzero(geom.tri_highlight).tolist() == [5]
+        w.on_left_button_press(c[wall].tolist(), Picker(wall))                # one fill per click of the button
+        assert "Copied" in panel.stack.currentWidget().copied.text()
+        r.reject()
+
+    from gui.supports_and_loads_panel import hole_from_wall                   # a tilted hole
+    axis = np.array([1.0, 1.0, 1.0]) / np.sqrt(3)
+    tube = pv.Cylinder(center=(5, 6, 7), direction=axis, radius=3, height=4, resolution=60, capping=False)
+    tube = tube.triangulate().compute_normals(cell_normals=True, point_normals=False)
+    corners = tube.points[tube.faces.reshape(-1, 4)[:, 1:]]
+    point, got, radius, start, end = hole_from_wall(tube.cell_data["Normals"], corners)
+    assert np.allclose(got, axis) and abs(radius - 3) < 0.03 and abs(end - start - 4) < 1e-6
+    assert np.allclose(point + 2 * axis, [5, 6, 7])                         # the middle of the tube
+
+
 def test_enter_previews():
     """Enter in the Selection form and in the support or load form checks what was typed and shows it on
     the part; the window stays open, a mistake shows in its message line; only OK saves and closes."""
