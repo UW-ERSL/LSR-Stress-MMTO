@@ -223,19 +223,29 @@ def preview_on_enter(dialog, event):
 
 
 NOT_ROUND = "This doesn't look like a round hole"
+FLAT_FACE = ("That click was on a flat face, not the inside wall of a hole. Turn the part so the wall shows, "
+             "then click on it.")
 
 
 def hole_from_wall(normals, corners):
-    """(point on the axis, axis, radius, start, end) of a round hole, from the triangles of its inside wall
-    (their normals, and their corners as an (n, 3, 3) array). The axis is the direction the wall's normals
+    """(point on the axis, axis, radius, start, end, outside) of a round hole, from the triangles of its inside
+    wall (their normals, and their corners as an (n, 3, 3) array). The axis is the direction the wall's normals
     avoid: the eigenvector of the smallest eigenvalue of the sum of n n^T, exactly x, y or z when within
     0.01 % of one. The centre and radius are the least-squares circle (algebraic fit) through the corners
     seen along the axis; start and end are the wall's extent along the axis, and the point is on the axis
-    at start. ValueError when the corners are far from a circle: rms off it over 5 % of the radius, or all
-    on one line (no circle to fit)."""
+    at start. outside is True when the normals point away from the axis: the outside of a round face, not a
+    hole. ValueError(FLAT_FACE) when over half of the triangles' area faces within 5 degrees of their mean
+    normal; ValueError(NOT_ROUND) when the corners are far from a circle: rms off it over 5 % of the radius,
+    or all on one line (no circle to fit)."""
     n = np.asarray(normals, dtype=float)
     n = n / np.linalg.norm(n, axis=1)[:, None]
-    p = np.unique(np.asarray(corners, dtype=float).reshape(-1, 3), axis=0)
+    tri = np.asarray(corners, dtype=float)
+    area = 0.5 * np.linalg.norm(np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0]), axis=1)
+    mean = area @ n
+    if np.linalg.norm(mean) > 1e-6 * area.sum() and \
+            area[n @ mean > np.cos(np.radians(5)) * np.linalg.norm(mean)].sum() > 0.5 * area.sum():
+        raise ValueError(FLAT_FACE)
+    p = np.unique(tri.reshape(-1, 3), axis=0)
     axis = np.linalg.eigh(n.T @ n)[1][:, 0]
     k = int(np.argmax(np.abs(axis)))
     axis = axis * np.sign(axis[k])
@@ -256,7 +266,10 @@ def hole_from_wall(normals, corners):
     if np.sqrt(np.mean((np.hypot(x - cx, y - cy) - r) ** 2)) > 0.05 * r:
         raise ValueError(NOT_ROUND)
     centre = middle - (middle @ axis) * axis + cx * u + cy * v + t.min() * axis
-    return centre, axis, r, float(t.min()), float(t.max())
+    away = tri.mean(axis=1) - centre                                # from the axis to each triangle
+    away -= np.outer(away @ axis, axis)
+    outside = bool(np.sum(area * np.sum(n * away, axis=1)) > 0)
+    return centre, axis, r, float(t.min()), float(t.max()), outside
 
 
 def _number_text(value):
@@ -266,9 +279,11 @@ def _number_text(value):
 def fill_from_hole(dialog, normals, corners):
     """The Cylinder form filled in from the inside wall of a hole (hole_from_wall): Point on the axis, Axis
     direction, Radius (the hole's radius + 1h, one element size of whatever mesh it is used on, so the nodes
-    of the wall are in), and the ends; then its preview. A wall that is not round fills nothing and says so."""
+    of the wall are in), Inner radius 0, and the ends; then its preview. The outside of a round face fills a
+    tube one element size each side of it (Radius r + 1h, Inner radius r - 1h), so it takes the nodes of that
+    face only. A face that is flat or not round fills nothing and says so."""
     try:
-        centre, axis, r, start, end = hole_from_wall(normals, corners)
+        centre, axis, r, start, end, outside = hole_from_wall(normals, corners)
     except ValueError as e:
         dialog.result.setText(f"<span style='color:#b00000'>{e}</span>")
         return
@@ -277,7 +292,7 @@ def fill_from_hole(dialog, normals, corners):
     boxes["center"].setText(", ".join(_number_text(c) for c in centre))
     boxes["axis"].setCurrentText(letter or ", ".join(_number_text(c) for c in axis))
     boxes["radius"].setText(f"{_number_text(r)} + 1h")
-    boxes["inner_radius"].setText("0")
+    boxes["inner_radius"].setText(f"{_number_text(r)} - 1h" if outside else "0")
     ends = (start, end) if letter else (0.0, end - start)          # coordinates along x, y, z; else distances
     for box, value in zip(boxes["along"], ends):
         box.setText(_number_text(value))
