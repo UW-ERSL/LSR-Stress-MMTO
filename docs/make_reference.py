@@ -258,7 +258,7 @@ def _entry(heading, obj, how):
         imports = f"from {obj.__module__} import {obj.__name__}"
     lines = [f"### {heading}", ""]
     if call:
-        lines += [f"`{call}`" + (f", imported with `{imports}`" if imports else "") +
+        lines += [f"`{call}`" + (f", after `{imports}`" if imports else "") +
                   (", p a Project" if how in ("method", "attribute") else ""), ""]
     if description:
         lines += [_cell(description), ""]

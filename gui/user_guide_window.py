@@ -172,11 +172,21 @@ class UserGuideWindow(QtWidgets.QDialog):
         self.page.setMarkdown(text)
         self.page.moveCursor(QtGui.QTextCursor.Start)
         if self.parts[index][0] == 3:                           # a part: the page opens at its heading
-            self.page.find(self.parts[index][1])
+            self.at_heading(self.parts[index][1])
         words = self.words()
         if words:                                               # and at the first word searched for
             self.page.find(words[0])
         self.mark()
+
+    def at_heading(self, title):
+        """The page scrolled to the heading with this text, not to the same word earlier on the page."""
+        block = self.page.document().begin()
+        while block.isValid() and not (block.blockFormat().headingLevel() and block.text().strip() == title):
+            block = block.next()
+        if block.isValid():
+            self.page.setTextCursor(QtGui.QTextCursor(block))
+            top = self.page.document().documentLayout().blockBoundingRect(block).top()
+            self.page.verticalScrollBar().setValue(int(top))
 
     def words(self):
         return [w for w in self.search.text().lower().split() if w]

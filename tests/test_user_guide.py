@@ -99,6 +99,12 @@ def test_researcher_guide():
         assert chapter.text(0) == re.search(r"^# (.+)", text, re.M).group(1).strip()
         assert [chapter.child(c).text(0) for c in range(chapter.childCount())] == \
             [t.strip() for t in re.findall(r"^## (.+)", text, re.M)]
+    reference = g.contents.topLevelItem(3)
+    for title in ("Python", "Settings"):                    # each word is on the page before its heading
+        (part,) = [reference.child(c) for c in range(reference.childCount()) if reference.child(c).text(0) == title]
+        g.contents.setCurrentItem(part)
+        block = g.page.textCursor().block()
+        assert block.text() == title and block.blockFormat().headingLevel(), block.text()
     g.contents.setCurrentItem(g.contents.topLevelItem(0))
     assert g.page.toPlainText().startswith("How the code works")
     g.search.setText("lagrangian")                                       # in CONTRIBUTING.md only

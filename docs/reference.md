@@ -173,7 +173,7 @@ Every call a setup script uses, with its arguments, read from the code's own doc
 
 ### box
 
-`box(lo, hi, pad='auto')`, imported with `from lsr_mmto import box`
+`box(lo, hi, pad='auto')`, after `from lsr_mmto import box`
 
 Points with lo <= p <= hi; the corners may come in any order. By default pad is half the element size along each axis, so a box thinner than an element still catches the nearest layer.
 
@@ -189,7 +189,7 @@ tip = box([0.95, 0.9, 0], [1, 1, 0.01])
 
 ### cylinder
 
-`cylinder(center, axis, radius, inner_radius=0.0, along=None, pad='auto', boundary=False)`, imported with `from lsr_mmto import cylinder`
+`cylinder(center, axis, radius, inner_radius=0.0, along=None, pad='auto', boundary=False)`, after `from lsr_mmto import cylinder`
 
 Points whose distance to the axis is in [inner_radius, radius]; along = (t0, t1) limits (p - center) . axis. boundary=True keeps only nodes on the mesh boundary; it is written only when on.
 
@@ -209,7 +209,7 @@ boss = cylinder(center=[0.875, 0.25, 0], axis="z", radius=0.05)
 
 ### sphere
 
-`sphere(center, radius, pad='auto')`, imported with `from lsr_mmto import sphere`
+`sphere(center, radius, pad='auto')`, after `from lsr_mmto import sphere`
 
 Points within radius of center.
 
@@ -225,7 +225,7 @@ ball = sphere([0.25, 0.25, 0.005], 0.1)
 
 ### plane
 
-`plane(axis, value, pad='auto', limits=None)`, imported with `from lsr_mmto import plane`
+`plane(axis, value, pad='auto', limits=None)`, after `from lsr_mmto import plane`
 
 Points with \|p_axis - value\| <= pad; by default pad is half the element size along axis. limits, e.g. {"y": [100, 120]}, keeps only the part of the cut between those values of the other axes (each widened by pad along its own axis).
 
@@ -242,7 +242,7 @@ top = plane("y", 1.0, limits={"x": [0.75, 1]})
 
 ### face
 
-`face(side, pad='auto')`, imported with `from lsr_mmto import face`
+`face(side, pad='auto')`, after `from lsr_mmto import face`
 
 The plane at the mesh's extreme on one side: xmin, xmax, ymin, ymax, zmin or zmax.
 
@@ -257,7 +257,7 @@ left = face("xmin")
 
 ### near_face
 
-`near_face(side, distance)`, imported with `from lsr_mmto import near_face`
+`near_face(side, distance)`, after `from lsr_mmto import near_face`
 
 Points strictly within distance of the mesh's extreme on one side.
 
@@ -272,7 +272,7 @@ bottom = near_face("ymin", "1.5h")
 
 ### nearest
 
-`nearest(point, boundary=False)`, imported with `from lsr_mmto import nearest`
+`nearest(point, boundary=False)`, after `from lsr_mmto import nearest`
 
 The single node or element closest to point; boundary=True only looks at nodes on the mesh boundary, as the PyTO-AD GUI does for a picked point.
 
@@ -287,7 +287,7 @@ corner = nearest([1, 1, 0])
 
 ### ids
 
-`ids(indices)`, imported with `from lsr_mmto import ids`
+`ids(indices)`, after `from lsr_mmto import ids`
 
 Explicit node or element numbers; tied to one mesh.
 
@@ -301,7 +301,7 @@ first = ids([0, 1, 2])
 
 ### stl_faces
 
-`stl_faces(triangles, tol=None)`, imported with `from lsr_mmto import stl_faces`
+`stl_faces(triangles, tol=None)`, after `from lsr_mmto import stl_faces`
 
 Boundary nodes on triangles of the STL the mesh was made from: within tol times the smallest element size of a triangle. tol None is PyTO-AD's own lookup (0.707); the PyTO-AD GUI uses 0.8.
 
@@ -316,7 +316,7 @@ faces = stl_faces([0, 1])
 
 ### halfspaces
 
-`halfspaces(normals, origins, boundary=True)`, imported with `from lsr_mmto import halfspaces`
+`halfspaces(normals, origins, boundary=True)`, after `from lsr_mmto import halfspaces`
 
 Points on the inner side of every plane: n . (p - o) <= 1e-12 for each normal n and origin o. A box dragged in the PyTO-AD GUI is six such planes. boundary=True keeps only nodes on the mesh boundary, as the GUI does.
 
@@ -332,7 +332,7 @@ right = halfspaces([[-1, 0, 0]], [[0.9, 0, 0]])
 
 ### rows
 
-`rows(face, axis, n, end='max')`, imported with `from lsr_mmto import rows`
+`rows(face, axis, n, end='max')`, after `from lsr_mmto import rows`
 
 The n outermost node rows of a face, counted along an axis: e.g. the 8 highest rows of the right face. Rows are node layers, so their height is n element sizes.
 
@@ -349,7 +349,7 @@ upper = rows("xmax", "y", 8)
 
 ### inside_stl
 
-`inside_stl(path, shift=(0.0, 0.0, 0.0))`, imported with `from lsr_mmto import inside_stl`
+`inside_stl(path, shift=(0.0, 0.0, 0.0))`, after `from lsr_mmto import inside_stl`
 
 Points inside a closed STL surface, the surface first moved by shift (x, y, z in model units), e.g. when the STL was saved shifted to 0, 0, 0. shift is written only when it is not zero.
 
@@ -364,7 +364,7 @@ inside = inside_stl("data/models/UBracket/UBracket.STL")
 
 ### function
 
-`function(ref)`, imported with `from lsr_mmto import function`
+`function(ref)`, after `from lsr_mmto import function`
 
 Whatever a Python function name(mesh, on) in file.py returns.
 
@@ -378,7 +378,7 @@ picked = function("my_selection.py:pick")
 
 ### union
 
-`union(*parts)`, imported with `from lsr_mmto import union`
+`union(*parts)`, after `from lsr_mmto import union`
 
 Points in any of the parts.
 
@@ -392,7 +392,7 @@ ends = union(left, tip)
 
 ### intersect
 
-`intersect(*parts)`, imported with `from lsr_mmto import intersect`
+`intersect(*parts)`, after `from lsr_mmto import intersect`
 
 Points in all of the parts.
 
@@ -406,7 +406,7 @@ both = intersect(bottom, left)
 
 ### difference
 
-`difference(a, b)`, imported with `from lsr_mmto import difference`
+`difference(a, b)`, after `from lsr_mmto import difference`
 
 Points in the first part but not the second.
 
@@ -421,7 +421,7 @@ rest = difference(left, bottom)
 
 ### selection
 
-`selection(name)`, imported with `from lsr_mmto import selection`
+`selection(name)`, after `from lsr_mmto import selection`
 
 Another selection of the project, by name. Only a project can evaluate it: Project.evaluate puts the named selection in (resolved) each time, so a combination follows later edits of its parts.
 
@@ -435,7 +435,7 @@ link = selection("left")
 
 ### Project
 
-`Project(name, stl, n_dof=None, single_layer=None, base_dir=None)`, imported with `from lsr_mmto import Project`
+`Project(name, stl, n_dof=None, single_layer=None, base_dir=None)`, after `from lsr_mmto import Project`
 
 One problem: the part, its selections, supports and loads, keep-solid regions, material database, objective and constraints, and settings.
 
@@ -691,7 +691,7 @@ p = Project.load("projects/U-bracket.mmto")
 
 ### run
 
-`run(project, save_dir=None, **run_options)`, imported with `from lsr_mmto import run`
+`run(project, save_dir=None, **run_options)`, after `from lsr_mmto import run`
 
 Optimizes the project. The run's record keeps the project as it was run (Project.from_record rebuilds it). Returns the folder the results went to; None when nothing was saved.
 
@@ -714,7 +714,7 @@ folder = run(p)
 
 ### load
 
-`load(path)`, imported with `from lsr_mmto.results.load_results import load`
+`load(path)`, after `from lsr_mmto.results.load_results import load`
 
 A saved run read back, as a Run.
 
@@ -751,7 +751,7 @@ print(r.iterations, r.final_objective)
 
 ### summary
 
-`summary(run)`, imported with `from lsr_mmto.results.tables import summary`
+`summary(run)`, after `from lsr_mmto.results.tables import summary`
 
 One run at a glance, in sections: the result (objective and each constraint, met or not), the design, the materials and the run. An analysis: the same for its one solve, without what only an optimization has (grey elements, the latent space, iterations). A notebook shows it as tables.
 
@@ -765,7 +765,7 @@ summary(r)
 
 ### design
 
-`design(run, out=None, *, field='material', size=(1200, 950), view='iso', **kw)`, imported with `from lsr_mmto.results.run_plots import design`
+`design(run, out=None, *, field='material', size=(1200, 950), view='iso', **kw)`, after `from lsr_mmto.results.run_plots import design`
 
 The optimized design, drawn the way this example wants. 2D examples get a matplotlib panel; 3D examples get a mirrored voxel render placed on an axes, so both return a figure and display the same way. field applies to the 2D path only: material \| topology \| density \| a result's name (von_mises).
 
@@ -784,7 +784,7 @@ design(r)
 
 ### mesh_for
 
-`mesh_for(run)`, imported with `from lsr_mmto.results.design_3d import mesh_for`
+`mesh_for(run)`, after `from lsr_mmto.results.design_3d import mesh_for`
 
 The voxel mesh this run used, rebuilt and cached. nDOFDesired comes from the run's own config, so the rebuild matches the grid the run solved on rather than the example's current default.
 
@@ -798,7 +798,7 @@ mesh = mesh_for(r)
 
 ### export
 
-`export(run, mesh, folder, materials=True)`, imported with `from lsr_mmto.results.stl_export import export`
+`export(run, mesh, folder, materials=True)`, after `from lsr_mmto.results.stl_export import export`
 
 design.stl (and design_\<material>.stl) into folder, as Export STL in the GUI writes them; returns the Report, whose lines() say what was written and whether each file is closed.
 
