@@ -304,7 +304,12 @@ def constraint_name(run, i):
 
 
 MET_TOLERANCE = 1e-3          # a constraint within 0.1 % of its limit counts as met
-NOT_GIVEN = "not given by an analysis"    # a constraint of the latent points, which an analysis has none of
+
+
+def given(run, i):
+    """False for constraint i of an analysis that cannot give it (one of the latent points, which an analysis
+    has none of): its row is left out."""
+    return run.analysed_material is None or bool(np.isfinite(run.utilisation(i)))
 
 
 def met(run, i):
@@ -322,7 +327,8 @@ def met_cell(ok, before=""):
 def summary(run):
     """One run at a glance, in sections: the result (objective and each constraint, met or not), the
     design, the materials and the run. An analysis: the same for its one solve, without what only an
-    optimization has (grey elements, the latent space, iterations). A notebook shows it as tables.
+    optimization has (grey elements, the latent space, iterations) and the constraints it cannot give. A
+    notebook shows it as tables.
 
     run: a Run, from load
     Example: summary(r)
@@ -335,8 +341,7 @@ def summary(run):
     rows = []
     for i, spec in enumerate(run.constraint_spec):
         bound = float(spec[2]) if len(spec) > 2 else np.nan
-        if analysis is not None and not np.isfinite(run.utilisation(i)):
-            rows.append([constraint_name(run, i), NOT_GIVEN, _amount(run, spec[0], bound), "", ""])
+        if not given(run, i):
             continue
         rows.append([constraint_name(run, i), _amount(run, spec[0], run.utilisation(i) * bound),
                      _amount(run, spec[0], bound), f"{100 * run.utilisation(i):.1f} %", met_cell(met(run, i))])
@@ -370,9 +375,7 @@ def summary_details(run):
     lines.append(f"{run.objective_label}: {q.help}" if q is not None else run.objective_label)
     for i, spec in enumerate(run.constraint_spec):
         bound = float(spec[2]) if len(spec) > 2 else np.nan
-        if analysis is not None and not np.isfinite(run.utilisation(i)):
-            lines.append(f"{constraint_name(run, i)}: {NOT_GIVEN}, because it is worked out from the material "
-                         f"network, which an analysis does not use.")
+        if not given(run, i):
             continue
         lines.append(f"{constraint_name(run, i)}: {run.utilisation(i) * bound:.6g} against a limit of {bound:.6g} "
                      f"({100 * run.utilisation(i):.2f} % of it). Met means at most 0.1 % over the limit.")

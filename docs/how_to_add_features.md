@@ -239,7 +239,7 @@ makes the entries.
 Analyse (`optimize/solid_part_analysis.py`) uses the same entries with nothing added: `make_solver`,
 then `analyse` and the quantities on the whole part solid in one database material, then
 `final_summary` with that one design. Its model has no latent points, so a quantity that reads
-`m.z` is shown as not given there; everything else a physics reads is as in a run.
+`m.z` has no value there, and the Summary and Compare leave it out; everything else a physics reads is as in a run.
 
 ## A material database
 

@@ -53,8 +53,9 @@ def _iterations(run):
 
 def table(runs):
     """The runs side by side, one column each, in the sections of a run's summary (tables.summary):
-    the result with each constraint met or not, the design, the materials and the run."""
-    from .tables import NOT_GIVEN, Heading, Table, Tables, _unit, constraint_name, met, met_cell
+    the result with each constraint met or not, the design, the materials and the run. A constraint an
+    analysis cannot give is empty in its column, and left out when no run gives it."""
+    from .tables import Heading, Table, Tables, _unit, constraint_name, given, met, met_cell
     names = list(runs)
     rs = [runs[n] for n in names]
     r0 = rs[0]
@@ -65,9 +66,10 @@ def table(runs):
     if any(np.isfinite(r.max_ff) for r in rs):
         result.append(["Max failure factor"] + [f"{r.max_ff:.3f}" for r in rs])
     for i in range(len(r0.constraint_spec)):
+        if not any(given(r, i) for r in rs):                # an analysis's constraint it cannot give: left out
+            continue
         result.append([f"{constraint_name(r0, i)}, used"] +
-                      [met_cell(met(r, i), f"{100 * r.utilisation(i):.1f} %") if np.isfinite(r.utilisation(i))
-                       else NOT_GIVEN for r in rs])
+                      [met_cell(met(r, i), f"{100 * r.utilisation(i):.1f} %") if given(r, i) else "" for r in rs])
     return Tables(
         Heading(f"{r0.example}: the runs side by side"),
         Table(result, headers=[""] + names, title="Result", right_cols=right),

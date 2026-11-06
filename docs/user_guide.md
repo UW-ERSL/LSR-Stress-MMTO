@@ -536,7 +536,7 @@ Press **Analyse**. A small window asks for:
 
 The same checks as for a run come first: if something stops a run, it stops the analysis too, and the Current run panel says why under *Cannot start:*. While it goes, the line beside the buttons says *Analysing the solid part in* and the material, and **Stop** ends it; nothing is saved then.
 
-When it is done, Results shows it the way it shows a run, titled **Analysis:** and the material: the part in the 3D view (Material, Density, Stress, Solid) and its **Summary**, with the objective and each constraint for the solid part. An analysis has no **Convergence** and no **Latent space**. A material volume fraction is worked out from the material network, so the Summary says *not given by an analysis* for it.
+When it is done, Results shows it the way it shows a run, titled **Analysis:** and the material: the part in the 3D view (Material, Density, Stress, Solid) and its **Summary**, with the objective and each constraint for the solid part. An analysis has no **Convergence** and no **Latent space**. A material volume fraction is worked out from the material network, which an analysis does not use, so the Summary and Compare leave it out.
 
 ## 11. Results
 

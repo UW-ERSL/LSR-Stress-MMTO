@@ -151,7 +151,10 @@ def test_stop_ends_it_and_nothing_is_written():
 
 def test_a_quantity_of_the_latent_points_is_not_given(monkeypatch):
     """The L-bracket's constraints are material volume fractions, worked out from the latent points: the
-    analysis gives the objective and says the constraints are not given, in its record and its summary."""
+    analysis gives the objective; its record holds no value for the constraints, and its Summary and Compare
+    leave them out. Compared with a run that gives them, their rows are kept, empty for the analysis."""
+    import dataclasses
+    from lsr_mmto.results import compare
     from lsr_mmto.results import tables
     seen = _values(monkeypatch)
     p = Project.load(os.path.join(PROJECTS, "L-bracket.mmto"))
@@ -159,7 +162,14 @@ def test_a_quantity_of_the_latent_points_is_not_given(monkeypatch):
     run = A.analyse_solid_part(p, 0)
     assert seen[-1][0][1] is not None and all(v is None for _, v, _ in seen[-1][1:])
     assert np.isfinite(run.final_objective) and np.all(np.isnan(run.history["constraints"]))
-    assert str(tables.summary(run)).count(tables.NOT_GIVEN) == 3
+    text = str(tables.summary(run))
+    assert run.objective_label in text and "volume fraction" not in text and "Constraint" not in text, text
+    assert "volume fraction" not in tables.summary_details(run)
+    assert "volume fraction" not in str(compare.table({"one": run, "two": run}))
+    optimized = dataclasses.replace(run, config={k: v for k, v in run.config.items() if k != "analysis"},
+                                    history=dict(run.history, constraints=[[-0.5, 0.0, 0.5]]))
+    rows = [r for r in compare.table({"run": optimized, "analysis": run}).tables[1].rows if "used" in str(r[0])]
+    assert len(rows) == 3 and all(r[2] == "" and isinstance(r[1], tables.Raw) for r in rows), rows
 
 
 # ---------------------------------------------------------------------- in the window
