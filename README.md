@@ -30,6 +30,12 @@ If you already have conda (Miniforge, Miniconda or Anaconda), skip step 1. If yo
 
 ## Your first project
 
+
+
+https://github.com/user-attachments/assets/abb986d8-c686-4a75-b559-3b81c5ae498f
+
+
+
 1. **New project from an STL** on the start page, or File > New.
 2. Work down the sidebar: **Units**, **Materials**, **Supports and loads**, **Formulation**, **Settings**.
 3. **Analyse** to check the setup on the solid part, then **Run**.
