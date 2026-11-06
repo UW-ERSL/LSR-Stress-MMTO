@@ -582,7 +582,7 @@ Tick two runs and press **Compare**. A Compare window opens with their convergen
 
 The files go into the run's folder:
 
-- **design.stl**: the whole part, in one piece, for printing in one material. Faces of your STL the optimization did not touch keep their exact shape.
+- **design.stl**: the whole part, in one piece, for printing in one material. Faces of your STL the optimization did not touch keep their exact shape. When that smooth surface cannot be closed (a plate only two elements thick can do this, and an analysis has no empty elements to take away), design.stl is built from the material regions instead, the same surface the material files share, and the messages say so.
 - **design_*material*.stl**: one file per material the design uses. Together they make up the part, with no gaps and no overlaps between them.
 
 The files are smoothed, so they do not show the staircase of the elements. Smoothing cannot add detail finer than the mesh: features one element across are dropped, and square corners come out rounded. For a part to print, run on a finer mesh.

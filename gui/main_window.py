@@ -1179,7 +1179,7 @@ class MMTOWindow(MainWindow):
         unit = ((shown[1].config or {}).get("units") or {}).get("length", "") if shown and shown[0] == folder else ""
         for line in [f"STL exported to {folder}:"] + report.lines(unit):
             self.message_text.append(line)
-        good = not report.whole_error and report.whole_closed and all(p.closed for p in report.pieces)
+        good = report.whole_closed and all(p.closed for p in report.pieces)
         files = 1 + len(report.pieces)
         note = "" if good else " (with problems: see the messages)"
         self.banner.say(f"{files} STL files saved{note} \u00b7 <a href='open'>Open folder</a>", error=not good,

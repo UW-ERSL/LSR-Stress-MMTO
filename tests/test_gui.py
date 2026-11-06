@@ -2335,7 +2335,7 @@ def test_export_stl():
         assert _wait(lambda: not w.exporting, 300)
         assert "STL files saved" in w.banner.text() and "Open folder" in w.banner.text()
         folder, report = w.exported_last
-        assert folder == r.save_dir and not report.whole_error, report.whole_error
+        assert folder == r.save_dir and not report.from_regions                # the smooth surface, as before
         assert os.path.isfile(os.path.join(folder, "design.stl")) and report.whole_closed
         assert report.pieces and all(p.closed and os.path.isfile(p.path) for p in report.pieces), report.lines()
         assert abs(report.sum_off) < 1e-6                                     # no gap, no overlap
@@ -2383,7 +2383,7 @@ def test_earlier_run_after_scale_part():
         def exported_extent(mesh):
             report = stl_export.export(load_results.load(os.path.join(folder, "run_data")), mesh, folder,
                                        materials=False)
-            assert not report.whole_error, report.whole_error
+            assert report.whole_closed, report.lines()
             return trimesh.load(os.path.join(folder, "design.stl"), force="mesh").bounds
 
         run = load_results.load(os.path.join(folder, "run_data"))

@@ -6,12 +6,14 @@ around a spherical hole, a plate one element thick (as the L-bracket and the U-b
 one material one element thick between two others, scattered specks, a round cylinder. Every piece
 is closed, touches no other body at a single point, and the pieces add up exactly to their whole;
 volumes are near the design's, and the cylinder comes out round. Contacts along an edge or at a
-corner are always resolved. About half a minute.
+corner are always resolved. The whole part (design.stl) is the material regions' surface where the
+smooth one cannot be closed: a plate two elements thick, an analysis. About half a minute.
 
     python tests/test_stl_export.py        (or: python -m pytest tests)
 """
 import os
 import sys
+import tempfile
 from types import SimpleNamespace
 
 import numpy as np
@@ -119,6 +121,70 @@ def test_round_cylinder():
     deviation = np.abs(np.hypot(v[side, 0] - 15, v[side, 1] - 15) - r0)
     assert abs(out[1].volume / (np.pi * r0 ** 2 * n[2]) - 1) < 0.02
     assert deviation.mean() < 0.15 and deviation.max() < 0.5       # in elements: round, not a staircase
+
+
+def _thin_plate():
+    """The shipped U-bracket meshed solid (not one layer) with two elements through its thickness, and its
+    element indices across the plate."""
+    from lsr_mmto.problem.mesh import make_mesh
+    mesh = make_mesh(os.path.join(ROOT, "data", "models", "UBracket", "UBracket.STL"), 3000, False, 3)
+    c, h = np.asarray(mesh.elem_centers, dtype=float), np.asarray(mesh.elem_size, dtype=float)
+    assert len(np.unique(np.round(c[:, 2] / h[2]))) == 2
+    return mesh, np.rint((c[:, :2] - c[:, :2].min(axis=0)) / h[:2]).astype(int)
+
+
+def _holes(ij, *boxes):
+    """A design of one material, solid but for the boxes (i from, i to, j from, j to) through the plate."""
+    void = np.zeros(len(ij), bool)
+    for a, b, c, d in boxes:
+        void |= (ij[:, 0] >= a) & (ij[:, 0] < b) & (ij[:, 1] >= c) & (ij[:, 1] < d)
+    x = np.where(void, 0.0, 1.0)
+    return SimpleNamespace(x_cont=x, solid=x > 0.5, material_indices=np.zeros(len(x), int), material_labels=["A"])
+
+
+def test_whole_part_from_the_material_regions():
+    """A plate two elements thick whose void surface cannot be closed (a hole of 6 x 8 elements and a hole of
+    one element two elements from its corner, as in a U-bracket run): design.stl is the material regions'
+    outer surface, closed and near the design's volume, and the report says so. A design whose smooth surface
+    closes keeps it, as written before."""
+    import trimesh
+    mesh, ij = _thin_plate()
+    run = _holes(ij, (18, 24, 12, 20), (18, 19, 22, 23))
+    try:
+        X.whole_part(run, mesh)
+        raise AssertionError("the smooth surface of this design was made: the case no longer shows the failure")
+    except ValueError:
+        pass
+    with tempfile.TemporaryDirectory() as d:
+        report = X.export(run, mesh, d)
+        t = trimesh.load(report.whole_path, force="mesh")
+        assert report.from_regions and report.whole_closed and t.is_watertight
+        assert abs(report.whole_volume / report.design_volume - 1) < 0.02
+        assert abs(report.whole_volume / report.pieces_whole_volume - 1) < 1e-9
+        assert "built from the material regions, because the smooth surface could not be closed" in "\n".join(
+            report.lines())
+        report = X.export(run, mesh, d, materials=False)                         # the whole part alone, too
+        assert report.from_regions and report.whole_closed and not report.pieces
+
+        run = _holes(ij, (18, 24, 12, 20))                                      # one hole: the smooth surface
+        report = X.export(run, mesh, d, materials=False)
+        assert not report.from_regions and report.whole_closed
+        X.whole_part(run, mesh).save(os.path.join(d, "again.stl"))
+        assert open(report.whole_path, "rb").read() == open(os.path.join(d, "again.stl"), "rb").read()
+
+
+def test_whole_part_of_an_analysis():
+    """An analysis has every element solid, so there is no void surface to take away: design.stl is the
+    material regions' outer surface, closed, with the part's volume."""
+    from lsr_mmto.optimize.solid_part_analysis import analyse_solid_part
+    from lsr_mmto.problem.project import Project
+    p = Project.load(os.path.join(ROOT, "projects", "U-bracket.mmto"))
+    p.n_dof, p.single_layer = 3000, False
+    run = analyse_solid_part(p, 0)
+    with tempfile.TemporaryDirectory() as d:
+        report = X.export(run, p.mesh(), d)
+    assert report.from_regions and report.whole_closed and len(report.pieces) == 1
+    assert abs(report.whole_volume / report.design_volume - 1) < 0.02
 
 
 if __name__ == "__main__":

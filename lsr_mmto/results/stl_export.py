@@ -10,7 +10,9 @@ A run's design as smooth STL files, for printing or for another program.
 design.stl, the whole part: PyTO-AD's STL recovery (pyto/io/topopt_stl_recovery.py), as its
 GUI's Postprocess does. The density is smoothed by a Gaussian of SIGMA elements, the void
 surface is taken at density 0.5 and subtracted from the STL the mesh was made from, so faces
-the optimizer did not touch keep their exact CAD shape.
+the optimizer did not touch keep their exact CAD shape. When that fails or its part is not closed
+(a plate two elements thick, or a part with no voids at all, as an analysis), design.stl is instead
+the outer surface of the material regions below, which is closed, and the report says so.
 
 design_<material>.stl, one per material the design uses: each material's field (the density
 where the element is that material) is smoothed by the same
@@ -61,7 +63,7 @@ class Report:
     whole_closed: bool = False
     whole_volume: float = float("nan")
     design_volume: float = float("nan")
-    whole_error: str = ""
+    from_regions: bool = False                  # design.stl is the material regions' outer surface
     pieces: list = field(default_factory=list)
     pieces_whole_volume: float = float("nan")   # the per-material set's own outer surface
 
@@ -72,12 +74,11 @@ class Report:
 
     def lines(self, unit=""):
         u = f" {unit}³" if unit else ""
-        out = []
-        if self.whole_error:
-            out.append(f"Whole part not written: {self.whole_error}")
-        else:
-            out.append(f"Whole part: {os.path.basename(self.whole_path)}, {self.whole_volume:,.4g}{u} "
-                       f"(design {self.design_volume:,.4g}){'' if self.whole_closed else ', NOT closed'}")
+        out = [f"Whole part: {os.path.basename(self.whole_path)}, {self.whole_volume:,.4g}{u} "
+               f"(design {self.design_volume:,.4g}){'' if self.whole_closed else ', NOT closed'}"]
+        if self.from_regions:
+            out.append("The whole part was built from the material regions, because the smooth surface could "
+                       "not be closed.")
         for p in self.pieces:
             out.append(f"{p.label}: {os.path.basename(p.path)}, {p.volume:,.4g}{u} (design {p.design_volume:,.4g})"
                        f"{'' if p.closed else ', NOT closed'}")
@@ -110,13 +111,12 @@ def _vtu(mesh, density):
 
 
 def whole_part(run, mesh):
-    """PyTO-AD's STL recovery of the run's design: (part, design volume)."""
+    """PyTO-AD's STL recovery of the run's design, the part as a surface."""
     from lsr_mmto.pyto_ad_imports import stl_recovery
     extract_isosurface, subtract_voids_from_stl = stl_recovery().extract_isosurface, stl_recovery().subtract_voids_from_stl
     stl = mesh.stlMesh.triangulate().compute_normals()
     voids = extract_isosurface(_vtu(mesh, run.x_cont), isovalue=0.5, method="gaussian", sigma=SIGMA)
-    part = subtract_voids_from_stl(stl, voids)
-    return part, float(np.count_nonzero(run.solid)) * float(np.prod(mesh.elem_size))
+    return subtract_voids_from_stl(stl, voids)
 
 
 def material_labels(run, mesh, fine=FINE, sigma=SIGMA):
@@ -296,22 +296,28 @@ def export(run, mesh, folder, materials=True):
     materials: True also writes one file for each material, False only the whole part
     Example: report = export(r, mesh, folder)
     """
-    report = Report()
+    import trimesh
     h3 = float(np.prod(mesh.elem_size))
+    report = Report(whole_path=os.path.join(folder, "design.stl"),
+                    design_volume=float(np.count_nonzero(run.solid)) * h3)
     try:
-        part, report.design_volume = whole_part(run, mesh)
-        report.whole_path = os.path.join(folder, "design.stl")
-        part.save(report.whole_path)
-        import trimesh
+        whole_part(run, mesh).save(report.whole_path)
         t = trimesh.load(report.whole_path, force="mesh")
         report.whole_closed, report.whole_volume = bool(t.is_watertight), float(abs(t.volume))
-    except Exception as e:                                          # noqa: BLE001
-        report.whole_error = str(e)
+    except Exception:                                               # noqa: BLE001
+        report.whole_closed = False                                 # the smooth surface could not be made
+    regions = None
+    if materials or not report.whole_closed:
+        label, origin, spacing = material_labels(run, mesh)
+        pts, quads, bl, behind = material_surfaces(label, origin, spacing)
+        regions = piece(pts, quads, bl, behind, 0)                  # the material regions' outer surface
+        report.pieces_whole_volume = float(regions.volume)
+    if not report.whole_closed:
+        regions.export(report.whole_path)
+        report.from_regions = True
+        report.whole_closed, report.whole_volume = bool(regions.is_watertight), float(abs(regions.volume))
     if not materials:
         return report
-    label, origin, spacing = material_labels(run, mesh)
-    pts, quads, bl, behind = material_surfaces(label, origin, spacing)
-    report.pieces_whole_volume = float(piece(pts, quads, bl, behind, 0).volume)
     solid = np.asarray(run.solid, dtype=bool)
     mat = np.asarray(run.material_indices, dtype=int)
     used = set()
