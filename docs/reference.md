@@ -169,6 +169,8 @@ Every setting a run takes, under its own name. A new project starts from these v
 
 ## Python
 
+In the examples, `p` is your project: `p = Project(...)` for a new one, or `p = Project.load('my project.mmto')` for a saved one.
+
 Every call a setup script uses, with its arguments, read from the code's own docstrings; `Python_walkthrough.ipynb` uses them on one whole project. Model units are the project's units (`p.units`). A length is a number in model units, or text in numbers, pi and h, the largest element size, such as `"1.5h"` or `"5.64 + 1h"`. A selection is made with one of the selection types first and then added to a project under a name. The examples follow on from one another, run from the LSR MMTO folder: the selections, then a new project that the next examples build up, save and write as a script, then the shipped U-bracket, run and read back.
 
 ### box
@@ -453,7 +455,7 @@ p = Project("my bracket", stl="data/models/UBracket/UBracket.STL", n_dof=8000)
 
 ### p.units
 
-`p.units = value`, p a Project
+`p.units = value`
 
 The unit system: "MKS", "mmKS", "IPS" (those of the PyTO-AD GUI, kept where the GUI keeps it, settings.unit_system) or "none". Numbers are never converted; the unit system says what they are meant to be in, so that a database in other units is reported.
 
@@ -467,7 +469,7 @@ p.units = "MKS"
 
 ### p.comment
 
-`p.comment = value`, p a Project
+`p.comment = value`
 
 | argument | format | default |
 |---|---|---|
@@ -479,7 +481,7 @@ p.comment = "U-bracket, fixed on the left"
 
 ### p.physics
 
-`p.physics = value`, p a Project
+`p.physics = value`
 
 | argument | format | default |
 |---|---|---|
@@ -491,7 +493,7 @@ p.physics = "structural"
 
 ### p.add_selection
 
-`p.add_selection(name, selection)`, p a Project
+`p.add_selection(name, selection)`
 
 Adds a selection under a name, which supports, loads and keep solid can then use; returns the name.
 
@@ -506,7 +508,7 @@ p.add_selection("left", left)
 
 ### p.mesh
 
-`p.mesh()`, p a Project
+`p.mesh()`
 
 The voxel mesh of the part, made from the mesh settings (n_dof, single_layer) as a run makes it.
 
@@ -516,7 +518,7 @@ mesh = p.mesh()
 
 ### p.evaluate
 
-`p.evaluate(selection, mesh, on='nodes')`, p a Project
+`p.evaluate(selection, mesh, on='nodes')`
 
 Indices of a selection (or of the selection with that name) on mesh, with every selection(name) in it looked up now, so a combination follows later edits of its parts. Elements of a selection that picks only nodes (stl_faces, rows, ...) are the elements touching those nodes.
 
@@ -532,7 +534,7 @@ print(len(p.evaluate("left", mesh)))
 
 ### p.add_bc
 
-`p.add_bc(kind, on, **values)`, p a Project
+`p.add_bc(kind, on, **values)`
 
 A support or load of a kind of BC_KINDS (the structural ones: fixed, displacement, force, traction) on a selection, its name or a Selection (stored under a new name), with the kind's values, e.g. p.add_bc("fixed", "clamp", dofs="xyz"), p.add_bc("force", "corner", total=[0, -4, 0]). The values are checked as the project's check checks them; a wrong one is an error here.
 
@@ -548,7 +550,7 @@ p.add_bc("fixed", "left", dofs="xyz")
 
 ### p.keep_solid
 
-`p.keep_solid(*names)`, p a Project
+`p.keep_solid(*names)`
 
 Keeps these selections solid: their elements are always material.
 
@@ -562,7 +564,7 @@ p.keep_solid(boss)
 
 ### p.keep_support_elements
 
-`p.keep_support_elements = value`, p a Project
+`p.keep_support_elements = value`
 
 | argument | format | default |
 |---|---|---|
@@ -574,7 +576,7 @@ p.keep_support_elements = True
 
 ### p.database
 
-`p.database = value`, p a Project
+`p.database = value`
 
 The material database. When the database chosen has a trained network, and the trained network is used (the vae setting use_pretrained_vae), the settings that give the network its shape (latentDim, vae_hiddenDim) are set from the network itself, and a printed line says which changed.
 
@@ -588,7 +590,7 @@ p.database = "6Materials_AF_3Attr"
 
 ### p.network_error
 
-`p.network_error()`, p a Project
+`p.network_error()`
 
 How closely the database's trained network gives back its materials: (rows, line). rows: one for each material and property, the database's value and the network's; line: the same in one sentence, as the Materials panel shows it. (None, None) when the database has no trained network yet, or the network cannot be read for it (vae_check says why).
 
@@ -598,7 +600,7 @@ rows, line = p.network_error()
 
 ### p.vae_check
 
-`p.vae_check()`, p a Project
+`p.vae_check()`
 
 (errors, warnings, status) about the VAE: a run that would train into the shipped folder, a trained network that does not fit the settings or the database, a network a run would replace, a latent dimension other than the recommended one; status says which network the database has. For a database that passes its check. Each error says how to put it right.
 
@@ -608,7 +610,7 @@ errors, warnings, status = p.vae_check()
 
 ### p.objective
 
-`p.objective(expression, sense='minimize')`, p a Project
+`p.objective(expression, sense='minimize')`
 
 What the optimization makes as small as it can.
 
@@ -623,7 +625,7 @@ p.objective("FailureFactorPNorm()")
 
 ### p.constraint
 
-`p.constraint(expression, op, bound)`, p a Project
+`p.constraint(expression, op, bound)`
 
 A limit on a quantity, expression op bound; each call adds one more constraint.
 
@@ -639,7 +641,7 @@ p.constraint("Mass()", "<=", 0.0035)
 
 ### p.settings
 
-`p.settings[section][name] = value`, p a Project
+`p.settings[section][name] = value`
 
 | argument | format | default |
 |---|---|---|
@@ -651,7 +653,7 @@ p.settings["common"]["maxIterations"] = 50
 
 ### p.save
 
-`p.save(path)`, p a Project
+`p.save(path)`
 
 Write the project, every setting included, with the other sections it was loaded with. Always as .mmto. Its folder becomes the project's folder, as the window keeps it: the part and the database with its network are copied into part/ and materials/ there (project_folder.pack), unless they are in it already.
 
@@ -665,7 +667,7 @@ p.save("my bracket/my bracket.mmto")
 
 ### p.to_script
 
-`p.to_script(path)`, p a Project
+`p.to_script(path)`
 
 Write a Python script that rebuilds this project with the same calls, next to it. Settings that differ from a new project's are written; the rest are the defaults.
 
@@ -755,7 +757,7 @@ print(r.iterations, r.final_objective)
 
 `summary(run)`, after `from lsr_mmto.results.tables import summary`
 
-One run at a glance, in sections: the result (objective and each constraint, met or not), the design, the materials and the run. An analysis: the same for its one solve, without what only an optimization has (grey elements, the latent space, iterations). A notebook shows it as tables.
+One run at a glance, in sections: the result (objective and each constraint, met or not), the design, the materials and the run. An analysis: the same for its one solve, without what only an optimization has (grey elements, the latent space, iterations) and the constraints it cannot give. A notebook shows it as tables.
 
 | argument | format | default |
 |---|---|---|

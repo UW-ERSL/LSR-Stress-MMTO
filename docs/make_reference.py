@@ -258,8 +258,7 @@ def _entry(heading, obj, how):
         imports = f"from {obj.__module__} import {obj.__name__}"
     lines = [f"### {heading}", ""]
     if call:
-        lines += [f"`{call}`" + (f", after `{imports}`" if imports else "") +
-                  (", p a Project" if how in ("method", "attribute") else ""), ""]
+        lines += [f"`{call}`" + (f", after `{imports}`" if imports else ""), ""]
     if description:
         lines += [_cell(description), ""]
     if how == "fields":
@@ -279,6 +278,8 @@ def examples():
 
 def python_section():
     out = ["", "## Python", "",
+           "In the examples, `p` is your project: `p = Project(...)` for a new one, or "
+           "`p = Project.load('my project.mmto')` for a saved one.", "",
            "Every call a setup script uses, with its arguments, read from the code's own docstrings; "
            "`Python_walkthrough.ipynb` uses them on one whole project. Model units "
            "are the project's units (`p.units`). A length is a number in model units, or text in numbers, pi "

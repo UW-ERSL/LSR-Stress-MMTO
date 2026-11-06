@@ -46,7 +46,7 @@ Each panel's (i) button explains that panel, and Help > User guide covers every 
 
 ## Your first project in Python
 
-`Python_walkthrough.ipynb` takes the U-bracket from its STL to the optimized design in Python, with no GUI. Open it in VS Code or Jupyter and select the kernel **Python (lsr-stress-mmto-ad)**. Every call it uses is in `docs/reference.md`, and in the GUI under Help > Researcher guide > Reference.
+`docs/reference.md` has every call, with examples (also in the GUI under Help > Researcher guide > Reference). `Python_walkthrough.ipynb` takes the U-bracket from its STL to the optimized design in Python, with no GUI. Open it in VS Code or Jupyter and select the kernel **Python (lsr-stress-mmto-ad)**.
 
 ## Setting up by hand
 
