@@ -225,6 +225,30 @@ def test_the_template_is_analysed_with_no_file_of_it_changed():
     assert np.isclose(r.utilisation(0), 1.0 / 0.5)                            # every element full: volume 1
 
 
+def test_result_fields_say_where_and_shape():
+    """A RESULT_FIELDS entry may say where its values live and their shape; one that does not is a number at
+    each element (the template's). The final check refuses values of another length or shape than declared."""
+    import pytest
+    from types import SimpleNamespace
+    from lsr_mmto.optimize.final_design_analysis import checked_results
+    from lsr_mmto.results.load_results import result_info, result_shape
+    info = result_info(TEMPLATE.RESULT_FIELDS["mean_value"])
+    assert info["where"] == "element" and info["shape"] == "scalar" and result_shape(info, 10, 4) == (10,)
+    vector = dict(view="Displacement", title="Displacement", measures="length", where="node", shape="vector")
+    assert result_shape(result_info(vector), 10, 4) == (4, 3)
+    with pytest.raises(ValueError, match="where 'nodes'"):
+        result_info(dict(vector, where="nodes"))
+    physics = SimpleNamespace(NAME="test", RESULT_FIELDS={"mean_value": TEMPLATE.RESULT_FIELDS["mean_value"],
+                                                          "displacement": vector})
+    good = {"mean_value": np.zeros(10), "displacement": np.zeros((4, 3))}
+    assert checked_results(physics, good, 10, 4) is good
+    for wrong in (np.zeros(12), np.zeros((10, 3)), np.zeros((4, 2))):
+        with pytest.raises(ValueError, match=r"declares a vector at each node: shape \(4, 3\)"):
+            checked_results(physics, dict(good, displacement=wrong), 10, 4)
+    with pytest.raises(ValueError, match="declares a scalar at each element"):
+        checked_results(physics, dict(good, mean_value=np.zeros(4)), 10, 4)
+
+
 def test_a_result_the_physics_does_not_return_stops_the_save_with_a_message(monkeypatch):
     """final_summary returns the value of every RESULT_FIELDS entry; one left out is a clear error, not a
     result silently missing or taken from an earlier solve."""

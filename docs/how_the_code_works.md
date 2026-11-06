@@ -72,7 +72,7 @@ the code takes from it. `MODULE_ENTRIES` in `physics/available_physics.py` lists
 | `QUANTITIES` | its objectives and constraints |
 | `PENALTIES` | the terms it adds to the objective besides those every physics has (may be empty) |
 | `SETTINGS` | its own settings |
-| `RESULT_FIELDS` | the per-element results a run saves: their names, views and units |
+| `RESULT_FIELDS` | the results a run saves: their names, views and units, and where each lives (element or node) and its shape (scalar or vector) |
 | `iteration_diagnostics` | what each iteration records and prints |
 | `final_summary` | the final check's numbers, printed; it returns the values of `RESULT_FIELDS` for the last design |
 

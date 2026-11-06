@@ -41,12 +41,16 @@ MODULE_ENTRIES = {
     "PENALTIES": "the terms it adds to the objective besides those every physics has, each as the arguments "
                  "of a Penalty (design/latent_penalties.py); may be empty",
     "SETTINGS": "its own settings, each as the arguments of a Setting",
-    "RESULT_FIELDS": "the per-element results a run saves, {name: dict(view, title, measures)}; final_summary "
-                     "returns their values",
+    "RESULT_FIELDS": "the results a run saves, {name: dict(view, title, measures, where, shape)}: view the Results "
+                     "panel's choice that shows it, title its colour scale's, measures what it is (for its unit), "
+                     "where 'element' (one value per element, the default) or 'node' (one per node), shape "
+                     "'scalar' (one number, the default) or 'vector' (x, y and z); final_summary returns their "
+                     "values",
     "iteration_diagnostics": "iteration_diagnostics(history, iteration, solver, x_phys, properties, ...): what each "
                              "iteration records and prints besides the objective and the constraints",
     "final_summary": "final_summary(designs, solver, ...): prints the final designs' numbers and returns "
-                     "{name: value per element} of the last design, one for each RESULT_FIELDS entry",
+                     "{name: values} of the last design, one for each RESULT_FIELDS entry: an array of "
+                     "(elements,) or (nodes,), with a last axis of 3 for a vector",
 }
 
 

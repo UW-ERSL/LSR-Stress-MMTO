@@ -69,10 +69,15 @@ QUANTITIES = [
 
 
 # ----------------------------------------------------------------------------- results a run saves
-# {name: dict(view, title, measures)}: view is the Results panel's choice that shows it, title the colour
-# scale's title, measures what it is (for its unit, None for no unit). The values come from final_summary
-# below, which returns one array per element for each name here; a name it does not return stops the
-# save with a message that says so.
+# {name: dict(view, title, measures, where, shape)}: view is the Results panel's choice that shows it, title
+# the colour scale's title, measures what it is (for its unit, None for no unit). where is "element" (one
+# value per element) or "node" (one per node), shape "scalar" (one number) or "vector" (x, y and z); an
+# entry that does not say them is a number at each element, as here. The values come from final_summary
+# below, which returns one array for each name here, (elements,) or (nodes,) with a last axis of 3 for a
+# vector; a name it does not return, or values of another length or shape, stop the save with a message
+# that says so. A vector at each node, such as a displacement:
+#     "displacement": dict(view="Displacement", title="Displacement", measures="length", where="node",
+#                          shape="vector"),
 RESULT_FIELDS = {
     "mean_value": dict(view="Value", title="Value of c", measures=None),      # FILL
 }
@@ -101,7 +106,8 @@ def final_summary(designs, solver, properties_of, settings, encoder, latent_dim,
     """Once, at the end. designs is [(label, x, z)] for the continuous, binarized and binarized-and-snapped
     final designs (x per element, z per element and latent dimension); properties_of(z) decodes latent
     points to properties. Solve each, print its numbers, and return the results a run saves,
-    {name: numpy array, one value per element}, one for each RESULT_FIELDS entry, of the last design."""
+    {name: numpy array}, one for each RESULT_FIELDS entry, of the last design: one value per element here,
+    or as the entry's where and shape say."""
     for label, x, z in designs:
         with torch.no_grad():
             z = z if torch.is_tensor(z) else torch.as_tensor(np.asarray(z), dtype=torch.get_default_dtype())

@@ -8,6 +8,24 @@ import numpy as np
 import torch
 
 
+def checked_results(physics, results, n_elems, n_nodes):
+    """The physics' final_summary results, refused with a clear message when one of its RESULT_FIELDS is
+    missing, or its values are not of the length and shape its entry declares (where and shape:
+    load_results.result_info)."""
+    from lsr_mmto.results.load_results import result_info, result_shape
+    missing = sorted(set(physics.RESULT_FIELDS) - set(results or {}))
+    if missing:
+        raise ValueError(f"the {physics.NAME} physics' final_summary returned no {', '.join(missing)}: it returns "
+                         f"one value per element for each entry of its RESULT_FIELDS")
+    for name, entry in physics.RESULT_FIELDS.items():
+        info = result_info(entry)
+        want, got = result_shape(info, n_elems, n_nodes), np.shape(results[name])
+        if got != want:
+            raise ValueError(f"the {physics.NAME} physics' final_summary returned {name} with shape {got}, but its "
+                             f"RESULT_FIELDS entry declares a {info['shape']} at each {info['where']}: shape {want}")
+    return results
+
+
 def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
                        MaterialModel, physical_density,
                        zRealPoints, material_colors, num_elems, latentDim,
@@ -52,10 +70,7 @@ def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
          ("Binarized topology (x projected -> binarized, raw z)", xOptimal, zOptimal),
          ("Binarized + snapped materials (x binarized, snapped z)", xOptimal, zOptimalPts)],
         fe_solver, properties_of, settings, matEncoder, latentDim, elem_volume, design_domain_volume)
-    missing = sorted(set(physics.RESULT_FIELDS) - set(results or {}))
-    if missing:
-        raise ValueError(f"the {physics.NAME} physics' final_summary returned no {', '.join(missing)}: it returns "
-                         f"one value per element for each entry of its RESULT_FIELDS")
+    checked_results(physics, results, num_elems, int(fe_solver.mesh.num_nodes))
 
     decoded = matEncoder.vaeNet.decoder(zOptimalPts)
     material_properties = matEncoder.getMaterialProperties(decoded)

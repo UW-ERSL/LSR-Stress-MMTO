@@ -742,7 +742,7 @@ One optimization run. Per-element arrays are in solver element order.
 | `x_cont` | each element's density, 0 to 1, before that |
 | `material_indices` | each element's material, its row in the database, counted from 0 |
 | `material_labels` | the materials' names, as tables and legends show them |
-| `results` | {name: one value per element}, the physics' results, e.g. results["von_mises"] |
+| `results` | {name: values}, the physics' results, e.g. results["von_mises"]: one value per element, or as result_info[name] says (where: "element" or "node"; shape: "scalar", or "vector" with x, y, z) |
 | `history` | {name: one value per iteration}, e.g. history["J_phys"], the objective |
 | `iterations` | how many iterations the optimizer made |
 | `final_objective` | the objective at the last iteration |

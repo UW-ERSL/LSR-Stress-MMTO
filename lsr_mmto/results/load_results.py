@@ -25,6 +25,32 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+# Where a result's values live and their shape, as a RESULT_FIELDS entry may say (physics/available_physics.py):
+# where "element" (one value per element) or "node" (one per node of the mesh); shape "scalar" (one number)
+# or "vector" (x, y and z). The first of each is what an entry that does not say gets.
+RESULT_WHERE = ("element", "node")
+RESULT_SHAPES = {"scalar": (), "vector": (3,)}
+
+
+def result_info(entry):
+    """A RESULT_FIELDS entry (or a record's description of a result) as a record describes it: view, title,
+    measures, where and shape, the last two filled in when it does not say them. ValueError for another
+    where or shape."""
+    info = {"view": entry.get("view"), "title": entry.get("title"), "measures": entry.get("measures"),
+            "where": entry.get("where", RESULT_WHERE[0]), "shape": entry.get("shape", next(iter(RESULT_SHAPES)))}
+    if info["where"] not in RESULT_WHERE:
+        raise ValueError(f"where {info['where']!r}: one of {', '.join(RESULT_WHERE)}")
+    if info["shape"] not in RESULT_SHAPES:
+        raise ValueError(f"shape {info['shape']!r}: one of {', '.join(RESULT_SHAPES)}")
+    return info
+
+
+def result_shape(info, n_elems, n_nodes):
+    """The numpy shape of a result's values, from its description (result_info): (n_elems,) for a number at
+    each element, (n_nodes, 3) for a vector at each node."""
+    return ((n_elems if info["where"] == "element" else n_nodes),) + RESULT_SHAPES[info["shape"]]
+
+
 # the project folder in a record (relative to the run's folder), and the paths a record holds relative to it
 PROJECT_FOLDER = ("arguments_resolved", "to_problem", "base_dir")
 RECORD_PATHS = (("arguments_resolved", "to_problem", "stl_file_path"), ("arguments_resolved", "saveNet"),
@@ -119,7 +145,8 @@ class Run:
     x_cont: each element's density, 0 to 1, before that
     material_indices: each element's material, its row in the database, counted from 0
     material_labels: the materials' names, as tables and legends show them
-    results: {name: one value per element}, the physics' results, e.g. results["von_mises"]
+    results: {name: values}, the physics' results, e.g. results["von_mises"]: one value per element, or as
+        result_info[name] says (where: "element" or "node"; shape: "scalar", or "vector" with x, y, z)
     history: {name: one value per iteration}, e.g. history["J_phys"], the objective
     iterations: how many iterations the optimizer made
     final_objective: the objective at the last iteration
@@ -135,8 +162,8 @@ class Run:
     material_indices: np.ndarray   # (n_elems,)      int
     solid: np.ndarray              # (n_elems,)      bool, binarized topology
     x_cont: np.ndarray             # (n_elems,)      float32
-    results: dict                  # name -> (n_elems,) float32, the physics' results (von_mises)
-    result_info: dict              # name -> {view, title, measures}
+    results: dict                  # name -> float32, (n_elems,) or as its where and shape say (result_shape)
+    result_info: dict              # name -> {view, title, measures, where, shape} (result_info)
     z_elem: np.ndarray             # (n_elems, n_z)  float32, NaN in voids
     z_real: np.ndarray             # (n_mats, n_z)   latent anchors
     material_names: list
@@ -283,11 +310,14 @@ def _build(path, meta, config, n, mat, solid, x_cont, results, z, z_real,
         raise RecordError(f"{tag}: z_elem has shape {z.shape}, "
                           f"expected ({n}, n_latent)")
     names = [str(s) for s in names]
+    described = meta.get("results") or {}
+    info = {k: result_info(described.get(k, {})) for k in dict.fromkeys(list(described) + list(results))}
     return Run(path=path, meta=meta, config=config, n_elems=n,
                material_indices=mat.astype(np.int64), solid=solid,
                x_cont=np.asarray(x_cont).ravel().astype(np.float32),
-               results={k: np.asarray(v).ravel().astype(np.float32) for k, v in results.items()},
-               result_info=dict(meta.get("results") or {}),
+               results={k: np.asarray(v).astype(np.float32).reshape(result_shape(info[k], n, -1))
+                        for k, v in results.items()},
+               result_info=info,
                z_elem=z, z_real=np.asarray(z_real).astype(np.float32),
                material_names=names, material_colors=[str(c) for c in colours],
                material_labels=[str(s) for s in labels], history=history)

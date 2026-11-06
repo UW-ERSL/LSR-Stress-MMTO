@@ -116,6 +116,7 @@ def analyse_solid_part(project, material, save_dir=None, should_stop=None):
     AnalysisStopped."""
     from lsr_mmto.materials.databases import material_display
     from lsr_mmto.optimize import save_results
+    from lsr_mmto.optimize.final_design_analysis import checked_results
     from lsr_mmto.optimize.history import compute_domain_volume
     from lsr_mmto.optimize.optimization_loop import problem_solver
     from lsr_mmto.physics.available_physics import physics_module
@@ -152,10 +153,7 @@ def analyse_solid_part(project, material, save_dir=None, should_stop=None):
     results = physics.final_summary(                 # properties ignore it: every element is the one material
         [(title, x, z)], solver, lambda z: one.properties(len(z)), s, one, 1, elem_volume,
         compute_domain_volume(solver))
-    missing = sorted(set(physics.RESULT_FIELDS) - set(results or {}))
-    if missing:
-        raise ValueError(f"the {physics.NAME} physics' final_summary returned no {', '.join(missing)}: it returns "
-                         f"one value per element for each entry of its RESULT_FIELDS")
+    checked_results(physics, results, m.N, int(mesh.num_nodes))
     stop_if_asked()
 
     nan = float("nan")

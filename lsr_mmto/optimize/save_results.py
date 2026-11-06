@@ -354,7 +354,8 @@ def save_run_data(save_dir, config, fields, vae_state_dict, history,
                   example_name, z_real_points, material_colors, material_names,
                   latent_dim, num_elems, num_nodes, material_labels=None, results=None):
     """Write the record, run_config.yaml, and the pickle if SAVE_PICKLE. results: the physics'
-    per-element results, {name: dict(view, title, measures, value)} with value the array.
+    results, {name: dict(view, title, measures, where, shape, value)} with value the array (where and
+    shape may be left out: load_results.result_info).
 
     Returns the path of the primary artefact: the .pkl when SAVE_PICKLE is on,
     otherwise the .npz. Returns None when WRITE_FILES is False (the tests only).
@@ -371,6 +372,7 @@ def save_run_data(save_dir, config, fields, vae_state_dict, history,
 def run_data(config, fields, vae_state_dict, history, example_name, z_real_points, material_colors,
              material_names, latent_dim, num_elems, num_nodes, material_labels=None, results=None):
     """Everything save_run_data writes, as one dict (its arguments as save_run_data takes them)."""
+    from lsr_mmto.results.load_results import result_info
     sd = {}
     try:
         for k, v in (vae_state_dict or {}).items():
@@ -386,7 +388,7 @@ def run_data(config, fields, vae_state_dict, history, example_name, z_real_point
         "num_nodes": int(num_nodes),
         "fields": {k: np.asarray(v) for k, v in fields.items()},
         "results": {name: np.asarray(r["value"]) for name, r in (results or {}).items()},
-        "result_info": {name: {k: r[k] for k in ("view", "title", "measures")} for name, r in (results or {}).items()},
+        "result_info": {name: result_info(r) for name, r in (results or {}).items()},
         "vae_state_dict": sd,
         "history": history,
         "zRealPoints": np.asarray(z_real_points).astype(float),
@@ -424,7 +426,8 @@ def _save_record(save_dir, data):
     x_bin is stored bitpacked; z_elem is stored for solid elements only.
     results/load_results.py undoes both. zeta, the property_<name> fields and vae_state_dict
     are not stored; they are recoverable from z_elem and the .nt named in meta.
-    Each of the physics' results is stored as r_<name>, described in meta's results.
+    Each of the physics' results is stored flat as r_<name>, described in meta's results (its where and
+    shape say how load_results gives it its shape back).
     """
     rec, cfg = record_arrays(save_dir, data)
     base = os.path.join(save_dir, "run_data")
