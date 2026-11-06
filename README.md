@@ -97,10 +97,10 @@ The pages in `docs/` and `CONTRIBUTING.md` can also be read inside the GUI: the 
 | `projects/` | the four examples as project files: geometry, supports, loads, materials, objective, constraints, settings |
 | `docs/how_the_code_works.md` | how the code is laid out, and what happens in one run |
 | `docs/code_map.md` | the map of the code: what is where, and where a new feature goes |
-| `docs/project_file_reference.md` | everything a project file can hold, generated from the code |
+| `docs/reference.md` | everything a project file can hold, generated from the code |
 | `docs/how_to_add_features.md` | how to add a quantity, a selection type, a kind of support or load, a setting, a material attribute, a physics or a database |
 | `CONTRIBUTING.md` | how changes to the code are made and checked |
-| `docs/make_project_file_reference.py` | writes `docs/project_file_reference.md` from the code |
+| `docs/make_reference.py` | writes `docs/reference.md` from the code |
 | `setup_environment.py` | installs everything; see Installation |
 | `requirements.txt` | Python packages the setup installs |
 | `pyproject.toml` | makes this folder installable as the package `lsr_mmto` (`pip install -e .`) |

@@ -86,7 +86,7 @@ def test_researcher_guide():
                                                                     "About LSR MMTO"]
     assert [os.path.relpath(p, ROOT).replace(os.sep, "/") for p in U.RESEARCHER_GUIDE] == [
         "docs/how_the_code_works.md", "docs/how_to_add_features.md", "docs/code_map.md",
-        "docs/project_file_reference.md", "CONTRIBUTING.md"]
+        "docs/reference.md", "CONTRIBUTING.md"]
     menu.actions()[1].trigger()
     APP.processEvents()
     g = window._researcher_guide

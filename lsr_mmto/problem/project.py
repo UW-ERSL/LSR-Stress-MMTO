@@ -31,7 +31,7 @@ defaults, and the run says which.
 
 Supports and loads each act on a named selection, evaluated on the mesh nodes. Their kinds are
 those of the project's physics (the <name>_supports_and_loads.py file of each physics); every
-kind with its values is listed in docs/project_file_reference.md, made from the code.
+kind with its values is listed in docs/reference.md, made from the code.
 Supports and loads picked on the part in the window (faces, nodes, boxes) become selections
 and boundary conditions of the project as soon as they are applied (adopt_picks), with the
 picking tools' own rules (stl_faces with tol 0.8, nearest boundary node, halfspaces): the mmto
@@ -42,7 +42,7 @@ material database.
 
 Objective and constraints are written as PyTO-AD stores them: an expression, a sense
 (minimize) or an operator (<=) and a bound. An expression is exactly one quantity, e.g. "Mass()"
-or "MaterialVolumeFraction(2, tau=0.5)"; every quantity is listed in docs/project_file_reference.md.
+or "MaterialVolumeFraction(2, tau=0.5)"; every quantity is listed in docs/reference.md.
 """
 import json
 import os

@@ -44,8 +44,8 @@ def test_one_entry_makes_a_setting():
         assert settings.DEFAULT_SETTINGS["advanced"]["my_knob"] == 0.25
         assert "my_knob" in settings.RUN_KEYS
         sys.path.insert(0, os.path.join(ROOT, "docs"))
-        import make_project_file_reference
-        assert "| `my_knob` | 0.25 | What my knob does. |" in make_project_file_reference.generate()
+        import make_reference
+        assert "| `my_knob` | 0.25 | What my knob does. |" in make_reference.generate()
 
         p = Project.load(os.path.join(ROOT, "projects", "U-bracket.mmto"))
         p.complete_settings()

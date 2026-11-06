@@ -1,6 +1,6 @@
-# Project reference
+# Reference
 
-Generated from the code by `python docs/make_project_file_reference.py`; do not edit by hand.
+Generated from the code by `python docs/make_reference.py`; do not edit by hand.
 
 A project is an LSR MMTO project file (.mmto): the layout of a PyTO-AD project file, with an `mmto` section, which holds the whole problem. Supports and loads picked on the part in the window become selections (`gui_support1`, `gui_load1`, ...) and boundary conditions of the mmto section as soon as they are applied; the rest of what the window saves in the file (its settings) is kept.
 

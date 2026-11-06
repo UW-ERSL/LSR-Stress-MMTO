@@ -1,10 +1,10 @@
 """
-make_project_file_reference.py
-==============================
-Writes docs/project_file_reference.md from the code: the project file's sections, the
+make_reference.py
+=================
+Writes docs/reference.md from the code: the project file's sections, the
 selection types, the boundary-condition kinds, the quantities and the settings.
 
-    python docs/make_project_file_reference.py        (from the repository folder)
+    python docs/make_reference.py        (from the repository folder)
 
 The page is generated, not edited by hand; tests/test_reference.py fails when the
 page in the repository differs from what the code generates.
@@ -13,7 +13,7 @@ import os
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PAGE = os.path.join(ROOT, "docs", "project_file_reference.md")
+PAGE = os.path.join(ROOT, "docs", "reference.md")
 
 SECTIONS = [
     ("schema_version", "version of the project format"),
@@ -43,8 +43,8 @@ def generate():
     from lsr_mmto.problem.settings import FROM_DATABASE, SETTINGS
     from lsr_mmto.materials.databases import ATTRIBUTES, UNIT_SYSTEMS
 
-    out = ["# Project reference", "",
-           "Generated from the code by `python docs/make_project_file_reference.py`; do not edit by hand.", "",
+    out = ["# Reference", "",
+           "Generated from the code by `python docs/make_reference.py`; do not edit by hand.", "",
            "A project is an LSR MMTO project file (.mmto): the layout of a PyTO-AD project file, with an "
            "`mmto` section, which holds the whole "
            "problem. Supports and loads picked on the part in the window become selections (`gui_support1`, "

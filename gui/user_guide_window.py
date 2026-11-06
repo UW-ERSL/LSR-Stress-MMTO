@@ -22,7 +22,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GUIDE = os.path.join(ROOT, "docs", "user_guide.md")
 RESEARCHER_GUIDE = [os.path.join(ROOT, f) for f in ("docs/how_the_code_works.md", "docs/how_to_add_features.md",
-                                                  "docs/code_map.md", "docs/project_file_reference.md",
+                                                  "docs/code_map.md", "docs/reference.md",
                                                   "CONTRIBUTING.md")]           # its chapters, in this order
 LIST = re.compile(r"(<!-- list: (\w+) -->\n\n)(.*?)(<!-- end of list -->)", re.S)
 

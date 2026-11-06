@@ -3,11 +3,11 @@
 Most additions are one entry in a list. `docs/how_the_code_works.md` says where each part of the
 code is, and `docs/code_map.md` leads from what you want to add to the section of this page to follow. The tests listed under each one fail when the entry is incomplete. After any addition, run
 
-    python docs/make_project_file_reference.py
+    python docs/make_reference.py
     python -m gui.user_guide_window --write
     python -m pytest tests -q
 
-The first rewrites `docs/project_file_reference.md`, the second the lists in `docs/user_guide.md`
+The first rewrites `docs/reference.md`, the second the lists in `docs/user_guide.md`
 (the settings, quantities, kinds of support and load, selection types and material attributes, as
 the user guide shows them); `tests/test_reference.py` and `tests/test_user_guide.py` fail until
 they are rewritten. Each section below ends with what else to run.
