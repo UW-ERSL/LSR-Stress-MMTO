@@ -15,8 +15,9 @@ autodiff branch: gradients come from automatic differentiation through PyTO-AD.
    lsr_mmto (pip install -e .), so scripts anywhere can import it
 4. registers the environment as a Jupyter kernel
 5. checks that the solver builds a mesh and a material decoder loads
-6. (Windows) adds LSR MMTO to the Start menu, and to the desktop if you say yes; the one question
-   is asked before anything is installed, so the rest runs on its own
+6. (Windows) adds LSR MMTO to the Start menu and to Settings > Apps (whose Uninstall removes it), and
+   to the desktop if you say yes; the one question is asked before anything is installed, so the
+   rest runs on its own
 
 Safe to run again: each step is skipped if already done.
 

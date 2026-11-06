@@ -94,6 +94,10 @@ git -C ../PyTO-AD checkout 790d935
 
 To use a PyTO-AD you already have instead, it must sit next to this folder and be named `PyTO-AD`. If yours has another name, run `mklink /J PyTO-AD <its name>` in the folder that holds both.
 
+## Removing LSR MMTO
+
+Windows Settings > Apps > LSR MMTO > Uninstall. It lists what it removes and what it keeps, and asks before it starts. It removes the Start menu and desktop shortcuts, the Python environment `lsr-stress-mmto-ad`, the Jupyter kernel and the GUI's saved settings. It keeps this folder, PyTO-AD next to it and your projects, and says where they are, so you can delete them yourself if you no longer want them.
+
 ## Files
 
 The pages in `docs/` and `CONTRIBUTING.md` can also be read inside the GUI: the user guide under Help > User guide, and the others under Help > Researcher guide, so no Markdown viewer is needed.
@@ -104,7 +108,8 @@ The pages in `docs/` and `CONTRIBUTING.md` can also be read inside the GUI: the 
 |---|---|
 | `Python_walkthrough.ipynb` | one whole project in Python, from the STL to the exported design |
 | `run_gui.py` | starts the LSR MMTO GUI: `python run_gui.py`, or `python run_gui.py projects/beam.mmto` |
-| `make_shortcut.py` | adds LSR MMTO to the Start menu and the desktop (Windows); the setup runs it, and running it again (`python make_shortcut.py`, with the environment active) repairs the shortcuts after the folder moves |
+| `make_shortcut.py` | adds LSR MMTO to the Start menu, the desktop and Settings > Apps (Windows); the setup runs it, and running it again (`python make_shortcut.py`, with the environment active) repairs the shortcuts after the folder moves |
+| `uninstall_lsr_mmto.py` | removes LSR MMTO; Settings > Apps > LSR MMTO > Uninstall runs it |
 | `projects/` | the four examples as project files: geometry, supports, loads, materials, objective, constraints, settings |
 | `docs/how_the_code_works.md` | how the code is laid out, and what happens in one run |
 | `docs/code_map.md` | the map of the code: what is where, and where a new feature goes |

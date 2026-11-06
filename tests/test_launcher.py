@@ -3,8 +3,9 @@ test_launcher.py
 ================
 The desktop start: the icon loads at every size Windows asks for, the start-up picture shows, a start
 with no console writes what the app prints to the log file, the shortcut is written with every path
-quoted for the desktop or the Start menu (on Windows, a real shortcut in a scratch folder), and the
-setup's one question takes Enter as yes.
+quoted for the desktop or the Start menu (on Windows, a real shortcut in a scratch folder), the
+setup's one question takes Enter as yes, and Settings > Apps lists LSR MMTO, whose Uninstall removes
+exactly what it lists (with stand-ins for the registry, the commands and the folders).
 
     python -m pytest tests/test_launcher.py
 """
@@ -143,3 +144,135 @@ def test_shortcut_made_on_windows():
                               capture_output=True, text=True, timeout=120)
         assert done.returncode == 0, done.stderr
         assert os.path.isfile(os.path.join(d, "LSR MMTO.lnk"))
+
+
+# ---------------------------------------------------------------------- Settings > Apps, and Uninstall
+class FakeRegistry:
+    """A stand-in for winreg, holding keys under HKEY_CURRENT_USER as {key: {name: (value, type)}}."""
+    HKEY_CURRENT_USER, REG_SZ, REG_DWORD = "HKCU", 1, 4
+
+    def __init__(self):
+        self.keys = {}
+
+    def CreateKey(self, root, key):
+        values = self.keys.setdefault((root, key), {})
+
+        class Key:
+            def __enter__(self):
+                return values
+
+            def __exit__(self, *exc):
+                return False
+        return Key()
+
+    def SetValueEx(self, values, name, reserved, kind, value):
+        values[name] = (value, kind)
+
+    def DeleteKey(self, root, key):
+        del self.keys[(root, key)]
+
+
+def test_uninstall_entry(monkeypatch):
+    """The entry Settings > Apps lists: its values, the uninstaller run by the conda installation's own
+    python (found from CONDA_EXE, or as the folder holding envs); written twice, still one entry."""
+    reg = FakeRegistry()
+    monkeypatch.setitem(sys.modules, "winreg", reg)
+    with tempfile.TemporaryDirectory() as d:
+        base = os.path.join(d, "miniforge3")
+        os.makedirs(os.path.join(base, "Scripts"))
+        open(os.path.join(base, "python.exe"), "w").close()
+        env = os.path.join(base, "envs", "lsr-stress-mmto-ad")
+        python = os.path.join(base, "python.exe")
+        assert M.base_python({"CONDA_EXE": os.path.join(base, "Scripts", "conda.exe")}, "elsewhere") == python
+        assert M.base_python({}, env) == python
+        try:
+            M.base_python({}, os.path.join(d, "venv"))
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("a python.exe was found where there is none")
+        M.write_uninstall_entry(python)
+        M.write_uninstall_entry(python)
+    assert list(reg.keys) == [("HKCU", r"Software\Microsoft\Windows\CurrentVersion\Uninstall\LSR MMTO")]
+    values = reg.keys[("HKCU", M.UNINSTALL_KEY)]
+    assert values == {"DisplayName": ("LSR MMTO", 1), "DisplayIcon": (M.ICON, 1), "InstallLocation": (ROOT, 1),
+                      "NoModify": (1, 4), "NoRepair": (1, 4),
+                      "UninstallString": (f'"{python}" "{os.path.join(ROOT, "uninstall_lsr_mmto.py")}"', 1)}
+
+
+def _computer(d, monkeypatch):
+    """A stand-in computer in folder d: shortcuts, kernels and settings among others that must stay, a code
+    folder, a conda installation, the uninstall entry, and every command recorded instead of run."""
+    import types
+    import uninstall_lsr_mmto as U
+    reg = FakeRegistry()
+    monkeypatch.setitem(sys.modules, "winreg", reg)
+    reg.keys[("HKCU", M.UNINSTALL_KEY)] = {"DisplayName": ("LSR MMTO", 1)}
+    folders = {name: os.path.join(d, name) for name in ("Desktop", "Programs", "home", "appdata", "code", "base")}
+    for f in folders.values():
+        os.makedirs(f)
+    files = [os.path.join(folders["Desktop"], "LSR MMTO.lnk"), os.path.join(folders["Desktop"], "Other.lnk"),
+             os.path.join(folders["Programs"], "LSR MMTO.lnk"), os.path.join(folders["code"], "run_gui.py"),
+             os.path.join(folders["appdata"], "jupyter", "kernels", "lsr-stress-mmto-ad", "kernel.json"),
+             os.path.join(folders["appdata"], "jupyter", "kernels", "python3", "kernel.json"),
+             os.path.join(folders["appdata"], "LSR MMTO", "LSR MMTO.ini"),
+             os.path.join(folders["appdata"], "Other app", "settings.ini"),
+             os.path.join(folders["base"], "Scripts", "conda.exe")]
+    for f in files:
+        os.makedirs(os.path.dirname(f), exist_ok=True)
+        open(f, "w").close()
+    ran = []
+
+    def run(cmd, **kw):
+        ran.append(list(cmd))
+        out = ""
+        if cmd[0] == "powershell":
+            out = folders["Desktop"] if "'Desktop'" in cmd[-1] else folders["Programs"]
+        elif cmd[1:3] == ["env", "list"]:
+            out = f"base  {folders['base']}\nlsr-stress-mmto-ad  {folders['base']}/envs/lsr-stress-mmto-ad\n"
+        return types.SimpleNamespace(returncode=0, stdout=out, stderr="")
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(sys, "prefix", folders["base"])
+    monkeypatch.setattr(U, "ROOT", folders["code"])
+    monkeypatch.setenv("APPDATA", folders["appdata"])
+    monkeypatch.setenv("USERPROFILE", folders["home"])
+    monkeypatch.delenv("OneDrive", raising=False)
+    monkeypatch.delenv("CONDA_DEFAULT_ENV", raising=False)
+    return U, reg, files, ran
+
+
+def test_uninstall_removes_exactly_what_it_lists(monkeypatch, capsys):
+    """Answered no, nothing goes. Answered yes: the two shortcuts, the kernel, the GUI's settings, the
+    environment (conda env remove) and, last, the entry go; everything else stays, the code folder
+    untouched, and the folders kept are named."""
+    with tempfile.TemporaryDirectory() as d:
+        U, reg, files, ran = _computer(d, monkeypatch)
+        assert U.main(answer=lambda prompt: "n") == 1
+        assert all(os.path.isfile(f) for f in files) and reg.keys
+        assert U.main(answer=lambda prompt: "y") == 0
+        gone = {files[0], files[2], files[4], files[6]}
+        assert [f for f in files if not os.path.exists(f)] == [f for f in files if f in gone]
+        assert not os.path.exists(os.path.dirname(files[4])) and not os.path.exists(os.path.dirname(files[6]))
+        assert os.listdir(os.path.join(d, "code")) == ["run_gui.py"]
+        assert [c for c in ran if "remove" in c] == [[os.path.join(d, "base", "Scripts", "conda.exe"), "env", "remove",
+                                                      "-n", "lsr-stress-mmto-ad", "-y"]]
+        assert reg.keys == {}
+    shown = capsys.readouterr().out
+    assert "To be kept:" in shown and os.path.join(d, "code") in shown and "PyTO-AD" in shown
+
+
+def test_uninstall_refuses_to_run_inside_the_environment(monkeypatch, capsys):
+    with tempfile.TemporaryDirectory() as d:
+        U, reg, files, ran = _computer(d, monkeypatch)
+        monkeypatch.setattr(sys, "prefix", os.path.join(d, "base", "envs", "lsr-stress-mmto-ad"))
+        assert U.main(answer=lambda prompt: "y") == 1
+        assert all(os.path.isfile(f) for f in files) and reg.keys and ran == []
+    assert "Settings > Apps" in capsys.readouterr().out
+
+
+def test_no_other_way_to_remove():
+    """Uninstall in Settings > Apps is the one way: no remove option in the setup or the shortcut maker."""
+    for name in ("setup_environment.py", "make_shortcut.py", "run_gui.py"):
+        with open(os.path.join(ROOT, name), encoding="utf-8") as fh:
+            text = fh.read()
+        assert "--remove" not in text and "--uninstall" not in text, name
