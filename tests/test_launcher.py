@@ -95,12 +95,12 @@ def test_start_menu_and_the_question():
 
 
 def test_setup_step_lines_count_the_real_steps(capsys):
-    """The install prints [n/N] with N the number of steps it really goes through: 6 on Windows (the
-    Start menu step), 5 elsewhere, and main() calls step() once for each of them."""
+    """The install prints [n/N] with N the number of steps it really goes through: 5 on Windows (the
+    Start menu step), 4 elsewhere, and main() calls step() once for each of them."""
     import inspect
     import re
     import setup_environment as S
-    for windows, total in ((True, 6), (False, 5)):
+    for windows, total in ((True, 5), (False, 4)):
         all_steps = S.steps(windows, desktop=True)
         assert len(all_steps) == total
         for n in range(1, total + 1):

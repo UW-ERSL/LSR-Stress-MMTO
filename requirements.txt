@@ -37,8 +37,6 @@ PyQt5
 
 # --- this repository ---
 openpyxl                   # the .xlsx engine pandas uses for the databases
-ipython                    # image display in the notebooks
-ipykernel                  # registers the environment as a Jupyter kernel
 pytest                     # the tests in tests/
 
 # --- optional ---

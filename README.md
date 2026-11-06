@@ -1,10 +1,10 @@
-# LSR-Stress-MMTO (autodiff branch)
+# LSR MMTO
 
-Stress-based multi-material topology optimization in a learned latent space.
+Multi-material topology optimization in a learned material space, with a GUI that takes a part from its STL to the optimized design.
 
-**This is the `autodiff` branch.** The gradients of the objective and constraints come from automatic differentiation (PyTorch autograd) through [PyTO-AD](https://github.com/UW-ERSL/PyTO-AD), instead of the hand-derived sensitivities on `main`. The `main` branch is the code the paper used; see [Differences from main](#differences-from-main).
+This is the `autodiff` branch, built on [PyTO-AD](https://github.com/UW-ERSL/PyTO-AD). The `main` branch holds older code and is not developed further.
 
-Install below, then open `Tutorial.ipynb` to reproduce the paper's examples.
+Install below, then open LSR MMTO from the Start menu. Everything, from your part's STL to the optimized design, is done in the GUI.
 
 ## What LSR MMTO is
 
@@ -26,23 +26,17 @@ If you already have conda (Miniforge, Miniconda or Anaconda), skip step 1. If yo
 
    This also downloads [PyTO-AD](https://github.com/UW-ERSL/PyTO-AD), the differentiable topology optimization code this branch builds on (finite element analysis, filters, MMA, automatic differentiation), into a folder next to this one, unless it is already there. It creates its own environment, `lsr-stress-mmto-ad`, so it never touches the one `main` uses.
 
-4. **Open the tutorial.** Open `Tutorial.ipynb` in your code editor and select the kernel **Python (lsr-stress-mmto-ad)**.
+4. **Open LSR MMTO.** Start menu, type LSR, and open it, or use the desktop icon. The start page offers the four examples and New project from an STL.
 
-To use your browser instead of an editor, run these in the same prompt, one at a time:
+## Your first project
 
-```
-conda activate lsr-stress-mmto-ad
-```
+1. **New project from an STL** on the start page, or File > New.
+2. Work down the sidebar: **Units**, **Materials**, **Supports and loads**, **Formulation**, **Settings**.
+3. **Analyse** to check the setup on the solid part, then **Run**.
+4. Look at the design in **Results**.
+5. **Export STL**.
 
-```
-pip install jupyterlab
-```
-
-Then type `jupyter lab` and a space, **without pressing Enter**, drag `Tutorial.ipynb` into the window, and press Enter.
-
-## Running the paper's examples
-
-`Tutorial.ipynb` reproduces each of the four examples in the paper and, in doing so, walks through the whole workflow: the material database, choosing the latent dimension, the design problem, the trained VAE, the optimization, and the resulting design.
+Each panel's (i) button explains that panel, and Help > User guide covers every step.
 
 ## Setting up by hand
 
@@ -72,12 +66,6 @@ pip install -r requirements.txt
 pip install --no-deps -e .
 ```
 
-**Register it as a notebook kernel:**
-
-```
-python -m ipykernel install --user --name lsr-stress-mmto-ad --display-name "Python (lsr-stress-mmto-ad)"
-```
-
 **Fetch PyTO-AD next to this folder**, at the commit this branch was tested with:
 
 ```
@@ -90,16 +78,6 @@ git -C ../PyTO-AD checkout 790d935
 
 To use a PyTO-AD you already have instead, it must sit next to this folder and be named `PyTO-AD`. If yours has another name, run `mklink /J PyTO-AD <its name>` in the folder that holds both.
 
-## Differences from main
-
-| | `main` | `autodiff` |
-|---|---|---|
-| Solver library | PyTO | PyTO-AD only (PyTO is not used) |
-| Gradients | hand-derived adjoints, `SensitivitiesPureStructural.py` | autograd through the forward pass, `lsr_mmto/physics/structural/` |
-| Environment | `lsr-stress-mmto` | `lsr-stress-mmto-ad` |
-
-Everything else (examples, material databases, VAEs, optimizer settings, schedules) is the same, so a run on either branch can be compared one to one.
-
 ## Files
 
 The pages in `docs/` and `CONTRIBUTING.md` can also be read inside the GUI: the user guide under Help > User guide, and the others under Help > Researcher guide, so no Markdown viewer is needed.
@@ -108,7 +86,6 @@ The pages in `docs/` and `CONTRIBUTING.md` can also be read inside the GUI: the 
 
 | File | Purpose |
 |---|---|
-| `Tutorial.ipynb` | runs one example end to end |
 | `run_gui.py` | starts the LSR MMTO GUI: `python run_gui.py`, or `python run_gui.py projects/beam.mmto` |
 | `make_shortcut.py` | adds LSR MMTO to the Start menu and the desktop (Windows); the setup runs it, and running it again (`python make_shortcut.py`, with the environment active) repairs the shortcuts after the folder moves |
 | `projects/` | the four examples as project files: geometry, supports, loads, materials, objective, constraints, settings |
@@ -215,7 +192,7 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad_imp
 |---|---|
 | `load_results.py` | a finished run, read back for plotting |
 | `run_plots.py` | design, latent space, convergence, boundary conditions |
-| `tables.py` | run summary and material database tables, formatted for the notebook |
+| `tables.py` | run summary and material database tables |
 | `design_3d.py` | 2D panels and 3D voxel renders |
 | `stl_export.py` | a run's design as STL files |
 | `compare.py` | two runs side by side |
