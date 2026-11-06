@@ -38,6 +38,7 @@ PyQt5
 # --- this repository ---
 openpyxl                   # the .xlsx engine pandas uses for the databases
 pytest                     # the tests in tests/
+ipykernel                  # registers the environment as a Jupyter kernel
 nbclient                   # runs Python_walkthrough.ipynb in its test
 
 # --- optional ---

@@ -13,13 +13,15 @@ autodiff branch: gradients come from automatic differentiation through PyTO-AD.
    with git if it is installed and as a download otherwise
 3. installs requirements.txt into that environment, and this repository as the package
    lsr_mmto (pip install -e .), so scripts anywhere can import it
-4. checks that the solver builds a mesh and a material decoder loads
-5. (Windows) adds LSR MMTO to the Start menu, and to the desktop if you say yes; the one question
+4. registers the environment as a Jupyter kernel
+5. checks that the solver builds a mesh and a material decoder loads
+6. (Windows) adds LSR MMTO to the Start menu, and to the desktop if you say yes; the one question
    is asked before anything is installed, so the rest runs on its own
 
 Safe to run again: each step is skipped if already done.
 
-Afterwards, open LSR MMTO from the Start menu (type LSR).
+Afterwards, open LSR MMTO from the Start menu (type LSR). To work in Python instead, open
+Python_walkthrough.ipynb in a code editor and select the kernel "Python (lsr-stress-mmto-ad)".
 """
 import os
 import shutil
@@ -54,6 +56,7 @@ def steps(windows, desktop):
     out = [("conda environment", "1 to 3 min"),
            ("PyTO-AD, the differentiable topology optimization code", "under a minute"),
            ("dependencies", "roughly 10 min; pip shows progress below"),
+           ("Jupyter kernel", "a few seconds"),
            ("verification", "under a minute")]
     if windows:
         out.append(("Start menu" + (" and desktop" if desktop else ""), "a few seconds"))
@@ -278,6 +281,13 @@ def main():
 
     # ------------------------------------------------------------------ 4
     step(4, all_steps)
+    py = env_python(conda)
+    if in_env(py, "-m", "ipykernel", "install", "--user",
+              "--name", ENV, "--display-name", f"Python ({ENV})") != 0:
+        fail("could not register the Jupyter kernel")
+
+    # ------------------------------------------------------------------ 5
+    step(5, all_steps)
     check = os.path.join(HERE, "_verify_environment.py")
     with open(check, "w") as fh:
         fh.write(VERIFY)
@@ -288,10 +298,10 @@ def main():
     if code != 0:
         fail("the environment is built but something does not import; see above")
 
-    # ------------------------------------------------------------------ 5
+    # ------------------------------------------------------------------ 6
     opened = ""
     if os.name == "nt":
-        step(5, all_steps)
+        step(6, all_steps)
         args = [os.path.join(HERE, "make_shortcut.py")] + ([] if desktop else ["--no-desktop"])
         if in_env(env_python(conda), *args) == 0:
             opened = ("\nOpen LSR MMTO from the Start menu (type LSR)"
@@ -304,6 +314,8 @@ def main():
     print(f"""
 Done.
 {opened}
+To work in Python, open Python_walkthrough.ipynb in your code editor and select the kernel
+"Python ({ENV})".
 """)
 
 

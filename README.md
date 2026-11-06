@@ -76,6 +76,12 @@ pip install -r requirements.txt
 pip install --no-deps -e .
 ```
 
+**Register it as a notebook kernel:**
+
+```
+python -m ipykernel install --user --name lsr-stress-mmto-ad --display-name "Python (lsr-stress-mmto-ad)"
+```
+
 **Fetch PyTO-AD next to this folder**, at the commit this branch was tested with:
 
 ```
