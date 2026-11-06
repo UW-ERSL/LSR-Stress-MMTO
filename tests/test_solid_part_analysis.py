@@ -258,6 +258,12 @@ def test_analyse_in_the_window(monkeypatch):
         assert "result_design" in w.plotter.actors and w.view == "design"
         assert [res.field.itemText(i) for i in range(res.field.count())][:5] == ["Material", "Density", "Stress",
                                                                                   "Displacement", "Solid"]
+        res.field.setCurrentText("Displacement")                              # an analysis's displacement too
+        assert "result_design" in w.plotter.actors and res.component.isVisible() and res.deformed.isVisible()
+        res.deformed.setChecked(True)
+        assert "result_design" in w.plotter.actors and float(res.scale.text()) > 0
+        res.deformed.setChecked(False)
+        res.field.setCurrentText("Material")
 
         chosen.update(row=0, save=True)                                       # Stop: nothing is saved
         assert w.analyse()

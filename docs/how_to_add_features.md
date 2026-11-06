@@ -232,6 +232,24 @@ plus one line in `MODULES` in `lsr_mmto/physics/available_physics.py`. The entri
 `"physics"` in its file (`p.physics` in code); an unknown name is an error before the run. What else to run: both generators
 above, since its settings, quantities and kinds join their lists.
 
+The results a run saves are the entries of `RESULT_FIELDS`, each `dict(view, title, measures, where,
+shape)`:
+
+| key | what it says | values |
+|---|---|---|
+| `view` | the Results panel's Show choice that draws it | text, e.g. `"Stress"` |
+| `title` | the colour scale's title | text |
+| `measures` | what it is, for its unit | a kind of `UNITS` or `UNIT_KINDS`, or None |
+| `where` | where its values live | `"element"` (the default) or `"node"` |
+| `shape` | one number, or x, y and z | `"scalar"` (the default) or `"vector"` |
+
+`final_summary` returns one array per entry: `(elements,)` or `(nodes,)`, with a last axis of 3 for a
+vector. The final check refuses one of another length or shape, with a message naming it. A run saves
+each entry's where and shape, and a run saved before they existed loads as a number at each element.
+In Results, a value at each node is coloured smoothly over the faces, and a vector gets a picker
+(magnitude, x, y, z); a vector at each node that measures length can also draw the deformed shape.
+`structural_module.py` saves the displacement this way.
+
 A module's files import the layers below them (`elements/`, `design/`, `pyto_ad_imports.py`), never
 the core's lists: its quantities, kinds and settings are given as plain arguments, and the core
 makes the entries.

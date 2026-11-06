@@ -2201,8 +2201,9 @@ def test_part_facts_pca_live_colours_training():
 
 
 def test_results_compare_delete():
-    """Results: the project's runs, newest first; a run shown as each of Material, Density, Stress and
-    Solid; two runs compared side by side; another place's run opened for looking only; Delete, in
+    """Results: the project's runs, newest first; a run shown as each of Material, Density, Stress,
+    Displacement (smooth over the faces, its magnitude or x, y, z, and the deformed shape at a scale that moves
+    it 5 % of the part at most) and Solid; two runs compared side by side; another place's run opened for looking only; Delete, in
     Results and in the Run strip, removes a run's folder."""
     from gui import draw_design
     with scratch() as d:
@@ -2227,12 +2228,39 @@ def test_results_compare_delete():
         assert [res.tabs.tabText(i) for i in range(res.tabs.count())] == ["Convergence", "Latent space",
                                                                           "Summary"]
         shown = [res.field.itemText(i) for i in range(res.field.count())]
-        assert shown == ["Material", "Density", "Stress", "Solid", "Smooth (exported)"], shown   # the views a
-        assert not res.field.model().item(4).isEnabled()                      # structural run saved; not exported
-        for field in shown[:-1]:
+        assert shown == ["Material", "Density", "Stress", "Displacement", "Solid", "Smooth (exported)"], shown
+        assert not res.field.model().item(5).isEnabled()                      # the views a structural run saved;
+        for field in shown[:-1]:                                              # not exported
             res.field.setCurrentText(field)
             assert "result_design" in w.plotter.actors and w.view == "design", field
-            assert bool(w.design_bars) == (field in ("Density", "Stress")), (field, w.design_bars)
+            assert bool(w.design_bars) == (field in ("Density", "Stress", "Displacement")), (field, w.design_bars)
+            assert res.component.isVisible() == res.deformed.isVisible() == (field == "Displacement"), field
+            assert not res.scale.isVisible()
+
+        res.field.setCurrentText("Displacement")                              # at the nodes, a vector: smooth
+        run, mesh = res._loaded(res.current)                                  # colours, its magnitude first
+        u = run.results["displacement"]
+        drawn = w.plotter.actors["result_design"].GetMapper().GetInput()
+        values = np.asarray(drawn.point_data["value"])
+        assert drawn.n_points < mesh.num_nodes and np.isclose(values.max(), np.linalg.norm(u, axis=1).max())
+        assert any("Displacement magnitude" in t for t in w.design_bars)
+        res.component.setCurrentText("y")
+        values = np.asarray(w.plotter.actors["result_design"].GetMapper().GetInput().point_data["value"])
+        assert values.min() < 0 and any("Displacement y" in t for t in w.design_bars)
+        still = np.array(w.plotter.actors["result_design"].GetMapper().GetInput().points)
+        res.deformed.setChecked(True)                                         # moved by u times Scale
+        assert res.scale.isVisible() and float(res.scale.text()) > 0
+        scale = float(res.scale.text())
+        moved = np.array(w.plotter.actors["result_design"].GetMapper().GetInput().points)
+        shift = np.linalg.norm(moved - still, axis=1).max()
+        extent = np.ptp(still, axis=0).max()
+        assert abs(shift / extent - 0.05) < 0.002, (shift, extent)            # the largest: 5 % of the part
+        res.scale.setText(f"{2 * scale}")
+        res.redraw()
+        moved = np.array(w.plotter.actors["result_design"].GetMapper().GetInput().points)
+        assert np.isclose(np.linalg.norm(moved - still, axis=1).max(), 2 * shift, rtol=1e-3)
+        res.deformed.setChecked(False)
+        res.component.setCurrentText("magnitude")
 
         for i in range(2):
             res.list.item(i).setCheckState(QtCore.Qt.Checked)

@@ -2,7 +2,8 @@
 results_panel.py
 ================
 The Results strip: the project's runs, newest first. A run clicked is drawn on the part (the
-window's Design view) as Material, Density, Stress or Solid, with tabs for its convergence,
+window's Design view) as Material, Density, Stress, Displacement (with the part shown: magnitude, x,
+y or z, and the deformed shape) or Solid, with tabs for its convergence,
 its latent space and its summary. Open other results... shows any run folder, also another
 project's, for looking only. Two runs ticked and Compare: a Compare window of its own with their
 convergence overlaid, their latent spaces side by side and their summaries in columns, and the two
@@ -26,8 +27,8 @@ from .run_panel import ask_delete_run, open_folder, plot_canvas, result_tabs, su
 
 RESULTS_HELP = ("Each run of the project is listed here, newest first. Click one to see its design on the part "
                 "and its convergence, latent space and summary in the tabs. Show chooses what the part shows: "
-                "each element's material, its density, its stress, only which elements are solid, or the smooth "
-                "STL files Export STL wrote for the run.\n\n"
+                "each element's material, its density, its stress, how far it moves (Displacement), only which "
+                "elements are solid, or the smooth STL files Export STL wrote for the run.\n\n"
                 "Tick two runs and press Compare to see them side by side. Open other results... shows a run "
                 "from anywhere, another project's too; it changes nothing in your project.\n\n"
                 "An analysis (Analyse, at the top) is listed as Analysis: and its material. One not saved is "
@@ -44,6 +45,12 @@ STL_HELP = ("Export STL, at the top, writes the design shown as two kinds of smo
             "volume compares with the design.\n\n"
             "Show > Smooth (exported) draws the files of a run that has been exported, each piece in its "
             "material's colour. Pull the material pieces apart sets them side by side, so each can be seen alone.")
+VECTOR_HELP = ("magnitude shows the size at each point, for Displacement how far it moves. x, y and z show the "
+               "part along each axis, which can be below zero. These values belong to the corners of the elements, "
+               "so the colours blend smoothly over the faces.\n\n"
+               "Deformed shape draws the part moved by its displacement times Scale. The first Scale makes the "
+               "largest movement about 5% of the part's largest size, so that the shape can be seen; the real "
+               "movement is usually far smaller.")
 SMOOTH = "Smooth (exported)"                             # the Show choice of a run's exported STL files
 UNSAVED = "analysis not saved"                           # the list's key of the analysis shown but not saved
 NO_HISTORY = "An analysis is one solve of the solid part, not an optimization: it has no {}."
@@ -233,8 +240,30 @@ class ResultsWindow(QtWidgets.QDialog):
         self.apart.setVisible(False)
         self.apart.toggled.connect(lambda _: self.redraw())
         show.addWidget(self.apart)
+        self.component = QtWidgets.QComboBox()                     # a vector: its magnitude, x, y or z
+        self.component.addItems(draw_design.COMPONENTS)
+        self.component.currentTextChanged.connect(lambda _: self.redraw())
+        self.vector_info = Info(VECTOR_HELP)
+        for widget in (self.component, self.vector_info):
+            widget.setVisible(False)
+            show.addWidget(widget)
         show.addStretch()
         layout.addLayout(show)
+        self.deform_row = QtWidgets.QWidget()                      # under Show, for a result that moves the part
+        deform = QtWidgets.QHBoxLayout(self.deform_row)
+        deform.setContentsMargins(0, 0, 0, 0)
+        self.deformed = QtWidgets.QCheckBox("Deformed shape")
+        self.deformed.toggled.connect(lambda _: self.redraw())
+        self.scale_label = QtWidgets.QLabel("Scale")
+        self.scale = QtWidgets.QLineEdit()
+        self.scale.setFixedWidth(100)
+        self.scale.editingFinished.connect(self.redraw)
+        self._scaled = None                                        # what the Scale shown was worked out for
+        for widget in (self.deformed, self.scale_label, self.scale):
+            deform.addWidget(widget)
+        deform.addStretch()
+        self.deform_row.setVisible(False)
+        layout.addWidget(self.deform_row)
         self.status = QtWidgets.QLabel("")
         self.status.setWordWrap(True)
         self.status.setStyleSheet(GREY)
@@ -426,8 +455,37 @@ class ResultsWindow(QtWidgets.QDialog):
         self.apart.setVisible(field == SMOOTH)
         mine = (self.current, run, mesh) if self.current not in self.others and self.current != UNSAVED else None
         if field == SMOOTH:
+            self._vector_controls([], field)
             return self._draw_smooth(run, mine)
-        self.window.set_design(lambda w: draw_design.record(w, run, mesh, field), run=mine)
+        component, scale = self._vector_controls([(run, mesh)], field)
+        self.window.set_design(lambda w: draw_design.record(w, run, mesh, field, component=component, scale=scale),
+                               run=mine)
+
+    def _vector_controls(self, shown, field):
+        """Beside Show, for a vector result: the part shown (magnitude, x, y, z) and its (i); for one that
+        deforms the part (draw_design.deforms), Deformed shape and its Scale, first worked out for the runs
+        shown (draw_design.deformed_scale). Returns (component, scale or None) for the drawing."""
+        info = next((run.result_info[draw_design.result_of(run, field)] for run, _ in shown
+                     if draw_design.result_of(run, field) is not None), {})
+        vector, deforms = info.get("shape") == "vector", draw_design.deforms(info)
+        for widget in (self.component, self.vector_info):
+            widget.setVisible(vector)
+        self.deform_row.setVisible(deforms)
+        on = deforms and self.deformed.isChecked()
+        self.scale_label.setVisible(on)
+        self.scale.setVisible(on)
+        if not on:
+            return self.component.currentText(), None
+        first = draw_design.deformed_scale(shown, field)
+        if self._scaled != (tuple(id(run) for run, _ in shown), field):
+            self._scaled = (tuple(id(run) for run, _ in shown), field)
+            self.scale.setText(f"{first:.3g}")
+        try:
+            scale = float(self.scale.text())
+        except ValueError:
+            scale = first
+            self.scale.setText(f"{first:.3g}")
+        return self.component.currentText(), scale
 
     # ------------------------------------------------------------------ STL
     def exported(self, folder):
@@ -530,10 +588,12 @@ class ResultsWindow(QtWidgets.QDialog):
     def _draw_compare(self):
         field = self.field.currentText()
         (_, (run1, mesh1)), (_, (run2, mesh2)) = self.comparing
-        clim = draw_design.field_range([run1, run2], field)
+        component, scale = self._vector_controls([(run1, mesh1), (run2, mesh2)], field)
+        clim = draw_design.field_range([(run1, mesh1), (run2, mesh2)], field, component)
         gap = draw_design.width(mesh1) * 1.1
 
         def draw(w):
-            draw_design.record(w, run1, mesh1, field, clim=clim, name="design")
-            draw_design.record(w, run2, mesh2, field, shift=gap, clim=clim, name="design_2")
+            draw_design.record(w, run1, mesh1, field, clim=clim, name="design", component=component, scale=scale)
+            draw_design.record(w, run2, mesh2, field, shift=gap, clim=clim, name="design_2", component=component,
+                               scale=scale)
         self.window.set_design(draw, wide=True)

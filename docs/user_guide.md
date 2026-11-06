@@ -536,7 +536,7 @@ Press **Analyse**. A small window asks for:
 
 The same checks as for a run come first: if something stops a run, it stops the analysis too, and the Current run panel says why under *Cannot start:*. While it goes, the line beside the buttons says *Analysing the solid part in* and the material, and **Stop** ends it; nothing is saved then.
 
-When it is done, Results shows it the way it shows a run, titled **Analysis:** and the material: the part in the 3D view (Material, Density, Stress, Solid) and its **Summary**, with the objective and each constraint for the solid part. An analysis has no **Convergence** and no **Latent space**. A material volume fraction is worked out from the material network, which an analysis does not use, so the Summary and Compare leave it out.
+When it is done, Results shows it the way it shows a run, titled **Analysis:** and the material: the part in the 3D view (Material, Density, Stress, Displacement, Solid) and its **Summary**, with the objective and each constraint for the solid part. An analysis has no **Convergence** and no **Latent space**. A material volume fraction is worked out from the material network, which an analysis does not use, so the Summary and Compare leave it out.
 
 ## 11. Results
 
@@ -552,6 +552,7 @@ When it is done, Results shows it the way it shows a run, titled **Analysis:** a
 - **Material**: each element in its material's colour, with a legend at the top left: each material and its share of the solid elements, largest first. Two runs compared get a column each, left and right. The legend shows whenever the database has more than one material (a design of one of them reads 100%), and not for a database of one material.
 - **Density**: how solid each element is, from empty to solid.
 - **Stress**: the stress in each element.
+- **Displacement**: how far each point of the part moves under the loads. The colours blend smoothly over the faces. Beside it, choose **magnitude** (the distance) or **x**, **y** or **z** (the movement along one axis, below zero for a movement the other way). Tick **Deformed shape** to see the part moved, enlarged by **Scale**: at first the largest movement is drawn as about 5% of the part's largest size, since the real movement is usually too small to see. The (i) beside them explains.
 - **Solid**: only which elements are solid, in one colour.
 - **Smooth (exported)**: the STL files of the run, once it has been exported (section 12). Greyed until then.
 

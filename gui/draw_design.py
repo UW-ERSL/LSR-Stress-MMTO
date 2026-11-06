@@ -4,7 +4,8 @@ draw_design.py
 An optimized design on the 3D view: one block per element, drawn in place of the part.
 
     live(window, mesh, x, material, colours, labels)   while a run goes: density and material
-    record(window, run, mesh, field, ...)       a finished run: Material, Density, a result (Stress) or Solid
+    record(window, run, mesh, field, ...)       a finished run: Material, Density, a result (Stress,
+                                                Displacement) or Solid
     run_mesh(window, run)                       the mesh a saved run was made on, at the size it was run at
 
 A drawing of materials (a run going, the Material view, the smooth pieces) also adds a column to
@@ -26,6 +27,9 @@ def views(*runs):
     return ("Material", "Density", *dict.fromkeys(shown), "Solid")
 
 
+COMPONENTS = ("magnitude", "x", "y", "z")     # how a vector result is shown: its size, or one of its parts
+DEFORMED_SHARE = 0.05                         # the deformed shape's first scale: the largest movement drawn as this
+                                              # share of the part's largest extent
 FAINT = 0.1                                   # elements below this density are empty: not drawn
 WEAKEST = 0.25                                # colour strength of an element just above FAINT
 SOLID_COLOUR = "#9aa5b1"
@@ -80,14 +84,37 @@ def draw(window, mesh, mask, colours=None, values=None, title=None, clim=None, s
         return window.plotter.add_mesh(blocks, scalars="rgb", rgb=True, **kwargs)
     if values is not None:
         blocks = _blocks(centres, h, {"value": np.asarray(values, dtype=float)[mask]})
-        window.design_bars.add(title)
-        actor = window.plotter.add_mesh(blocks, scalars="value", cmap="viridis", clim=clim,
-                                        scalar_bar_args=VALUE_BAR | {"title": title}, **kwargs)
-        bar = window.plotter.scalar_bars[title]
-        bar.SetTextPositionToPrecedeScalarBar()            # the numbers and the title under the bar
-        bar.SetTextPad(3)
-        return actor
+        return _on_scale(window, blocks, title, clim, kwargs)
     return window.plotter.add_mesh(_blocks(centres, h, {}), color=SOLID_COLOUR, **kwargs)
+
+
+def _on_scale(window, shape, title, clim, kwargs):
+    """shape drawn coloured by its "value" on the colour scale with title, the scale under the view."""
+    window.design_bars.add(title)
+    actor = window.plotter.add_mesh(shape, scalars="value", cmap="viridis", clim=clim,
+                                    scalar_bar_args=VALUE_BAR | {"title": title}, **kwargs)
+    bar = window.plotter.scalar_bars[title]
+    bar.SetTextPositionToPrecedeScalarBar()                # the numbers and the title under the bar
+    bar.SetTextPad(3)
+    return actor
+
+
+def draw_nodes(window, mesh, mask, values, title, clim, shift=0.0, name="design", moved=None):
+    """The masked elements of mesh as one surface coloured by values, one per node of the mesh: the colour
+    blends smoothly over each face, from corner to corner, instead of one colour per element. moved: each
+    node's movement (nodes, 3), added to where it is (the deformed shape), or None. shift moves it along x."""
+    import pyvista as pv
+    corners = np.asarray(mesh.elemArray)[:, :8][np.asarray(mask, dtype=bool)]
+    if not len(corners):
+        return None
+    points = np.asarray(mesh.node_xyz, dtype=float) + np.array([shift, 0.0, 0.0])
+    if moved is not None:
+        points = points + np.asarray(moved, dtype=float)
+    cells = np.column_stack((np.full(len(corners), 8), corners)).ravel()
+    grid = pv.UnstructuredGrid(cells, np.full(len(corners), pv.CellType.HEXAHEDRON, dtype=np.uint8), points)
+    grid.point_data["value"] = np.asarray(values, dtype=float)
+    return _on_scale(window, grid.extract_surface(), title, clim,
+                     dict(pickable=False, name=PREFIX + name, reset_camera=False))
 
 
 def legend_rows(colours, labels, shares):
@@ -126,29 +153,72 @@ def result_of(run, field):
     return next((name for name, info in run.result_info.items() if info.get("view") == field), None)
 
 
-def result_title(run, name):
-    """The colour scale's title of a result, with its unit: von Mises stress [MPa]."""
+def result_title(run, name, component="magnitude"):
+    """The colour scale's title of a result, with its unit: von Mises stress [MPa]; a vector's with the part
+    shown: Displacement x [mm]."""
     info = run.result_info[name]
     units = (run.config or {}).get("units") or {}
     unit = units.get(info.get("measures"))
-    return f"{info['title']} [{unit}]" if unit else info["title"]
+    title = f"{info['title']} {component}" if info.get("shape") == "vector" else info["title"]
+    return f"{title} [{unit}]" if unit else title
 
 
-def field_range(runs, field):
-    """One colour scale for several runs drawn together, so their colours compare."""
+def result_values(run, name, component="magnitude"):
+    """A result's numbers to colour by: the values themselves, or for a vector its magnitude or its x, y or z."""
+    values = np.asarray(run.results[name], dtype=float)
+    if run.result_info[name].get("shape") != "vector":
+        return values
+    return np.linalg.norm(values, axis=1) if component == "magnitude" else values[:, "xyz".index(component)]
+
+
+def deforms(info):
+    """True for a result that can draw the deformed shape: a vector at each node that measures length."""
+    return info.get("where") == "node" and info.get("shape") == "vector" and info.get("measures") == "length"
+
+
+def _on(run, mesh, name):
+    """Where a result is drawn: the solid elements, or for a result at the nodes, the nodes of those."""
+    solid = np.asarray(run.solid, dtype=bool)
+    if run.result_info[name].get("where") != "node":
+        return solid
+    return np.unique(np.asarray(mesh.elemArray)[:, :8][solid])
+
+
+def field_range(shown, field, component="magnitude"):
+    """One colour scale for several runs drawn together, so their colours compare: shown is [(run, mesh)]. It
+    starts at 0, or lower for values below 0 (the x, y or z of a vector)."""
     if field == "Density":
         return (0.0, 1.0)
-    shown = [r for r in runs if result_of(r, field) is not None]
-    if not shown:
+    values = [result_values(run, result_of(run, field), component)[_on(run, mesh, result_of(run, field))]
+              for run, mesh in shown if result_of(run, field) is not None and np.asarray(run.solid).any()]
+    if not any(result_of(run, field) is not None for run, _ in shown):
         return None
-    top = max((float(np.max(r.results[result_of(r, field)][r.solid])) for r in shown if r.solid.any()), default=1.0)
-    return (0.0, top if top > 0 else 1.0)
+    lo = min([0.0] + [float(v.min()) for v in values if v.size])
+    hi = max([lo] + [float(v.max()) for v in values if v.size])
+    return (lo, hi if hi > lo else lo + 1.0)
 
 
-def record(window, run, mesh, field="Material", shift=0.0, clim=None, name="design"):
+def deformed_scale(shown, field):
+    """The Scale of the deformed shape that makes the largest movement DEFORMED_SHARE of the part's largest
+    extent: shown is [(run, mesh)], field the view of the movement."""
+    largest, extent = 0.0, 0.0
+    for run, mesh in shown:
+        name = result_of(run, field)
+        if name is None or not np.asarray(run.solid).any():
+            continue
+        on = _on(run, mesh, name)
+        largest = max(largest, float(np.linalg.norm(np.asarray(run.results[name], dtype=float)[on], axis=1).max()))
+        extent = max(extent, float(np.ptp(np.asarray(mesh.node_xyz, dtype=float)[on], axis=0).max()))
+    return DEFORMED_SHARE * extent / largest if largest > 0 else 1.0
+
+
+def record(window, run, mesh, field="Material", shift=0.0, clim=None, name="design", component="magnitude",
+           scale=None):
     """A finished run, drawn as field: Material (its solid elements in their material's colour),
     Density (every element at FAINT or more, on a scale), a result's view (Stress: von Mises on its
-    solid elements, on a scale) or Solid (its solid elements, one colour)."""
+    solid elements; Displacement: at their nodes, coloured smoothly; on a scale) or Solid (its solid
+    elements, one colour). component: magnitude, x, y or z of a vector result; scale: for a result that
+    deforms (deforms), the part drawn moved by it times scale, or None for not moved."""
     if field == "Material":
         table = np.array([rgb(c) for c in run.material_colors]).astype(np.uint8)
         m = np.asarray(run.material_indices).ravel() % len(table)
@@ -160,10 +230,15 @@ def record(window, run, mesh, field="Material", shift=0.0, clim=None, name="desi
         return draw(window, mesh, np.asarray(run.x_cont) >= FAINT, values=run.x_cont, title="Density",
                     clim=clim or (0.0, 1.0), shift=shift, name=name)
     result = result_of(run, field)
-    if result is not None:
-        return draw(window, mesh, run.solid, values=run.results[result], title=result_title(run, result),
-                    clim=clim or field_range([run], field), shift=shift, name=name)
-    return draw(window, mesh, run.solid, shift=shift, name=name)
+    if result is None:
+        return draw(window, mesh, run.solid, shift=shift, name=name)
+    values, title = result_values(run, result, component), result_title(run, result, component)
+    clim = clim or field_range([(run, mesh)], field, component)
+    info = run.result_info[result]
+    if info.get("where") == "node":
+        moved = np.asarray(run.results[result], dtype=float) * scale if scale and deforms(info) else None
+        return draw_nodes(window, mesh, run.solid, values, title, clim, shift=shift, name=name, moved=moved)
+    return draw(window, mesh, run.solid, values=values, title=title, clim=clim, shift=shift, name=name)
 
 
 def smooth(window, pieces, apart=False, absent=()):
