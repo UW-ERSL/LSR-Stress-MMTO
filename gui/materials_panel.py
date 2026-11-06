@@ -349,7 +349,7 @@ class MaterialsPanel(QtWidgets.QDialog):
                             f"{effective_text(d_eff, n_z)}).")
             self.latent_info.setToolTip(latent_help(d_eff, n_z, ratios))
             self.latent_info.setVisible(True)
-            network = self._network_line(xlsx)
+            network = self._network_line()
             if network:
                 lines.insert(1, network)
         if self._network_rows is None and self.show_errors.isChecked():
@@ -394,23 +394,14 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.table.setColumnHidden(1, list(labels) == list(names))      # Material: only when the labels differ
         self.table.resizeColumnsToContents()
 
-    def _network_line(self, xlsx):
+    def _network_line(self):
         """How closely the trained network gives back the database's materials, in one line (every value
         under Network error); None when the database has no trained network yet."""
-        from lsr_mmto.materials.encoder import network_reconstruction
-        nt = self.project.network_path()
-        if not (os.path.isfile(nt) and os.path.getsize(nt) > 0):
-            return None
-        try:
-            rows = network_reconstruction(xlsx, nt)
-        except Exception:                                           # noqa: BLE001
-            return None
-        if not rows:
-            return None
-        self._network_rows = rows
-        self.show_errors.setEnabled(True)
-        worst = max(r["percent_of_range"] for r in rows)
-        return f"The trained network gives back every material within {worst:.2g}% of each property's range."
+        rows, line = self.project.network_error()
+        if rows is not None:
+            self._network_rows = rows
+            self.show_errors.setEnabled(True)
+        return line
 
     def apply(self, project):
         """The database, and on a change the VAE settings of the new one. Returns lines saying what changed."""

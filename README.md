@@ -44,6 +44,10 @@ https://github.com/user-attachments/assets/abb986d8-c686-4a75-b559-3b81c5ae498f
 
 Each panel's (i) button explains that panel, and Help > User guide covers every step.
 
+## Your first project in Python
+
+`Python_walkthrough.ipynb` takes the U-bracket from its STL to the optimized design in Python, with no GUI. Open it in VS Code or Jupyter and select the kernel **Python (lsr-stress-mmto-ad)**. Every call it uses is in `docs/reference.md`, and in the GUI under Help > Researcher guide > Reference.
+
 ## Setting up by hand
 
 In a Miniforge Prompt (or Anaconda Prompt), from inside this folder, run these one at a time.
@@ -92,6 +96,7 @@ The pages in `docs/` and `CONTRIBUTING.md` can also be read inside the GUI: the 
 
 | File | Purpose |
 |---|---|
+| `Python_walkthrough.ipynb` | one whole project in Python, from the STL to the exported design |
 | `run_gui.py` | starts the LSR MMTO GUI: `python run_gui.py`, or `python run_gui.py projects/beam.mmto` |
 | `make_shortcut.py` | adds LSR MMTO to the Start menu and the desktop (Windows); the setup runs it, and running it again (`python make_shortcut.py`, with the environment active) repairs the shortcuts after the folder moves |
 | `projects/` | the four examples as project files: geometry, supports, loads, materials, objective, constraints, settings |

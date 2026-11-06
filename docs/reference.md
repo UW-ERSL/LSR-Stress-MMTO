@@ -169,7 +169,7 @@ Every setting a run takes, under its own name. A new project starts from these v
 
 ## Python
 
-Every call a setup script uses, with its arguments, read from the code's own docstrings. Model units are the project's units (`p.units`). A length is a number in model units, or text in numbers, pi and h, the largest element size, such as `"1.5h"` or `"5.64 + 1h"`. A selection is made with one of the selection types first and then added to a project under a name. The examples follow on from one another, run from the LSR MMTO folder: the selections, then a new project that the next examples build up, save and write as a script, then the shipped U-bracket, run and read back.
+Every call a setup script uses, with its arguments, read from the code's own docstrings; `Python_walkthrough.ipynb` uses them on one whole project. Model units are the project's units (`p.units`). A length is a number in model units, or text in numbers, pi and h, the largest element size, such as `"1.5h"` or `"5.64 + 1h"`. A selection is made with one of the selection types first and then added to a project under a name. The examples follow on from one another, run from the LSR MMTO folder: the selections, then a new project that the next examples build up, save and write as a script, then the shipped U-bracket, run and read back.
 
 ### box
 
@@ -582,6 +582,26 @@ p.keep_support_elements = True
 
 ```python
 p.database = "6Materials_AF_3Attr"
+```
+
+### p.network_error
+
+`p.network_error()`, p a Project
+
+How closely the database's trained network gives back its materials: (rows, line). rows: one for each material and property, the database's value and the network's; line: the same in one sentence, as the Materials panel shows it. (None, None) when the database has no trained network yet, or the network cannot be read for it (vae_check says why).
+
+```python
+rows, line = p.network_error()
+```
+
+### p.vae_check
+
+`p.vae_check()`, p a Project
+
+(errors, warnings, status) about the VAE: a run that would train into the shipped folder, a trained network that does not fit the settings or the database, a network a run would replace, a latent dimension other than the recommended one; status says which network the database has. For a database that passes its check. Each error says how to put it right.
+
+```python
+errors, warnings, status = p.vae_check()
 ```
 
 ### p.objective

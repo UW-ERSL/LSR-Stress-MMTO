@@ -623,7 +623,10 @@ class Project:
         """(errors, warnings, status) about the VAE: a run that would train into the shipped folder,
         a trained network that does not fit the settings or the database, a network a run would
         replace, a latent dimension other than the recommended one; status says which network the
-        database has. For a database that passes its check."""
+        database has. For a database that passes its check. Each error says how to put it right.
+
+        Example: errors, warnings, status = p.vae_check()
+        """
         vae = self.settings.get("vae", {})
         xlsx, _ = self.database_paths()
         nt = self.network_path()
@@ -669,6 +672,27 @@ class Project:
         status = f"Network: {name}, " + ("shipped." if shipped and exists else "found." if exists else
                                          f"none yet. The first run trains {name}.")
         return errors, warnings_, status
+
+    def network_error(self):
+        """How closely the database's trained network gives back its materials: (rows, line). rows: one for
+        each material and property, the database's value and the network's; line: the same in one sentence,
+        as the Materials panel shows it. (None, None) when the database has no trained network yet, or the
+        network cannot be read for it (vae_check says why).
+
+        Example: rows, line = p.network_error()
+        """
+        from lsr_mmto.materials.encoder import network_reconstruction
+        nt = self.network_path()
+        if not (os.path.isfile(nt) and os.path.getsize(nt) > 0):
+            return None, None
+        try:
+            rows = network_reconstruction(self.database_paths()[0], nt)
+        except Exception:                                                              # noqa: BLE001
+            return None, None
+        if not rows:
+            return None, None
+        worst = max(r["percent_of_range"] for r in rows)
+        return rows, f"The trained network gives back every material within {worst:.2g}% of each property's range."
 
     def complete_settings(self):
         """Fill every missing setting from the defaults; returns what was filled."""

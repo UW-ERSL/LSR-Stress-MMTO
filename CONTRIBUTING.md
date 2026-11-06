@@ -60,7 +60,8 @@ committed:
 
 - `lsr_mmto.egg-info/`, made by the setup (`pip install -e .`);
 - `__pycache__/` folders, made by Python;
-- the `results/` folder of each project, with its runs and analyses.
+- the `results/` folder of each project, with its runs and analyses;
+- `python_walkthrough_project/`, the project `Python_walkthrough.ipynb` makes.
 
 ## Commit messages
 

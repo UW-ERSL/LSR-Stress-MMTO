@@ -42,7 +42,8 @@ SECTIONS = [
 
 
 PROJECT_CALLS = ("Project", "units", "comment", "physics", "add_selection", "mesh", "evaluate", "add_bc",
-                 "keep_solid", "keep_support_elements", "database", "objective", "constraint", "settings",
+                 "keep_solid", "keep_support_elements", "database", "network_error", "vae_check", "objective",
+                 "constraint", "settings",
                  "save", "to_script", "load")                  # Project's calls, in the order a script uses them
 ARGUMENT = re.compile(r"^(\w+)((?:\[\w+\]|\(\w+\))*): (.*)$")       # name: text, or settings[section][name]: text
 
@@ -278,7 +279,8 @@ def examples():
 
 def python_section():
     out = ["", "## Python", "",
-           "Every call a setup script uses, with its arguments, read from the code's own docstrings. Model units "
+           "Every call a setup script uses, with its arguments, read from the code's own docstrings; "
+           "`Python_walkthrough.ipynb` uses them on one whole project. Model units "
            "are the project's units (`p.units`). A length is a number in model units, or text in numbers, pi "
            "and h, the largest element size, such as `\"1.5h\"` or `\"5.64 + 1h\"`. A selection is made "
            "with one of the selection types first and then added to a project under a name. The examples "

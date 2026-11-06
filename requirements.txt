@@ -38,6 +38,7 @@ PyQt5
 # --- this repository ---
 openpyxl                   # the .xlsx engine pandas uses for the databases
 pytest                     # the tests in tests/
+nbclient                   # runs Python_walkthrough.ipynb in its test
 
 # --- optional ---
 # cupy-cuda11x             # GPU acceleration; needs CUDA 11 and an NVIDIA card.
