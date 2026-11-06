@@ -108,11 +108,11 @@ def _database_files(project):
 def _copy_database(project, xlsx, nt, folder):
     """The database file and its network into folder/materials; project.database names the copy.
     A network already beside a copy is kept: it may have been retrained there."""
-    if not os.path.isfile(xlsx):
-        project.database = xlsx                                 # its error stays readable: the full path
+    if not os.path.isfile(xlsx):                                # the same database moved: its settings stay
+        project._database = xlsx                                # its error stays readable: the full path
         return None
     rel = copy_in(xlsx, folder, MATERIALS)
-    project.database = rel
+    project._database = rel
     if nt is not None and os.path.isfile(nt):
         dest = os.path.splitext(os.path.join(folder, rel))[0] + ".nt"
         if not os.path.exists(dest):

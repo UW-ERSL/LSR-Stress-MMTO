@@ -576,9 +576,11 @@ p.keep_support_elements = True
 
 `p.database = value`, p a Project
 
+The material database. When the database chosen has a trained network, and the trained network is used (the vae setting use_pretrained_vae), the settings that give the network its shape (latentDim, vae_hiddenDim) are set from the network itself, and a printed line says which changed.
+
 | argument | format | default |
 |---|---|---|
-| `value` | the material database: the name of one in data/databases, such as "6Materials_AF_3Attr", or the path of an .xlsx file, absolute or relative to base_dir | `None` |
+| `value` | the name of one in data/databases, such as "6Materials_AF_3Attr", or the path of an .xlsx file, absolute or relative to base_dir | `None` |
 
 ```python
 p.database = "6Materials_AF_3Attr"

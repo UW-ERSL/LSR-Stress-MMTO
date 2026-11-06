@@ -157,9 +157,6 @@ class Project:
         Example: p.physics = "structural"
     keep_support_elements: True also keeps solid every element touching a fixed node
         Example: p.keep_support_elements = True
-    database: the material database: the name of one in data/databases, such as "6Materials_AF_3Attr",
-        or the path of an .xlsx file, absolute or relative to base_dir
-        Example: p.database = "6Materials_AF_3Attr"
     settings[section][name]: one setting: section is "common", "advanced" or "vae", name a setting of
         that section; every setting, its default and what it does are under Settings
         Default: the values under Settings
@@ -178,7 +175,7 @@ class Project:
         self.bcs = []                           # dicts, see BC_KINDS
         self.keep_solid_names = []
         self.keep_support_elements = False
-        self.database = None
+        self._database = None
         self.formulation = {"objective": None, "constraints": []}
         self.settings = {k: dict(v) for k, v in DEFAULT_SETTINGS.items()}
         self._gui = {}                          # everything else in the file, kept for the GUI
@@ -351,6 +348,45 @@ class Project:
         if self.units not in UNIT_SYSTEMS:
             return {"system": self.units}
         return dict(system=self.units, **UNIT_SYSTEMS[self.units])
+
+    @property
+    def database(self):
+        """The material database. When the database chosen has a trained network, and the trained network is
+        used (the vae setting use_pretrained_vae), the settings that give the network its shape (latentDim,
+        vae_hiddenDim) are set from the network itself, and a printed line says which changed.
+
+        database: the name of one in data/databases, such as "6Materials_AF_3Attr", or the path of an
+            .xlsx file, absolute or relative to base_dir
+        Example: p.database = "6Materials_AF_3Attr"
+        """
+        return self._database
+
+    @database.setter
+    def database(self, value):
+        self._database = value
+        said = self.match_network()
+        if said:
+            print(f"[{self.name}] {said}")
+
+    def match_network(self):
+        """The settings that give the network its shape (latentDim, vae_hiddenDim) set from the database's
+        trained network, when it has one and the trained network is used. Returns the line saying what
+        changed from what a run would have used, or None when nothing did."""
+        vae = self.settings.setdefault("vae", {})
+        if self._database is None or not vae.get("use_pretrained_vae", True):
+            return None
+        nt = self.network_path()
+        shape = network_shape(nt) if os.path.isfile(nt) and os.path.getsize(nt) > 0 else None
+        if shape is None:
+            return None
+        before = self.copy()
+        before.complete_settings()                          # what a run would use now
+        changed = []
+        for key, value in (("vae_hiddenDim", shape[1]), ("latentDim", shape[2])):
+            if before.settings["vae"].get(key) != value:
+                vae[key] = value
+                changed.append(f"{BY_KEY[key].label[:1].lower()}{BY_KEY[key].label[1:]} {value}")
+        return f"Network settings set to match the trained network: {', '.join(changed)}" if changed else None
 
     def database_paths(self):
         """(xlsx, VAE defaults or None) for the database name or path."""
@@ -1011,7 +1047,7 @@ class Project:
         p.bcs = [dict(bc) for bc in m.get("bcs", [])]
         p.keep_solid_names = list(m.get("keep_solid", []))
         p.keep_support_elements = bool(m.get("keep_support_elements", False))
-        p.database = m.get("database")
+        p._database = m.get("database")                    # as saved: its settings stay as they are
         f = m.get("formulation") or {}
         p.formulation = {"objective": f.get("objective"), "constraints": list(f.get("constraints", []))}
         stored = m.get("settings") or {}

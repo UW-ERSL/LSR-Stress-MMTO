@@ -694,6 +694,14 @@ def test_materials_panel():
         assert m.project.database == "mine.xlsx"
         m.apply(w.project)
         assert w.project.settings["vae"]["latentDim"] == 2 and w.project.validate() == []
+        shutil.copy(os.path.join(ROOT, DATABASE_DIR, "BM1_3Mats_2Attr.nt"), os.path.join(d, "trained.nt"))
+        shutil.copy(own, os.path.join(d, "trained.xlsx"))                      # its own network: width 50
+        w.project.settings["vae"]["vae_hiddenDim"] = 300
+        m = materials_panel.MaterialsPanel(w, w.project)
+        m.set_database(os.path.join(d, "trained.xlsx"))
+        lines = m.apply(w.project)
+        assert lines[-1] == "Network settings set to match the trained network: hidden layer width 50", lines
+        assert w.project.settings["vae"]["vae_hiddenDim"] == 50 and w.project.validate() == []
 
 
 def test_database_editor():

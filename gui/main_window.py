@@ -1781,12 +1781,13 @@ class MMTOWindow(MainWindow):
             QtWidgets.QMessageBox.warning(self, "Save project", f"Not saved: {e}")
             return False
         p = self.project
-        old = p.name, p.base_dir, p.stl, p.database, p.selections
-        # the regions too: pack points a region's own files (an inside_stl surface) at their copies in part/
-        p.name, p.base_dir, p.stl, p.database, p.selections = (packed.name, packed.base_dir, packed.stl,
-                                                              packed.database, packed.selections)
+        old = p.name, p.base_dir, p.stl, p._database, p.selections
+        # the regions too: pack points a region's own files (an inside_stl surface) at their copies in part/;
+        # the database is the same one moved, so its settings stay as they are
+        p.name, p.base_dir, p.stl, p._database, p.selections = (packed.name, packed.base_dir, packed.stl,
+                                                               packed.database, packed.selections)
         if not self._write(path):
-            p.name, p.base_dir, p.stl, p.database, p.selections = old
+            p.name, p.base_dir, p.stl, p._database, p.selections = old
             return False
         if self.template:
             self.template = False

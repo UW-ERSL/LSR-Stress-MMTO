@@ -149,7 +149,7 @@ Open **Materials** from the buttons on the right. The window shows:
 - A table of the database's materials, each in the colour and with the label it is drawn with, and its properties with their units.
 - Under the table, a short report: how many materials there are, the latent dimension recommended for them, how closely the trained network gives them back, and any errors or warnings. The (i) next to it explains the recommended latent dimension.
 
-Choose a database and press **OK**. When you change the database, the network settings of the new one come with it (see Settings, section 9), and the messages say what changed. In a project folder of its own, the database you choose is copied into the project's materials folder, with its trained network, so the project keeps everything it uses.
+Choose a database and press **OK**. When you change the database, the network settings of the new one come with it (see Settings, section 9), and the messages say what changed. A database with a trained network sets the network's shape (its latent dimension and hidden layer width) from the network itself, so they always match. In a project folder of its own, the database you choose is copied into the project's materials folder, with its trained network, so the project keeps everything it uses.
 
 ### 6.1 Where a database comes from
 

@@ -91,7 +91,8 @@ def latent_help(d_eff, n_z, ratios):
 class MaterialsPanel(QtWidgets.QDialog):
     """The material database: which one, its materials in their colours and labels, its check,
     and the latent dimension recommended for it. Choosing another database resets the VAE
-    settings to the new one's (its trained values, or the recommended latent dimension)."""
+    settings to the new one's (its trained values, or the recommended latent dimension); a trained
+    network sets the shape settings from itself (Project.match_network)."""
 
     def __init__(self, parent, project):
         from lsr_mmto.materials.databases import DATABASE_VAE
@@ -410,9 +411,11 @@ class MaterialsPanel(QtWidgets.QDialog):
         q = self.project.copy()
         q.settings["vae"] = {"use_pretrained_vae": project.settings["vae"].get("use_pretrained_vae", True)}
         q.complete_settings()
+        matched = q.match_network()                                 # a trained network gives its own shape
         before = {k: project.settings["vae"].get(k) for k in VAE_KEYS + ("saveNet",)}
-        project.database = q.database
         project.settings["vae"] = q.settings["vae"]
+        project.database = q.database
         changed = [f"{BY_KEY[k].label} {before[k]} -> {q.settings['vae'][k]}" for k in before
                    if not same(before[k], q.settings["vae"][k])]
-        return [f"Database: {q.database}"] + ([f"VAE settings for it: {', '.join(changed)}"] if changed else [])
+        return [f"Database: {q.database}"] + ([f"VAE settings for it: {', '.join(changed)}"] if changed else []) + \
+            ([matched] if matched else [])

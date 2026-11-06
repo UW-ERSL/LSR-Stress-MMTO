@@ -352,6 +352,36 @@ def test_vae_check():
 
 
 
+def test_a_trained_network_sets_its_own_shape(capsys):
+    """A database chosen with a trained network of another shape than the settings say: the settings that
+    give the network its shape follow the network, the change is said, and validate finds nothing wrong.
+    A later explicit change is still checked; a project read from its file keeps its settings as saved."""
+    from lsr_mmto.problem.project import Project
+    with tempfile.TemporaryDirectory() as d:
+        bm1 = os.path.join(SHIPPED, "BM1_3Mats_2Attr")
+        shutil.copy(bm1 + ".xlsx", os.path.join(d, "ggd.xlsx"))
+        shutil.copy(bm1 + ".nt", os.path.join(d, "ggd.nt"))                  # hidden width 50, latent 2
+        p = Project.load(os.path.join(ROOT, "projects", "L-bracket.mmto"))
+        p.stl, p.base_dir = p.stl_path(), d                                   # the database in d, the part kept
+        p.settings["vae"]["vae_hiddenDim"] = 300
+        p.database = "ggd.xlsx"
+        assert p.settings["vae"]["vae_hiddenDim"] == 50 and p.settings["vae"]["latentDim"] == 2
+        assert "Network settings set to match the trained network: hidden layer width 50" in capsys.readouterr().out
+        assert p.validate() == []
+        assert p.match_network() is None                                      # nothing left to change
+        p.settings["vae"]["vae_hiddenDim"] = 300                              # a later change: checked as before
+        assert any("vae_hiddenDim is 300, but ggd.nt was trained with 50" in e for e in p.validate())
+        path = os.path.join(d, "P.mmto")
+        p.save(path)
+        assert Project.load(path).settings["vae"]["vae_hiddenDim"] == 300     # read back as saved
+        q = Project.load(os.path.join(ROOT, "projects", "L-bracket.mmto"))
+        q.base_dir = d
+        q.settings["vae"]["use_pretrained_vae"] = False                       # training a new one: any shape
+        q.settings["vae"]["vae_hiddenDim"] = 300
+        q.database = "ggd.xlsx"
+        assert q.settings["vae"]["vae_hiddenDim"] == 300
+
+
 def test_read_once_per_file_version():
     """A database is read once for each version of its file: looked at again it is not read again, a
     copy is handed back each time, and once the file is saved again it is read again."""
