@@ -165,3 +165,630 @@ Every setting a run takes, under its own name. A new project starts from these v
 | `maxAttributeErrorPercent` | from the database | Training stops once the network reproduces every material property within this percent. |
 | `klFactor` | from the database | How strongly training keeps the material map compact and smooth. |
 | `numEpochs` | from the database | Training stops after this many passes at the latest. |
+
+
+## Python
+
+Every call a setup script uses, with its arguments, read from the code's own docstrings. Model units are the project's units (`p.units`). A length is a number in model units, or text in numbers, pi and h, the largest element size, such as `"1.5h"` or `"5.64 + 1h"`. A selection is made with one of the selection types first and then added to a project under a name. The examples follow on from one another, run from the LSR MMTO folder: the selections, then a new project that the next examples build up, save and write as a script, then the shipped U-bracket, run and read back.
+
+### box
+
+`box(lo, hi, pad='auto')`, imported with `from lsr_mmto import box`
+
+Points with lo <= p <= hi; the corners may come in any order. By default pad is half the element size along each axis, so a box thinner than an element still catches the nearest layer.
+
+| argument | format | default |
+|---|---|---|
+| `lo` | one corner, [x, y, z] in model units | required |
+| `hi` | the opposite corner, [x, y, z] in model units | required |
+| `pad` | how far every bound is widened: "auto" (see Selection types), "half" (half an element), or a length, a number in model units or text in element sizes h such as "0.5h"; 0 is exact | `'auto'` |
+
+```python
+tip = box([0.95, 0.9, 0], [1, 1, 0.01])
+```
+
+### cylinder
+
+`cylinder(center, axis, radius, inner_radius=0.0, along=None, pad='auto', boundary=False)`, imported with `from lsr_mmto import cylinder`
+
+Points whose distance to the axis is in [inner_radius, radius]; along = (t0, t1) limits (p - center) . axis. boundary=True keeps only nodes on the mesh boundary; it is written only when on.
+
+| argument | format | default |
+|---|---|---|
+| `center` | a point on the axis, [x, y, z] in model units | required |
+| `axis` | its direction: "x", "y", "z", or a vector such as [1, 1, 0] | required |
+| `radius` | the outer radius, a length: a number in model units or text such as "1.5h" | required |
+| `inner_radius` | the inner radius, a length; 0 is a full cylinder, more is a tube | `0.0` |
+| `along` | where it starts and ends along the axis, measured from center: [start, end], two lengths; None is endless | `None` |
+| `pad` | how far every bound is widened: "auto" (see Selection types), "half" (half an element), or a length, a number in model units or text in element sizes h such as "0.5h"; 0 is exact | `'auto'` |
+| `boundary` | True keeps only the nodes on the outside of the mesh, False all | `False` |
+
+```python
+boss = cylinder(center=[0.875, 0.25, 0], axis="z", radius=0.05)
+```
+
+### sphere
+
+`sphere(center, radius, pad='auto')`, imported with `from lsr_mmto import sphere`
+
+Points within radius of center.
+
+| argument | format | default |
+|---|---|---|
+| `center` | [x, y, z] in model units | required |
+| `radius` | a length: a number in model units or text such as "1.5h" | required |
+| `pad` | how far every bound is widened: "auto" (see Selection types), "half" (half an element), or a length, a number in model units or text in element sizes h such as "0.5h"; 0 is exact | `'auto'` |
+
+```python
+ball = sphere([0.25, 0.25, 0.005], 0.1)
+```
+
+### plane
+
+`plane(axis, value, pad='auto', limits=None)`, imported with `from lsr_mmto import plane`
+
+Points with \|p_axis - value\| <= pad; by default pad is half the element size along axis. limits, e.g. {"y": [100, 120]}, keeps only the part of the cut between those values of the other axes (each widened by pad along its own axis).
+
+| argument | format | default |
+|---|---|---|
+| `axis` | the axis across the plane: "x", "y" or "z" | required |
+| `value` | where the plane cuts that axis, a number in model units | required |
+| `pad` | how far every bound is widened: "auto" (see Selection types), "half" (half an element), or a length, a number in model units or text in element sizes h such as "0.5h"; 0 is exact | `'auto'` |
+| `limits` | None for the whole cut, or {other axis: [from, to]} in model units, for one or both other axes, e.g. {"x": [0.75, 1]} | `None` |
+
+```python
+top = plane("y", 1.0, limits={"x": [0.75, 1]})
+```
+
+### face
+
+`face(side, pad='auto')`, imported with `from lsr_mmto import face`
+
+The plane at the mesh's extreme on one side: xmin, xmax, ymin, ymax, zmin or zmax.
+
+| argument | format | default |
+|---|---|---|
+| `side` | "xmin", "xmax", "ymin", "ymax", "zmin" or "zmax" | required |
+| `pad` | how far every bound is widened: "auto" (see Selection types), "half" (half an element), or a length, a number in model units or text in element sizes h such as "0.5h"; 0 is exact | `'auto'` |
+
+```python
+left = face("xmin")
+```
+
+### near_face
+
+`near_face(side, distance)`, imported with `from lsr_mmto import near_face`
+
+Points strictly within distance of the mesh's extreme on one side.
+
+| argument | format | default |
+|---|---|---|
+| `side` | "xmin", "xmax", "ymin", "ymax", "zmin" or "zmax" | required |
+| `distance` | how far in from that side, a length: a number in model units or text such as "1.5h" | required |
+
+```python
+bottom = near_face("ymin", "1.5h")
+```
+
+### nearest
+
+`nearest(point, boundary=False)`, imported with `from lsr_mmto import nearest`
+
+The single node or element closest to point; boundary=True only looks at nodes on the mesh boundary, as the PyTO-AD GUI does for a picked point.
+
+| argument | format | default |
+|---|---|---|
+| `point` | [x, y, z] in model units | required |
+| `boundary` | True looks only at the nodes on the outside of the mesh | `False` |
+
+```python
+corner = nearest([1, 1, 0])
+```
+
+### ids
+
+`ids(indices)`, imported with `from lsr_mmto import ids`
+
+Explicit node or element numbers; tied to one mesh.
+
+| argument | format | default |
+|---|---|---|
+| `indices` | a list of node or element numbers, counted from 0 | required |
+
+```python
+first = ids([0, 1, 2])
+```
+
+### stl_faces
+
+`stl_faces(triangles, tol=None)`, imported with `from lsr_mmto import stl_faces`
+
+Boundary nodes on triangles of the STL the mesh was made from: within tol times the smallest element size of a triangle. tol None is PyTO-AD's own lookup (0.707); the PyTO-AD GUI uses 0.8.
+
+| argument | format | default |
+|---|---|---|
+| `triangles` | a list of triangle numbers of the STL, counted from 0 | required |
+| `tol` | how close a node must be, in smallest element sizes; None is 0.707 | `None` |
+
+```python
+faces = stl_faces([0, 1])
+```
+
+### halfspaces
+
+`halfspaces(normals, origins, boundary=True)`, imported with `from lsr_mmto import halfspaces`
+
+Points on the inner side of every plane: n . (p - o) <= 1e-12 for each normal n and origin o. A box dragged in the PyTO-AD GUI is six such planes. boundary=True keeps only nodes on the mesh boundary, as the GUI does.
+
+| argument | format | default |
+|---|---|---|
+| `normals` | a list of vectors [a, b, c], each pointing out of its plane | required |
+| `origins` | a list of points [x, y, z] in model units, one on each plane, in the same order | required |
+| `boundary` | True keeps only the nodes on the outside of the mesh, False all | `True` |
+
+```python
+right = halfspaces([[-1, 0, 0]], [[0.9, 0, 0]])
+```
+
+### rows
+
+`rows(face, axis, n, end='max')`, imported with `from lsr_mmto import rows`
+
+The n outermost node rows of a face, counted along an axis: e.g. the 8 highest rows of the right face. Rows are node layers, so their height is n element sizes.
+
+| argument | format | default |
+|---|---|---|
+| `face` | the side the rows are on: "xmin", "xmax", "ymin", "ymax", "zmin" or "zmax" | required |
+| `axis` | the axis the rows are counted along: "x", "y" or "z" | required |
+| `n` | how many rows, a whole number | required |
+| `end` | "max" counts from the high end of axis, "min" from the low end | `'max'` |
+
+```python
+upper = rows("xmax", "y", 8)
+```
+
+### inside_stl
+
+`inside_stl(path, shift=(0.0, 0.0, 0.0))`, imported with `from lsr_mmto import inside_stl`
+
+Points inside a closed STL surface, the surface first moved by shift (x, y, z in model units), e.g. when the STL was saved shifted to 0, 0, 0. shift is written only when it is not zero.
+
+| argument | format | default |
+|---|---|---|
+| `path` | the STL file, absolute or relative to the project's folder | required |
+| `shift` | how far the surface is moved first, [x, y, z] in model units | `(0.0, 0.0, 0.0)` |
+
+```python
+inside = inside_stl("data/models/UBracket/UBracket.STL")
+```
+
+### function
+
+`function(ref)`, imported with `from lsr_mmto import function`
+
+Whatever a Python function name(mesh, on) in file.py returns.
+
+| argument | format | default |
+|---|---|---|
+| `ref` | "file.py:name": the Python file, absolute or relative to the project's folder, and the function in it | required |
+
+```python
+picked = function("my_selection.py:pick")
+```
+
+### union
+
+`union(*parts)`, imported with `from lsr_mmto import union`
+
+Points in any of the parts.
+
+| argument | format | default |
+|---|---|---|
+| `parts` | two or more selections, each a selection type above or a name in selection("name") | required |
+
+```python
+ends = union(left, tip)
+```
+
+### intersect
+
+`intersect(*parts)`, imported with `from lsr_mmto import intersect`
+
+Points in all of the parts.
+
+| argument | format | default |
+|---|---|---|
+| `parts` | two or more selections, each a selection type above or a name in selection("name") | required |
+
+```python
+both = intersect(bottom, left)
+```
+
+### difference
+
+`difference(a, b)`, imported with `from lsr_mmto import difference`
+
+Points in the first part but not the second.
+
+| argument | format | default |
+|---|---|---|
+| `a` | the selection to start from | required |
+| `b` | the selection taken away from it | required |
+
+```python
+rest = difference(left, bottom)
+```
+
+### selection
+
+`selection(name)`, imported with `from lsr_mmto import selection`
+
+Another selection of the project, by name. Only a project can evaluate it: Project.evaluate puts the named selection in (resolved) each time, so a combination follows later edits of its parts.
+
+| argument | format | default |
+|---|---|---|
+| `name` | the name the other selection was added under | required |
+
+```python
+link = selection("left")
+```
+
+### Project
+
+`Project(name, stl, n_dof=None, single_layer=None, base_dir=None)`, imported with `from lsr_mmto import Project`
+
+One problem: the part, its selections, supports and loads, keep-solid regions, material database, objective and constraints, and settings.
+
+| argument | format | default |
+|---|---|---|
+| `name` | the project's name, text; its runs are named after it | required |
+| `stl` | the part, an STL file: its path, absolute or relative to base_dir | required |
+| `n_dof` | how fine the mesh is, a whole number of unknowns (see Settings, mesh); None is the default there | `None` |
+| `single_layer` | True for one element through the thickness (a flat part such as a plate), False for a solid part; None is the default under Settings, mesh | `None` |
+| `base_dir` | the folder relative paths start from; None is the folder Python runs in | `None` |
+
+```python
+p = Project("my bracket", stl="data/models/UBracket/UBracket.STL", n_dof=8000)
+```
+
+### p.units
+
+`p.units = value`, p a Project
+
+The unit system: "MKS", "mmKS", "IPS" (those of the PyTO-AD GUI, kept where the GUI keeps it, settings.unit_system) or "none". Numbers are never converted; the unit system says what they are meant to be in, so that a database in other units is reported.
+
+| argument | format | default |
+|---|---|---|
+| `value` | "MKS", "mmKS", "IPS" or "none" (see Unit systems) | `'none'` |
+
+```python
+p.units = "MKS"
+```
+
+### p.comment
+
+`p.comment = value`, p a Project
+
+| argument | format | default |
+|---|---|---|
+| `value` | a description, text | `''` |
+
+```python
+p.comment = "U-bracket, fixed on the left"
+```
+
+### p.physics
+
+`p.physics = value`, p a Project
+
+| argument | format | default |
+|---|---|---|
+| `value` | the physics the optimization uses, one of those under Physics | `'structural'` |
+
+```python
+p.physics = "structural"
+```
+
+### p.add_selection
+
+`p.add_selection(name, selection)`, p a Project
+
+Adds a selection under a name, which supports, loads and keep solid can then use; returns the name.
+
+| argument | format | default |
+|---|---|---|
+| `name` | the selection's name, text | required |
+| `selection` | one of the selection types above, e.g. face("xmin") | required |
+
+```python
+p.add_selection("left", left)
+```
+
+### p.mesh
+
+`p.mesh()`, p a Project
+
+The voxel mesh of the part, made from the mesh settings (n_dof, single_layer) as a run makes it.
+
+```python
+mesh = p.mesh()
+```
+
+### p.evaluate
+
+`p.evaluate(selection, mesh, on='nodes')`, p a Project
+
+Indices of a selection (or of the selection with that name) on mesh, with every selection(name) in it looked up now, so a combination follows later edits of its parts. Elements of a selection that picks only nodes (stl_faces, rows, ...) are the elements touching those nodes.
+
+| argument | format | default |
+|---|---|---|
+| `selection` | a selection's name, or a selection type above | required |
+| `mesh` | the mesh, from p.mesh() | required |
+| `on` | "nodes" for node numbers, "elements" for element numbers | `'nodes'` |
+
+```python
+print(len(p.evaluate("left", mesh)))
+```
+
+### p.add_bc
+
+`p.add_bc(kind, on, **values)`, p a Project
+
+A support or load of a kind of BC_KINDS (the structural ones: fixed, displacement, force, traction) on a selection, its name or a Selection (stored under a new name), with the kind's values, e.g. p.add_bc("fixed", "clamp", dofs="xyz"), p.add_bc("force", "corner", total=[0, -4, 0]). The values are checked as the project's check checks them; a wrong one is an error here.
+
+| argument | format | default |
+|---|---|---|
+| `kind` | one of the kinds under Boundary conditions, such as "fixed" or "force" | required |
+| `on` | the selection it acts on: its name, or a selection type above (added under a new name) | required |
+| `values` | the kind's values, as keywords, e.g. dofs="xyz" or total=[0, -1000, 0]; each kind's values are under Boundary conditions | required |
+
+```python
+p.add_bc("fixed", "left", dofs="xyz")
+```
+
+### p.keep_solid
+
+`p.keep_solid(*names)`, p a Project
+
+Keeps these selections solid: their elements are always material.
+
+| argument | format | default |
+|---|---|---|
+| `names` | one or more selections: their names, or selection types above (each added under a new name) | required |
+
+```python
+p.keep_solid(boss)
+```
+
+### p.keep_support_elements
+
+`p.keep_support_elements = value`, p a Project
+
+| argument | format | default |
+|---|---|---|
+| `value` | True also keeps solid every element touching a fixed node | `False` |
+
+```python
+p.keep_support_elements = True
+```
+
+### p.database
+
+`p.database = value`, p a Project
+
+| argument | format | default |
+|---|---|---|
+| `value` | the material database: the name of one in data/databases, such as "6Materials_AF_3Attr", or the path of an .xlsx file, absolute or relative to base_dir | `None` |
+
+```python
+p.database = "6Materials_AF_3Attr"
+```
+
+### p.objective
+
+`p.objective(expression, sense='minimize')`, p a Project
+
+What the optimization makes as small as it can.
+
+| argument | format | default |
+|---|---|---|
+| `expression` | one quantity, text, such as "Mass()" or "FailureFactorPNorm()" (see Quantities) | required |
+| `sense` | "minimize", the only one for now | `'minimize'` |
+
+```python
+p.objective("FailureFactorPNorm()")
+```
+
+### p.constraint
+
+`p.constraint(expression, op, bound)`, p a Project
+
+A limit on a quantity, expression op bound; each call adds one more constraint.
+
+| argument | format | default |
+|---|---|---|
+| `expression` | one quantity, text, such as "Mass()" or "MaterialVolumeFraction(2, tau=0.5)" (see Quantities) | required |
+| `op` | "<=", the only one for now | required |
+| `bound` | the limit, a number in the project's units | required |
+
+```python
+p.constraint("Mass()", "<=", 0.0035)
+```
+
+### p.settings
+
+`p.settings[section][name] = value`, p a Project
+
+| argument | format | default |
+|---|---|---|
+| `value` | one setting: section is "common", "advanced" or "vae", name a setting of that section; every setting, its default and what it does are under Settings | the values under Settings |
+
+```python
+p.settings["common"]["maxIterations"] = 50
+```
+
+### p.save
+
+`p.save(path)`, p a Project
+
+Write the project, every setting included, with the other sections it was loaded with. Always as .mmto. Its folder becomes the project's folder, as the window keeps it: the part and the database with its network are copied into part/ and materials/ there (project_folder.pack), unless they are in it already.
+
+| argument | format | default |
+|---|---|---|
+| `path` | the .mmto file, absolute or relative to the folder Python runs in | required |
+
+```python
+p.save("my bracket/my bracket.mmto")
+```
+
+### p.to_script
+
+`p.to_script(path)`, p a Project
+
+Write a Python script that rebuilds this project with the same calls, next to it. Settings that differ from a new project's are written; the rest are the defaults.
+
+| argument | format | default |
+|---|---|---|
+| `path` | the .py file, in the project's folder | required |
+
+```python
+p.to_script("my bracket/my bracket_setup.py")
+```
+
+### Project.load
+
+`Project.load(path)`
+
+A project read from its .mmto file, as the GUI and p.save write it.
+
+| argument | format | default |
+|---|---|---|
+| `path` | the .mmto file, absolute or relative to the folder Python runs in | required |
+
+```python
+p = Project.load("projects/U-bracket.mmto")
+```
+
+### run
+
+`run(project, save_dir=None, **run_options)`, imported with `from lsr_mmto import run`
+
+Optimizes the project. The run's record keeps the project as it was run (Project.from_record rebuilds it). Returns the folder the results went to; None when nothing was saved.
+
+| argument | format | default |
+|---|---|---|
+| `project` | the project, a Project | required |
+| `save_dir` | the folder the results go into; None is a new folder in results in the project's folder, named after the date and time | `None` |
+| `run_options` | any of the options below, as keywords | none |
+| `verbose` | True prints each iteration's numbers | `True` |
+| `plot_progress` | True draws the design in a window as it changes | `False` |
+| `plot_bcs` | True opens a window with the supports and loads before the optimization starts | `False` |
+| `plotter` | a PyVista plotter the design is drawn into instead of a new window, or None | `None` |
+| `progress` | a function called after each iteration with a dict of its numbers (iteration, objective, constraints, x_phys, z, z_real), or None | `None` |
+| `should_stop` | a function the run asks as it goes; when it returns True the run stops and saves the design reached so far; or None | `None` |
+| `on_network_error` | a function called with the warning when the trained network is further from the database than the vae setting network_error_warning; when it returns False nothing is optimized; or None | `None` |
+
+```python
+folder = run(p)
+```
+
+### load
+
+`load(path)`, imported with `from lsr_mmto.results.load_results import load`
+
+A saved run read back, as a Run.
+
+| argument | format | default |
+|---|---|---|
+| `path` | the run's folder (one of those in results in the project's folder), or the run_data.npz in it; the .npz may be left off | required |
+
+```python
+r = load(folder)
+```
+
+### Run fields
+
+One optimization run. Per-element arrays are in solver element order.
+
+| field | what it is |
+|---|---|
+| `path` | the run_data.npz file it was read from |
+| `n_elems` | how many elements the mesh has |
+| `solid` | one True or False per element: material or empty, once the design is made all or nothing |
+| `x_cont` | each element's density, 0 to 1, before that |
+| `material_indices` | each element's material, its row in the database, counted from 0 |
+| `material_labels` | the materials' names, as tables and legends show them |
+| `results` | {name: one value per element}, the physics' results, e.g. results["von_mises"] |
+| `history` | {name: one value per iteration}, e.g. history["J_phys"], the objective |
+| `iterations` | how many iterations the optimizer made |
+| `final_objective` | the objective at the last iteration |
+| `objective_label` | the objective's name as the GUI shows it |
+| `constraint(i)` | constraint i (counted from 0) at the last iteration, as value / bound - 1: 0 or less is met |
+
+```python
+print(r.iterations, r.final_objective)
+```
+
+### summary
+
+`summary(run)`, imported with `from lsr_mmto.results.tables import summary`
+
+One run at a glance, in sections: the result (objective and each constraint, met or not), the design, the materials and the run. An analysis: the same for its one solve, without what only an optimization has (grey elements, the latent space, iterations). A notebook shows it as tables.
+
+| argument | format | default |
+|---|---|---|
+| `run` | a Run, from load | required |
+
+```python
+summary(r)
+```
+
+### design
+
+`design(run, out=None, *, field='material', size=(1200, 950), view='iso', **kw)`, imported with `from lsr_mmto.results.run_plots import design`
+
+The optimized design, drawn the way this example wants. 2D examples get a matplotlib panel; 3D examples get a mirrored voxel render placed on an axes, so both return a figure and display the same way. field applies to the 2D path only: material \| topology \| density \| a result's name (von_mises).
+
+| argument | format | default |
+|---|---|---|
+| `run` | a Run, from load | required |
+| `out` | None returns the figure; a path without its extension writes a .png and a .pdf there | `None` |
+| `field` | what colours the design of a flat part: "material", "topology", "density" or a result's name, such as "von_mises"; a solid part shows "material" only | `'material'` |
+| `size` | (width, height) in pixels of a solid part's picture | `(1200, 950)` |
+| `view` | where a solid part is seen from: "iso", "xy", "xz" or "yz", with a "-" in front for the other side | `'iso'` |
+| `kw` | angles=(azimuth, elevation, roll, zoom) turns a solid part's view further, in degrees, and zooms by a factor | none |
+
+```python
+design(r)
+```
+
+### mesh_for
+
+`mesh_for(run)`, imported with `from lsr_mmto.results.design_3d import mesh_for`
+
+The voxel mesh this run used, rebuilt and cached. nDOFDesired comes from the run's own config, so the rebuild matches the grid the run solved on rather than the example's current default.
+
+| argument | format | default |
+|---|---|---|
+| `run` | a Run, from load | required |
+
+```python
+mesh = mesh_for(r)
+```
+
+### export
+
+`export(run, mesh, folder, materials=True)`, imported with `from lsr_mmto.results.stl_export import export`
+
+design.stl (and design_\<material>.stl) into folder, as Export STL in the GUI writes them; returns the Report, whose lines() say what was written and whether each file is closed.
+
+| argument | format | default |
+|---|---|---|
+| `run` | a Run, from load | required |
+| `mesh` | the mesh it was solved on, from mesh_for(run) | required |
+| `folder` | the folder the files go into, usually the run's own | required |
+| `materials` | True also writes one file for each material, False only the whole part | `True` |
+
+```python
+report = export(r, mesh, folder)
+```

@@ -319,10 +319,14 @@ def met_cell(ok, before=""):
                f"{before} " * bool(before) + ("met" if ok else "NOT MET"))
 
 
-def summary(run, show=True):
+def summary(run):
     """One run at a glance, in sections: the result (objective and each constraint, met or not), the
     design, the materials and the run. An analysis: the same for its one solve, without what only an
-    optimization has (grey elements, the latent space, iterations)."""
+    optimization has (grey elements, the latent space, iterations). A notebook shows it as tables.
+
+    run: a Run, from load
+    Example: summary(r)
+    """
     analysis = run.analysed_material
     obj = (run.config or {}).get("topopt_params", {}).get("Objective") or ["objective", None]
     result = [[run.objective_label, f"{run.final_objective:.4g}", _unit(run, obj[0])]]

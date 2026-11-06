@@ -253,7 +253,8 @@ def test_record_stores_display():
 
 def test_script_run_lands_in_the_project_results():
     """run(p) from a script, with no folder given, writes the run where the window does: results/<date and
-    time> in the project's folder, listed by the window's Results; nothing goes to the current folder.
+    time> in the project's folder, listed by the window's Results, and returns that folder; nothing goes
+    to the current folder.
     The run's folder holds its three files and no copy of the project; moved with its project folder
     (zipped and sent), the run still finds its part."""
     import shutil
@@ -269,12 +270,13 @@ def test_script_run_lands_in_the_project_results():
         run_save.WRITE_FILES = True
         os.chdir(elsewhere)
         try:
-            run(p, verbose=False)
+            folder = run(p, verbose=False)
         finally:
             os.chdir(here)
             run_save.WRITE_FILES = saved
         listed = F.runs(p)
         assert len(listed) == 1 and os.path.dirname(listed[0]) == os.path.join(d, "ub", "results"), listed
+        assert folder == listed[0] and load_results.load(folder).iterations == 1
         assert len(os.path.basename(listed[0])) == 19 and os.listdir(elsewhere) == []
         assert sorted(os.listdir(listed[0])) == ["run_config.yaml", "run_data.config.json", "run_data.npz"]
         moved = shutil.move(os.path.join(d, "ub"), os.path.join(d, "sent"))

@@ -25,7 +25,22 @@ class RecordError(RuntimeError):
 
 @dataclass
 class Run:
-    """One optimization run. Per-element arrays are in solver element order."""
+    """One optimization run. Per-element arrays are in solver element order.
+
+    path: the run_data.npz file it was read from
+    n_elems: how many elements the mesh has
+    solid: one True or False per element: material or empty, once the design is made all or nothing
+    x_cont: each element's density, 0 to 1, before that
+    material_indices: each element's material, its row in the database, counted from 0
+    material_labels: the materials' names, as tables and legends show them
+    results: {name: one value per element}, the physics' results, e.g. results["von_mises"]
+    history: {name: one value per iteration}, e.g. history["J_phys"], the objective
+    iterations: how many iterations the optimizer made
+    final_objective: the objective at the last iteration
+    objective_label: the objective's name as the GUI shows it
+    constraint(i): constraint i (counted from 0) at the last iteration, as value / bound - 1: 0 or less is met
+    Example: print(r.iterations, r.final_objective)
+    """
     path: str
     meta: dict
     config: dict
@@ -193,7 +208,14 @@ def _build(path, meta, config, n, mat, solid, x_cont, results, z, z_real,
 
 
 def load(path: str) -> Run:
-    """Load one record. The .npz extension may be omitted."""
+    """A saved run read back, as a Run.
+
+    path: the run's folder (one of those in results in the project's folder), or the run_data.npz in it;
+        the .npz may be left off
+    Example: r = load(folder)
+    """
+    if os.path.isdir(path):
+        path = os.path.join(path, "run_data.npz")
     if not path.endswith(".npz"):
         path = path + ".npz"
     if not os.path.isfile(path):

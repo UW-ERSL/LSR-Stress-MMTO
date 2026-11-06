@@ -56,7 +56,9 @@ is kept as it is and worked out on each mesh; arithmetic without h is a number a
 
 To add a type: subclass Selection, give it a TYPE, a fields tuple and, for each field, how
 it is given (field_kinds: a Field each, which the GUI's form is made from), write _mask or
-evaluate, and add it to tests/test_selections.py. from_dict finds it by TYPE.
+evaluate, and add it to tests/test_selections.py. from_dict finds it by TYPE. Its docstring
+is its entry in docs/reference.md: what it selects, then one line per argument (name: what it is
+and its format) and an Example: line (docs/make_reference.py says how it is read).
 """
 import ast
 import importlib.util
@@ -243,7 +245,14 @@ def from_dict(d):
 # ----------------------------------------------------------------------------- shapes
 class box(Selection):
     """Points with lo <= p <= hi; the corners may come in any order. By default pad is half the element
-    size along each axis, so a box thinner than an element still catches the nearest layer."""
+    size along each axis, so a box thinner than an element still catches the nearest layer.
+
+    lo: one corner, [x, y, z] in model units
+    hi: the opposite corner, [x, y, z] in model units
+    pad: how far every bound is widened: "auto" (see Selection types), "half" (half an element), or a length,
+        a number in model units or text in element sizes h such as "0.5h"; 0 is exact
+    Example: tip = box([0.95, 0.9, 0], [1, 1, 0.01])
+    """
     TYPE, fields = "box", ("lo", "hi", "pad")
     field_kinds = {"lo": POINT, "hi": POINT, "pad": PAD}
 
@@ -258,7 +267,19 @@ class box(Selection):
 
 class cylinder(Selection):
     """Points whose distance to the axis is in [inner_radius, radius]; along = (t0, t1) limits (p - center) . axis.
-    boundary=True keeps only nodes on the mesh boundary; it is written only when on."""
+    boundary=True keeps only nodes on the mesh boundary; it is written only when on.
+
+    center: a point on the axis, [x, y, z] in model units
+    axis: its direction: "x", "y", "z", or a vector such as [1, 1, 0]
+    radius: the outer radius, a length: a number in model units or text such as "1.5h"
+    inner_radius: the inner radius, a length; 0 is a full cylinder, more is a tube
+    along: where it starts and ends along the axis, measured from center: [start, end], two lengths;
+        None is endless
+    pad: how far every bound is widened: "auto" (see Selection types), "half" (half an element), or a length,
+        a number in model units or text in element sizes h such as "0.5h"; 0 is exact
+    boundary: True keeps only the nodes on the outside of the mesh, False all
+    Example: boss = cylinder(center=[0.875, 0.25, 0], axis="z", radius=0.05)
+    """
     TYPE, fields = "cylinder", ("center", "axis", "radius", "inner_radius", "along", "pad", "boundary")
     field_kinds = {"center": POINT, "axis": AXIS, "radius": LENGTH, "inner_radius": LENGTH,
                    "along": Field("length", optional=True), "pad": PAD, "boundary": Field("tick")}
@@ -312,7 +333,14 @@ class cylinder(Selection):
 
 
 class sphere(Selection):
-    """Points within radius of center."""
+    """Points within radius of center.
+
+    center: [x, y, z] in model units
+    radius: a length: a number in model units or text such as "1.5h"
+    pad: how far every bound is widened: "auto" (see Selection types), "half" (half an element), or a length,
+        a number in model units or text in element sizes h such as "0.5h"; 0 is exact
+    Example: ball = sphere([0.25, 0.25, 0.005], 0.1)
+    """
     TYPE, fields = "sphere", ("center", "radius", "pad")
     field_kinds = {"center": POINT, "radius": LENGTH, "pad": PAD}
 
@@ -327,7 +355,16 @@ class sphere(Selection):
 class plane(Selection):
     """Points with |p_axis - value| <= pad; by default pad is half the element size along axis.
     limits, e.g. {"y": [100, 120]}, keeps only the part of the cut between those values of the
-    other axes (each widened by pad along its own axis)."""
+    other axes (each widened by pad along its own axis).
+
+    axis: the axis across the plane: "x", "y" or "z"
+    value: where the plane cuts that axis, a number in model units
+    pad: how far every bound is widened: "auto" (see Selection types), "half" (half an element), or a length,
+        a number in model units or text in element sizes h such as "0.5h"; 0 is exact
+    limits: None for the whole cut, or {other axis: [from, to]} in model units, for one or both
+        other axes, e.g. {"x": [0.75, 1]}
+    Example: top = plane("y", 1.0, limits={"x": [0.75, 1]})
+    """
     TYPE, fields = "plane", ("axis", "value", "pad", "limits")
     field_kinds = {"axis": AXIS, "value": LENGTH, "pad": PAD, "limits": Field("limits", optional=True)}
 
@@ -363,7 +400,13 @@ def _side(side):
 
 
 class face(Selection):
-    """The plane at the mesh's extreme on one side: xmin, xmax, ymin, ymax, zmin or zmax."""
+    """The plane at the mesh's extreme on one side: xmin, xmax, ymin, ymax, zmin or zmax.
+
+    side: "xmin", "xmax", "ymin", "ymax", "zmin" or "zmax"
+    pad: how far every bound is widened: "auto" (see Selection types), "half" (half an element), or a length,
+        a number in model units or text in element sizes h such as "0.5h"; 0 is exact
+    Example: left = face("xmin")
+    """
     TYPE, fields = "face", ("side", "pad")
     field_kinds = {"side": SIDE, "pad": PAD}
 
@@ -378,7 +421,12 @@ class face(Selection):
 
 
 class near_face(Selection):
-    """Points strictly within distance of the mesh's extreme on one side."""
+    """Points strictly within distance of the mesh's extreme on one side.
+
+    side: "xmin", "xmax", "ymin", "ymax", "zmin" or "zmax"
+    distance: how far in from that side, a length: a number in model units or text such as "1.5h"
+    Example: bottom = near_face("ymin", "1.5h")
+    """
     TYPE, fields = "near_face", ("side", "distance")
     field_kinds = {"side": SIDE, "distance": LENGTH}
 
@@ -396,7 +444,12 @@ class near_face(Selection):
 
 class nearest(Selection):
     """The single node or element closest to point; boundary=True only looks at nodes on
-    the mesh boundary, as the PyTO-AD GUI does for a picked point."""
+    the mesh boundary, as the PyTO-AD GUI does for a picked point.
+
+    point: [x, y, z] in model units
+    boundary: True looks only at the nodes on the outside of the mesh
+    Example: corner = nearest([1, 1, 0])
+    """
     TYPE, fields = "nearest", ("point", "boundary")
     field_kinds = {"point": POINT, "boundary": Field("tick")}
 
@@ -417,7 +470,11 @@ class nearest(Selection):
 
 
 class ids(Selection):
-    """Explicit node or element numbers; tied to one mesh."""
+    """Explicit node or element numbers; tied to one mesh.
+
+    indices: a list of node or element numbers, counted from 0
+    Example: first = ids([0, 1, 2])
+    """
     TYPE, fields = "ids", ("indices",)
     field_kinds = {"indices": Field("numbers")}
 
@@ -435,7 +492,12 @@ class ids(Selection):
 class stl_faces(Selection):
     """Boundary nodes on triangles of the STL the mesh was made from: within tol times the
     smallest element size of a triangle. tol None is PyTO-AD's own lookup (0.707); the
-    PyTO-AD GUI uses 0.8."""
+    PyTO-AD GUI uses 0.8.
+
+    triangles: a list of triangle numbers of the STL, counted from 0
+    tol: how close a node must be, in smallest element sizes; None is 0.707
+    Example: faces = stl_faces([0, 1])
+    """
     TYPE, fields = "stl_faces", ("triangles", "tol")
     field_kinds = {"triangles": Field("numbers"), "tol": Field("number", optional=True)}
 
@@ -465,7 +527,13 @@ class stl_faces(Selection):
 class halfspaces(Selection):
     """Points on the inner side of every plane: n . (p - o) <= 1e-12 for each normal n and
     origin o. A box dragged in the PyTO-AD GUI is six such planes. boundary=True keeps only
-    nodes on the mesh boundary, as the GUI does."""
+    nodes on the mesh boundary, as the GUI does.
+
+    normals: a list of vectors [a, b, c], each pointing out of its plane
+    origins: a list of points [x, y, z] in model units, one on each plane, in the same order
+    boundary: True keeps only the nodes on the outside of the mesh, False all
+    Example: right = halfspaces([[-1, 0, 0]], [[0.9, 0, 0]])
+    """
     TYPE, fields = "halfspaces", ("normals", "origins", "boundary")
     field_kinds = {"normals": Field("numbers"), "origins": Field("numbers"), "boundary": Field("tick")}
 
@@ -488,7 +556,14 @@ class halfspaces(Selection):
 
 class rows(Selection):
     """The n outermost node rows of a face, counted along an axis: e.g. the 8 highest rows
-    of the right face. Rows are node layers, so their height is n element sizes."""
+    of the right face. Rows are node layers, so their height is n element sizes.
+
+    face: the side the rows are on: "xmin", "xmax", "ymin", "ymax", "zmin" or "zmax"
+    axis: the axis the rows are counted along: "x", "y" or "z"
+    n: how many rows, a whole number
+    end: "max" counts from the high end of axis, "min" from the low end
+    Example: upper = rows("xmax", "y", 8)
+    """
     TYPE, fields = "rows", ("face", "axis", "n", "end")
     field_kinds = {"face": SIDE, "axis": AXIS, "n": Field("number"),
                    "end": Field("choice", (("High end", "max"), ("Low end", "min")))}
@@ -520,7 +595,12 @@ def _resolve(path, base_dir):
 
 class inside_stl(Selection):
     """Points inside a closed STL surface, the surface first moved by shift (x, y, z in model units), e.g.
-    when the STL was saved shifted to 0, 0, 0. shift is written only when it is not zero."""
+    when the STL was saved shifted to 0, 0, 0. shift is written only when it is not zero.
+
+    path: the STL file, absolute or relative to the project's folder
+    shift: how far the surface is moved first, [x, y, z] in model units
+    Example: inside = inside_stl("data/models/UBracket/UBracket.STL")
+    """
     TYPE, fields = "inside_stl", ("path", "shift")
     field_kinds = {"path": Field("file", files="STL files (*.stl *.STL)"),
                    "shift": Field("point", help="Moves the shape before nodes are selected, for example when "
@@ -559,7 +639,12 @@ class inside_stl(Selection):
 
 
 class function(Selection):
-    """Whatever a Python function name(mesh, on) in file.py returns."""
+    """Whatever a Python function name(mesh, on) in file.py returns.
+
+    ref: "file.py:name": the Python file, absolute or relative to the project's folder, and the
+        function in it
+    Example: picked = function("my_selection.py:pick")
+    """
     TYPE, fields = "function", ("ref",)
     field_kinds = {"ref": Field("file", files="Python files (*.py)")}
 
@@ -623,7 +708,11 @@ class Difference(Union):
 
 class selection(Selection):
     """Another selection of the project, by name. Only a project can evaluate it: Project.evaluate puts
-    the named selection in (resolved) each time, so a combination follows later edits of its parts."""
+    the named selection in (resolved) each time, so a combination follows later edits of its parts.
+
+    name: the name the other selection was added under
+    Example: link = selection("left")
+    """
     TYPE, fields = "selection", ("name",)
     field_kinds = {"name": Field("choice")}
 
@@ -693,12 +782,28 @@ def holds_typed_lengths(selection):
 
 
 def union(*parts):
+    """Points in any of the parts.
+
+    parts: two or more selections, each a selection type above or a name in selection("name")
+    Example: ends = union(left, tip)
+    """
     return Union(*parts)
 
 
 def intersect(*parts):
+    """Points in all of the parts.
+
+    parts: two or more selections, each a selection type above or a name in selection("name")
+    Example: both = intersect(bottom, left)
+    """
     return Intersect(*parts)
 
 
 def difference(a, b):
+    """Points in the first part but not the second.
+
+    a: the selection to start from
+    b: the selection taken away from it
+    Example: rest = difference(left, bottom)
+    """
     return Difference(a, b)

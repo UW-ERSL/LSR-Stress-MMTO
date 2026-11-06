@@ -49,7 +49,7 @@ in one line what is in the file. `structural_supports_and_loads.py` passes; `loo
 - Text the GUI shows is written for someone who has never seen the code: plain words, the labels
   the form itself shows, and the details behind an (i).
 - After a change to a list (settings, quantities, supports and loads, selection types, material
-  attributes), run `python docs/make_reference.py` and
+  attributes) or to a docstring the reference reads, run `python docs/make_reference.py` and
   `python -m gui.user_guide_window --write`; the reference page and the user guide's lists are made
   from the code.
 

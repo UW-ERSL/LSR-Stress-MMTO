@@ -119,7 +119,7 @@ def result_tabs(tabs, run, keep=0):
             tabs.addTab(plot_canvas(make()), title)
         except Exception as e:                                      # noqa: BLE001
             tabs.addTab(QtWidgets.QLabel(f"Could not draw: {e}"), title)
-    tabs.addTab(summary_view(tables.summary(run, show=False), tables.summary_details(run)), "Summary")
+    tabs.addTab(summary_view(tables.summary(run), tables.summary_details(run)), "Summary")
 
 
 def summary_view(summary, details=None):

@@ -10,7 +10,9 @@ code is, and `docs/code_map.md` leads from what you want to add to the section o
 The first rewrites `docs/reference.md`, the second the lists in `docs/user_guide.md`
 (the settings, quantities, kinds of support and load, selection types and material attributes, as
 the user guide shows them); `tests/test_reference.py` and `tests/test_user_guide.py` fail until
-they are rewritten. Each section below ends with what else to run.
+they are rewritten. The Python section of `docs/reference.md` is read from the docstrings of the calls
+a setup script uses: a new argument needs its line in the docstring (`docs/make_reference.py` says how
+a docstring is laid out), and every example there must run. Each section below ends with what else to run.
 
 ## A quantity (an objective or a constraint)
 

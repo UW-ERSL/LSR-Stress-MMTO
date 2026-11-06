@@ -287,7 +287,15 @@ def exported(run, folder):
 
 
 def export(run, mesh, folder, materials=True):
-    """design.stl (and design_<material>.stl) into folder; returns the Report."""
+    """design.stl (and design_<material>.stl) into folder, as Export STL in the GUI writes them; returns
+    the Report, whose lines() say what was written and whether each file is closed.
+
+    run: a Run, from load
+    mesh: the mesh it was solved on, from mesh_for(run)
+    folder: the folder the files go into, usually the run's own
+    materials: True also writes one file for each material, False only the whole part
+    Example: report = export(r, mesh, folder)
+    """
     report = Report()
     h3 = float(np.prod(mesh.elem_size))
     try:

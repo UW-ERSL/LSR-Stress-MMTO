@@ -327,6 +327,18 @@ def design(run: Run, out=None, *, field="material", size=(1200, 950),
     2D examples get a matplotlib panel; 3D examples get a mirrored voxel render
     placed on an axes, so both return a figure and display the same way.
     field applies to the 2D path only: material | topology | density | a result's name (von_mises).
+
+    run: a Run, from load
+    out: None returns the figure; a path without its extension writes a .png and a .pdf there
+    field: what colours the design of a flat part: "material", "topology", "density" or a result's
+        name, such as "von_mises"; a solid part shows "material" only
+    size: (width, height) in pixels of a solid part's picture
+    view: where a solid part is seen from: "iso", "xy", "xz" or "yz", with a "-" in front for the
+        other side
+    kw: angles=(azimuth, elevation, roll, zoom) turns a solid part's view further, in degrees, and
+        zooms by a factor
+        Default: none
+    Example: design(r)
     """
     import matplotlib.pyplot as plt
     _rc()

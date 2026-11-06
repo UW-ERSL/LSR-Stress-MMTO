@@ -2,14 +2,25 @@
 make_reference.py
 =================
 Writes docs/reference.md from the code: the project file's sections, the
-selection types, the boundary-condition kinds, the quantities and the settings.
+selection types, the boundary-condition kinds, the quantities, the settings, and the
+Python calls a setup script uses.
 
     python docs/make_reference.py        (from the repository folder)
 
 The page is generated, not edited by hand; tests/test_reference.py fails when the
 page in the repository differs from what the code generates.
+
+The Python section is read from the docstrings of the calls (python_entries lists them):
+first what the call does, then one line per argument, "name: what it is and its format",
+continued on lines indented further, and an "Example: ..." line with one line of code. An
+indented "Default: ..." under an argument stands for its default where the signature has
+none to give. A class's docstring may also describe what is set on it once it is made,
+each such line with its own indented "Example: ..." (Project: database, settings, ...).
+Every argument needs its line; a missing one stops the page being written.
 """
+import inspect
 import os
+import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -28,6 +39,12 @@ SECTIONS = [
     ("formulation", "objective and constraints, see Quantities"),
     ("settings", "common, advanced and vae, see Settings"),
 ]
+
+
+PROJECT_CALLS = ("Project", "units", "comment", "physics", "add_selection", "mesh", "evaluate", "add_bc",
+                 "keep_solid", "keep_support_elements", "database", "objective", "constraint", "settings",
+                 "save", "to_script", "load")                  # Project's calls, in the order a script uses them
+ARGUMENT = re.compile(r"^(\w+)((?:\[\w+\]|\(\w+\))*): (.*)$")       # name: text, or settings[section][name]: text
 
 
 def _value(v):
@@ -61,7 +78,7 @@ def generate():
             "| type | fields | selects |", "|---|---|---|"]
     for name, cls in sorted(S._TYPES.items()):
         fields = "parts" if cls in (S.Union, S.Intersect, S.Difference) else ", ".join(cls.fields)
-        doc = " ".join((cls.__doc__ or "").split()).replace("|", "\\|")
+        doc = _docstring(cls.__doc__, cls.fields)[0].replace("|", "\\|")      # what it selects
         out.append(f"| `{name}` | {fields} | {doc} |")
 
     out += ["", "## Boundary conditions", "",
@@ -125,7 +142,152 @@ def generate():
             meaning = e.help + (f" Empty (None): {e.none_means}." if e.none_means else "")
             out.append(f"| `{e.key}` | {default} | {meaning} |")
         out.append("")
+    out += python_section()
     return "\n".join(out)
+
+
+# ---------------------------------------------------------------------- the Python section
+def _docstring(doc, known):
+    """(description, {name: {"written", "text", "default", "example"}}, example) read from a docstring as
+    the module docstring says; known: the names whose lines are arguments."""
+    description, arguments, example, current = [], {}, None, None
+    for line in inspect.cleandoc(doc or "").splitlines():
+        m = ARGUMENT.match(line)
+        if line.startswith("Example: "):
+            example, current = line[len("Example: "):].strip(), None
+        elif m and m.group(1) in known:
+            current = arguments[m.group(1)] = {"written": m.group(1) + m.group(2), "text": m.group(3).strip(),
+                                               "default": None, "example": None}
+        elif current is not None and line[:1].isspace():
+            text = line.strip()
+            for key in ("Default", "Example"):
+                if text.startswith(key + ": "):
+                    current[key.lower()] = text[len(key) + 2:].strip()
+                    break
+            else:
+                current["text"] += " " + text
+        elif not arguments and example is None:
+            description.append(line)
+        else:
+            current = None
+    return " ".join(" ".join(description).split()), arguments, example
+
+
+def _cell(text):
+    """Text for the page: | escaped for the tables, and < before a letter so it is not read as a tag."""
+    return re.sub(r"<(?=[A-Za-z])", r"\\<", str(text).replace("|", "\\|"))
+
+
+def python_entries():
+    """[(heading, object, how)] of the Python section, in order; how is "call" (a function or a class),
+    "method", "classmethod", "attribute" (a property or a value set on a Project) or "fields" (what a
+    Run holds). Every selection type is written as the call of its name."""
+    from lsr_mmto.problem import selections as S
+    from lsr_mmto.problem.project import Project, run
+    from lsr_mmto.results import design_3d, load_results, run_plots, stl_export, tables
+    out = [(name, getattr(S, name), "call") for name in S._TYPES]
+    for name in PROJECT_CALLS:
+        found = inspect.getattr_static(Project, name, None)
+        how = ("call" if name == "Project" else "classmethod" if isinstance(found, classmethod) else
+               "method" if inspect.isfunction(found) else "attribute")
+        heading = name if how == "call" else f"Project.{name}" if how == "classmethod" else f"p.{name}"
+        out.append((heading, Project if how == "call" else found, how))
+    out += [("run", run, "call"), ("load", load_results.load, "call"), ("Run fields", load_results.Run, "fields"),
+            ("summary", tables.summary, "call"), ("design", run_plots.design, "call"),
+            ("mesh_for", design_3d.mesh_for, "call"), ("export", stl_export.export, "call")]
+    return out
+
+
+def _options(obj):
+    """The keyword options a call passes on under its **name (run's run_options: those _run_arguments
+    takes), as parameters; none for other calls."""
+    from lsr_mmto.problem.project import _run_arguments, run
+    if obj is not run:
+        return []
+    taken = inspect.signature(run).parameters
+    return [q for n, q in inspect.signature(_run_arguments).parameters.items() if n not in taken and n != "project"]
+
+
+def _entry(heading, obj, how):
+    """(lines of the page, import line or None, example) of one entry."""
+    import lsr_mmto
+    from lsr_mmto.problem.project import Project
+    new = Project("name", "part.stl")
+    rows, imports = [], None
+    if how == "attribute":
+        doc = obj.__doc__ if isinstance(obj, property) else Project.__doc__
+        name = heading[2:]
+        description, arguments, example = _docstring(doc, {name})
+        if name not in arguments:
+            raise ValueError(f"{heading}: its docstring has no line for it")
+        a = arguments[name]
+        if isinstance(obj, property):
+            a["example"], description = example, description
+        else:
+            description = ""
+        call = f"p.{a['written']} = value"
+        rows.append(("value", a["text"], a["default"] or f"`{getattr(new, name)!r}`"))
+        example = a["example"]
+    elif how == "fields":
+        fields = set(getattr(obj, "__annotations__", {})) | set(dir(obj))
+        description, arguments, example = _docstring(obj.__doc__, fields)
+        call = None
+        rows = [(a["written"], a["text"]) for a in arguments.values()]
+    else:
+        function = obj.__func__ if how == "classmethod" else obj
+        parameters = list(inspect.signature(function).parameters.values())
+        if how in ("method", "classmethod"):
+            parameters = parameters[1:]                                             # self, cls
+        options = _options(obj)
+        description, arguments, example = _docstring(obj.__doc__, {q.name for q in parameters + options})
+        signature = str(inspect.Signature([q.replace(annotation=inspect.Parameter.empty) for q in parameters]))
+        call = (f"p.{heading[2:]}{signature}" if how == "method" else f"{heading}{signature}")
+        for q in parameters + options:
+            if q.name not in arguments:
+                raise ValueError(f"{heading}: its docstring has no line for the argument {q.name}")
+            a = arguments[q.name]
+            default = a["default"] or ("required" if q.default is inspect.Parameter.empty else f"`{q.default!r}`")
+            rows.append((a["written"], a["text"], default))
+        if how == "call":
+            module = "lsr_mmto" if getattr(lsr_mmto, obj.__name__, None) is obj else obj.__module__
+            imports = f"from {module} import {obj.__name__}"
+    if not example:
+        raise ValueError(f"{heading}: its docstring has no Example: line")
+    if how == "fields":
+        imports = f"from {obj.__module__} import {obj.__name__}"
+    lines = [f"### {heading}", ""]
+    if call:
+        lines += [f"`{call}`" + (f", imported with `{imports}`" if imports else "") +
+                  (", p a Project" if how in ("method", "attribute") else ""), ""]
+    if description:
+        lines += [_cell(description), ""]
+    if how == "fields":
+        lines += ["| field | what it is |", "|---|---|"] + [f"| `{n}` | {_cell(t)} |" for n, t in rows] + [""]
+    elif rows:
+        lines += ["| argument | format | default |", "|---|---|---|"] + \
+                 [f"| `{n}` | {_cell(t)} | {d if d.startswith('`') else _cell(d)} |" for n, t, d in rows] + [""]
+    lines += ["```python", example, "```", ""]
+    return lines, imports if how == "call" else None, example
+
+
+def examples():
+    """[(import line or None, example)] of the Python section's entries, in their order: run one after
+    another from the repository folder, they make, save, run and read back the projects they describe."""
+    return [_entry(*e)[1:] for e in python_entries()]
+
+
+def python_section():
+    out = ["", "## Python", "",
+           "Every call a setup script uses, with its arguments, read from the code's own docstrings. Model units "
+           "are the project's units (`p.units`). A length is a number in model units, or text in numbers, pi "
+           "and h, the largest element size, such as `\"1.5h\"` or `\"5.64 + 1h\"`. A selection is made "
+           "with one of the selection types first and then added to a project under a name. The examples "
+           "follow on from one another, run from the LSR MMTO folder: the selections, then a new project "
+           "that the next examples build up, save and write as a script, then the shipped U-bracket, run "
+           "and read back.", ""]
+    for e in python_entries():
+        out += _entry(*e)[0]
+    return out
 
 
 if __name__ == "__main__":

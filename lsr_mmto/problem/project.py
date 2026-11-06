@@ -138,6 +138,34 @@ def _supports_and_loads(picks):
 
 
 class Project:
+    """One problem: the part, its selections, supports and loads, keep-solid regions, material database,
+    objective and constraints, and settings.
+
+    name: the project's name, text; its runs are named after it
+    stl: the part, an STL file: its path, absolute or relative to base_dir
+    n_dof: how fine the mesh is, a whole number of unknowns (see Settings, mesh); None is the default there
+    single_layer: True for one element through the thickness (a flat part such as a plate), False for a
+        solid part; None is the default under Settings, mesh
+    base_dir: the folder relative paths start from; None is the folder Python runs in
+    Example: p = Project("my bracket", stl="data/models/UBracket/UBracket.STL", n_dof=8000)
+
+    Set on a project once it is made (its setup script sets them the same way):
+
+    comment: a description, text
+        Example: p.comment = "U-bracket, fixed on the left"
+    physics: the physics the optimization uses, one of those under Physics
+        Example: p.physics = "structural"
+    keep_support_elements: True also keeps solid every element touching a fixed node
+        Example: p.keep_support_elements = True
+    database: the material database: the name of one in data/databases, such as "6Materials_AF_3Attr",
+        or the path of an .xlsx file, absolute or relative to base_dir
+        Example: p.database = "6Materials_AF_3Attr"
+    settings[section][name]: one setting: section is "common", "advanced" or "vae", name a setting of
+        that section; every setting, its default and what it does are under Settings
+        Default: the values under Settings
+        Example: p.settings["common"]["maxIterations"] = 50
+    """
+
     def __init__(self, name, stl, n_dof=None, single_layer=None, base_dir=None):
         self.name = name
         self.stl = stl                          # as given; relative paths are relative to base_dir
@@ -157,6 +185,12 @@ class Project:
 
     # ------------------------------------------------------------------ building it up
     def add_selection(self, name, selection):
+        """Adds a selection under a name, which supports, loads and keep solid can then use; returns the name.
+
+        name: the selection's name, text
+        selection: one of the selection types above, e.g. face("xmin")
+        Example: p.add_selection("left", left)
+        """
         if not isinstance(selection, S.Selection):
             raise TypeError(f"{name}: a Selection is expected, e.g. face('xmin')")
         self.selections[name] = selection
@@ -203,9 +237,16 @@ class Project:
 
     def add_bc(self, kind, on, **values):
         """A support or load of a kind of BC_KINDS (the structural ones: fixed, displacement, force,
-        traction) on a selection, its name or a Selection (stored under a new name), with the kind's
-        values: p.add_bc("fixed", "clamp", dofs="xyz"), p.add_bc("force", "corner", total=[0, -4, 0]).
-        The values are checked as the project's check checks them; a wrong one is an error here."""
+        traction) on a selection, its name or a Selection (stored under a new name), with the kind's values,
+        e.g. p.add_bc("fixed", "clamp", dofs="xyz"), p.add_bc("force", "corner", total=[0, -4, 0]).
+        The values are checked as the project's check checks them; a wrong one is an error here.
+
+        kind: one of the kinds under Boundary conditions, such as "fixed" or "force"
+        on: the selection it acts on: its name, or a selection type above (added under a new name)
+        values: the kind's values, as keywords, e.g. dofs="xyz" or total=[0, -1000, 0]; each kind's values
+            are under Boundary conditions
+        Example: p.add_bc("fixed", "left", dofs="xyz")
+        """
         if kind not in BC_KINDS:
             raise ValueError(f"kind must be one of {', '.join(BC_KINDS)}, not {kind!r}")
         k = BC_KINDS[kind]
@@ -218,7 +259,13 @@ class Project:
     def evaluate(self, selection, mesh, on="nodes"):
         """Indices of a selection (or of the selection with that name) on mesh, with every selection(name) in
         it looked up now, so a combination follows later edits of its parts. Elements of a selection that
-        picks only nodes (stl_faces, rows, ...) are the elements touching those nodes."""
+        picks only nodes (stl_faces, rows, ...) are the elements touching those nodes.
+
+        selection: a selection's name, or a selection type above
+        mesh: the mesh, from p.mesh()
+        on: "nodes" for node numbers, "elements" for element numbers
+        Example: print(len(p.evaluate("left", mesh)))
+        """
         seen = ()
         if isinstance(selection, str):
             seen, selection = (selection,), self.selections[selection]
@@ -241,15 +288,34 @@ class Project:
         self.keep_solid_names = [new if n == old else n for n in self.keep_solid_names]
 
     def keep_solid(self, *names):
+        """Keeps these selections solid: their elements are always material.
+
+        names: one or more selections: their names, or selection types above (each added under a new name)
+        Example: p.keep_solid(boss)
+        """
         for n in names:
             n = self._on(n, "keep")
             if n not in self.keep_solid_names:
                 self.keep_solid_names.append(n)
 
     def objective(self, expression, sense="minimize"):
+        """What the optimization makes as small as it can.
+
+        expression: one quantity, text, such as "Mass()" or "FailureFactorPNorm()" (see Quantities)
+        sense: "minimize", the only one for now
+        Example: p.objective("FailureFactorPNorm()")
+        """
         self.formulation["objective"] = {"expression": expression, "sense": sense}
 
     def constraint(self, expression, op, bound):
+        """A limit on a quantity, expression op bound; each call adds one more constraint.
+
+        expression: one quantity, text, such as "Mass()" or "MaterialVolumeFraction(2, tau=0.5)" (see
+            Quantities)
+        op: "<=", the only one for now
+        bound: the limit, a number in the project's units
+        Example: p.constraint("Mass()", "<=", 0.0035)
+        """
         self.formulation["constraints"].append({"expression": expression, "op": op, "bound": float(bound)})
 
     # ------------------------------------------------------------------ checks without a mesh
@@ -265,7 +331,11 @@ class Project:
     def units(self):
         """The unit system: "MKS", "mmKS", "IPS" (those of the PyTO-AD GUI, kept where the GUI
         keeps it, settings.unit_system) or "none". Numbers are never converted; the unit
-        system says what they are meant to be in, so that a database in other units is reported."""
+        system says what they are meant to be in, so that a database in other units is reported.
+
+        units: "MKS", "mmKS", "IPS" or "none" (see Unit systems)
+        Example: p.units = "MKS"
+        """
         return (self._gui.get("settings") or {}).get("unit_system", "none")
 
     @units.setter
@@ -623,6 +693,14 @@ class Project:
         return filled
 
     # ------------------------------------------------------------------ the problem
+    def mesh(self):
+        """The voxel mesh of the part, made from the mesh settings (n_dof, single_layer) as a run makes it.
+
+        Example: mesh = p.mesh()
+        """
+        from lsr_mmto.problem.mesh import make_mesh
+        return make_mesh(self.stl_path(), self.n_dof, self.single_layer, self.unknowns_per_node())
+
     def build(self, verbose=True):
         """mesh, mat_prop, bc, elem_body_force, to_params, vae_params."""
         filled = self.complete_settings()
@@ -639,9 +717,8 @@ class Project:
                 self._shown_warnings = shown
         from lsr_mmto.pyto_ad_imports import mat_lib, find_elements_with_fixedDOF
         from lsr_mmto.optimize.mmto_to_params import MMTOParams
-        from lsr_mmto.problem.mesh import make_mesh
 
-        mesh = make_mesh(self.stl_path(), self.n_dof, self.single_layer, self.unknowns_per_node())
+        mesh = self.mesh()
         bcs, _ = self.supports_and_loads(mesh)
         error = self.supports_and_loads_error(mesh, bcs)            # as PyTO-AD's FEA does, but before the
         if error:                                                   # VAE and the run
@@ -758,7 +835,11 @@ class Project:
         """Write the project, every setting included, with the other sections it was loaded with.
         Always as .mmto. Its folder becomes the project's folder, as the window keeps it: the part and
         the database with its network are copied into part/ and materials/ there (project_folder.pack),
-        unless they are in it already."""
+        unless they are in it already.
+
+        path: the .mmto file, absolute or relative to the folder Python runs in
+        Example: p.save("my bracket/my bracket.mmto")
+        """
         from lsr_mmto.problem.project_folder import pack
         if not path.lower().endswith(".mmto"):
             raise ValueError(f"{path}: an LSR MMTO project is saved as a .mmto file")
@@ -773,7 +854,11 @@ class Project:
     def to_script(self, path):
         """Write a Python script that rebuilds this project with the same calls, next to it.
 
-        Settings that differ from a new project's are written; the rest are the defaults.        """
+        Settings that differ from a new project's are written; the rest are the defaults.
+
+        path: the .py file, in the project's folder
+        Example: p.to_script("my bracket/my bracket_setup.py")
+        """
         path = os.path.abspath(path)
         if os.path.normcase(os.path.dirname(path)) != os.path.normcase(self.base_dir):
             raise ValueError(f"save the script in {self.base_dir}, next to the project, so that the "
@@ -864,6 +949,11 @@ class Project:
 
     @classmethod
     def load(cls, path):
+        """A project read from its .mmto file, as the GUI and p.save write it.
+
+        path: the .mmto file, absolute or relative to the folder Python runs in
+        Example: p = Project.load("projects/U-bracket.mmto")
+        """
         path = os.path.abspath(path)
         if not path.lower().endswith(".mmto"):
             raise ValueError(f"{path}: not an LSR MMTO project; a project is a .mmto file")
@@ -923,7 +1013,29 @@ def _prepared(project):
 
 
 def run(project, save_dir=None, **run_options):
-    """Optimize the project with _run_topopt. The run's record keeps the project as it was run
-    (Project.from_record rebuilds it)."""
+    """Optimizes the project. The run's record keeps the project as it was run (Project.from_record
+    rebuilds it). Returns the folder the results went to; None when nothing was saved.
+
+    project: the project, a Project
+    save_dir: the folder the results go into; None is a new folder in results in the project's folder,
+        named after the date and time
+    run_options: any of the options below, as keywords
+        Default: none
+    verbose: True prints each iteration's numbers
+    plot_progress: True draws the design in a window as it changes
+    plot_bcs: True opens a window with the supports and loads before the optimization starts
+    plotter: a PyVista plotter the design is drawn into instead of a new window, or None
+    progress: a function called after each iteration with a dict of its numbers (iteration, objective,
+        constraints, x_phys, z, z_real), or None
+    should_stop: a function the run asks as it goes; when it returns True the run stops and saves the
+        design reached so far; or None
+    on_network_error: a function called with the warning when the trained network is further from the
+        database than the vae setting network_error_warning; when it returns False nothing is
+        optimized; or None
+    Example: folder = run(p)
+    """
     from lsr_mmto.optimize.optimization_loop import _run_topopt
-    return _run_topopt(**_run_arguments(_prepared(project), save_dir, **run_options))
+    from lsr_mmto.problem.project_folder import is_run
+    arguments = _run_arguments(_prepared(project), save_dir, **run_options)
+    _run_topopt(**arguments)
+    return arguments["save_dir"] if is_run(arguments["save_dir"]) else None

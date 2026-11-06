@@ -49,6 +49,9 @@ def mesh_for(run: Run):
 
     nDOFDesired comes from the run's own config, so the rebuild matches the grid
     the run solved on rather than the example's current default.
+
+    run: a Run, from load
+    Example: mesh = mesh_for(r)
     """
     ndof = (run.config.get("topopt_params") or {}).get("nDOFDesired")
     key = (run.example, ndof)
