@@ -2387,10 +2387,10 @@ def test_earlier_run_after_scale_part():
             return trimesh.load(os.path.join(folder, "design.stl"), force="mesh").bounds
 
         run = load_results.load(os.path.join(folder, "run_data"))
-        before = draw_design.run_mesh(w, folder, run)
+        before = draw_design.run_mesh(w, run)
         nodes, extent = np.array(before.node_xyz, dtype=float), exported_extent(before)
         assert w.scale_part(2.0)
-        after = draw_design.run_mesh(w, folder, load_results.load(os.path.join(folder, "run_data")))
+        after = draw_design.run_mesh(w, load_results.load(os.path.join(folder, "run_data")))
         assert after is not before and np.allclose(after.elem_size, run.elem_size, rtol=1e-12, atol=0)
         assert np.allclose(after.node_xyz, nodes, rtol=1e-12, atol=1e-12 * np.abs(nodes).max())
         assert np.allclose(exported_extent(after), extent, rtol=1e-9, atol=1e-9 * np.abs(extent).max())
@@ -2403,7 +2403,7 @@ def test_earlier_run_after_scale_part():
         draw_design.forget_meshes(w.project.stl_path())
         w._mesh, w._mesh_key = None, None
         try:
-            draw_design.run_mesh(w, folder, load_results.load(os.path.join(folder, "run_data")))
+            draw_design.run_mesh(w, load_results.load(os.path.join(folder, "run_data")))
             raise AssertionError("a run was shown on a part of another shape")
         except draw_design.MeshError as e:
             assert "its part has changed since the run" in str(e), e

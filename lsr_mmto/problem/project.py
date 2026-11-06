@@ -1004,20 +1004,11 @@ class Project:
                 "gui": self._gui}
 
     @classmethod
-    def from_record(cls, record, folder=None):
-        """The project a run record stores. folder: the project's folder now, when it may have been
-        moved since the run (zipped and sent): the part is then looked for at the same place
-        relative to it."""
+    def from_record(cls, record):
+        """The project a run record stores, its paths as load gives them (absolute, in the project folder
+        where it is now: load_results.absolute_paths)."""
         data = dict(record.get("gui") or {}, mmto=record["project"], stl_file_path=record["stl_file_path"])
-        p = cls._from_data(data, record["base_dir"], record["project"].get("name", "project"))
-        if folder is not None and not os.path.isfile(p.stl_path()):
-            try:
-                rel = os.path.relpath(record["stl_file_path"], record["base_dir"])
-            except ValueError:                                  # another drive on Windows
-                return p
-            if os.path.isfile(os.path.join(folder, rel)):
-                p.base_dir, p.stl = os.path.abspath(folder), rel.replace("\\", "/")
-        return p
+        return cls._from_data(data, record["base_dir"], record["project"].get("name", "project"))
 
     @classmethod
     def load(cls, path):

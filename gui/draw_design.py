@@ -5,7 +5,7 @@ An optimized design on the 3D view: one block per element, drawn in place of the
 
     live(window, mesh, x, material, colours, labels)   while a run goes: density and material
     record(window, run, mesh, field, ...)       a finished run: Material, Density, a result (Stress) or Solid
-    run_mesh(window, folder, run)               the mesh a saved run was made on, at the size it was run at
+    run_mesh(window, run)                       the mesh a saved run was made on, at the size it was run at
 
 A drawing of materials (a run going, the Material view, the smooth pieces) also adds a column to
 window.design_legend: each material of the database with its colour, label and share (none when the
@@ -225,7 +225,7 @@ def _scaled(mesh, factor):
     return out
 
 
-def run_mesh(window, folder, run):
+def run_mesh(window, run):
     """The mesh a saved run was made on, rebuilt from the project its record keeps (the window's own
     mesh when it is the same one). A part scaled since the run (File > Scale part: the same elements, each
     larger or smaller by one factor in x, y and z than the run recorded) gives a copy of the mesh scaled back
@@ -235,7 +235,7 @@ def run_mesh(window, folder, run):
     spec = ((run.config or {}).get("arguments_resolved") or {}).get("to_problem")
     if not isinstance(spec, dict) or "project" not in spec:
         raise MeshError("this run's record does not hold its project, so its part is not known")
-    p = Project.from_record(spec, folder=os.path.dirname(os.path.dirname(os.path.abspath(folder))))
+    p = Project.from_record(spec)
     if not os.path.isfile(p.stl_path()):
         raise MeshError(f"its part is missing: {p.stl_path()}")
     mesh = mesh_of(window, p)

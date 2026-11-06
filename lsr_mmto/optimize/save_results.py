@@ -399,7 +399,10 @@ def run_data(config, fields, vae_state_dict, history, example_name, z_real_point
 
 def write_run_data(save_dir, data):
     """run_data's dict written into save_dir: the record, run_config.yaml, and the pickle if SAVE_PICKLE.
-    Returns the path of the primary artefact, as save_run_data."""
+    Their paths are relative to the project folder (load_results.relative_paths), so the project folder
+    can be moved with its runs. Returns the path of the primary artefact, as save_run_data."""
+    from lsr_mmto.results.load_results import relative_paths
+    data = dict(data, config=relative_paths(data["config"], save_dir))
     rec_path = _save_record(save_dir, data)
 
     pkl_path = None

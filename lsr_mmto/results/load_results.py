@@ -7,15 +7,101 @@ load(path)        a run saved to disk, as a Run.
 from_arrays(...)  the same from the record's arrays and manifest, written or not (an analysis
                   shown without being saved).
 
+The paths a record holds (RECORD_PATHS) are written relative to the project folder, and the project
+folder relative to the run's folder (relative_paths), so a project folder can be moved, renamed or
+zipped to someone else with its runs; load makes them absolute again (absolute_paths), also for an
+older record that holds them absolute.
+
 Nothing here imports torch, pyvista or PyTO.
 """
 from __future__ import annotations
 
+import copy
 import json
+import ntpath
 import os
+import posixpath
 from dataclasses import dataclass, field
 
 import numpy as np
+
+# the project folder in a record (relative to the run's folder), and the paths a record holds relative to it
+PROJECT_FOLDER = ("arguments_resolved", "to_problem", "base_dir")
+RECORD_PATHS = (("arguments_resolved", "to_problem", "stl_file_path"), ("arguments_resolved", "saveNet"),
+                ("arguments_resolved", "save_dir"), ("topopt_params", "MaterialsExcelFile"))
+
+
+def _get(config, keys):
+    for key in keys:
+        config = config.get(key) if isinstance(config, dict) else None
+    return config if isinstance(config, str) and config else None
+
+
+def _set(config, keys, value):
+    for key in keys[:-1]:
+        config = config[key]
+    config[keys[-1]] = value
+
+
+def _absolute(path):
+    """True for an absolute path of either kind (a record written on Windows read elsewhere, and back)."""
+    return ntpath.isabs(path) or posixpath.isabs(path)
+
+
+def _below(path, folder):
+    """path relative to folder, its parts joined by /, when it is inside folder; else None. Either kind of
+    separator, and case, are ignored, so a record written on Windows is read anywhere."""
+    p, f = path.replace("\\", "/"), folder.replace("\\", "/").rstrip("/")
+    return p[len(f) + 1:] if p.lower().startswith(f.lower() + "/") else None
+
+
+def relative_paths(config, run_folder):
+    """A copy of the record's manifest with RECORD_PATHS inside the project folder relative to it, and the
+    project folder relative to the run's folder (run_folder), joined by /. A path elsewhere stays as it is."""
+    config = copy.deepcopy(config)
+    base = _get(config, PROJECT_FOLDER)
+    if base is None or not _absolute(base):
+        return config
+    for keys in RECORD_PATHS:
+        path = _get(config, keys)
+        if path is not None and _absolute(path) and _below(path, base) is not None:
+            _set(config, keys, _below(path, base))
+    try:
+        _set(config, PROJECT_FOLDER, os.path.relpath(base, os.path.abspath(run_folder)).replace("\\", "/"))
+    except ValueError:                                              # another drive on Windows: kept absolute
+        pass
+    return config
+
+
+def absolute_paths(config, run_folder):
+    """A copy of a record's manifest with its paths absolute again, for the run in run_folder: relative ones
+    against the project folder, found from the run's folder. An older record holds them absolute: when one
+    no longer exists, the same place inside the run's project folder now is taken, if it is there (the
+    project folder was moved or renamed)."""
+    config = copy.deepcopy(config)
+    base = _get(config, PROJECT_FOLDER)
+    if base is None:
+        return config
+    run_folder = os.path.abspath(run_folder)
+    old = base if _absolute(base) else None
+    folder = base if old else os.path.normpath(os.path.join(run_folder, base))
+    if old and not os.path.isdir(old):                              # moved: the run sits where it sat in it
+        where = _below(_get(config, ("arguments_resolved", "save_dir")) or "", old)
+        folder = run_folder
+        for _ in range(len(where.split("/")) if where else 2):     # an analysis records no save_dir:
+            folder = os.path.dirname(folder)                        # <project>/results/<run>
+    _set(config, PROJECT_FOLDER, folder)
+    for keys in RECORD_PATHS:
+        path = _get(config, keys)
+        if path is None:
+            continue
+        if not _absolute(path):
+            _set(config, keys, os.path.normpath(os.path.join(folder, path)))
+        elif old and not os.path.exists(path) and _below(path, old) is not None:
+            moved = os.path.normpath(os.path.join(folder, _below(path, old)))
+            if os.path.exists(moved):
+                _set(config, keys, moved)
+    return config
 
 
 
@@ -229,7 +315,7 @@ def load(path: str) -> Run:
     config = None
     if os.path.isfile(path[:-4] + ".config.json"):
         with open(path[:-4] + ".config.json") as fh:
-            config = json.load(fh)
+            config = absolute_paths(json.load(fh), os.path.dirname(path))
     return from_arrays(path, r, config)
 
 

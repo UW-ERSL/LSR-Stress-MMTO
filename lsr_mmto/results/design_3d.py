@@ -40,8 +40,7 @@ def _problem(run: Run):
     spec = ((run.config or {}).get("arguments_resolved") or {}).get("to_problem")
     if not isinstance(spec, dict) or "project" not in spec:
         raise RenderError(f"{run.descriptor}: the record does not hold its project")
-    folder = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(run.path))))
-    return Project.from_record(spec, folder=folder)        # the project's folder, if moved since
+    return Project.from_record(spec)
 
 
 def mesh_for(run: Run):

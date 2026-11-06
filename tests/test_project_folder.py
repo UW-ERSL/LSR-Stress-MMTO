@@ -258,6 +258,60 @@ def test_new_project_has_the_physics_chosen():
         assert q.physics == next(iter(PHYSICS))
 
 
+def test_runs_survive_moving_the_project_folder():
+    """A run's record holds its paths relative to the project folder, so after the folder is moved (or renamed,
+    or zipped to someone else) the run still rebuilds its mesh, redraws and exports. An older record, with
+    absolute paths (written on Windows, as C:\\...), finds them at the same place in the folder where it is now."""
+    import json
+    from types import SimpleNamespace
+    from gui import draw_design
+    from lsr_mmto.optimize.solid_part_analysis import analyse_solid_part
+    from lsr_mmto.results import design_3d, load_results, stl_export
+    d = _scratch()
+    try:
+        p = F.pack(Project.load(os.path.join(PROJECTS, "U-bracket.mmto")), os.path.join(d, "A"))
+        p.n_dof = 3000
+        p.save(os.path.join(d, "A", "A.mmto"))
+        run_folder = F.new_run_folder(p)
+        analyse_solid_part(p, 0, save_dir=run_folder)                    # saved as a run is saved
+        stamp = os.path.basename(run_folder)
+        manifest = os.path.join("results", stamp, "run_data.config.json")
+        record = json.load(open(os.path.join(d, "A", manifest)))
+        spec = record["arguments_resolved"]["to_problem"]
+        assert spec["base_dir"] == "../.." and spec["stl_file_path"] == "part/UBracket.STL"
+        assert record["topopt_params"]["MaterialsExcelFile"] == "materials/6Materials_AF_3Attr.xlsx"
+        assert "PROJECTDEMO" not in open(os.path.join(d, "A", "results", stamp, "run_config.yaml")).read()
+
+        shutil.move(os.path.join(d, "A"), os.path.join(d, "B"))           # the whole folder moved
+        moved = os.path.join(d, "B", "results", stamp)
+
+        def works():
+            run = load_results.load(moved)
+            spec = run.config["arguments_resolved"]["to_problem"]
+            assert spec["base_dir"] == os.path.join(d, "B")
+            assert spec["stl_file_path"] == os.path.join(d, "B", "part", "UBracket.STL")
+            design_3d._MESH_CACHE.clear()
+            mesh = design_3d.mesh_for(run)                                  # rebuilt from the moved part
+            assert draw_design.run_mesh(SimpleNamespace(), run).num_elems == mesh.num_elems == run.n_elems
+            report = stl_export.export(run, mesh, moved)
+            assert report.whole_closed and all(piece.closed for piece in report.pieces)
+        works()
+
+        old = "C:\\PROJECTDEMO\\A"                                       # an older record: absolute, elsewhere
+        spec = dict(record["arguments_resolved"]["to_problem"], base_dir=old,
+                    stl_file_path=old + "\\part/UBracket.STL")
+        record["arguments_resolved"].update(to_problem=spec, save_dir=old + "\\results\\" + stamp)
+        record["topopt_params"]["MaterialsExcelFile"] = old + "\\materials/6Materials_AF_3Attr.xlsx"
+        json.dump(record, open(os.path.join(d, "B", manifest), "w"))
+        works()
+        config = load_results.load(moved).config
+        assert config["topopt_params"]["MaterialsExcelFile"] == os.path.join(d, "B", "materials",
+                                                                              "6Materials_AF_3Attr.xlsx")
+        assert config["arguments_resolved"]["save_dir"] == moved
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def test_new_project_dialog_offers_every_physics():
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PyQt5 import QtWidgets

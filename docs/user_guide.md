@@ -99,7 +99,7 @@ A project keeps everything it uses in its own folder:
 - **materials**: the material database and its trained network, when the database is one of your own;
 - **results**: one folder per run, named by when it was made.
 
-Zip the folder to send the whole project to someone else.
+Zip the folder to send the whole project to someone else. A run remembers its files by where they sit in the project folder, so its runs still show and export after the folder is moved, renamed or unzipped elsewhere.
 
 ## 4. Units
 

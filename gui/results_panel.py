@@ -360,7 +360,7 @@ class ResultsWindow(QtWidgets.QDialog):
         try:
             QtWidgets.QApplication.processEvents()
             run = self.record(folder)
-            return run, (self.unsaved[1] if folder == UNSAVED else draw_design.run_mesh(self.window, folder, run))
+            return run, (self.unsaved[1] if folder == UNSAVED else draw_design.run_mesh(self.window, run))
         except Exception as e:                                      # noqa: BLE001
             self.status.setText(f"<span style='color:#b00000'>This run cannot be shown: {e}</span>")
             return None
