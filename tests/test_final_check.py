@@ -4,7 +4,8 @@ test_final_check.py
 The final check at the end of a run (compliance, stresses, failure factor of the continuous,
 binarized and snapped designs) must analyse the design with the same materials as the
 optimization: each element's Young's modulus from the network, and its Poisson's ratio either from
-the network or, when the project says so, the constant one.
+the network or, when the project says so, the constant one. The run saves the last check's displacement,
+x, y and z at each node, as the solver gave it.
 
 It once used 0.3 (steel's) for every element whatever the project said: the beam, with a constant
 0.37, got a max failure factor 7% too high.
@@ -26,6 +27,7 @@ sys.path.insert(0, ROOT)
 
 from lsr_mmto.physics.structural import structural_quantities as U  # noqa: E402
 from lsr_mmto.problem.project import Project, run  # noqa: E402
+from lsr_mmto.results.load_results import load  # noqa: E402
 
 N_DOF, ITERATIONS = 3000, 2
 
@@ -44,6 +46,7 @@ def final_checks(name):
     def check(**kw):
         result = real(**kw)
         fe, enc = kw["fe_solver_structural"], kw["matEncoder"]
+        seen_u.append(fe.sol.detach().numpy().reshape(-1, 3).copy())
         lam, mu = fe.lam.detach().numpy(), fe.mu.detach().numpy()
         nu_used = lam / (2.0 * (lam + mu))
         E_used = 2.0 * mu * (1.0 + nu_used)
@@ -57,12 +60,18 @@ def final_checks(name):
                      "compliance": result["compliance"]})
         return result
 
+    seen_u = []
     U.eval_stress_compliance_metrics = check
     try:
         with tempfile.TemporaryDirectory() as d:
             run(p, save_dir=d, verbose=False)
+            saved = load(d)
     finally:
         U.eval_stress_compliance_metrics = real
+    u = seen_u[-1]                                    # the last design's solve: the displacement saved
+    shown = saved.results["displacement"]
+    assert shown.shape == u.shape == (int(p.mesh().num_nodes), 3)
+    assert np.allclose(np.linalg.norm(shown, axis=1), np.linalg.norm(u, axis=1), rtol=0, atol=1e-6 * np.abs(u).max())
     return seen
 
 

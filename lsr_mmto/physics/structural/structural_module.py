@@ -45,8 +45,10 @@ SETTINGS = [
          help="The Poisson's ratio used when Constant Poisson's ratio is ticked.", group="Material model"),
 ]
 
-# the per-element results a run saves, by name: the view that shows it in the Results panel, its title on the
-# colour scale, what it measures (for its unit), and its value from the solver after the final check
+# the results a run saves, by name: the view that shows it in the Results panel, its title on the colour scale,
+# what it measures (for its unit), where its values live and their shape (a number at each element unless it
+# says otherwise), and its value from the solver after the final check
 RESULT_FIELDS = {
     "von_mises": dict(view="Stress", title="von Mises stress", measures="stress"),
+    "displacement": dict(view="Displacement", title="Displacement", measures="length", where="node", shape="vector"),
 }

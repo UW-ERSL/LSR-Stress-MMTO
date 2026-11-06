@@ -15,6 +15,7 @@ The template physics is analysed in tests/test_template_physics.py.
 
     python -m pytest tests/test_solid_part_analysis.py
 """
+import json
 import os
 import shutil
 import sys
@@ -69,7 +70,8 @@ def _files(folder):
 
 def test_compliance_is_a_direct_solve_of_the_solid_part(monkeypatch):
     """The analysis in each of two materials gives the compliance F . u of a solve with x_phys = 1 in every
-    element and that material's Young's modulus and Poisson's ratio from the database, to 1e-10."""
+    element and that material's Young's modulus and Poisson's ratio from the database, to 1e-10, and that
+    solve's displacement u at each node, x, y and z, as its result."""
     from lsr_mmto.materials.databases import database_table
     from lsr_mmto.physics.available_physics import physics_module
     from lsr_mmto.pyto_ad_imports import MaterialModel, deflation, linear_solvers
@@ -97,7 +99,12 @@ def test_compliance_is_a_direct_solve_of_the_solid_part(monkeypatch):
         assert np.isclose(run.final_objective, direct, rtol=1e-6)            # the record keeps it as float32
         assert run.analysed_material is not None and run.n_latent == 0
         assert np.all(run.material_indices == row) and run.solid.all() and np.all(run.x_cont == 1)
-        assert list(run.results) == ["von_mises"] and run.results["von_mises"].shape == (n,)
+        assert list(run.results) == ["von_mises", "displacement"] and run.results["von_mises"].shape == (n,)
+        shown, u = run.results["displacement"], u.numpy().reshape(-1, 3)
+        assert shown.shape == (mesh.num_nodes, 3) and run.result_info["displacement"]["where"] == "node"
+        assert np.allclose(shown, u, rtol=0, atol=1e-6 * np.abs(u).max())         # kept as float32
+        assert np.allclose(np.linalg.norm(shown, axis=1), np.linalg.norm(u, axis=1), rtol=0,
+                           atol=1e-6 * np.abs(u).max())
     E0, E1 = (values[r, attributes.index("Youngs_Modulus")] for r in (0, len(names) - 1))
     assert E0 != E1, "the two materials should differ"
 
@@ -132,6 +139,9 @@ def test_not_saved_writes_nothing_saved_is_one_entry_that_loads_back():
         assert again.analysed_material == run.analysed_material
         assert np.array_equal(again.history["J_phys"], run.history["J_phys"])
         assert np.array_equal(again.results["von_mises"], run.results["von_mises"])
+        assert np.array_equal(again.results["displacement"], run.results["displacement"])   # a vector at each
+        assert again.results["displacement"].shape == (int(p.mesh().num_nodes), 3)          # node, back as it was
+        assert again.result_info == run.result_info and again.result_info["displacement"]["shape"] == "vector"
         assert np.array_equal(again.material_indices, run.material_indices)
         assert again.config["analysis"] == run.config["analysis"]
         assert project_folder.run_facts(folder)[1] is None                   # no iterations
@@ -139,6 +149,16 @@ def test_not_saved_writes_nothing_saved_is_one_entry_that_loads_back():
         text = str(tables.summary(again))
         assert "Analysis: " + again.analysed_material in text and "Iterations" not in text
         assert "Grey" not in text and "Latent dimension" not in text
+
+        record = dict(np.load(os.path.join(folder, "run_data.npz")))              # as an older run wrote it:
+        meta = json.loads(str(record["meta_json"]))                                 # no displacement, results
+        meta["results"] = {"von_mises": {k: meta["results"]["von_mises"][k] for k in ("view", "title", "measures")}}
+        record["meta_json"] = np.array(json.dumps(meta))                            # described without where
+        del record["r_displacement"]                                                # and shape
+        np.savez_compressed(os.path.join(folder, "run_data.npz"), **record)
+        old = load_results.load(folder)
+        assert list(old.results) == ["von_mises"] and old.results["von_mises"].shape == (old.n_elems,)
+        assert old.result_info["von_mises"] == dict(meta["results"]["von_mises"], where="element", shape="scalar")
 
 
 def test_stop_ends_it_and_nothing_is_written():
@@ -236,8 +256,8 @@ def test_analyse_in_the_window(monkeypatch):
         assert [res.tabs.tabText(i) for i in range(res.tabs.count())] == ["Summary"]
         assert not res.delete_button.isEnabled() and not res.folder_button.isEnabled()
         assert "result_design" in w.plotter.actors and w.view == "design"
-        assert [res.field.itemText(i) for i in range(res.field.count())][:4] == ["Material", "Density", "Stress",
-                                                                                  "Solid"]
+        assert [res.field.itemText(i) for i in range(res.field.count())][:5] == ["Material", "Density", "Stress",
+                                                                                  "Displacement", "Solid"]
 
         chosen.update(row=0, save=True)                                       # Stop: nothing is saved
         assert w.analyse()
