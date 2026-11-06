@@ -870,6 +870,10 @@ class Project:
         reference.complete_settings()
         mine = self.copy()
         mine.complete_settings()
+        def explained(block, what):                         # the comment above each block of calls
+            return [f"# {block}: {what} are in docs/reference.md",
+                    "# (in the LSR MMTO folder), or in the GUI under Help > Researcher guide > Reference."]
+
         types = sorted({type(s).__name__.lower() for s in self.selections.values()} |
                        {type(t).__name__.lower() for s in self.selections.values()
                         for t in getattr(s, "parts", ())})
@@ -886,6 +890,7 @@ class Project:
                  f"from lsr_mmto import {', '.join(['Project'] + types)}",
                  "",
                  "HERE = os.path.dirname(os.path.abspath(__file__))",
+                 ""] + explained("Part and mesh", "Project, its arguments and the units") + [
                  f"p = Project({self.name!r}, stl={stl!r}, n_dof={self.n_dof}, single_layer={self.single_layer},",
                  "            base_dir=HERE)"]
         if self.comment:
@@ -894,17 +899,23 @@ class Project:
             lines.append(f"p.physics = {self.physics!r}")
         if self.units != "none":
             lines.append(f"p.units = {self.units!r}")
-        lines.append("")
-        for name, sel in self.selections.items():
-            lines.append(f"p.add_selection({name!r}, {sel!r})")
-        for bc in self.bcs:
-            lines.append(BC_KINDS[bc["kind"]].script(bc["kind"], bc, repr(bc["on"])))
+        if self.selections:
+            lines += [""] + explained("Selections", "every selection type, its arguments and an example")
+            lines += [f"p.add_selection({name!r}, {sel!r})" for name, sel in self.selections.items()]
+        if self.bcs:
+            lines += [""] + explained("Supports and loads", "p.add_bc and the values of each kind")
+            lines += [BC_KINDS[bc["kind"]].script(bc["kind"], bc, repr(bc["on"])) for bc in self.bcs]
+        if self.keep_solid_names or self.keep_support_elements:
+            lines += [""] + explained("Keep solid", "p.keep_solid and p.keep_support_elements")
         if self.keep_solid_names:
             lines.append(f"p.keep_solid({', '.join(map(repr, self.keep_solid_names))})")
         if self.keep_support_elements:
             lines.append("p.keep_support_elements = True")
-        lines += ["", f"p.database = {self.database!r}"]
+        lines += [""] + explained("Materials", "p.database and the columns of a database")
+        lines.append(f"p.database = {self.database!r}")
         obj = self.formulation.get("objective")
+        if obj or self.formulation.get("constraints"):
+            lines += [""] + explained("Objective and constraints", "p.objective, p.constraint and every quantity")
         if obj:
             lines.append(f"p.objective({obj['expression']!r})")
         for c in self.formulation.get("constraints", []):
@@ -912,7 +923,8 @@ class Project:
         changed = [(sec, k, v) for sec, values in mine.settings.items() for k, v in values.items()
                    if reference.settings.get(sec, {}).get(k, object()) != v]
         if changed:
-            lines += ["", "# settings that differ from a new project's; the rest are the defaults"]
+            lines += [""] + explained("Settings", "every setting, its default and what it does")
+            lines += ["# settings that differ from a new project's; the rest are the defaults"]
             lines += [f"p.settings[{sec!r}][{k!r}] = {v!r}" for sec, k, v in changed]
         lines += ["", f"p.save(os.path.join(HERE, {self.name + '.mmto'!r}))", ""]
         with open(path, "w") as fh:

@@ -230,6 +230,21 @@ def test_script_round_trip():
                 os.remove(script)
 
 
+def test_setup_script_says_where_each_block_is_explained():
+    """Above each block of calls in a setup script, a comment names where those calls are explained."""
+    p = Project.load(os.path.join(ROOT, "projects", "U-bracket.mmto"))
+    p.keep_solid(S.face("ymin"))
+    with tempfile.TemporaryDirectory() as d:
+        p.save(os.path.join(d, "u.mmto"))
+        lines = open(p.to_script(os.path.join(d, "u_setup.py"))).read().splitlines()
+    for block in ("Part and mesh", "Selections", "Supports and loads", "Keep solid", "Materials",
+                  "Objective and constraints", "Settings"):
+        (i,) = [i for i, line in enumerate(lines) if line.startswith(f"# {block}: ")]
+        assert lines[i - 1] == "" and lines[i].endswith(" are in docs/reference.md"), lines[i]
+        assert lines[i + 1] == "# (in the LSR MMTO folder), or in the GUI under Help > Researcher guide > Reference."
+        assert lines[i + 2].startswith(("p.", "p = ", "# settings that differ")), lines[i + 2]
+
+
 def test_window_picks_become_the_project():
     """Supports and loads picked on the part in the window (faces, a clicked node, a box) become
     selections and boundary conditions with the picking tools' own rules: the same fixed dofs and
