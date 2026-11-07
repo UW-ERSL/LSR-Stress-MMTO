@@ -862,11 +862,6 @@ def test_database_editor():
             return 1
         path = editing(m, m.new_database, new)
         e = DE.DatabaseEditor(w, folder, unit_system=w.project.units)          # Add / Remove property
-        e._fill_property_menu()
-        from lsr_mmto.materials.databases import ATTRIBUTES, SHOWN
-        offered = [a.text() for a in e.add_property_menu.actions()]
-        assert offered == [SHOWN[k] for k in ATTRIBUTES if k not in e.attributes]   # every property not there yet
-        assert "Yield strength" in offered and "Cost" in offered and "Density" not in offered
         e.add_property("Cost")
         assert e.attributes == ["Density", "Youngs_Modulus", "Poissons_Ratio", "Cost"]
         assert e.table.cellWidget(0, 6).currentText() == "USD/t"
@@ -910,6 +905,51 @@ def test_database_editor():
         assert copy == os.path.join(folder, "BM1_3Mats_2Attr copy.xlsx") and open(shipped, "rb").read() == before
         assert m.project.database == "materials/BM1_3Mats_2Attr copy.xlsx"
         assert material_display(copy)[1] == ["Red", "Mat2_Blue", "Mate3_Green"]
+
+
+def test_add_properties_window():
+    """Add property opens the Add properties window: with a project, the properties it needs (its physics'
+    and those its objective and constraints read) and the others, each part alphabetical; those in the table
+    ticked and greyed; several ticked are added at once, and OK says how many; the search box filters. From
+    elsewhere (no project) everything is one list."""
+    from lsr_mmto.materials.databases import ATTRIBUTES, SHOWN
+    from gui import database_editor as DE
+    with scratch() as d:
+        w = opened("U-bracket", d)
+        assert w.project.needed_properties() == ["Youngs_Modulus", "Yield_Strength", "Density"]
+        e = DE.DatabaseEditor(w, d, unit_system=w.project.units, project=w.project)
+        assert e.attributes == ["Density", "Youngs_Modulus", "Poissons_Ratio"]
+        seen = {}
+
+        def tick(dialog):
+            seen["groups"] = dialog.groups()
+            seen["greyed"] = [k for k, item in dialog.items.items() if not item.flags() & QtCore.Qt.ItemIsEnabled]
+            assert dialog.items["Density"].text(0) == "Density    (in the table)"
+            assert dialog.add_button.text() == "Add" and not dialog.add_button.isEnabled()
+            dialog.items["Yield_Strength"].setCheckState(0, QtCore.Qt.Checked)
+            assert dialog.add_button.text() == "Add 1 property"
+            dialog.items["Cost"].setCheckState(0, QtCore.Qt.Checked)
+            assert dialog.add_button.text() == "Add 2 properties"
+            dialog.search.setText("young")
+            seen["young"] = dialog.shown_keys()
+            dialog.search.setText("yield")                                    # an other name too: "Yield"
+            seen["yield"] = dialog.shown_keys()
+            dialog.search.setText("")
+            return 1
+        real = DE.AddPropertiesDialog.exec_
+        try:
+            DE.AddPropertiesDialog.exec_ = tick
+            e.add_property_button.click()
+        finally:
+            DE.AddPropertiesDialog.exec_ = real
+        assert seen["groups"] == {"Needed by this project": ["Density", "Yield_Strength", "Youngs_Modulus"],
+                                  "Other properties": ["Cost", "Poissons_Ratio"]}
+        assert sorted(seen["greyed"]) == ["Density", "Poissons_Ratio", "Youngs_Modulus"]
+        assert seen["young"] == ["Youngs_Modulus"] and seen["yield"] == ["Yield_Strength"]
+        assert e.attributes == ["Density", "Youngs_Modulus", "Poissons_Ratio", "Yield_Strength", "Cost"]
+        assert [e.table.horizontalHeaderItem(c).text() for c in (6, 7)] == ["Yield strength", "Cost"]
+        lone = DE.AddPropertiesDialog(w, ["Density"])                          # no project: one list
+        assert lone.groups() == {None: sorted(ATTRIBUTES, key=lambda k: SHOWN[k].lower())}
 
 
 def test_import_database():

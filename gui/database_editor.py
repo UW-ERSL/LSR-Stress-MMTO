@@ -14,14 +14,15 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 from .panel_widgets import GREY, Info, ok_cancel
 
-# the properties a new database starts with; Add property... lists every property of the registry
+# the properties a new database starts with; Add property offers every property of the registry
 # (databases.ATTRIBUTES)
 STARTING = ["Density", "Youngs_Modulus", "Poissons_Ratio"]
 FIXED = ["Name", "Shown as", "Colour"]                      # the columns before the properties
 BAD = QtGui.QColor("#ffd6d6")
 HELP = ("One row per material. Shown as is optional: a shorter name for legends and plots (the name is "
         "shown when it is empty). Click a colour to change it.\n\nThe row under the headers holds each "
-        "property's unit. Add property adds a column; Remove property removes the column you are in.\n\n"
+        "property's unit. Add property opens the list of properties to add, a column each; Remove property removes "
+        "the column you are in.\n\n"
         "You can paste a block copied from Excel into the table.")
 
 
@@ -61,6 +62,103 @@ class _Table(QtWidgets.QTableWidget):
         self.pasted.emit()
 
 
+class AddPropertiesDialog(QtWidgets.QDialog):
+    """Add property: every property LSR MMTO knows (databases.ATTRIBUTES), each with a tick box, found by
+    typing in the search box. With a project, in two parts: those the project needs (Project.needed_properties)
+    and the others, each part in alphabetical order; without one, all in one list. Those already in the table
+    are ticked and greyed. OK says how many it adds; chosen() gives them."""
+
+    def __init__(self, parent, in_table, project=None):
+        from lsr_mmto.materials.databases import ATTRIBUTES
+        super().__init__(parent)
+        self.setWindowTitle("Add properties")
+        self.setWindowFlag(QtCore.Qt.WindowContextHelpButtonHint, False)
+        self.setFixedSize(460, 520)
+        layout = QtWidgets.QVBoxLayout(self)
+        self.search = QtWidgets.QLineEdit()
+        self.search.setPlaceholderText("Search properties")
+        self.search.textChanged.connect(self._filter)
+        layout.addWidget(self.search)
+        self.tree = QtWidgets.QTreeWidget()
+        self.tree.setHeaderHidden(True)
+        self.tree.setRootIsDecorated(project is not None)
+        layout.addWidget(self.tree, stretch=1)
+        needed = [k for k in project.needed_properties() if k in ATTRIBUTES] if project is not None else []
+        others = [k for k in ATTRIBUTES if k not in needed]
+        by_shown = lambda keys: sorted(keys, key=lambda k: shown(k).lower())        # noqa: E731
+        groups = ([("Needed by this project", by_shown(needed)), ("Other properties", by_shown(others))]
+                  if project is not None else [(None, by_shown(others))])
+        self.items = {}
+        for title, keys in groups:
+            parent_item = self.tree.invisibleRootItem()
+            if title is not None:
+                parent_item = QtWidgets.QTreeWidgetItem(self.tree, [title])
+                parent_item.setFlags(QtCore.Qt.ItemIsEnabled)
+                font = parent_item.font(0)
+                font.setBold(True)
+                parent_item.setFont(0, font)
+                parent_item.setExpanded(True)
+            for key in keys:
+                there = key in in_table
+                item = QtWidgets.QTreeWidgetItem(parent_item, [shown(key) + ("    (in the table)" if there else "")])
+                item.setData(0, QtCore.Qt.UserRole, key)
+                item.setFlags(QtCore.Qt.ItemIsUserCheckable | (QtCore.Qt.NoItemFlags if there else
+                                                                QtCore.Qt.ItemIsEnabled))
+                item.setCheckState(0, QtCore.Qt.Checked if there else QtCore.Qt.Unchecked)
+                self.items[key] = item
+        self.tree.expandAll()
+        self.tree.itemChanged.connect(lambda *_: self._count())
+        note = QtWidgets.QLabel("Properties already in the table are ticked. Tick the ones to add.")
+        note.setStyleSheet(GREY)
+        note.setWordWrap(True)
+        layout.addWidget(note)
+        self.in_table = set(in_table)
+        self.buttons = ok_cancel(self, layout)
+        self.add_button = self.buttons.button(QtWidgets.QDialogButtonBox.Ok)
+        self._count()
+
+    def groups(self):
+        """{part's title (None without parts): the keys listed in it, in order}."""
+        out = {}
+        root = self.tree.invisibleRootItem()
+        for i in range(root.childCount()):
+            top = root.child(i)
+            if top.data(0, QtCore.Qt.UserRole) is not None:
+                out.setdefault(None, []).append(top.data(0, QtCore.Qt.UserRole))
+            else:
+                out[top.text(0)] = [top.child(j).data(0, QtCore.Qt.UserRole) for j in range(top.childCount())]
+        return out
+
+    def chosen(self):
+        """The keys ticked to add (not those already in the table), in the order listed."""
+        return [k for k, item in self.items.items() if k not in self.in_table and
+                item.checkState(0) == QtCore.Qt.Checked]
+
+    def _count(self):
+        n = len(self.chosen())
+        self.add_button.setText(f"Add {n} propert{'y' if n == 1 else 'ies'}" if n else "Add")
+        self.add_button.setEnabled(bool(n))
+
+    def _filter(self, text):
+        """Only the properties whose name (any of them) holds the text typed; a part with none is hidden."""
+        from lsr_mmto.materials.databases import ATTRIBUTES
+        text = text.strip().lower()
+        for key, item in self.items.items():
+            a = ATTRIBUTES[key]
+            names = [a.shown, a.name] + list(a.aliases)
+            item.setHidden(bool(text) and not any(text in n.lower() for n in names))
+        root = self.tree.invisibleRootItem()
+        for i in range(root.childCount()):
+            top = root.child(i)
+            if top.childCount():
+                top.setHidden(all(top.child(j).isHidden() for j in range(top.childCount())))
+
+    def shown_keys(self):
+        """The keys the list shows now (after the search)."""
+        return [k for k, item in self.items.items() if not item.isHidden() and
+                (item.parent() is None or not item.parent().isHidden())]
+
+
 class DatabaseEditor(QtWidgets.QDialog):
     """New (path None: a database to be saved in folder) or an existing database to change. A shipped one
     (in_shipped_folder) opens as a copy to be saved in folder. imported (databases.import_table, with its
@@ -68,11 +166,11 @@ class DatabaseEditor(QtWidgets.QDialog):
     saved_path is set by a successful Save, and network_set_aside names the network moved out of the way
     when the numbers changed."""
 
-    def __init__(self, parent, folder, path=None, unit_system=None, imported=None):
+    def __init__(self, parent, folder, path=None, unit_system=None, imported=None, project=None):
         from lsr_mmto.materials.databases import in_shipped_folder
         super().__init__(parent)
         path = None if path is None else os.path.normpath(os.path.abspath(path))   # one kind of slash on Windows
-        self.folder, self.path, self.unit_system = folder, path, unit_system
+        self.folder, self.path, self.unit_system, self.project = folder, path, unit_system, project
         self.copy = path is not None and in_shipped_folder(path)
         self.saved_path, self.network_set_aside, self.loaded = None, None, None
         self.left_out = []                                          # the file's columns of no known property
@@ -109,10 +207,8 @@ class DatabaseEditor(QtWidgets.QDialog):
             button.clicked.connect(slot)
             rows.addWidget(button)
         rows.addSpacing(24)
-        self.add_property_button = QtWidgets.QPushButton("Add property...")
-        self.add_property_menu = QtWidgets.QMenu(self)
-        self.add_property_menu.aboutToShow.connect(self._fill_property_menu)
-        self.add_property_button.setMenu(self.add_property_menu)
+        self.add_property_button = QtWidgets.QPushButton("Add property")
+        self.add_property_button.clicked.connect(lambda: self.add_properties())
         rows.addWidget(self.add_property_button)
         remove = QtWidgets.QPushButton("Remove property")
         remove.clicked.connect(lambda: self.remove_property())
@@ -195,19 +291,21 @@ class DatabaseEditor(QtWidgets.QDialog):
         a = ATTRIBUTES[key]
         return UNIT_SYSTEMS.get(self.unit_system or "", {}).get(a.measures, a.units[0])
 
-    def _fill_property_menu(self):
-        from lsr_mmto.materials.databases import ATTRIBUTES
-        self.add_property_menu.clear()
-        missing = [key for key in ATTRIBUTES if key not in self.attributes]
-        for key in missing:
-            self.add_property_menu.addAction(shown(key), lambda k=key: self.add_property(k))
-        if not missing:
-            self.add_property_menu.addAction("Every property is in the table").setEnabled(False)
+    def add_properties(self):
+        """Add property: the Add properties window; the properties ticked there get a column each, at the end,
+        empty. Returns them."""
+        dialog = AddPropertiesDialog(self, self.attributes, self.project)
+        if not dialog.exec_():
+            return []
+        keys = dialog.chosen()
+        self.add_property(*keys)
+        return keys
 
-    def add_property(self, key):
-        """A column for the property, at the end, empty."""
-        if key not in self.attributes:
-            self._columns(order=self.attributes + [key])
+    def add_property(self, *keys):
+        """A column for each property not in the table yet, at the end, empty."""
+        new = [k for k in keys if k not in self.attributes]
+        if new:
+            self._columns(order=self.attributes + new)
 
     def remove_property(self, key=None):
         """The property's column (by default the one the current cell is in) gone, after a yes when it holds

@@ -183,7 +183,7 @@ The editor shows the database as a table:
 - **Name**: the database's name, which is also its file name.
 - One row per material: its name, **Shown as** (an optional shorter name for legends and plots) and **Colour** (click it to choose another).
 - One column per property. The row under the headers holds each property's unit.
-- **Add material** and **Remove material** add and remove rows. **Add property...** adds a column for one of the properties below; **Remove property** removes the column you are in.
+- **Add material** and **Remove material** add and remove rows. **Add property** opens the **Add properties** window: every property below with a tick box, those this project needs first (the ones its physics, its objective and its constraints read), then the others. Those already in the table are ticked and greyed. Tick as many as you want (the search box finds one by any of its names); **Add 2 properties** adds a column for each. **Remove property** removes the column you are in.
 
 You can paste a block copied from Excel into the table. Problems are listed in red under the table as you type (a missing value, a value outside what the property allows, two materials with the same name). **Save** keeps the database in the project's folder and the project then uses it.
 

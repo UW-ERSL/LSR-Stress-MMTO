@@ -287,7 +287,7 @@ class MaterialsPanel(QtWidgets.QDialog):
         folder = self._own_folder("New database")
         if folder is None:
             return None
-        editor = DatabaseEditor(self, folder, unit_system=self.project.units)
+        editor = DatabaseEditor(self, folder, unit_system=self.project.units, project=self.project)
         if not editor.exec_():
             return None
         path = editor.saved_path or editor.save()
@@ -327,7 +327,8 @@ class MaterialsPanel(QtWidgets.QDialog):
         note = self.import_note(table)
         if note:
             QtWidgets.QMessageBox.information(self, "Import a database", note)
-        editor = DatabaseEditor(self, folder, unit_system=self.project.units, imported=table)
+        editor = DatabaseEditor(self, folder, unit_system=self.project.units, imported=table,
+                                project=self.project)
         if not editor.exec_():
             return None
         saved = editor.saved_path or editor.save()
@@ -364,7 +365,7 @@ class MaterialsPanel(QtWidgets.QDialog):
         folder = self._own_folder("Database") if shipped else os.path.dirname(os.path.abspath(xlsx))
         if folder is None:
             return None
-        editor = DatabaseEditor(self, folder, path=xlsx, unit_system=self.project.units)
+        editor = DatabaseEditor(self, folder, path=xlsx, unit_system=self.project.units, project=self.project)
         if not editor.exec_():
             return None
         path = editor.saved_path or editor.save()

@@ -507,6 +507,21 @@ class Project:
         """True once the step of STEPS is begun (units chosen, a database, a support or load, an objective)."""
         return STEPS[step](self)
 
+    def needed_properties(self):
+        """The material properties (database columns) this project reads: its physics' PROPERTIES, and those
+        its objective and constraints read (each quantity's needs), in that order, each once."""
+        from lsr_mmto.formulation.quantities import QUANTITIES
+        by_name, f = {q.name: q for q in QUANTITIES}, self.formulation
+        out = list(PHYSICS[self.physics].PROPERTIES if self.physics in PHYSICS else ())
+        for expr in [(f.get("objective") or {}).get("expression")] + \
+                    [c.get("expression") for c in f.get("constraints", [])]:
+            try:
+                q = by_name.get(parse_expression(expr)[0])
+            except Exception:                                                          # noqa: BLE001
+                continue
+            out += list(q.needs if q else ())
+        return list(dict.fromkeys(out))
+
     def _missing_columns(self, columns):
         """Columns the physics and the objective and constraints read that the database lacks."""
         from lsr_mmto.formulation.quantities import QUANTITIES
