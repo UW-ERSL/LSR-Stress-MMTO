@@ -41,17 +41,34 @@ in one line what is in the file. `structural_supports_and_loads.py` passes; `loo
 
 ## Checking a change
 
-- `python -m pytest tests -q` passes.
+Run the checks in a Miniforge Prompt, from inside this folder, with the environment active:
+
+    conda activate lsr-stress-mmto-ad
+    python -m pytest tests -q
+
+That is every test, about six minutes. While working, run only the file of the part you changed,
+for example `python -m pytest tests/test_solid_part_analysis.py -q`, and every test once before
+committing. To see which lines of the code no test runs:
+
+    python -m pytest tests -q --cov=lsr_mmto --cov-report=term-missing
+
+- Every test passes, with no warnings. A failing test you did not touch means the change broke
+  something that worked before.
 - A change that moves code or renames things changes no number: the first iterations of the shipped
   projects give the same objective and constraints, to 1 part in a million, before and after
   (`tests/test_regression.py` checks it). Later iterations drift by tiny amounts from one run to the
   next even with no change, because the solver adds numbers in a different order on several threads.
+  A change meant to change results (a new formulation, a new PyTO-AD pin) fails that test: store the
+  new values on purpose with `python tests/test_regression.py --update`, and say why in the commit
+  message.
 - Text the GUI shows is written for someone who has never seen the code: plain words, the labels
   the form itself shows, and the details behind an (i).
 - After a change to a list (settings, quantities, supports and loads, selection types, material
   attributes) or to a docstring the reference reads, run `python docs/make_reference.py` and
   `python -m gui.user_guide_window --write`; the reference page and the user guide's lists are made
   from the code.
+- The versions in requirements.txt are the ones every test passes with. A newer version of a package
+  is a change like any other: change its pin, run every test, and commit both.
 
 ## What is not committed
 
