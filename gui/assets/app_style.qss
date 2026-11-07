@@ -91,6 +91,11 @@ QTabBar::tab { background: #eef1f5; border: 1px solid #dfe4ec; border-bottom: no
     border-top-left-radius: 6px; border-top-right-radius: 6px; margin-right: 2px; color: #4b5563; }
 QTabBar::tab:selected { background: #ffffff; color: #1f2933; border-top: 2px solid #2f5fe0; }
 QTabBar::tab:hover:!selected { background: #f5f7ff; }
+QTabBar#underlineTabs::tab { background: transparent; border: none; border-bottom: 2px solid transparent;
+    border-radius: 0px; padding: 6px 16px; margin-right: 6px; color: #4b5563; }
+QTabBar#underlineTabs::tab:selected { color: #2f5fe0; border-bottom: 2px solid #2f5fe0; }
+QTabBar#underlineTabs::tab:hover:!selected { color: #1f2933; background: transparent; }
+QTabBar#underlineTabs::tab:disabled { color: #a0a7b2; }
 QTabWidget::pane { background: #ffffff; border: 1px solid #dfe4ec; border-radius: 0px 6px 6px 6px; top: -1px; }
 
 /* buttons */

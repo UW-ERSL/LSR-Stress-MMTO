@@ -674,13 +674,24 @@ def test_a_new_constraint_row_starts_at_its_quantity_limit():
 
 
 def test_materials_panel():
-    from lsr_mmto.materials.databases import DATABASE_DIR
+    """The Database list holds the project's own databases (its materials folder, and its database when it
+    lives elsewhere); those that come with LSR MMTO are under Included databases and show as '<name>
+    (included)' once chosen. With no database the report says how to get one and Edit and Open in Excel
+    are off. The database's file saved again while the window is in the background is read again when
+    the window is active again."""
+    from lsr_mmto.materials.databases import DATABASE_DIR, DATABASE_VAE
     with scratch() as d:
         w = opened("L-bracket", d)
         m = materials_panel.MaterialsPanel(w, w.project)
+        assert [m.combo.itemText(i) for i in range(m.combo.count())] == ["BM1_3Mats_2Attr (included)"]
+        assert [a.text() for a in m.included.menu().actions()] == list(DATABASE_VAE)
+        assert m.new_button.isDefault() and m.import_button.text() == "Import..."
+        assert m.tabs.count() == 2 and [m.tabs.tabText(i) for i in range(2)] == ["Values", "Network error"]
+        assert not [b for b in m.findChildren(QtWidgets.QPushButton) if b.text() in ("Browse...", "Check again")]
         assert m.table.rowCount() == 3 and m.table.item(0, 0).text() == "Mat1_Red"
         assert "latent dimension 2 recommended" in m.report.toPlainText()
-        m.combo.setCurrentText("CustomAlloys20_3D")
+        next(a for a in m.included.menu().actions() if a.text() == "CustomAlloys20_3D").trigger()
+        assert m.combo.currentText() == "CustomAlloys20_3D (included)" and m.combo.count() == 2
         assert m.table.rowCount() == 20 and m.table.item(0, 0).text() == "A"
         lines = m.apply(w.project)
         vae = w.project.settings["vae"]
@@ -691,7 +702,7 @@ def test_materials_panel():
         assert m.project.database == "BM1_3Mats_2Attr"
         own = shutil.copy(os.path.join(ROOT, DATABASE_DIR, "BM1_3Mats_2Attr.xlsx"), os.path.join(d, "mine.xlsx"))
         m.set_database(own)                                                    # any other: relative to the project
-        assert m.project.database == "mine.xlsx"
+        assert m.project.database == "mine.xlsx" and m.combo.currentText() == "mine"
         m.apply(w.project)
         assert w.project.settings["vae"]["latentDim"] == 2 and w.project.validate() == []
         shutil.copy(os.path.join(ROOT, DATABASE_DIR, "BM1_3Mats_2Attr.nt"), os.path.join(d, "trained.nt"))
@@ -702,6 +713,93 @@ def test_materials_panel():
         lines = m.apply(w.project)
         assert lines[-1] == "Network settings set to match the trained network: hidden layer width 50", lines
         assert w.project.settings["vae"]["vae_hiddenDim"] == 50 and w.project.validate() == []
+
+        os.makedirs(os.path.join(d, "materials"))                             # the project's own databases
+        for name in ("steels", "alloys"):
+            shutil.copy(own, os.path.join(d, "materials", f"{name}.xlsx"))
+        m = materials_panel.MaterialsPanel(w, w.project)
+        assert [(m.combo.itemText(i), m.combo.itemData(i)) for i in range(m.combo.count())] == \
+            [("alloys", "materials/alloys.xlsx"), ("steels", "materials/steels.xlsx"), ("trained", "trained.xlsx")]
+        assert m.combo.currentText() == "trained"
+        m.show()
+        m.combo.showPopup()
+        popup = m.combo.view().window()
+        assert popup.width() == m.combo.width()                                # the list as wide as the list box
+        m.combo.hidePopup()
+        m.combo.setCurrentIndex(1)
+        assert m.project.database == "materials/steels.xlsx" and m.table.item(0, 0).text() == "Mat1_Red"
+        import openpyxl                                                         # saved again elsewhere (Excel)
+        book = openpyxl.load_workbook(os.path.join(d, "materials", "steels.xlsx"))
+        book.worksheets[0]["A3"] = "Ruby"
+        book.save(os.path.join(d, "materials", "steels.xlsx"))
+        os.utime(os.path.join(d, "materials", "steels.xlsx"), (1e9, 1e9))
+        assert m.table.item(0, 0).text() == "Mat1_Red"
+        QtWidgets.QApplication.sendEvent(m, QtCore.QEvent(QtCore.QEvent.WindowActivate))
+        assert m.table.item(0, 0).text() == "Ruby"
+        m.close()
+
+        w.project._database = None                                            # no database yet
+        m = materials_panel.MaterialsPanel(w, w.project)
+        assert m.combo.currentIndex() == -1 and m.report.toPlainText() == materials_panel.NO_DATABASE
+        assert not m.edit_button.isEnabled() and not m.excel_button.isEnabled() and m.import_button.isEnabled()
+
+
+def test_import_button_opens_the_file_window(monkeypatch):
+    """Import... clicked asks for the file to import (the click once handed Qt's checked, False, over as the
+    file and the window never opened)."""
+    from gui import panel_widgets
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        assert w.save_project_as(os.path.join(d, "P", "P.mmto")) and w.own_folder()
+        m = materials_panel.MaterialsPanel(w, w.project)
+        asked = []
+        monkeypatch.setattr(QtWidgets.QFileDialog, "getOpenFileName",
+                            staticmethod(lambda *a, **k: (asked.append(a[1]), ("", ""))[1]))
+        m.import_button.click()
+        assert asked == ["Import a table of materials"]
+
+
+def test_no_button_hands_its_checked_to_a_method_that_takes_an_argument():
+    """A button's clicked (or an action's triggered) connected straight to a method that takes an argument hands
+    the method Qt's checked (False) as that argument. Every such connection in gui/ goes through a lambda."""
+    import glob
+    wrong = [w for path in sorted(glob.glob(os.path.join(ROOT, "gui", "*.py")))
+             for w in straight_connections(open(path, encoding="utf-8").read(), os.path.basename(path))]
+    assert not wrong, wrong
+    old = ("def f(self):\n    for t, s in ((1, self.a), (2, self.b)):\n        x.clicked.connect(s)\n"
+           "    y.triggered.connect(self.b)\n    z.clicked.connect(lambda _=False: self.b())\n"
+           "def a(self):\n    pass\ndef b(self, path=None):\n    pass\n")
+    assert straight_connections(old, "old.py") == ["old.py:3 b", "old.py:4 b"]       # as Import... once was
+
+
+def straight_connections(source, name):
+    """'file:line method' for each clicked or triggered connected straight to a method of the file that takes an
+    argument besides self: as self.method, or as a name a for loop takes from a list of such methods."""
+    import ast
+    tree = ast.parse(source)
+    takes = {f.name for f in ast.walk(tree) if isinstance(f, ast.FunctionDef)
+             and (len(f.args.args) + len(f.args.kwonlyargs) > 1 or f.args.vararg)}
+    out = set()
+    for scope in [f for f in ast.walk(tree) if isinstance(f, ast.FunctionDef)]:
+        looped = {}                                             # a for loop's name -> the slots it takes
+        for loop in ast.walk(scope):
+            if isinstance(loop, ast.For) and isinstance(loop.target, ast.Tuple) and \
+                    isinstance(loop.iter, (ast.Tuple, ast.List)):
+                for k, target in enumerate(loop.target.elts):
+                    if isinstance(target, ast.Name):
+                        looped.setdefault(target.id, []).extend(
+                            e.elts[k] for e in loop.iter.elts if isinstance(e, ast.Tuple) and len(e.elts) > k)
+        for call in ast.walk(scope):
+            f = getattr(call, "func", None)
+            if not (isinstance(call, ast.Call) and isinstance(f, ast.Attribute) and f.attr == "connect" and
+                    call.args and isinstance(f.value, ast.Attribute) and f.value.attr in ("clicked", "triggered")):
+                continue
+            slot = call.args[0]
+            for s in (looped.get(slot.id, []) if isinstance(slot, ast.Name) else [slot]):
+                if isinstance(s, ast.Attribute) and isinstance(s.value, ast.Name) and s.value.id == "self" and \
+                        s.attr in takes:
+                    out.add(f"{name}:{call.lineno} {s.attr}")
+    return sorted(out)
 
 
 def test_database_editor():
@@ -2142,7 +2240,7 @@ def test_examples_open_as_templates():
         assert open(original).read() == before                                # the example is untouched
         assert w.database_folder() == os.path.join(folder, "materials")
         m = materials_panel.MaterialsPanel(w, w.project)
-        m.combo.setCurrentText("6Materials_AF_3Attr")                         # a shipped one: copied in at OK
+        m.choose("6Materials_AF_3Attr")                                     # a shipped one: copied in at OK
         w.apply_panel(m)
         assert w.project.database == "materials/6Materials_AF_3Attr.xlsx"
         assert os.path.isfile(os.path.join(folder, "materials", "6Materials_AF_3Attr.nt"))
@@ -2169,14 +2267,14 @@ def test_part_facts_pca_live_colours_training():
         tip = panel.latent_info.toolTip()
         assert "direction 1: " in tip and "The recommended latent dimension is the smallest whole number" in tip
         # Values | Network error: the same table, each cell the network's error with both values behind it
-        assert panel.show_values.isChecked() and panel.show_errors.isEnabled()
+        assert panel.tabs.currentIndex() == 0 and panel.tabs.isTabEnabled(1)
         value = panel.table.item(0, 2).text()
-        panel.show_errors.click()
+        panel.tabs.setCurrentIndex(1)
         cells = [panel.table.item(i, j) for i in range(panel.table.rowCount())
                  for j in range(2, panel.table.columnCount())]
         assert cells and all(c.text().endswith("%") for c in cells)
         assert cells[0].toolTip().startswith("Database: ") and "\nNetwork: " in cells[0].toolTip()
-        panel.show_values.click()
+        panel.tabs.setCurrentIndex(0)
         assert panel.table.item(0, 2).text() == value
 
         w.project.n_dof, w.project.single_layer = 3000, True

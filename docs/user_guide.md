@@ -145,7 +145,8 @@ The materials the optimization chooses from come from a **material database**: a
 
 Open **Materials** from the buttons on the right. The window shows:
 
-- **Database:** the database the project uses. The list has the databases that come with LSR MMTO, and the project's own.
+- **Database:** the database the project uses. The list holds the project's own databases: every database in its materials folder, and the one it uses when that one is kept elsewhere. **Included databases** beside it lists the databases that come with LSR MMTO; choosing one makes it the project's database, shown in the list as *its name (included)*.
+- With no database chosen yet, the report says so; make one with **New database...**, or bring one in with **Import...**.
 - A table of the database's materials, each in the colour and with the label it is drawn with, and its properties with their units.
 - Under the table, a short report: how many materials there are, the latent dimension recommended for them, how closely the trained network gives them back, and any errors or warnings. The (i) next to it explains the recommended latent dimension.
 
@@ -158,9 +159,7 @@ The buttons next to the list:
 - **New database...** opens the database editor (section 6.3) on an empty database, to type or paste your materials in.
 - **Import...** makes a database from a table of materials you already have, in Excel (.xlsx or .xls) or CSV. The first column holds the material names and the first row the properties. A property can be written under any of the names LSR MMTO knows it by (for example Young's modulus as Youngs_Modulus, Youngs Modulus or E), and a unit may follow in brackets, as in *Density [kg/m^3]*. A second row of units, as in an LSR MMTO database, is read too. Columns that are not a property LSR MMTO knows are left out, and one message lists them. The database editor then opens with what was read, for you to check and save.
 - **Edit...** opens the database in the editor. One of your own is changed in place. One that comes with LSR MMTO is saved as a copy in your project's folder, and the project then uses the copy. A column that is not a property LSR MMTO knows is left out, and a note over the table names it; Save writes the database without it.
-- **Browse...** chooses a database file (.xlsx) from anywhere.
-- **Open in Excel** opens the database file in Excel, or whatever opens .xlsx files on your computer.
-- **Check again** reads the database again, for example after you changed it in Excel.
+- **Open in Excel** opens the database file in Excel, or whatever opens .xlsx files on your computer. When you come back to the Materials window after saving it there, the window reads the database again by itself.
 
 New database and Import save into the project's folder, so the project must be saved first; LSR MMTO says so if it is not.
 
@@ -168,7 +167,7 @@ When some columns of the database are in other units than the project's (section
 
 ### 6.2 Values and Network error
 
-Above the table, two buttons choose what the table shows:
+Two tabs on the table choose what it shows:
 
 - **Values**: each material's properties, as the database gives them.
 - **Network error**: for each value, how far the trained network is from it when it turns the material into its point on the material map and back, in % of that property's range over the database's materials. Rest the mouse on a cell to see both values and the difference in the property's unit.

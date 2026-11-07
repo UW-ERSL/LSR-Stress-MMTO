@@ -88,11 +88,75 @@ def latent_help(d_eff, n_z, ratios):
     return "\n".join(lines)
 
 
+INCLUDED = " (included)"                     # after the name of a database that comes with LSR MMTO
+NO_DATABASE = "No database yet. Make one with New database, or bring one in with Import."
+
+
+def import_help():
+    """The Import (i): what a table brought in must look like and what happens to it; the properties it
+    reads are listed from the registry (databases.ATTRIBUTES), each with its shortest other name."""
+    from lsr_mmto.materials.databases import ATTRIBUTES
+    names = ", ".join(a.name + (f" (or {min(a.aliases, key=len)})" if a.aliases else "") for a in ATTRIBUTES.values())
+    return ("Import brings in a table of materials made elsewhere, as an Excel or CSV file.\n\n"
+            "**The file:** material names in the first column, property names in the first row, each with its "
+            "unit in brackets, e.g. Density [kg/m^3]. The units may go in a second row instead.\n\n"
+            "**What happens:**\n\n"
+            "1. A database made by LSR MMTO is used as it is.\n"
+            f"2. Any other table: only columns named after a property LSR MMTO knows are read: {names}. A message "
+            "lists the columns left out. To keep one, rename it in your file and import again.\n"
+            "3. The editor opens. Check every value, choose any unit it could not read, then Save. The database "
+            "is kept in the project's folder.\n"
+            "4. If its units differ from the project's, use Convert units below the table.\n"
+            "5. It has no trained network yet, so the first Run trains one (a few minutes). Then look at Network "
+            "error.\n\n"
+            "Every property, its other names and its units: Help > Researcher guide > Reference.")
+
+
+def database_choices(project):
+    """[(value, text, where)] for the Database list: every database in the project's materials folder, then
+    the project's own database when it lives elsewhere. value is what project.database holds; text what the
+    list shows (a database that comes with LSR MMTO as '<name> (included)'); where its file."""
+    from lsr_mmto.materials.databases import DATABASE_VAE
+    from lsr_mmto.problem.project_folder import MATERIALS
+    folder = os.path.join(project.base_dir, MATERIALS)
+    out = []
+    if os.path.isdir(folder):
+        for name in sorted(os.listdir(folder), key=str.lower):
+            if name.lower().endswith(".xlsx") and not name.startswith("~$"):
+                out.append((f"{MATERIALS}/{name}", os.path.splitext(name)[0], os.path.join(folder, name)))
+    if project.database is not None:
+        here = os.path.normcase(os.path.abspath(project.database_paths()[0]))
+        if not any(os.path.normcase(os.path.abspath(where)) == here for _, _, where in out):
+            out.append(choice_of(project, project.database))
+    return out
+
+
+def choice_of(project, value):
+    """(value, text, where) of one database, as database_choices lists it."""
+    from lsr_mmto.materials.databases import DATABASE_VAE
+    where = project.copy(_database=value).database_paths()[0]
+    text = value + INCLUDED if value in DATABASE_VAE else os.path.splitext(os.path.basename(where))[0]
+    return value, text, where
+
+
+class FittedCombo(QtWidgets.QComboBox):
+    """A drop-down whose open list is exactly as wide as itself, long names cut short with ..."""
+
+    def showPopup(self):
+        self.view().setTextElideMode(QtCore.Qt.ElideRight)
+        super().showPopup()
+        popup = self.view().window()
+        popup.setFixedWidth(self.width())
+        popup.move(self.mapToGlobal(QtCore.QPoint(0, 0)).x(), popup.y())
+
+
 class MaterialsPanel(QtWidgets.QDialog):
     """The material database: which one, its materials in their colours and labels, its check,
-    and the latent dimension recommended for it. Choosing another database resets the VAE
+    and the latent dimension recommended for it. The Database list holds this project's own databases;
+    those that come with LSR MMTO are under Included databases. Choosing another database resets the VAE
     settings to the new one's (its trained values, or the recommended latent dimension); a trained
-    network sets the shape settings from itself (Project.match_network)."""
+    network sets the shape settings from itself (Project.match_network). When the window becomes active
+    again and the database's file changed (saved in Excel, say), it is read again."""
 
     def __init__(self, parent, project):
         from lsr_mmto.materials.databases import DATABASE_VAE
@@ -105,43 +169,59 @@ class MaterialsPanel(QtWidgets.QDialog):
 
         row = QtWidgets.QHBoxLayout()
         row.addWidget(QtWidgets.QLabel("Database:"))
-        self.combo = QtWidgets.QComboBox()
-        self.combo.addItems(list(DATABASE_VAE))
-        if project.database is not None and project.database not in DATABASE_VAE:
-            self.combo.addItem(project.database)
-        self.combo.setCurrentIndex(-1 if project.database is None else self.combo.findText(project.database))
-        self.combo.currentTextChanged.connect(self._choose)
+        self.combo = FittedCombo()
+        for value, text, where in database_choices(project):
+            self._add_choice(value, text, where)
+        self.combo.setCurrentIndex(-1 if project.database is None else self.combo.findData(project.database))
+        self.combo.currentIndexChanged.connect(lambda _: self._choose(self.combo.currentData()))
         row.addWidget(self.combo, stretch=1)
-        for text, slot in (("New database...", self.new_database), ("Import...", self.import_database),
-                           ("Edit...", self.edit_database),
-                           ("Browse...", self._browse), ("Open in Excel", self._open_in_excel),
-                           ("Check again", self._refresh)):
-            button = QtWidgets.QPushButton(text)
-            button.clicked.connect(slot)
-            row.addWidget(button)
+        self.included = QtWidgets.QPushButton("Included databases")
+        self.included.setProperty("hasMenu", True)
+        menu = QtWidgets.QMenu(self.included)
+        for name in DATABASE_VAE:
+            menu.addAction(name, lambda n=name: self.choose(n))
+        self.included.setMenu(menu)
+        row.addWidget(self.included)
         layout.addLayout(row)
 
+        actions = QtWidgets.QHBoxLayout()
+        self.new_button = QtWidgets.QPushButton("New database...")
+        self.edit_button = QtWidgets.QPushButton("Edit...")
+        self.excel_button = QtWidgets.QPushButton("Open in Excel")
+        self.import_button = QtWidgets.QPushButton("Import...")
+        for button, slot in ((self.new_button, self.new_database), (self.edit_button, self.edit_database),
+                             (self.excel_button, self._open_in_excel), (self.import_button, self.import_database)):
+            button.clicked.connect(lambda _=False, s=slot: s())     # not s(checked): Qt's checked is no path
+            if button is self.import_button:
+                actions.addStretch()
+            actions.addWidget(button)
+        actions.addWidget(Info(import_help()))
+        layout.addLayout(actions)
+
+        shown = QtWidgets.QVBoxLayout()                             # the tabs right on the table
+        shown.setSpacing(0)
         switch = QtWidgets.QHBoxLayout()
-        self.show_values = QtWidgets.QPushButton("Values")
-        self.show_errors = QtWidgets.QPushButton("Network error")
-        self.shown = QtWidgets.QButtonGroup(self)
-        for b in (self.show_values, self.show_errors):
-            b.setCheckable(True)
-            self.shown.addButton(b)
-            switch.addWidget(b)
-        self.show_values.setChecked(True)
-        self.shown.buttonClicked.connect(lambda _: self._fill_table())
+        self.tabs = QtWidgets.QTabBar()
+        self.tabs.setObjectName("underlineTabs")
+        self.tabs.setDrawBase(False)
+        self.tabs.setExpanding(False)
+        for text in ("Values", "Network error"):
+            self.tabs.addTab(text)
+        self.tabs.currentChanged.connect(lambda _: self._fill_table())
+        switch.addWidget(self.tabs)
         switch.addWidget(Info("**Values:** each material's properties as the database gives them.\n\n"
                               "**Network error:** how far the trained network is from each value when it turns the "
                               "material into its point on the material map and back, in % of the property's "
                               "range over the database's materials.\n\nRest the mouse on a cell for both values "
                               "and the difference in the property's unit."))
         switch.addStretch()
-        layout.addLayout(switch)
+        shown.addLayout(switch)
         self.table = QtWidgets.QTableWidget()
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
-        layout.addWidget(self.table, stretch=1)
+        shown.addWidget(self.table, stretch=1)
+        layout.addLayout(shown, stretch=1)
         self._shown_table = None                                    # what _refresh read, for _fill_table
+        self._read = None                                           # the files' times when they were read
         self.report = QtWidgets.QTextEdit()
         self.report.setReadOnly(True)
         self.report.setFixedHeight(64)
@@ -155,20 +235,41 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.convert_button.clicked.connect(lambda: self.convert_units())
         layout.addWidget(self.convert_button, alignment=QtCore.Qt.AlignLeft)
         ok_cancel(self, layout)
+        self.new_button.setDefault(True)
         self._refresh()
 
-    def _choose(self, name):
-        if name:
-            self.project.database = name
+    def _add_choice(self, value, text, where):
+        self.combo.addItem(text, value)
+        self.combo.setItemData(self.combo.count() - 1, where, QtCore.Qt.ToolTipRole)
+
+    def choose(self, value):
+        """The database value (as project.database holds it) chosen, added to the list when it is not there."""
+        if self.combo.findData(value) < 0:
+            self._add_choice(*choice_of(self.project, value))
+        self.combo.setCurrentIndex(self.combo.findData(value))
+
+    def _choose(self, value):
+        if value and value != self.project.database:
+            self.project.database = value
             self._refresh()
 
-    def _browse(self):
-        from lsr_mmto.materials.databases import DATABASE_DIR
-        from .pyto_ad_imports import FILE_DIALOG_OPTIONS
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Material database", DATABASE_DIR,
-                                                        "Excel files (*.xlsx)", options=FILE_DIALOG_OPTIONS)
-        if path:
-            self.set_database(path)
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._read = self._file_times()
+
+    def event(self, event):
+        """Active again (back from Excel, say) with the database's file changed: read it again."""
+        if event.type() == QtCore.QEvent.WindowActivate and self._read is not None and \
+                self._file_times() != self._read:
+            self._refresh()
+        return super().event(event)
+
+    def _file_times(self):
+        """When the database's file and its network were last changed (None for one that is not there)."""
+        if self.project.database is None:
+            return None
+        xlsx = self.project.database_paths()[0]
+        return tuple(os.path.getmtime(f) if os.path.isfile(f) else None for f in (xlsx, self.project.network_path()))
 
     def _own_folder(self, what):
         """The project's materials folder, or None after saying the project must be saved first."""
@@ -285,9 +386,7 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.project.formulation = json.loads(json.dumps(project.formulation))
         self.project.settings["vae"] = dict(project.settings["vae"])
         self.combo.blockSignals(True)
-        if self.combo.findText(project.database) < 0:
-            self.combo.addItem(project.database)
-        self.combo.setCurrentText(project.database)
+        self.choose(project.database)
         self.combo.blockSignals(False)
         self._refresh()
         return lines
@@ -304,9 +403,7 @@ class MaterialsPanel(QtWidgets.QDialog):
                 name = os.path.relpath(os.path.abspath(path), self.project.base_dir).replace("\\", "/")
             except ValueError:                                      # another drive on Windows
                 name = os.path.abspath(path)
-        if self.combo.findText(name) < 0:
-            self.combo.addItem(name)
-        self.combo.setCurrentText(name)
+        self.choose(name)
 
     def _open_in_excel(self):
         xlsx, error = database_choice(self.project)
@@ -326,10 +423,16 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.table.setColumnCount(0)
         self._shown_table, self._network_rows = None, None
         self.latent_info.setVisible(False)
-        self.show_errors.setEnabled(False)
+        self.tabs.setTabEnabled(1, False)
+        self._read = self._file_times()
         self.convert_button.setText(f"Convert to {self.project.units} units...")
         self.convert_button.setVisible(self.project.database == self.original and
                                        bool(self.project.unit_conversion()[0]))
+        for button in (self.edit_button, self.excel_button):
+            button.setEnabled(self.project.database is not None)
+        if self.project.database is None:
+            self.report.setText(NO_DATABASE)
+            return
         xlsx, error = database_choice(self.project)
         if error:
             self.report.setText(error)
@@ -353,9 +456,10 @@ class MaterialsPanel(QtWidgets.QDialog):
             network = self._network_line()
             if network:
                 lines.insert(1, network)
-        if self._network_rows is None and self.show_errors.isChecked():
-            self.show_values.setChecked(True)
-        self._fill_table()
+        if self._network_rows is None and self.tabs.currentIndex() == 1:
+            self.tabs.setCurrentIndex(0)                            # fills the table
+        else:
+            self._fill_table()
         self.report.setText("\n".join(lines))
 
     def _fill_table(self):
@@ -365,7 +469,7 @@ class MaterialsPanel(QtWidgets.QDialog):
         if self._shown_table is None:
             return
         names, attributes, units, values, colours, labels = self._shown_table
-        errors = self.show_errors.isChecked() and self._network_rows is not None
+        errors = self.tabs.currentIndex() == 1 and self._network_rows is not None
         by_cell = {(r["material"], attribute_name(r["property"])): r for r in (self._network_rows or [])}
         heads = ["Label", "Material"] + [SHOWN.get(a, a) + ("" if errors or u is None else f" [{u}]")
                                          for a, u in zip(attributes, units)]
@@ -401,7 +505,7 @@ class MaterialsPanel(QtWidgets.QDialog):
         rows, line = self.project.network_error()
         if rows is not None:
             self._network_rows = rows
-            self.show_errors.setEnabled(True)
+            self.tabs.setTabEnabled(1, True)
         return line
 
     def apply(self, project):
