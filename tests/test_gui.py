@@ -2803,3 +2803,26 @@ def test_show_list_is_the_runs_own():
     assert draw_design.views(other) == ("Material", "Density", "Value", "Solid")
     assert draw_design.views(structural, other) == ("Material", "Density", "Stress", "Value", "Solid")
     assert draw_design.views() == ("Material", "Density", "Solid")
+
+
+def test_colour_scale_title_never_meets_its_numbers():
+    """The colour scale of a value view: the lowest and highest values under the bar, the title over it as a text
+    of its own (the bar's own title empty), so a long title never runs into the highest value; the title goes
+    with the drawing."""
+    import vtk
+    from gui import draw_design
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        mesh = w.preview_mesh()
+        n = int(mesh.num_elems)
+        title = "A long title for a colour scale, longer than the bar itself [MPa]"
+        w.set_design(lambda win: draw_design.draw(win, mesh, np.ones(n, bool), values=np.linspace(0, 1e5, n),
+                                                  title=title, clim=(0, 1e5)), show=True)
+        bar = w.plotter.scalar_bars[title]
+        text = w.plotter.actors[draw_design.PREFIX + "scale title " + title]
+        assert bar.GetTitle() == "" and bar.GetTextPosition() == vtk.vtkScalarBarActor.PrecedeScalarBar
+        assert text.GetInput() == title and text.GetTextProperty().GetVerticalJustification() == vtk.VTK_TEXT_BOTTOM
+        bar_top = draw_design.VALUE_BAR["position_y"] + draw_design.VALUE_BAR["height"]
+        assert text.GetPosition()[1] > bar_top                                   # over the bar, the numbers under it
+        w._remove_design()                                                    # what drawing anything else does
+        assert draw_design.PREFIX + "scale title " + title not in w.plotter.actors and title not in w.plotter.scalar_bars

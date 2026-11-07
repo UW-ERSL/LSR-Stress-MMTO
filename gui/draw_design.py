@@ -35,10 +35,10 @@ WEAKEST = 0.25                                # colour strength of an element ju
 SOLID_COLOUR = "#9aa5b1"
 PREFIX = "result_"
 # The colour scale of a value view (Density, a result): the lowest and the highest value at the two
-# ends, under the bar, and the title in the middle under it, at fixed sizes, so the numbers never
-# run into each other or into the title, however large or small the values and whatever the size of
-# the view.
-VALUE_BAR = {"vertical": False, "position_x": 0.3, "position_y": 0.07, "width": 0.4, "height": 0.05,
+# ends, under the bar, and the title centred over it, at fixed sizes, so the numbers never run into
+# each other or into the title, however large or small the values, however long the title and whatever
+# the size of the view.
+VALUE_BAR = {"vertical": False, "position_x": 0.3, "position_y": 0.05, "width": 0.4, "height": 0.05,
              "n_labels": 2, "fmt": "%.3g", "unconstrained_font_size": True, "title_font_size": 16,
              "label_font_size": 14, "color": "#333333"}
 _MESHES = {}                                  # (STL, dofs, single layer) -> mesh, for saved runs
@@ -94,9 +94,29 @@ def _on_scale(window, shape, title, clim, kwargs):
     actor = window.plotter.add_mesh(shape, scalars="value", cmap="viridis", clim=clim,
                                     scalar_bar_args=VALUE_BAR | {"title": title}, **kwargs)
     bar = window.plotter.scalar_bars[title]
-    bar.SetTextPositionToPrecedeScalarBar()                # the numbers and the title under the bar
+    bar.SetTextPositionToPrecedeScalarBar()                # the numbers under the bar
     bar.SetTextPad(3)
+    bar.SetTitle("")                                       # the title over it, apart from the numbers
+    window.plotter.add_actor(scale_title(title), name=PREFIX + "scale title " + title, reset_camera=False,
+                             pickable=False)
     return actor
+
+
+def scale_title(title):
+    """The colour scale's title as a text of its own, centred over the bar, its foot just above the bar's top: on
+    the other side of the bar from the numbers, so the two never overlap."""
+    import vtk
+    text = vtk.vtkTextActor()
+    text.SetInput(title)
+    text.GetPositionCoordinate().SetCoordinateSystemToNormalizedViewport()
+    text.SetPosition(VALUE_BAR["position_x"] + VALUE_BAR["width"] / 2,
+                     VALUE_BAR["position_y"] + VALUE_BAR["height"] + 0.008)
+    p = text.GetTextProperty()
+    p.SetFontSize(VALUE_BAR["title_font_size"])
+    p.SetJustificationToCentered()
+    p.SetVerticalJustificationToBottom()
+    p.SetColor(*(rgb(VALUE_BAR["color"]) / 255.0))
+    return text
 
 
 def draw_nodes(window, mesh, mask, values, title, clim, shift=0.0, name="design", moved=None):

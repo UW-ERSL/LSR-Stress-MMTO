@@ -191,6 +191,27 @@ def test_conflicting_values_are_refused():
         raise AssertionError("conflicting imposed values were accepted")
 
 
+def test_a_load_is_split_evenly_over_its_nodes():
+    """A force on a face of a uniform mesh: the nodal forces add up to the total, and every node of the face
+    carries the same share; nodes off the face carry none. A pressure likewise adds up to pressure times area."""
+    p = Project("beam", stl="RectangularBeam.STL", n_dof=3000, single_layer=False,
+                base_dir=os.path.join(ROOT, "data", "models", "RectangularBeam"))
+    p.add_bc("fixed", S.face("xmin"), dofs="xyz")
+    p.add_bc("force", S.face("xmax"), total=[0.0, -12.0, 3.0])
+    mesh = p.mesh()
+    bcs, nodes = p.supports_and_loads(mesh)
+    force = bcs["u"].force.reshape(-1, 3)
+    on = nodes[p.bcs[1]["on"]]
+    assert len(on) > 4 and np.allclose(force.sum(axis=0), [0.0, -12.0, 3.0], rtol=0, atol=1e-12)
+    assert np.allclose(force[on], force[on][0], rtol=0, atol=1e-15)                  # the same on every node
+    assert not np.delete(force, on, axis=0).any()
+    p.bcs[1] = {"kind": "traction", "on": p.bcs[1]["on"], "pressure": 2.0, "direction": [1.0, 0.0, 0.0],
+                "area": 5.0}
+    force = p.supports_and_loads(mesh)[0]["u"].force.reshape(-1, 3)
+    assert np.allclose(force.sum(axis=0), [10.0, 0.0, 0.0], rtol=0, atol=1e-12)
+    assert np.allclose(force[on], force[on][0], rtol=0, atol=1e-15)
+
+
 def test_free_rigid_body_motion_is_refused():
     """Held at one node and pushed sideways at the top, the bracket is free to rotate: build stops,
     before the VAE and the run."""
