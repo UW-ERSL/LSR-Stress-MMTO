@@ -140,14 +140,14 @@ def choice_of(project, value):
 
 
 class FittedCombo(QtWidgets.QComboBox):
-    """A drop-down whose open list is exactly as wide as itself, long names cut short with ..."""
+    """A drop-down whose open list opens under it, exactly as wide as itself, long names cut short with ..."""
 
     def showPopup(self):
         self.view().setTextElideMode(QtCore.Qt.ElideRight)
         super().showPopup()
         popup = self.view().window()
         popup.setFixedWidth(self.width())
-        popup.move(self.mapToGlobal(QtCore.QPoint(0, 0)).x(), popup.y())
+        popup.move(self.mapToGlobal(QtCore.QPoint(0, self.height())))
 
 
 class MaterialsPanel(QtWidgets.QDialog):
