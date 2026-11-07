@@ -229,7 +229,8 @@ def test_top_row_and_bottom_buttons():
         p = w.progress_text
         w._top_timer.stop()                                   # it would clear the text: no run goes
         for text, whole, idle in (("", True, True),            # nothing going: Analyse beside Run
-                                  ("Starting: building the mesh and the material network...", False, False),
+                                  (" ".join(["Starting: building the mesh and the material network..."] * 3),
+                                   False, False),                   # longer than the room in any font
                                   ("Iteration 6 / 40 \u00b7 0:09 so far \u00b7 about 0:46 left", True, False)):
             w.analyse_button.setVisible(idle)                   # as update_top_row sets it while a run goes
             p.setText(text)
