@@ -910,7 +910,8 @@ def test_import_database():
     """Import...: a table of materials made elsewhere (here a CSV) becomes a database. Columns named as a
     property LSR MMTO knows are read (a unit in brackets after the name too), the others are listed in one
     message, and the editor opens with what was read, a value that is not a number shown as a cell to
-    correct; once saved in the project's folder the project uses it."""
+    correct; once saved in the project's folder the project uses it. A file that is already a database of
+    LSR MMTO is used where it is, with its trained network, and no editor opens."""
     from lsr_mmto.materials.databases import check_database, database_table
     from gui import database_editor as DE
     with scratch() as d:
@@ -948,6 +949,19 @@ def test_import_database():
         open(table, "w").write("Alloy,Price\nA,1\nB,2\n")                    # nothing LSR MMTO knows
         with answers():
             assert m.import_database(table) is None
+
+        from lsr_mmto.materials.databases import DATABASE_DIR                 # a database of LSR MMTO already:
+        os.makedirs(os.path.join(d, "elsewhere"))                             # used where it is, with its network
+        own = shutil.copy(os.path.join(ROOT, DATABASE_DIR, "BM1_3Mats_2Attr.xlsx"), os.path.join(d, "elsewhere"))
+        shutil.copy(os.path.join(ROOT, DATABASE_DIR, "BM1_3Mats_2Attr.nt"), os.path.join(d, "elsewhere"))
+        try:
+            DE.DatabaseEditor.exec_ = lambda e: pytest.fail("the editor opened for a database of LSR MMTO")
+            assert m.import_database(own) == own
+        finally:
+            DE.DatabaseEditor.exec_ = real_exec
+        assert m.project.database == "../elsewhere/BM1_3Mats_2Attr.xlsx" and m.combo.currentText() == "BM1_3Mats_2Attr"
+        assert os.path.samefile(m.project.network_path(), os.path.join(d, "elsewhere", "BM1_3Mats_2Attr.nt"))
+        assert m.tabs.isTabEnabled(1) and "gives back every material" in m.report.toPlainText()
 
 
 def test_edit_a_database_with_an_unknown_column():

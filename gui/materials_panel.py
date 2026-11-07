@@ -296,21 +296,28 @@ class MaterialsPanel(QtWidgets.QDialog):
         return path
 
     def import_database(self, path=None):
-        """A database made from a table of materials made elsewhere (an Excel or CSV file): the columns that
-        are properties LSR MMTO knows are read, the others listed in one message; the database editor then
-        opens with what was read, to be checked and saved in the project's folder, which the project then
-        uses."""
-        from lsr_mmto.materials.databases import import_table
+        """A table of materials made elsewhere (an Excel or CSV file). One that is already a database of LSR
+        MMTO (its check finds nothing wrong) is used where it is, with its trained network beside it if it has
+        one. Any other: the columns that are properties LSR MMTO knows are read, the others listed in one
+        message; the database editor then opens with what was read, to be checked and saved in the project's
+        folder, which the project then uses. Returns the database's path, or None."""
+        from lsr_mmto.materials.databases import check_database, import_table
         from .database_editor import DatabaseEditor
         from .pyto_ad_imports import FILE_DIALOG_OPTIONS
-        folder = self._own_folder("Import a database")
-        if folder is None:
-            return None
         if path is None:
-            path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Import a table of materials", folder,
+            window = self.parent()
+            start = window.database_folder() if hasattr(window, "own_folder") and window.own_folder() else \
+                self.project.base_dir
+            path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Import a table of materials", start,
                                                             "Tables (*.xlsx *.xls *.csv)", options=FILE_DIALOG_OPTIONS)
             if not path:
                 return None
+        if path.lower().endswith(".xlsx") and not check_database(path)[0]:
+            self.set_database(path)                                 # a database of LSR MMTO: used where it is
+            return path
+        folder = self._own_folder("Import a database")
+        if folder is None:
+            return None
         try:
             table = import_table(path)
         except Exception as e:                                      # noqa: BLE001
