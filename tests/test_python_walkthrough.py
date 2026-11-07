@@ -7,6 +7,7 @@ describe; every link in its notes leads to an entry of docs/reference.md.
 
     python -m pytest tests/test_python_walkthrough.py
 """
+import asyncio
 import json
 import os
 import re
@@ -52,7 +53,13 @@ def test_the_notebook_runs_from_top_to_bottom(monkeypatch):
         folder = os.path.join(d, "LSR MMTO")
         shutil.copytree(os.path.join(ROOT, "data", "models", "UBracket"), os.path.join(folder, "data", "models", "UBracket"))
         nb = nbformat.read(NOTEBOOK, as_version=4)
-        NotebookClient(nb, timeout=600, resources={"metadata": {"path": folder}}).execute()
+        before = asyncio.get_event_loop_policy()
+        if sys.platform == "win32":                # the kernel's messages need the selector event loop on Windows
+            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+        try:
+            NotebookClient(nb, timeout=600, resources={"metadata": {"path": folder}}).execute()
+        finally:
+            asyncio.set_event_loop_policy(before)
         errors = [o for c in nb.cells if c.cell_type == "code" for o in c.outputs if o.output_type == "error"]
         assert not errors, errors
         project = os.path.join(folder, "python_walkthrough_project")
