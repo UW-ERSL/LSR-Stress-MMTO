@@ -137,9 +137,9 @@ def test_not_saved_writes_nothing_saved_is_one_entry_that_loads_back():
         assert project_folder.analysed_material(folder) == saved.analysed_material == run.analysed_material
         again = load_results.load(os.path.join(folder, "run_data"))
         assert again.analysed_material == run.analysed_material
-        assert np.array_equal(again.history["J_phys"], run.history["J_phys"])
-        assert np.array_equal(again.results["von_mises"], run.results["von_mises"])
-        assert np.array_equal(again.results["displacement"], run.results["displacement"])   # a vector at each
+        assert np.array_equal(again.history["J_phys"], saved.history["J_phys"])     # the saved analysis comes
+        assert np.array_equal(again.results["von_mises"], saved.results["von_mises"])   # back as it was saved
+        assert np.array_equal(again.results["displacement"], saved.results["displacement"])   # a vector at each
         assert again.results["displacement"].shape == (int(p.mesh().num_nodes), 3)          # node, back as it was
         assert again.result_info == run.result_info and again.result_info["displacement"]["shape"] == "vector"
         assert np.array_equal(again.material_indices, run.material_indices)
