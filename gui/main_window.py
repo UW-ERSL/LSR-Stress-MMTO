@@ -73,7 +73,7 @@ SIDEBAR = ("Units", "Materials", "Supports and loads", "Formulation", "Settings"
            "Results", "Display Options")
 FOLDER_HELP = ("A project keeps everything it uses in its own folder: the project file, the part (in part), "
                "the material database and its trained network (in materials), and the results of every run "
-               "(in results). Zip the folder to send the whole project.")
+               "(in results).\n\nZip the folder to send the whole project.")
 PANELS = {"Materials": MaterialsPanel, "Formulation": FormulationPanel, "Settings": SettingsPanel}
 NO_PROJECT = "Open or start a project first"            # the tip of what waits for a project
 START_EXAMPLES = (("L-bracket", "L-bracket.mmto"), ("U-bracket", "U-bracket.mmto"), ("Beam", "beam.mmto"),
@@ -787,7 +787,7 @@ class ProjectFolderDialog(QtWidgets.QDialog):
 
 
 SCALE_HELP = ("Every coordinate of the part is multiplied by this number: 1/1000 for a part drawn in millimetres "
-              "that should be in metres, 25.4 from inches to millimetres. The project's own copy of the part "
+              "that should be in metres, 25.4 from inches to millimetres.\n\nThe project's own copy of the part "
               "is changed; the units, loads, limits and materials stay as they are.")
 
 

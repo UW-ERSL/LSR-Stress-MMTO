@@ -2,7 +2,7 @@
 
 This guide walks through every part of the LSR MMTO window. Open it in the window with Help > User guide, or press F1.
 
-Next to most fields there is a small (i). Click it, or rest the mouse on it, to see what that field means. This guide gives the bigger picture: what each part is for, how the parts fit together, and what to watch out for.
+Next to most fields there is a small (i). Click it to see what that field means. This guide gives the bigger picture: what each part is for, how the parts fit together, and what to watch out for.
 
 ## 1. Start here
 
@@ -21,7 +21,7 @@ The work always goes in the same order, and the buttons on the right of the wind
 
 Settings (section 9) has everything else, and most projects can leave it as it is.
 
-Next to most fields there is a small (i). Click it, or rest the mouse on it, to see what that field means and what its numbers are. When a field puzzles you, the (i) is the quickest answer. This guide gives the bigger picture.
+Next to most fields there is a small (i). Rest the mouse on it for its first sentence; click it for a card with the whole explanation and what its numbers are (a click outside the card, or Esc, closes it). When a field puzzles you, the (i) is the quickest answer. This guide gives the bigger picture.
 
 To try LSR MMTO before making a project of your own, open one of the examples: click it under **Try an example** on the start page, or use File > Open. The examples are the L-bracket, the U-bracket, the beam and the airplane bracket. They are complete, so you can press Run at once. An example never changes: when you save it, or run it, LSR MMTO asks for a folder of your own and saves a copy there.
 

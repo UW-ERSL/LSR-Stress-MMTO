@@ -83,7 +83,7 @@ TOLERANCE = ("Tolerance", "How far outside the selection a node may sit and stil
 PLACES_HELP = ("A selection is the part of the model a support or load acts on: faces you clicked, or a "
                "selection you described (a face of the part, a box, a cylinder...). Each selection has a name, "
                "like clamp or corner, which shows under Where, so several supports and loads can share one "
-               "selection. Open Selections to rename a selection, change it, or tick Keep solid so the "
+               "selection.\n\nOpen Selections to rename a selection, change it, or tick Keep solid so the "
                "optimization never removes it.")
 MOUSE_HINT = "Hover over the part to read its coordinates; click it to copy the point."
 
@@ -1432,7 +1432,7 @@ class SupportsPanel(QtWidgets.QDialog):
         self.report.setText("<br>".join(problems + [lines[-1]]))
         details = [line for line in lines[:-1] if line not in problems] + \
                   [f"{name}: {n} nodes" for name, n in self.counts.items()]
-        self.report_info.setToolTip("<br>".join(details))
+        self.report_info.setToolTip("\n".join(details))
         self.report_info.setVisible(bool(details))
         self.refresh()
 

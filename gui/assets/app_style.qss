@@ -164,7 +164,9 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 QScrollArea { background: transparent; border: none; }
 QScrollArea > QWidget > QWidget { background: transparent; }
 
-/* tips, message boxes, progress */
+/* tips, the (i) cards, message boxes, progress */
+QFrame#infoCard { background: #ffffff; border: 1px solid #cfd6e0; }
+QFrame#infoCard QScrollArea, QLabel#infoText { background: #ffffff; color: #1f2933; }
 QToolTip { background: #1f2937; color: #f9fafb; border: none; border-radius: 6px; padding: 6px 9px; }
 QMessageBox { background: #ffffff; }
 QMessageBox QLabel { color: #1f2933; }

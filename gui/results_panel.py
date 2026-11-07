@@ -26,7 +26,7 @@ from .panel_widgets import GREY, Info
 from .run_panel import ask_delete_run, open_folder, plot_canvas, result_tabs, summary_view, table_view
 
 RESULTS_HELP = ("Each run of the project is listed here, newest first. Click one to see its design on the part "
-                "and its convergence, latent space and summary in the tabs. Show chooses what the part shows: "
+                "and its convergence, latent space and summary in the tabs.\n\nShow chooses what the part shows: "
                 "each element's material, its density, its stress, how far it moves (Displacement), only which "
                 "elements are solid, or the smooth STL files Export STL wrote for the run.\n\n"
                 "Tick two runs and press Compare to see them side by side. Open other results... shows a run "

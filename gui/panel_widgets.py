@@ -66,8 +66,89 @@ class NumberEdit(QtWidgets.QLineEdit):
         return int(v) if self.integer else float(v)
 
 
+CARD_WIDTH = 420               # the (i) card's width; its text wraps inside
+CARD_SHARE = 0.6               # a card taller than this share of the window scrolls inside
+
+
+def card_markdown(text):
+    """An (i) text as the card shows it, in Markdown: a blank line starts a paragraph, a single line break
+    stays a line break, leading spaces do not make a code block, and a lone * (as in lbf*s^2/in) is a star,
+    not emphasis. **bold** and numbered steps (1. ...) are Markdown's own."""
+    import re
+    lines = [line.strip() for line in text.split("\n")]
+    out = []
+    for i, line in enumerate(lines):
+        line = re.sub(r"(?<=[^\s*])\*(?=[^\s*])", r"\\*", line)
+        follows = lines[i + 1] if i + 1 < len(lines) else ""
+        hard = line and follows and not re.match(r"(\d+\.|[-*]) ", follows)
+        out.append(line + ("  " if hard else ""))
+    return "\n".join(out)
+
+
+def first_sentence(text):
+    """What the mouse resting on an (i) shows: its text up to the end of the first sentence, plain."""
+    import re
+    first = text.strip().split("\n")[0].replace("**", "").strip()
+    m = re.search(r"[.!?](\s|$)", first)
+    return first[:m.start() + 1] if m else first
+
+
+class InfoCard(QtWidgets.QFrame):
+    """The card an (i) opens: its text in Markdown, CARD_WIDTH wide and wrapped, under the (i) and moved to
+    stay inside the window; scrolled inside when taller than CARD_SHARE of the window. A click outside it
+    or Esc closes it."""
+
+    def __init__(self, info, text):
+        super().__init__(info, QtCore.Qt.Popup)
+        self.setObjectName("infoCard")
+        self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+        self.label = QtWidgets.QLabel()
+        self.label.setObjectName("infoText")
+        self.label.setTextFormat(QtCore.Qt.MarkdownText)
+        self.label.setText(card_markdown(text))
+        self.label.setWordWrap(True)
+        self.label.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+        self.label.setContentsMargins(14, 10, 14, 10)
+        self.label.setFixedWidth(CARD_WIDTH)
+        self.scroll = QtWidgets.QScrollArea()
+        self.scroll.setWidget(self.label)
+        self.scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(1, 1, 1, 1)
+        layout.addWidget(self.scroll)
+        window = info.window().geometry() if info.window() is not None else None
+        tall = self.label.heightForWidth(CARD_WIDTH)
+        most = int(CARD_SHARE * window.height()) if window is not None else tall
+        bar = self.scroll.verticalScrollBar().sizeHint().width() if tall > most else 0
+        self.label.setFixedHeight(tall)
+        self.setFixedSize(CARD_WIDTH + bar + 2, min(tall, most) + 2)
+        self.info, self.window_area = info, window
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.move(self.placed(self.info, self.window_area))
+
+    def placed(self, info, window):
+        """Under the (i), its left edge at the (i)'s; moved left and up as far as needed to stay inside the
+        window (inside the screen when the (i) has no window)."""
+        at = info.mapToGlobal(QtCore.QPoint(0, info.height() + 4))
+        area = window if window is not None else QtWidgets.QApplication.primaryScreen().availableGeometry()
+        x = max(area.left(), min(at.x(), area.right() - self.width()))
+        y = at.y() if at.y() + self.height() <= area.bottom() else info.mapToGlobal(QtCore.QPoint(0, -4)).y() - \
+            self.height()
+        return QtCore.QPoint(x, max(area.top(), min(y, area.bottom() - self.height())))
+
+    def keyPressEvent(self, event):
+        if event.key() == QtCore.Qt.Key_Escape:
+            self.close()
+            return
+        super().keyPressEvent(event)
+
+
 class Info(QtWidgets.QToolButton):
-    """A small (i): the explanation shows on a click, or when the mouse rests on it."""
+    """A small (i): a click opens its card (InfoCard) with the whole text; the mouse resting on it shows the
+    first sentence. Its text is its toolTip (setToolTip changes it), written in Markdown: a blank line between
+    paragraphs, **bold** lead words, numbered steps."""
 
     def __init__(self, text, parent=None):
         super().__init__(parent)
@@ -78,8 +159,22 @@ class Info(QtWidgets.QToolButton):
         self.setStyleSheet("QToolButton { border: 1px solid #8a8a8a; border-radius: 9px; color: #555555; "
                            "font: bold italic 9pt 'Georgia'; background: transparent; } "
                            "QToolButton:hover { background: #e6eefc; }")
-        self.clicked.connect(lambda: QtWidgets.QToolTip.showText(
-            self.mapToGlobal(self.rect().bottomLeft()), self.toolTip(), self))
+        self.card = None
+        self.clicked.connect(self.open_card)
+
+    def hover_text(self):
+        return first_sentence(self.toolTip())
+
+    def open_card(self):
+        self.card = InfoCard(self, self.toolTip())
+        self.card.show()
+        return self.card
+
+    def event(self, event):
+        if event.type() == QtCore.QEvent.ToolTip:
+            QtWidgets.QToolTip.showText(event.globalPos(), self.hover_text(), self)
+            return True
+        return super().event(event)
 
 
 def with_info(widget, text):

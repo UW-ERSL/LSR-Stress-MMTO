@@ -20,8 +20,8 @@ STARTING = ["Density", "Youngs_Modulus", "Poissons_Ratio"]
 FIXED = ["Name", "Shown as", "Colour"]                      # the columns before the properties
 BAD = QtGui.QColor("#ffd6d6")
 HELP = ("One row per material. Shown as is optional: a shorter name for legends and plots (the name is "
-        "shown when it is empty). Click a colour to change it. The row under the headers holds each "
-        "property's unit. Add property adds a column; Remove property removes the column you are in. "
+        "shown when it is empty). Click a colour to change it.\n\nThe row under the headers holds each "
+        "property's unit. Add property adds a column; Remove property removes the column you are in.\n\n"
         "You can paste a block copied from Excel into the table.")
 
 

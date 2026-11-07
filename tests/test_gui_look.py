@@ -23,7 +23,7 @@ if sys.platform.startswith("win"):                         # off-screen Qt on Wi
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from PyQt5 import QtCore, QtGui, QtWidgets  # noqa: E402
+from PyQt5 import QtCore, QtGui, QtTest, QtWidgets  # noqa: E402
 
 APP = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
@@ -476,6 +476,56 @@ def test_run_layout():
     finally:
         APP.setStyleSheet("")
 
+
+
+def test_info_card():
+    """An (i) click opens a card with its whole text in Markdown (paragraphs, bold, numbered steps), 420 px
+    wide and wrapped, under the (i) and moved to stay inside the window at each edge, scrolling inside when
+    taller than 60 % of the window; Esc closes it. The mouse resting on it shows only the first sentence."""
+    from gui.panel_widgets import CARD_WIDTH, Info
+    text = ("Import brings in a table of materials made elsewhere, as an Excel or CSV file. More here.\n\n"
+            "**The file:** names in the first column, e.g. Density [kg/m^3].\n\n"
+            "1. One step.\n2. Another step, with lbf*s^2/in in it.")
+    top = QtWidgets.QWidget()
+    top.resize(900, 600)
+    grid = QtWidgets.QGridLayout(top)
+    corners = {}
+    for r, c in ((0, 0), (0, 2), (2, 0), (2, 2), (1, 1)):
+        corners[(r, c)] = Info(text)
+        grid.addWidget(corners[(r, c)], r, c, alignment=QtCore.Qt.AlignCenter)
+    grid.setRowStretch(1, 1)
+    grid.setColumnStretch(1, 1)
+    top.show()
+    settle(0.2)
+    area = top.geometry()
+    for where, info in corners.items():
+        card = info.open_card()
+        settle(0.05)
+        box = card.frameGeometry()
+        assert area.contains(box), (where, box, area)
+        assert card.width() <= CARD_WIDTH + 30 and card.label.width() == CARD_WIDTH
+        near = info.mapToGlobal(info.rect().center())
+        assert abs(box.center().y() - near.y()) < box.height() / 2 + 40, where     # beside its (i)
+        card.close()
+        settle(0.05)
+    card = corners[(1, 1)].open_card()
+    settle(0.05)
+    doc = card.label.text()
+    assert "**The file:**" in doc and "\\*" in doc and "1. One step." in doc
+    assert card.label.heightForWidth(CARD_WIDTH) > 4 * card.fontMetrics().height()            # wrapped
+    QtTest.QTest.keyClick(card, QtCore.Qt.Key_Escape)
+    settle(0.05)
+    assert not card.isVisible()
+    assert corners[(0, 0)].hover_text() == ("Import brings in a table of materials made elsewhere, as an Excel "
+                                            "or CSV file.")
+    long = Info("A first sentence. " + "Many words follow in this card. " * 200)
+    grid.addWidget(long, 1, 0)
+    settle(0.05)
+    card = long.open_card()
+    settle(0.05)
+    assert card.height() <= 0.6 * top.geometry().height() + 4 and card.scroll.verticalScrollBar().maximum() > 0
+    card.close()
+    top.close()
 
 if __name__ == "__main__":
     for name, f in list(globals().items()):

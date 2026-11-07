@@ -21,7 +21,7 @@ from .panel_widgets import Info, database_choice, ok_cancel, same, swatch
 
 CONVERT_HELP = ("The database is written again as the project's own copy, in its materials folder, with these "
                 "numbers in the project's units. Its trained network still fits the converted numbers, so it is "
-                "kept. A limit written for the old numbers means something else afterwards; converting it keeps "
+                "kept.\n\nA limit written for the old numbers means something else afterwards; converting it keeps "
                 "the limit the same in the converted units.")
 
 
@@ -131,10 +131,10 @@ class MaterialsPanel(QtWidgets.QDialog):
             switch.addWidget(b)
         self.show_values.setChecked(True)
         self.shown.buttonClicked.connect(lambda _: self._fill_table())
-        switch.addWidget(Info("Values: each material's properties as the database gives them.\n"
-                              "Network error: how far the trained network is from each value when it turns the "
+        switch.addWidget(Info("**Values:** each material's properties as the database gives them.\n\n"
+                              "**Network error:** how far the trained network is from each value when it turns the "
                               "material into its point on the material map and back, in % of the property's "
-                              "range over the database's materials. Rest the mouse on a cell for both values "
+                              "range over the database's materials.\n\nRest the mouse on a cell for both values "
                               "and the difference in the property's unit."))
         switch.addStretch()
         layout.addLayout(switch)

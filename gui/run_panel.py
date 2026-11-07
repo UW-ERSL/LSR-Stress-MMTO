@@ -46,7 +46,7 @@ RUN_HELP = ("Run, at the top, optimizes the project as it is now: it is saved fi
             "elements along the line; with more than three it shows a flat view, and its title says for "
             "how many of the elements that view shows the right nearest material.")
 ANALYSE_HELP = ("Analyse solves the project once with every element of the part solid, in the material you "
-                "choose, using that material's values from the database. Nothing is optimized: it is for "
+                "choose, using that material's values from the database.\n\nNothing is optimized: it is for "
                 "checking the supports, the loads and the materials before a run.")
 EPOCH = re.compile(r"^(?:\[(?:STD|SAM)\] )?Epoch (\d+):")   # what the network's training prints
 
