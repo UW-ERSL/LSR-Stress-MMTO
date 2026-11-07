@@ -713,14 +713,20 @@ def test_materials_panel():
         lines = m.apply(w.project)
         assert lines[-1] == "Network settings set to match the trained network: hidden layer width 50", lines
         assert w.project.settings["vae"]["vae_hiddenDim"] == 50 and w.project.validate() == []
+        w.project.settings["vae"]["saveNet"] = os.path.join(d, "trained.nt")    # set by hand, in a script
+        m = materials_panel.MaterialsPanel(w, w.project)
+        m.set_database(own)
+        lines = m.apply(w.project)
+        assert "The VAE file set by hand (trained.nt) was for the database chosen before" in lines[-1], lines
+        assert not w.project.settings["vae"].get("saveNet") and not any("VAE file" in x for x in lines[:-1])
 
         os.makedirs(os.path.join(d, "materials"))                             # the project's own databases
         for name in ("steels", "alloys"):
             shutil.copy(own, os.path.join(d, "materials", f"{name}.xlsx"))
         m = materials_panel.MaterialsPanel(w, w.project)
         assert [(m.combo.itemText(i), m.combo.itemData(i)) for i in range(m.combo.count())] == \
-            [("alloys", "materials/alloys.xlsx"), ("steels", "materials/steels.xlsx"), ("trained", "trained.xlsx")]
-        assert m.combo.currentText() == "trained"
+            [("alloys", "materials/alloys.xlsx"), ("steels", "materials/steels.xlsx"), ("mine", "mine.xlsx")]
+        assert m.combo.currentText() == "mine"
         m.show()
         m.combo.showPopup()
         popup = m.combo.view().window()

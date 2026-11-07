@@ -523,10 +523,11 @@ class MaterialsPanel(QtWidgets.QDialog):
         q.settings["vae"] = {"use_pretrained_vae": project.settings["vae"].get("use_pretrained_vae", True)}
         q.complete_settings()
         matched = q.match_network()                                 # a trained network gives its own shape
-        before = {k: project.settings["vae"].get(k) for k in VAE_KEYS + ("saveNet",)}
+        before = {k: project.settings["vae"].get(k) for k in VAE_KEYS}
+        cleared = project.clear_hand_set_network()                  # it belonged to the database before
         project.settings["vae"] = q.settings["vae"]
         project.database = q.database
         changed = [f"{BY_KEY[k].label} {before[k]} -> {q.settings['vae'][k]}" for k in before
                    if not same(before[k], q.settings["vae"][k])]
         return [f"Database: {q.database}"] + ([f"VAE settings for it: {', '.join(changed)}"] if changed else []) + \
-            ([matched] if matched else [])
+            [line for line in (cleared, matched) if line]

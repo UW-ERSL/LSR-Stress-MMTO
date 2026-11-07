@@ -363,10 +363,21 @@ class Project:
 
     @database.setter
     def database(self, value):
+        cleared = value != self._database and self.clear_hand_set_network()
         self._database = value
-        said = self.match_network()
-        if said:
-            print(f"[{self.name}] {said}")
+        for said in (cleared, self.match_network()):
+            if said:
+                print(f"[{self.name}] {said}")
+
+    def clear_hand_set_network(self):
+        """A VAE file set by hand (settings.vae.saveNet) cleared, as it belongs to the database chosen before;
+        the network next to the database is then used. Returns the line saying so, or None when none was set."""
+        vae = self.settings.setdefault("vae", {})
+        if not vae.get("saveNet"):
+            return None
+        old = vae.pop("saveNet")
+        return (f"The VAE file set by hand ({os.path.basename(old)}) was for the database chosen before, so it no "
+                f"longer applies: the network next to the database is used.")
 
     def match_network(self):
         """The settings that give the network its shape (latentDim, vae_hiddenDim) set from the database's

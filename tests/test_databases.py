@@ -382,6 +382,29 @@ def test_a_trained_network_sets_its_own_shape(capsys):
         assert q.settings["vae"]["vae_hiddenDim"] == 300
 
 
+def test_a_hand_set_network_is_cleared_on_another_database(capsys):
+    """A VAE file set by hand (settings.vae.saveNet) belongs to the database it was set for. The checks refuse a
+    network of another number of columns, but not one trained on another database of as many columns, so
+    choosing another database clears it, and says so; the network next to the new database is then used.
+    Setting the same database again keeps it."""
+    from lsr_mmto.problem.project import Project
+    with tempfile.TemporaryDirectory() as d:
+        bm1 = os.path.join(SHIPPED, "BM1_3Mats_2Attr")
+        shutil.copy(bm1 + ".xlsx", os.path.join(d, "mine.xlsx"))
+        shutil.copy(bm1 + ".nt", os.path.join(d, "other.nt"))                 # trained on another database
+        p = Project.load(os.path.join(ROOT, "projects", "L-bracket.mmto"))
+        p.stl, p.base_dir = p.stl_path(), d
+        p.settings["vae"]["saveNet"] = os.path.join(d, "other.nt")
+        p.database = p.database                                               # the same one: kept
+        assert p.settings["vae"]["saveNet"] == os.path.join(d, "other.nt")
+        capsys.readouterr()
+        p.database = "mine.xlsx"
+        assert "saveNet" not in p.settings["vae"] and p.network_path() == os.path.join(d, "mine.nt")
+        assert capsys.readouterr().out.startswith("[L-bracket] The VAE file set by hand (other.nt) was for the "
+                                                  "database chosen before, so it no longer applies: the network "
+                                                  "next to the database is used.")
+
+
 def test_read_once_per_file_version():
     """A database is read once for each version of its file: looked at again it is not read again, a
     copy is handed back each time, and once the file is saved again it is read again."""
