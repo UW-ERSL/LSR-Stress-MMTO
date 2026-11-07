@@ -12,13 +12,17 @@ import os
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-from .panel_widgets import GREY, Info, ok_cancel
+from .panel_widgets import GREY, Info, fit_columns, ok_cancel
 
 # the properties a new database starts with; Add property offers every property of the registry
 # (databases.ATTRIBUTES)
 STARTING = ["Density", "Youngs_Modulus", "Poissons_Ratio"]
-FIXED = ["Name", "Shown as", "Colour"]                      # the columns before the properties
+FIXED = ["Material", "Shown as", "Colour"]                  # the columns before the properties
+FIXED_WIDTHS = [160, 100, 80]                               # their least widths
 BAD = QtGui.QColor("#ffd6d6")
+HEADER_SHADE = "#f3f5f8"                                    # the headers' colour (app_style.qss), the units row's
+NO_UNIT = "no unit"                                         # the units row of a property without units
+UNIT_MARGIN = 3                                             # around a unit's drop-down in the units row
 HELP = ("One row per material. Shown as is optional: a shorter name for legends and plots (the name is "
         "shown when it is empty). Click a colour to change it.\n\nThe row under the headers holds each "
         "property's unit. Add property opens the list of properties to add, a column each; Remove property removes "
@@ -32,10 +36,89 @@ def shown(key):
     return SHOWN.get(key, key)
 
 
+class CentredCombo(QtWidgets.QComboBox):
+    """A drop-down whose chosen text is drawn centred in the whole box."""
+
+    def paintEvent(self, event):
+        painter = QtWidgets.QStylePainter(self)
+        option = QtWidgets.QStyleOptionComboBox()
+        self.initStyleOption(option)
+        text, option.currentText = option.currentText, ""
+        painter.drawComplexControl(QtWidgets.QStyle.CC_ComboBox, option)
+        painter.drawText(self.rect(), QtCore.Qt.AlignCenter, text)
+
+
+class FrozenFirstColumn(QtWidgets.QTableView):
+    """The table's first column kept in place over its left edge while the table scrolls sideways, as Excel's
+    freeze panes: a second view of the same cells (the same model and selection), showing only that column.
+    A paste or Delete in it goes to the table."""
+
+    def __init__(self, table):
+        super().__init__(table)
+        self.table = table
+        self.setObjectName("frozenColumn")
+        self.setModel(table.model())
+        self.setSelectionModel(table.selectionModel())
+        self.setEditTriggers(table.editTriggers())
+        self.verticalHeader().hide()
+        self.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Fixed)
+        for bar in (self.setHorizontalScrollBarPolicy, self.setVerticalScrollBarPolicy):
+            bar(QtCore.Qt.ScrollBarAlwaysOff)
+        self.setVerticalScrollMode(table.verticalScrollMode())
+        self.setStyleSheet("QTableView#frozenColumn { border: none; }")
+        table.viewport().stackUnder(self)
+        table.verticalScrollBar().valueChanged.connect(self.verticalScrollBar().setValue)
+        self.verticalScrollBar().valueChanged.connect(table.verticalScrollBar().setValue)
+        table.horizontalHeader().sectionResized.connect(lambda c, _, new: self._width(c, new))
+        table.verticalHeader().sectionResized.connect(lambda r, _, new: self.setRowHeight(r, new))
+        for signal in (table.model().columnsInserted, table.model().columnsRemoved, table.model().rowsInserted):
+            signal.connect(lambda *_: self.follow())
+        self.follow()
+
+    def _width(self, c, width):
+        if c == 0:
+            self.setColumnWidth(0, width)
+            self.place()
+
+    def follow(self):
+        """Only the first column, as wide and as tall as the table's, over its left edge."""
+        for c in range(self.model().columnCount()):
+            self.setColumnHidden(c, c != 0)
+        self.setColumnWidth(0, self.table.columnWidth(0))
+        for r in range(self.model().rowCount()):
+            self.setRowHeight(r, self.table.rowHeight(r))
+        self.horizontalHeader().setFixedHeight(self.table.horizontalHeader().height())
+        self.place()
+
+    def place(self):
+        t = self.table
+        self.setGeometry(t.verticalHeader().width() + t.frameWidth(), t.frameWidth(), t.columnWidth(0),
+                         t.viewport().height() + t.horizontalHeader().height())
+
+    def keyPressEvent(self, event):
+        if event.matches(QtGui.QKeySequence.Paste) or event.key() in (QtCore.Qt.Key_Delete, QtCore.Qt.Key_Backspace):
+            self.table.keyPressEvent(event)
+            return
+        super().keyPressEvent(event)
+
+
 class _Table(QtWidgets.QTableWidget):
     """A table that takes a block pasted from Excel (tab between cells, a new line between rows), adding
-    material rows as needed."""
+    material rows as needed. Its first column (Material) stays in place when it scrolls sideways."""
     pasted = QtCore.pyqtSignal()
+
+    def __init__(self):
+        super().__init__()
+        self.frozen = FrozenFirstColumn(self)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.frozen.follow()
+
+    def updateGeometries(self):
+        super().updateGeometries()
+        if hasattr(self, "frozen"):
+            self.frozen.place()
 
     def keyPressEvent(self, event):
         if event.matches(QtGui.QKeySequence.Paste):
@@ -105,6 +188,8 @@ class AddPropertiesDialog(QtWidgets.QDialog):
                 item.setFlags(QtCore.Qt.ItemIsUserCheckable | (QtCore.Qt.NoItemFlags if there else
                                                                 QtCore.Qt.ItemIsEnabled))
                 item.setCheckState(0, QtCore.Qt.Checked if there else QtCore.Qt.Unchecked)
+                if there:
+                    item.setForeground(0, QtGui.QColor("#9aa1ab"))                      # greyed
                 self.items[key] = item
         self.tree.expandAll()
         self.tree.itemChanged.connect(lambda *_: self._count())
@@ -179,7 +264,7 @@ class DatabaseEditor(QtWidgets.QDialog):
         layout = QtWidgets.QVBoxLayout(self)
 
         top = QtWidgets.QHBoxLayout()
-        top.addWidget(QtWidgets.QLabel("Name"))
+        top.addWidget(QtWidgets.QLabel("Database name"))
         self.name = QtWidgets.QLineEdit()
         top.addWidget(self.name, stretch=1)
         self.where = QtWidgets.QLabel()
@@ -197,23 +282,21 @@ class DatabaseEditor(QtWidgets.QDialog):
         self.table.parent_editor = self
         self.table.verticalHeader().setVisible(False)
         self.table.cellClicked.connect(self._clicked)
-        self.table.itemChanged.connect(lambda _: self.check())
+        self.table.itemChanged.connect(self._edited)
         self.table.pasted.connect(self.check)
+        self.touched = set()                                        # the rows edited: only they are marked
+        self.unit_boxes = {}                                        # property -> its unit's drop-down
         layout.addWidget(self.table, stretch=1)
 
-        rows = QtWidgets.QHBoxLayout()
-        for text, slot in (("Add material", self.add_material), ("Remove material", self.remove_material)):
-            button = QtWidgets.QPushButton(text)
-            button.clicked.connect(slot)
-            rows.addWidget(button)
-        rows.addSpacing(24)
+        rows = QtWidgets.QHBoxLayout()                              # four of one width, the table's width
         self.add_property_button = QtWidgets.QPushButton("Add property")
-        self.add_property_button.clicked.connect(lambda: self.add_properties())
-        rows.addWidget(self.add_property_button)
-        remove = QtWidgets.QPushButton("Remove property")
-        remove.clicked.connect(lambda: self.remove_property())
-        rows.addWidget(remove)
-        rows.addStretch()
+        self.row_buttons = [QtWidgets.QPushButton(text) for text in ("Add material", "Remove material")] + \
+            [self.add_property_button, QtWidgets.QPushButton("Remove property")]
+        for button, slot in zip(self.row_buttons, (self.add_material, self.remove_material, self.add_properties,
+                                                   self.remove_property)):
+            button.clicked.connect(lambda _=False, s=slot: s())
+            button.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Fixed)
+            rows.addWidget(button, stretch=1)
         layout.addLayout(rows)
         self.problems_text = QtWidgets.QLabel()
         self.problems_text.setWordWrap(True)
@@ -329,13 +412,12 @@ class DatabaseEditor(QtWidgets.QDialog):
 
     def _columns(self, *_, order=None, units=None):
         """The property columns, in order (by default as they are); a column that stays keeps its numbers
-        and unit."""
+        and unit. Row 0 holds the units, in the headers' band: a drop-down for each property with units,
+        "no unit" for one without."""
         from lsr_mmto.materials.databases import ATTRIBUTES
         keep = {}
         for j, key in enumerate(self.attributes):
-            combo = self.table.cellWidget(0, 3 + j)
-            keep[key] = (combo.currentText() if combo else None,
-                         [self.table.item(r, 3 + j).text() for r in range(1, self.table.rowCount())])
+            keep[key] = (self.unit(key), [self.table.item(r, 3 + j).text() for r in range(1, self.table.rowCount())])
         wanted = list(order) if order is not None else list(self.attributes)
         was = self.table.blockSignals(True)
         self.table.setColumnCount(len(FIXED) + len(wanted))
@@ -343,27 +425,59 @@ class DatabaseEditor(QtWidgets.QDialog):
         if self.table.rowCount() == 0:
             self.table.setRowCount(1)
         for c in range(len(FIXED)):
-            item = QtWidgets.QTableWidgetItem("Units" if c == 0 else "")
+            item = QtWidgets.QTableWidgetItem("")
             item.setFlags(QtCore.Qt.ItemIsEnabled)
-            item.setForeground(QtGui.QColor("#777777"))
+            item.setBackground(QtGui.QColor(HEADER_SHADE))
             self.table.setItem(0, c, item)
+        self.unit_boxes = {}
         for j, key in enumerate(wanted):
-            combo = QtWidgets.QComboBox()
-            combo.addItems(list(ATTRIBUTES[key].units))
+            a = ATTRIBUTES[key]
             unit = (units[j] if units else None) or keep.get(key, (None,))[0] or self._default_unit(key)
-            if combo.findText(unit) < 0:
-                combo.addItem(unit)
-            combo.setCurrentText(unit)
-            combo.currentTextChanged.connect(lambda _: self.check())
-            self.table.setCellWidget(0, 3 + j, combo)
+            item = QtWidgets.QTableWidgetItem("")
+            item.setFlags(QtCore.Qt.ItemIsEnabled)
+            item.setBackground(QtGui.QColor(HEADER_SHADE))
+            self.table.setItem(0, 3 + j, item)
+            self.table.setCellWidget(0, 3 + j, self._unit_cell(key, a, unit))
             old = keep.get(key, (None, []))[1]
             for r in range(1, self.table.rowCount()):
                 self.table.setItem(r, 3 + j, QtWidgets.QTableWidgetItem(old[r - 1] if r - 1 < len(old) else ""))
         self.attributes = list(wanted)
         self.table.blockSignals(was)
-        for c, width in enumerate([180, 90, 60] + [145] * len(wanted)):
-            self.table.setColumnWidth(c, width)
+        self.table.setRowHeight(0, self.table.verticalHeader().defaultSectionSize())   # as tall as a material row
+        fit_columns(self.table, least=FIXED_WIDTHS)
+        self.table.frozen.follow()
         self.check()
+
+    def _unit_cell(self, key, a, unit):
+        """Row 0's cell of a property: its unit's drop-down, slim, with an even margin on the headers' colour;
+        "no unit" in grey for a property without units."""
+        holder = QtWidgets.QWidget()
+        holder.setStyleSheet(f"background: {HEADER_SHADE};")
+        box = QtWidgets.QHBoxLayout(holder)
+        box.setContentsMargins(3 * UNIT_MARGIN, UNIT_MARGIN, 3 * UNIT_MARGIN, UNIT_MARGIN)
+        if a.measures == "ratio":
+            label = QtWidgets.QLabel(NO_UNIT)
+            label.setAlignment(QtCore.Qt.AlignCenter)
+            label.setStyleSheet("color: #6b7280;")
+            box.addWidget(label)
+            return holder
+        combo = CentredCombo()
+        combo.addItems(list(a.units))
+        if combo.findText(unit) < 0:
+            combo.addItem(unit)
+        combo.setCurrentText(unit)
+        combo.setStyleSheet("QComboBox { background: #ffffff; padding: 0px 6px; min-height: 0px; }")
+        combo.setFixedHeight(self.table.verticalHeader().defaultSectionSize() - 2 * UNIT_MARGIN)
+        combo.currentTextChanged.connect(lambda _: self.check())
+        box.addWidget(combo)
+        self.unit_boxes[key] = combo
+        return holder
+
+    def unit(self, key):
+        """The unit chosen for a property in the units row; its one unit for a property without units."""
+        from lsr_mmto.materials.databases import ATTRIBUTES
+        box = self.unit_boxes.get(key)
+        return box.currentText() if box is not None else (ATTRIBUTES[key].units[0] if key in ATTRIBUTES else None)
 
     def _new_row(self, colour=None):
         from lsr_mmto.materials.databases import default_colours
@@ -410,7 +524,7 @@ class DatabaseEditor(QtWidgets.QDialog):
         """(names, labels, colours, units, rows of text) as typed."""
         rows = range(1, self.table.rowCount())
         cell = lambda r, c: self.table.item(r, c).text().strip() if self.table.item(r, c) else ""  # noqa: E731
-        units = [self.table.cellWidget(0, 3 + j).currentText() for j in range(len(self.attributes))]
+        units = [self.unit(key) for key in self.attributes]
         return ([cell(r, 0) for r in rows], [cell(r, 1) for r in rows], [self.colour(r) for r in rows], units,
                 [[cell(r, 3 + j) for j in range(len(self.attributes))] for r in rows])
 
@@ -420,20 +534,34 @@ class DatabaseEditor(QtWidgets.QDialog):
         return os.path.join(self.folder, self.name.text().strip() + ".xlsx")
 
     def _where(self):
-        self.where.setText(f"Saved in {self.folder}" if self.path is None or self.copy else
-                           f"{self.path}")
+        """The grey words beside the name: where Save writes, the whole path in its tip."""
+        from lsr_mmto.problem.project_folder import MATERIALS
+        folder = os.path.dirname(self.target())
+        self.where.setText("Saved in the project's materials folder" if os.path.basename(folder) == MATERIALS
+                           else f"Saved in {folder}")
+        self.where.setToolTip(self.target())
+
+    def _edited(self, item):
+        """A cell typed in: its row is marked from now on when something in it is wrong."""
+        self.touched.add(item.row())
+        self.check()
 
     def check(self):
-        """Every cell checked; a bad one is shaded with the reason on it. Save only with none. The problems."""
+        """Every cell checked; Save only with none. The problems. A bad cell is shaded, with the reason on it,
+        and its problem said under the table, only in a row that was edited or holds something (a blank new
+        form shows no red)."""
         from lsr_mmto.materials.databases import ATTRIBUTES
         if self.table.columnCount() < len(FIXED):
             return ["no columns"]
         names, labels, colours, units, rows = self.contents()
-        out = []
+        out, said = [], []                                          # every problem; those said under the table
         was = self.table.blockSignals(True)
         for r, name in enumerate(names, start=1):
+            seen = r in self.touched or bool(name or labels[r - 1] or any(rows[r - 1]))
             bad = not name or names.count(name) > 1
-            self._mark(r, 0, bad, "A name, different from the others" if bad else "")
+            self._mark(r, 0, bad and seen, "A name, different from the others" if bad else "")
+            if bad and seen and not said:
+                said.append("Every material needs a name of its own")
             for j, key in enumerate(self.attributes):
                 a, text = ATTRIBUTES[key], rows[r - 1][j]
                 try:
@@ -441,22 +569,27 @@ class DatabaseEditor(QtWidgets.QDialog):
                     reason = "" if a.in_range(value) else f"{shown(key)}: {a.range_text()}"
                 except ValueError:
                     reason = f"{shown(key)}: a number" if text else f"{shown(key)}: empty"
-                self._mark(r, 3 + j, bool(reason), reason)
+                self._mark(r, 3 + j, bool(reason) and seen, reason)
                 if reason:
                     out.append(f"{name or 'row ' + str(r)}: {reason}")
+                    if seen:
+                        said.append(out[-1])
         self.table.blockSignals(was)
         if any(not n or names.count(n) > 1 for n in names):
             out.insert(0, "Every material needs a name of its own")
+        whole = []                                                  # about the whole database: always said
         if len(names) < 2:
-            out.append("At least two materials")
+            whole.append("At least two materials")
         if not self.attributes:
-            out.append("Add at least one property")
+            whole.append("Add at least one property")
         file_name = self.name.text().strip()
         if (self.path is None or self.copy) and (not file_name or any(ch in file_name for ch in '\\/:*?"<>|')):
-            out.append("Name: letters, digits, spaces, - and _")
+            whole.append("Name: letters, digits, spaces, - and _")
         elif (self.path is None or self.copy) and os.path.exists(self.target()):
-            out.append(f"{os.path.basename(self.target())} is already there; choose another name")
-        self.problems_text.setText(out[0] + (f" (and {len(out) - 1} more)" if len(out) > 1 else "") if out else "")
+            whole.append(f"{os.path.basename(self.target())} is already there; choose another name")
+        out += whole
+        said += whole
+        self.problems_text.setText(said[0] + (f" (and {len(said) - 1} more)" if len(said) > 1 else "") if said else "")
         self.save_button.setEnabled(not out)
         return out
 

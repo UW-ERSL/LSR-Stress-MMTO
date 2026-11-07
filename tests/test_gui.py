@@ -843,11 +843,12 @@ def test_database_editor():
         seen = {}
 
         def new(e):
-            assert e.where.text() == f"Saved in {folder}"
+            assert e.where.text() == "Saved in the project's materials folder"
+            assert e.where.toolTip() == os.path.join(folder, "my_materials.xlsx")
             assert not [b for b in e.findChildren(QtWidgets.QPushButton) if "Browse" in b.text()]
             assert [e.table.horizontalHeaderItem(c).text() for c in range(e.table.columnCount())] == \
-                ["Name", "Shown as", "Colour", "Density", "Young's modulus", "Poisson's ratio"]
-            assert [e.table.cellWidget(0, c).currentText() for c in (3, 4, 5)] == ["t/mm^3", "MPa", "-"]
+                ["Material", "Shown as", "Colour", "Density", "Young's modulus", "Poisson's ratio"]
+            assert e.contents()[3] == ["t/mm^3", "MPa", "-"]
             assert all(e.table.item(r, 0).text() == "" for r in (1, 2, 3))      # no placeholder names
             typed(e, [["Steel", "", "", "7.85e-9", "200000", "0.29"], ["Copper", "Cu", "", "8.96e-9", "117000", "0.6"],
                       ["Aluminum", "", "", "2.7e-9", "68900", "0.33"]])
@@ -864,7 +865,7 @@ def test_database_editor():
         e = DE.DatabaseEditor(w, folder, unit_system=w.project.units)          # Add / Remove property
         e.add_property("Cost")
         assert e.attributes == ["Density", "Youngs_Modulus", "Poissons_Ratio", "Cost"]
-        assert e.table.cellWidget(0, 6).currentText() == "USD/t"
+        assert e.unit("Cost") == "USD/t"
         e.table.item(1, 6).setText("1000")
         with answers(Box.No):
             assert not e.remove_property("Cost")                              # it holds a number: asked
@@ -889,7 +890,7 @@ def test_database_editor():
         assert os.path.isfile(network) and material_display(path)[0][1] == "#ff8800"
 
         def edit(e):
-            assert e.name.isReadOnly() and e.where.text() == path
+            assert e.name.isReadOnly() and e.where.toolTip() == path
             assert e.table.item(2, 1).text() == "Cu" and e.table.item(1, 1).text() == ""
             e.table.item(1, 4).setText("210000")
             return 1
@@ -905,6 +906,59 @@ def test_database_editor():
         assert copy == os.path.join(folder, "BM1_3Mats_2Attr copy.xlsx") and open(shipped, "rb").read() == before
         assert m.project.database == "materials/BM1_3Mats_2Attr copy.xlsx"
         assert material_display(copy)[1] == ["Red", "Mat2_Blue", "Mate3_Green"]
+
+
+def test_database_editor_look():
+    """The New database editor: the units row is part of the headers' band (no "Units" text, as tall as a
+    material row, each unit's drop-down inside it with room for its text, "no unit" for Poisson's ratio); a
+    blank form shows no red, a row typed in does; each column as wide as its title up to 200 px, a longer
+    title cut short with the whole of it as the header's tip; the Material column stays in place when the
+    table scrolls sideways; the four buttons under the table share its width equally."""
+    from gui import database_editor as DE
+    from gui.panel_widgets import COLUMN_MOST
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        e = DE.DatabaseEditor(w, os.path.join(d, "materials"), unit_system=w.project.units, project=w.project)
+        e.resize(900, 520)
+        e.show()
+        QtWidgets.QApplication.processEvents()
+        t = e.table
+        assert all(t.item(0, c).text() == "" for c in range(3)) and t.rowHeight(0) == t.rowHeight(1)
+        assert t.item(0, 0).background().color().name() == DE.HEADER_SHADE
+        assert isinstance(t.cellWidget(0, 5).findChild(QtWidgets.QLabel), QtWidgets.QLabel)
+        assert t.cellWidget(0, 5).findChild(QtWidgets.QLabel).text() == "no unit"
+        density = e.unit_boxes["Density"]
+        assert isinstance(density, DE.CentredCombo) and density.height() <= t.rowHeight(0) - 2 * DE.UNIT_MARGIN
+        assert density.height() >= density.fontMetrics().height() + 2                 # the g of kg/m^3 fits
+        assert [t.item(r, c).background().color() for r in (1, 2, 3) for c in (0, 3)] != [DE.BAD] * 6
+        assert all(t.item(r, c).background() == QtGui.QBrush() for r in (1, 2, 3) for c in range(t.columnCount())
+                   if c != 2) and e.problems_text.text() == "" and not e.save_button.isEnabled()
+        t.item(1, 3).setText("7.8e-9")                                       # a row typed in: its gaps are red
+        assert t.item(1, 0).background().color() == DE.BAD and t.item(1, 4).background().color() == DE.BAD
+        assert t.item(2, 0).background() == QtGui.QBrush() and e.problems_text.text().startswith("Every material")
+
+        e.add_property("Cost", "Yield_Strength")
+        long = "A property with a very long name indeed"
+        t.horizontalHeaderItem(7).setText(long)
+        from gui.panel_widgets import fit_columns
+        fit_columns(t, least=DE.FIXED_WIDTHS)
+        assert t.columnWidth(7) == COLUMN_MOST and t.horizontalHeaderItem(7).toolTip() == long
+        assert t.horizontalHeaderItem(3).toolTip() == "" and t.columnWidth(3) < COLUMN_MOST
+        assert t.columnWidth(3) >= density.sizeHint().width()
+        e.resize(520, 520)
+        QtWidgets.QApplication.processEvents()
+        t.horizontalScrollBar().setValue(t.horizontalScrollBar().maximum())
+        QtWidgets.QApplication.processEvents()
+        assert t.horizontalScrollBar().maximum() > 0 and t.columnViewportPosition(0) < 0       # scrolled away
+        frozen = t.frozen
+        assert frozen.isVisible() and frozen.x() <= t.frameWidth() + 1 and frozen.columnWidth(0) == t.columnWidth(0)
+        assert not frozen.isColumnHidden(0) and all(frozen.isColumnHidden(c) for c in range(1, t.columnCount()))
+        assert frozen.model() is t.model() and frozen.rowHeight(0) == t.rowHeight(0)
+        widths = [b.width() for b in e.row_buttons]
+        assert max(widths) - min(widths) <= 1, widths                        # equal, to the pixel left over
+        left, right = e.row_buttons[0].geometry().left(), e.row_buttons[-1].geometry().right()
+        assert left == t.geometry().left() and right == t.geometry().right()
+        e.close()
 
 
 def test_add_properties_window():
@@ -972,7 +1026,7 @@ def test_import_database():
 
         def review(e):
             seen["heads"] = [e.table.horizontalHeaderItem(c).text() for c in range(e.table.columnCount())]
-            seen["units"] = [e.table.cellWidget(0, c).currentText() for c in (3, 4)]
+            seen["units"] = e.contents()[3]
             seen["problems"] = e.check()
             assert not e.save_button.isEnabled()
             e.table.item(3, 4).setText("193")                                # the value that was not a number
@@ -985,7 +1039,7 @@ def test_import_database():
         finally:
             DE.DatabaseEditor.exec_, QtWidgets.QMessageBox.information = real_exec, real_info
         assert len(said) == 1 and "Not imported, as LSR MMTO has no property of that name: Price, E0." in said[0]
-        assert seen["heads"] == ["Name", "Shown as", "Colour", "Density", "Young's modulus"]
+        assert seen["heads"] == ["Material", "Shown as", "Colour", "Density", "Young's modulus"]
         assert seen["units"] == ["kg/m^3", "GPa"] and seen["problems"] == ["Steel 304: Young's modulus: a number"]
         assert path == os.path.join(d, "P", "materials", "alloys.xlsx")
         assert m.project.database == "materials/alloys.xlsx" and check_database(path)[0] == []
@@ -1046,7 +1100,7 @@ def test_edit_a_database_with_an_unknown_column():
             assert m.edit_database() == path
         finally:
             DE.DatabaseEditor.exec_ = real
-        assert seen["heads"] == ["Name", "Shown as", "Colour", "Density", "Young's modulus"]
+        assert seen["heads"] == ["Material", "Shown as", "Colour", "Density", "Young's modulus"]
         assert seen["note"] == ("Left out, as LSR MMTO has no property of that name: E0. Save writes the "
                                 "database without them.")
         assert check_database(path)[0] == [] and database_table(path)[1] == ["Density", "Youngs_Modulus"]

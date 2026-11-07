@@ -180,12 +180,12 @@ A small error (well under 1 %) means the run works with properties very close to
 
 The editor shows the database as a table:
 
-- **Name**: the database's name, which is also its file name.
-- One row per material: its name, **Shown as** (an optional shorter name for legends and plots) and **Colour** (click it to choose another).
-- One column per property. The row under the headers holds each property's unit.
+- **Database name**: the database's name, which is also its file name. The grey words beside it say where it is saved (rest the mouse on them for the whole path).
+- One row per material: its name under **Material**, **Shown as** (an optional shorter name for legends and plots) and **Colour** (click it to choose another). The Material column stays in place when the table scrolls sideways.
+- One column per property, as wide as its title (a long title is cut short with ...; rest the mouse on it for the whole name). The row under the titles holds each property's unit; a property without a unit says *no unit*.
 - **Add material** and **Remove material** add and remove rows. **Add property** opens the **Add properties** window: every property below with a tick box, those this project needs first (the ones its physics, its objective and its constraints read), then the others. Those already in the table are ticked and greyed. Tick as many as you want (the search box finds one by any of its names); **Add 2 properties** adds a column for each. **Remove property** removes the column you are in.
 
-You can paste a block copied from Excel into the table. Problems are listed in red under the table as you type (a missing value, a value outside what the property allows, two materials with the same name). **Save** keeps the database in the project's folder and the project then uses it.
+You can paste a block copied from Excel into the table. Problems show in red once you have typed in a row, and are listed under the table (a missing value, a value outside what the property allows, two materials with the same name); a new, empty form shows none. **Save** keeps the database in the project's folder and the project then uses it.
 
 If you change the numbers of a database that already has a trained network, the network no longer fits it: LSR MMTO sets the old network aside, and the next run trains a new one.
 

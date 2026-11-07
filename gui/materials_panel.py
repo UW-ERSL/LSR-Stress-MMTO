@@ -16,7 +16,7 @@ from PyQt5 import QtCore, QtWidgets
 
 from lsr_mmto.problem.settings import BY_KEY, VAE_PARAMS as VAE_KEYS
 
-from .panel_widgets import Info, database_choice, ok_cancel, same, swatch
+from .panel_widgets import Info, database_choice, fit_columns, ok_cancel, same, swatch
 
 
 CONVERT_HELP = ("The database is written again as the project's own copy, in its materials folder, with these "
@@ -505,7 +505,7 @@ class MaterialsPanel(QtWidgets.QDialog):
                 self.table.setItem(i, 2 + j, cell)
         self.table.verticalHeader().setVisible(False)
         self.table.setColumnHidden(1, list(labels) == list(names))      # Material: only when the labels differ
-        self.table.resizeColumnsToContents()
+        fit_columns(self.table)
 
     def _network_line(self):
         """How closely the trained network gives back the database's materials, in one line (every value

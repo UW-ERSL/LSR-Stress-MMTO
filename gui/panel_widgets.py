@@ -177,6 +177,32 @@ class Info(QtWidgets.QToolButton):
         return super().event(event)
 
 
+COLUMN_MOST = 200              # a table's column fits its title and contents up to this width
+
+
+def fit_columns(table, most=COLUMN_MOST, least=()):
+    """Each column of a table as wide as its title, its cells and the widgets in them need, up to most
+    pixels (and at least least[c] for the first columns); a title cut short ends in ... and shows in full
+    when the mouse rests on it."""
+    header = table.horizontalHeader()
+    bold = QtGui.QFont(header.font())
+    bold.setBold(True)                                          # the headers' titles are bold (app_style.qss);
+    header.setFont(bold)                                        # so a title cut short is cut at the right place
+    header.setTextElideMode(QtCore.Qt.ElideRight)
+    metrics = QtGui.QFontMetrics(bold)
+    table.resizeColumnsToContents()
+    for c in range(table.columnCount()):
+        item = table.horizontalHeaderItem(c)
+        title = item.text() if item is not None else ""
+        widgets = [table.cellWidget(r, c) for r in range(table.rowCount())]
+        want = max([metrics.horizontalAdvance(title) + 28, table.columnWidth(c)] +
+                   [w.sizeHint().width() for w in widgets if w is not None] +
+                   [least[c] if c < len(least) else 0])
+        table.setColumnWidth(c, min(want, most))
+        if item is not None:
+            item.setToolTip(title if want > most else "")
+
+
 def with_info(widget, text):
     """widget with an (i) beside it, as one widget."""
     box = QtWidgets.QWidget()
