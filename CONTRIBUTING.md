@@ -46,9 +46,28 @@ Run the checks in a Miniforge Prompt, from inside this folder, with the environm
     conda activate lsr-stress-mmto-ad
     python -m pytest tests -q
 
-That is every test, about six minutes. While working, run only the file of the part you changed,
-for example `python -m pytest tests/test_solid_part_analysis.py -q`, and every test once before
-committing. To see which lines of the code no test runs:
+That is every test, about six minutes. While working, run only the files of the part you changed:
+
+| What you changed | The tests that cover it |
+|---|---|
+| `lsr_mmto/problem/` (the project, selections, mesh, supports and loads, settings, the project folder) | `test_project.py`, `test_selections.py`, `test_mesh.py`, `test_project_folder.py` |
+| `lsr_mmto/materials/` (databases, the material network) | `test_databases.py` |
+| `lsr_mmto/formulation/` (quantities, the formula text) | `test_extending.py`, `test_project.py`, `test_ad_quantities.py` |
+| `lsr_mmto/physics/` | `test_template_physics.py`, `test_final_check.py`, `test_solid_part_analysis.py` |
+| `lsr_mmto/optimize/`, `lsr_mmto/design/`, `lsr_mmto/elements/` (the run itself) | `test_run_project.py`, `test_gradcheck.py`, `test_regression.py`, `test_solid_part_analysis.py` |
+| `lsr_mmto/results/` (reading runs back, tables, figures, STL export) | `test_stl_export.py`, `test_project_folder.py`, `test_solid_part_analysis.py` |
+| `gui/` | `test_gui.py`, `test_gui_look.py`, `test_user_guide.py` |
+| a docstring, or anything under `docs/` | `test_reference.py`, `test_user_guide.py`, `test_code_map.py` |
+| `setup_environment.py`, `make_shortcut.py`, `uninstall_lsr_mmto.py` | `test_launcher.py` |
+| `Python_walkthrough.ipynb` | `test_python_walkthrough.py` |
+
+For example `python -m pytest tests/test_solid_part_analysis.py -q`. The slow gradient checks can be
+left out while working, and the tests that failed run again on their own:
+
+    python -m pytest tests -q -m "not slow"
+    python -m pytest tests -q --lf
+
+Run every test once before committing. To see which lines of the code no test runs:
 
     python -m pytest tests -q --cov=lsr_mmto --cov-report=term-missing
 
