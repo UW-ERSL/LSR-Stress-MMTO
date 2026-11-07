@@ -50,7 +50,10 @@ as torch from the model's state; autograd gives the gradient.
   below 1 % of the part solid in the lightest material.
 - `start_bound` (optional): the limit a new constraint row in the Formulation panel starts at, a
   number or a function of the project (the fractions give 0.4, the failure factor 1, Mass 0.4 times
-  the part solid in the lightest material). Without it a new row starts at 0.
+  the part solid in the lightest material). Without it a new row starts at 0. `start_note` says in
+  plain words how it is worked out, for the row's (i) and the limit's tip; `{reference}` in it is
+  filled with `start_reference(project)` in the quantity's unit (Mass: "40% of the mass of the whole
+  part made solid in its lightest material ({reference})").
 - A project names it by its name; the objective and the constraints are kept by that name. A
   quantity of one physics is refused by the project's check in a project of another physics.
 - Add it to `QUANTITIES` in `tests/test_ad_quantities.py`, which checks the gradient against

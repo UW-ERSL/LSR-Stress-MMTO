@@ -41,7 +41,8 @@ QUANTITIES = [
          fn=_failure_factor_pnorm, doc="mean p-norm of von Mises / yield strength, per element",
          shown="Failure factor (p-norm)",
          help="One value close to the highest stress / yield strength in the part. Above 1 means some element "
-              "yields.", unit="no units", scales_with={"Yield_Strength": -1}, start_bound=1.0),
+              "yields.", unit="no units", scales_with={"Yield_Strength": -1}, start_bound=1.0,
+         start_note="the highest stress allowed equals the yield strength"),
 ]
 
 

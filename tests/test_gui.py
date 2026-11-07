@@ -653,6 +653,7 @@ def test_a_new_constraint_row_starts_at_its_quantity_limit():
         w = opened("U-bracket", d)
         _, attributes, _, values = database_table(w.project.database_paths()[0])
         lightest = values[:, attributes.index("Density")].min() * part_volume(w.project.stl_path())
+        w.project.units = "MKS"                                               # kg, for the words on the limit
         f = formulation_panel.FormulationPanel(w, w.project)
         before = f.rows[0]["widgets"]["bound"].value()
         row = f.add_row(None)["widgets"]
@@ -663,6 +664,19 @@ def test_a_new_constraint_row_starts_at_its_quantity_limit():
             assert abs(row["bound"].value() - start) <= 1e-12 * max(start, 1), (shown, row["bound"].value(), start)
         row["quantity"].setCurrentText("Mass")
         assert w.project.formulation["constraints"][0]["expression"] == "Mass()"
+        start = ("Starting limit 0.0035 kg: 40% of the mass of the whole part made solid in its lightest material "
+                 "(0.00875 kg). Type your own limit to change it.")
+        assert row["bound"].toolTip() == start                                 # where the limit comes from
+        assert row["info"].toolTip().endswith("\n\n" + start)
+        assert row["info"].toolTip().startswith(f.quantities["Mass"].help)
+        row["quantity"].setCurrentText("Volume fraction")
+        assert row["bound"].toolTip() == ("Starting limit 0.4: 40% of the design space filled. Type your own limit "
+                                          "to change it.")
+        row["quantity"].setCurrentText("Compliance")                           # none declared: no words
+        assert row["bound"].toolTip() == "" and row["info"].toolTip() == f.quantities["Compliance"].help
+        row["quantity"].setCurrentText("Mass")
+        row["bound"].textEdited.emit("0.002")
+        assert row["bound"].toolTip() == "" and "Starting limit" not in row["info"].toolTip()
         row["bound"].setText("0.002")                                          # typed: kept from now on
         row["quantity"].setCurrentText("Volume fraction")
         assert row["bound"].value() == 0.002

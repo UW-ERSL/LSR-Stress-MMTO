@@ -174,6 +174,7 @@ class FormulationPanel(QtWidgets.QDialog):
             except ValueError:
                 pass
         widgets["quantity"].currentIndexChanged.connect(lambda _=None, e=entry: self._update_row(e))
+        widgets["bound"].textEdited.connect(lambda _=None, e=entry: self._own_limit(e))
         widgets["remove"].clicked.connect(lambda _=False, e=entry: self.remove_row(e))
         self.rows.append(entry)
         self.rows_box.addLayout(row)
@@ -206,12 +207,24 @@ class FormulationPanel(QtWidgets.QDialog):
         w["info"].setVisible(bool(name))
         w["info"].setToolTip(self.quantities[name].help if name in self.quantities else "")
         if not entry["original"] and name in self.quantities and not w["bound"].edited():
-            w["bound"].set_value(self.quantities[name].first_bound(self.project) or 0.0)   # a new row's limit
+            q = self.quantities[name]
+            w["bound"].set_value(q.first_bound(self.project) or 0.0)   # a new row's limit, and where it comes from
+            start = q.start_text(self.project)
+            w["bound"].setToolTip(start or "")
+            if start:
+                w["info"].setToolTip(f"{q.help}\n\n{start}")
         unit = bound_unit(name, self.units) if name else ""
         w["unit"].setText("" if unit in ("fraction of the design domain", "no units") else unit)
         w["why"].setText(self.reason(name) or "" if name else "")
         if hasattr(self, "tau_box"):
             self._show_tau()
+
+    def _own_limit(self, entry):
+        """A limit typed in: the words on where the starting limit came from go."""
+        w = entry["widgets"]
+        name = w["quantity"].currentData()
+        w["bound"].setToolTip("")
+        w["info"].setToolTip(self.quantities[name].help if name in self.quantities else "")
 
     def remove_row(self, entry):
         self.rows.remove(entry)
