@@ -5,41 +5,42 @@
 # autodiff branch. A superset: this covers both this repository and PyTO-AD,
 # the solver library this branch builds on, so one install is enough.
 #
-# pyvista: PyTO-AD asks for >=0.45 and this repository's plotting for <0.46,
-# so it is held to the 0.45 series, which satisfies both.
+# Exact versions: the ones the full test suite passes with. Moving to a newer version is a
+# change like any other: change the pin, then run the full tests (CONTRIBUTING.md, "Checking a change").
 
 # --- solver stack ---
-numpy<2.3                  # numba supports NumPy 2.2 at most
-scipy
-matplotlib
-scikit-learn
-pandas
-torch                      # automatic differentiation (the gradients on this branch)
-numba
-pyamg
-pypardiso                  # direct linear solver
-mmapy                      # MMA optimizer
-threadpoolctl              # keeps NumPy's own threads to one, so they do not slow torch down
-absl-py
+numpy==2.2.6               # numba supports NumPy 2.2 at most
+scipy==1.15.3
+matplotlib==3.11.2
+scikit-learn==1.9.1
+pandas==3.1.0
+torch==2.15.0              # automatic differentiation (the gradients on this branch)
+numba==0.68.1
+pyamg==5.4.1
+pypardiso==0.4.7           # direct linear solver
+mmapy==0.3.1               # MMA optimizer
+threadpoolctl==3.7.0       # keeps NumPy's own threads to one, so they do not slow torch down
+absl-py==2.5.1
 
 # --- geometry and meshing ---
-numpy-stl
-tetgen
-trimesh
-pymeshfix
-manifold3d
+numpy-stl==4.1.3
+tetgen==0.8.4
+trimesh==5.2.0
+pymeshfix==0.18.1
+manifold3d==3.5.4
 
 # --- rendering ---
-pyvista>=0.45,<0.46
-vtk
-pyvistaqt
-PyQt5
+pyvista==0.45.3
+vtk==9.4.2
+pyvistaqt==0.13.1
+PyQt5==5.15.11
 
 # --- this repository ---
-openpyxl                   # the .xlsx engine pandas uses for the databases
-pytest                     # the tests in tests/
-ipykernel                  # registers the environment as a Jupyter kernel
-nbclient                   # runs Python_walkthrough.ipynb in its test
+openpyxl==3.1.5            # the .xlsx engine pandas uses for the databases
+pytest==9.2.0              # the tests in tests/
+pytest-cov==7.1.0          # which lines the tests run
+ipykernel==7.4.0           # registers the environment as a Jupyter kernel
+nbclient==0.11.0           # runs Python_walkthrough.ipynb in its test
 
 # --- optional ---
 # cupy-cuda11x             # GPU acceleration; needs CUDA 11 and an NVIDIA card.
