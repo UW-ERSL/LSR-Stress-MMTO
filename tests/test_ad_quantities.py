@@ -46,7 +46,8 @@ QUANTITIES = [
      ("MaterialVolumeFraction", {"material_id": 2, "tau": 0.5}, 0.15)),
     ("constraint MassFraction, the lightest", None, ("MassFraction", {"material_id": "lightest"}, 0.4)),
 ]
-# Cost is the one entry not checked here: no database with a Cost column is small enough.
+# the quantities not checked here, each with the reason (tests/test_extending.py makes sure every other one is)
+NOT_CHECKED = {"Cost": "no database with a Cost column is small enough"}
 # Mass fraction is also checked against a hand calculation (test_mass_fraction_by_hand).
 
 _SETUP = {}

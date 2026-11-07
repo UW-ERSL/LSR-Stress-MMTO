@@ -80,6 +80,21 @@ def test_one_entry_makes_a_quantity():
         f.close()
 
 
+
+def test_every_quantity_has_its_gradient_checked():
+    """Every quantity of the registry is in the hand list of tests/test_ad_quantities.py, which checks its
+    gradient against finite differences (that file is slow; this check is not), or named there as not checked,
+    with the reason. A new quantity left out of the list fails here, by its name."""
+    import importlib.util
+    from lsr_mmto.formulation.quantities import QUANTITIES
+    spec = importlib.util.spec_from_file_location("ad_quantities", os.path.join(ROOT, "tests", "test_ad_quantities.py"))
+    ad = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ad)
+    checked = {(objective or constraint)[0] for _, objective, constraint in ad.QUANTITIES}
+    missing = [q.name for q in QUANTITIES if q.name not in checked and q.name not in ad.NOT_CHECKED]
+    assert not missing, f"no gradient check in tests/test_ad_quantities.py for {', '.join(missing)}"
+    assert set(ad.NOT_CHECKED) <= {q.name for q in QUANTITIES}
+
 if __name__ == "__main__":
     test_one_entry_makes_a_setting()
     test_one_entry_makes_a_quantity()
