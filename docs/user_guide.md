@@ -557,6 +557,8 @@ When it is done, Results shows it the way it shows a run, titled **Analysis:** a
 
 **Open folder** opens the run's folder. **Delete this run** removes it, after asking.
 
+**Analyse this design** solves the run's design once more as it would be built, under the supports and loads the project has now: each element with a density above 0.5 solid, in its nearest material with that material's values from the database, the others empty. Nothing is optimized. Use it to see how a design holds up under other loads: change them in Supports and loads, then come back and press it. It goes like Analyse (section 10.4), with the same checks and Stop, and is always saved in the results, listed as **Analysis: design of** and the run's date. The mesh must be the run's (the same Mesh dofs, Single element layer and part); if not, the messages say what changed. When it is done, the analysis and its run are ticked, so **Compare** shows them side by side.
+
 ### 11.1 The Summary
 
 The Summary is in sections:
@@ -570,7 +572,7 @@ The (i) at the top of the Summary says what each word means, and gives each cons
 
 ### 11.2 Comparing two runs
 
-Tick two runs and press **Compare**. A Compare window opens with their convergence on one plot (each constraint by its name in the legend), their latent spaces side by side, and their summaries in two columns. The 3D view shows both designs side by side, the first on the left. Close the Compare window, or click a run, to stop comparing.
+Tick two runs and press **Compare**. A Compare window opens with their convergence on one plot (each constraint by its name in the legend), their latent spaces side by side, and their summaries in two columns. With an analysis, the summaries show only the rows both have. The 3D view shows both designs side by side, the first on the left. Close the Compare window, or click a run, to stop comparing.
 
 ### 11.3 Results from elsewhere
 

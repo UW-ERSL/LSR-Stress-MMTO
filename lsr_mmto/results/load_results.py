@@ -186,6 +186,12 @@ class Run:
         return ((self.config or {}).get("analysis") or {}).get("material")
 
     @property
+    def analysed_design(self):
+        """For an analysis of a run's design (Analyse this design), the folder name of the run it analysed; None
+        otherwise."""
+        return ((self.config or {}).get("analysis") or {}).get("design_of")
+
+    @property
     def n_latent(self) -> int:
         return self.z_elem.shape[1]
 

@@ -31,7 +31,8 @@ def test_every_python_example_runs():
     """The examples, run in their order from a copy of the LSR MMTO folder's U-bracket project and part, make,
     save and write as a script the project they build, then run the shipped U-bracket and read it back.
     run(p) is stood in for by Analyse (the solid part solved once and saved as a run is saved), so nothing
-    is optimized."""
+    is optimized; analyse_design, which takes only a run, is stood in for the same way, once its run folder
+    is checked to be one."""
     import matplotlib
     matplotlib.use("Agg")
     from lsr_mmto.optimize.solid_part_analysis import analyse_solid_part
@@ -41,6 +42,11 @@ def test_every_python_example_runs():
         folder = new_run_folder(project)
         analyse_solid_part(project, 0, save_dir=folder)
         return folder
+
+    def design_analysed(project, run_folder, save_dir=None, should_stop=None):
+        from lsr_mmto.problem.project_folder import is_run
+        assert is_run(run_folder)
+        return analyse_solid_part(project, 0, save_dir=save_dir)
 
     here = os.getcwd()
     with tempfile.TemporaryDirectory() as d:
@@ -55,6 +61,8 @@ def test_every_python_example_runs():
                     exec(imports, names)
                     if "run" in names:
                         names["run"] = analysed
+                    if "analyse_design" in names:
+                        names["analyse_design"] = design_analysed
                 exec(example, names)
         finally:
             os.chdir(here)

@@ -204,7 +204,7 @@ class RunWindow(StructuralTopOptWindow):
         self.latent_order = None
         self.started, self.last_draw, self.history = 0.0, 0.0, {"objective": [], "constraints": []}
         self.first_frame, self.optimizing = True, False
-        self.analysis = None                                       # (material row, its label) while Analyse goes
+        self.analysis = None                                       # (what is analysed, in words; how) while one goes
         super().__init__(window)
         self.setWindowTitle("Current run")
         self.log_line.connect(self._training_progress, QtCore.Qt.QueuedConnection)
@@ -343,10 +343,29 @@ class RunWindow(StructuralTopOptWindow):
         w = self.window
         if not self._checked() or (save and not self._saved("Analyse")):
             return False
+        from lsr_mmto.optimize.solid_part_analysis import analyse_solid_part
+        label = material_display(w.project.database_paths()[0])[1][material]
+        return self._start_analysis(f"the solid part in {label}", save,
+                                    lambda p, folder, stop: analyse_solid_part(p, int(material), folder, stop))
+
+    def start_design_analysis(self, run_folder):
+        """Analyse this design (Results): the run's design as built, analysed once under the project's supports
+        and loads now (solid_part_analysis.analyse_design), in the worker thread, as Analyse goes; saved in the
+        project's results, after the save a run asks for."""
+        from lsr_mmto.optimize.solid_part_analysis import analyse_design
+        from lsr_mmto.problem.project_folder import run_facts
+        if not self._checked() or not self._saved("Analyse this design"):
+            return False
+        self.design_of = run_folder
+        return self._start_analysis(f"the design of {run_facts(run_folder)[0]}", True,
+                                    lambda p, folder, stop: analyse_design(p, run_folder, folder, stop))
+
+    def _start_analysis(self, what, save, analyse):
+        """An analysis of what (in words) started in the worker thread: analyse(project, save_dir, should_stop)."""
         import threading
+        w = self.window
         self.project = w.project.copy()
-        label = material_display(self.project.database_paths()[0])[1][material]
-        self.analysis = (int(material), label)
+        self.analysis = (what, analyse)
         self.save_dir = results_folder(self.project) if save else None
         self.stop_requested, self.history = False, {"objective": [], "constraints": []}
         self.started, self.optimizing = time.time(), False
@@ -354,9 +373,8 @@ class RunWindow(StructuralTopOptWindow):
         for widget in self.run_buttons:
             widget.setVisible(False)
         self.formulation.log_view.clear()
-        self.status.setText(f"Analysing the solid part in {label}...")
-        w.message_text.append(f"Analysis started: the solid part in {label}" +
-                              (f", saved in {self.save_dir}" if save else ", not saved"))
+        self.status.setText(f"Analysing {what}...")
+        w.message_text.append(f"Analysis started: {what}" + (f", saved in {self.save_dir}" if save else ", not saved"))
         self.optimization_thread = threading.Thread(target=self.run_optimization, args=(None, None, None),
                                                     daemon=True)
         self.optimization_thread.start()
@@ -365,14 +383,13 @@ class RunWindow(StructuralTopOptWindow):
     def _run_optimization(self, plan, fe_solver, spec):
         """In the worker thread (PyTO-AD's run_optimization sends what is printed to the log)."""
         from lsr_mmto.materials.encoder import NetworkRunCancelled, TrainingStopped
-        from lsr_mmto.optimize.solid_part_analysis import AnalysisStopped, analyse_solid_part
+        from lsr_mmto.optimize.solid_part_analysis import AnalysisStopped
         from lsr_mmto.problem.project import run
         success, error, analysed = False, "", None
         self.stopped_training, self.network_cancelled = False, False
         try:
             if self.analysis is not None:
-                analysed = analyse_solid_part(self.project, self.analysis[0], save_dir=self.save_dir,
-                                              should_stop=lambda: self.stop_requested)
+                analysed = self.analysis[1](self.project, self.save_dir, lambda: self.stop_requested)
             else:
                 run(self.project, save_dir=self.save_dir, progress=self._progress,
                     should_stop=lambda: self.stop_requested, on_network_error=self._network_error)
@@ -604,7 +621,7 @@ class RunWindow(StructuralTopOptWindow):
 
     def _analysis_completed(self, success, error, save_dir, analysed):
         """The analysis shown in Results: listed there when it was saved, shown there only when not."""
-        w, label = self.window, self.analysis[1]
+        w, what = self.window, self.analysis[0]
         if getattr(self, "stopped_training", False):                # it writes only once it is done
             self.status.setText("The analysis was stopped. Nothing was saved.")
             w.message_text.append("Analysis stopped; nothing was saved.")
@@ -614,13 +631,13 @@ class RunWindow(StructuralTopOptWindow):
                                 f"The Log tab has the details.")
             w.message_text.append(f"Analysis failed: {error}")
             return
-        self.status.setText(f"Analysis of the solid part in {label} done, " +
-                            ("saved in the results." if save_dir else "not saved."))
-        w.message_text.append(f"Analysis done: the solid part in {label}" +
-                              (f", results in {save_dir}" if save_dir else ", not saved"))
+        self.status.setText(f"Analysis of {what} done, " + ("saved in the results." if save_dir else "not saved."))
+        w.message_text.append(f"Analysis done: {what}" + (f", results in {save_dir}" if save_dir else ", not saved"))
         results = w.open_results_panel()
         if results is not None:
             results.show_analysis(analysed, draw_design.mesh_of(w, self.project), save_dir)
+            if analysed.analysed_design is not None:
+                results.offer_compare(save_dir, getattr(self, "design_of", None))
 
     def show_results(self, save_dir):
         """The final design on the part, and tabs for the convergence, the latent space, the summary."""

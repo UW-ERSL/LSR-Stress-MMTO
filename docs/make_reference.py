@@ -183,6 +183,7 @@ def python_entries():
     """[(heading, object, how)] of the Python section, in order; how is "call" (a function or a class),
     "method", "classmethod", "attribute" (a property or a value set on a Project) or "fields" (what a
     Run holds). Every selection type is written as the call of its name."""
+    from lsr_mmto.optimize.solid_part_analysis import analyse_design
     from lsr_mmto.problem import selections as S
     from lsr_mmto.problem.project import Project, run
     from lsr_mmto.results import design_3d, load_results, run_plots, stl_export, tables
@@ -195,7 +196,8 @@ def python_entries():
         out.append((heading, Project if how == "call" else found, how))
     out += [("run", run, "call"), ("load", load_results.load, "call"), ("Run fields", load_results.Run, "fields"),
             ("summary", tables.summary, "call"), ("design", run_plots.design, "call"),
-            ("mesh_for", design_3d.mesh_for, "call"), ("export", stl_export.export, "call")]
+            ("mesh_for", design_3d.mesh_for, "call"), ("export", stl_export.export, "call"),
+            ("analyse_design", analyse_design, "call")]
     return out
 
 

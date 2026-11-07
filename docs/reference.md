@@ -816,3 +816,20 @@ design.stl (and design_\<material>.stl) into folder, as Export STL in the GUI wr
 ```python
 report = export(r, mesh, folder)
 ```
+
+### analyse_design
+
+`analyse_design(project, run_folder, save_dir=None, should_stop=None)`, after `from lsr_mmto.optimize.solid_part_analysis import analyse_design`
+
+Analyses a saved run's design as built, solved once under the project's supports and loads as they are now, with its settings, checked as a run is checked. Each element with a density above 0.5 is solid, in its nearest material of the database the run used (the run's material_indices, as Export STL takes them), with that material's values as the database gives them; the others are empty. The run's mesh must be the project's now: the same mesh dofs, single element layer and part, else a ValueError says what differs. Returns the analysis as a Run (load), its record saying which run it analysed (Run.analysed_design).
+
+| argument | format | default |
+|---|---|---|
+| `project` | the project, a Project, with the supports and loads to analyse the design under | required |
+| `run_folder` | the run's folder (run returns it), one of those in results in the project's folder | required |
+| `save_dir` | the folder the analysis goes into, kept with the runs; None saves nothing | `None` |
+| `should_stop` | a function asked between its steps; when it returns True the analysis stops and saves nothing; or None | `None` |
+
+```python
+a = analyse_design(p, folder, save_dir=folder + " design")
+```

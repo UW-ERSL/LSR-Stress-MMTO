@@ -53,36 +53,43 @@ def _iterations(run):
 
 def table(runs):
     """The runs side by side, one column each, in the sections of a run's summary (tables.summary):
-    the result with each constraint met or not, the design, the materials and the run. A constraint an
-    analysis cannot give is empty in its column, and left out when no run gives it."""
+    the result with each constraint met or not, the design, the materials and the run. Only the rows every
+    run has: with an analysis among them (one solve, no optimization), a constraint it cannot give and what
+    only an optimization has (grey elements, the latent dimension, iterations) are left out."""
     from .tables import Heading, Table, Tables, _unit, constraint_name, given, met, met_cell
     names = list(runs)
     rs = [runs[n] for n in names]
     r0 = rs[0]
+    optimized = all(r.analysed_material is None for r in rs)
     obj = (r0.config or {}).get("topopt_params", {}).get("Objective") or ["objective", None]
     unit = _unit(r0, obj[0])
     right = tuple(range(1, len(rs) + 1))
     result = [[f"{r0.objective_label}" + (f" ({unit})" if unit else "")] + [f"{r.final_objective:.4g}" for r in rs]]
-    if any(np.isfinite(r.max_ff) for r in rs):
+    if all(np.isfinite(r.max_ff) for r in rs):
         result.append(["Max failure factor"] + [f"{r.max_ff:.3f}" for r in rs])
     for i in range(len(r0.constraint_spec)):
-        if not any(given(r, i) for r in rs):                # an analysis's constraint it cannot give: left out
+        if not all(given(r, i) for r in rs):               # an analysis's constraint it cannot give: left out
             continue
         result.append([f"{constraint_name(r0, i)}, used"] +
-                      [met_cell(met(r, i), f"{100 * r.utilisation(i):.1f} %") if given(r, i) else "" for r in rs])
+                      [met_cell(met(r, i), f"{100 * r.utilisation(i):.1f} %") for r in rs])
+    design = [["Elements"] + [f"{r.n_elems:,}" for r in rs],
+              ["Solid"] + [f"{int(r.solid.sum()):,} ({100 * r.solid.mean():.1f} %)" for r in rs]]
+    if optimized:
+        design.append(["Grey (in between)"] + [f"{100 * r.grey:.1f} %" if np.isfinite(r.grey) else "" for r in rs])
+    materials = [["Used"] + [f"{int(r.materials_used().size)} of {len(r.material_names)}" for r in rs]]
+    if optimized:
+        materials.append(["Latent dimension"] + [str(r.n_latent) for r in rs])
+    run_rows = [["Run time"] + [f"{_runtime(r) / 60:.1f} min" for r in rs]]
+    if optimized:
+        run_rows = [["Iterations"] + [f"{_iterations(r)}" for r in rs]] + run_rows + \
+            [["Time per iteration"] + [f"{_runtime(r) / max(_iterations(r), 1):.2f} s" for r in rs]]
     return Tables(
         Heading(f"{r0.example}: the runs side by side"),
         Table(result, headers=[""] + names, title="Result", right_cols=right),
-        Table([["Elements"] + [f"{r.n_elems:,}" for r in rs],
-               ["Solid"] + [f"{int(r.solid.sum()):,} ({100 * r.solid.mean():.1f} %)" for r in rs],
-               ["Grey (in between)"] + [f"{100 * r.grey:.1f} %" if np.isfinite(r.grey) else "" for r in rs]],
-              title="Design", right_cols=right),
-        Table([["Used"] + [f"{int(r.materials_used().size)} of {len(r.material_names)}" for r in rs],
-               ["Latent dimension"] + [str(r.n_latent) for r in rs]], title="Materials", right_cols=right),
-        Table([["Iterations"] + [f"{_iterations(r)}" for r in rs],
-               ["Run time"] + [f"{_runtime(r) / 60:.1f} min" for r in rs],
-               ["Time per iteration"] + [f"{_runtime(r) / max(_iterations(r), 1):.2f} s" for r in rs]],
-              title="Run", note="Run time is the optimization only, from the run's own record.", right_cols=right))
+        Table(design, title="Design", right_cols=right),
+        Table(materials, title="Materials", right_cols=right),
+        Table(run_rows, title="Run", note="Run time is the optimization only, from the run's own record.",
+              right_cols=right))
 
 
 def histories(runs, out=None):

@@ -354,8 +354,9 @@ def summary(run):
               ["Solid", f"{int(run.solid.sum()):,}", f"{100 * run.solid.mean():.1f} % of the elements"]]
     if analysis is None:
         design.append(["Grey (in between)", f"{100 * run.grey:.1f} %", ""])
-    materials = ([["Used", f"{int(run.materials_used().size)} of {len(run.material_names)}"],
-                  ["Latent dimension", str(run.n_latent)]] if analysis is None else [["Material", analysis]])
+    used = ["Used", f"{int(run.materials_used().size)} of {len(run.material_names)}"]
+    materials = ([used, ["Latent dimension", str(run.n_latent)]] if analysis is None else
+                 [used] if run.analysed_design is not None else [["Material", analysis]])
     return Tables(
         Heading(run_title(run)),
         Table(result, title="Result", right_cols=(1,)),
@@ -370,8 +371,12 @@ def summary_details(run):
     obj = (run.config or {}).get("topopt_params", {}).get("Objective") or ["objective", None]
     q = _quantity(obj[0])
     analysis = run.analysed_material
-    lines = [] if analysis is None else [f"An analysis: the whole part solid in {analysis}, with its values from "
-                                         f"the database, solved once. Nothing is optimized."]
+    lines = [] if analysis is None else \
+        [f"An analysis of the {analysis} as built: each element with a density above 0.5 solid, in its nearest "
+         f"material with its values from the database, the others empty; solved once under the supports and loads "
+         f"of the project. Nothing is optimized."] if run.analysed_design is not None else \
+        [f"An analysis: the whole part solid in {analysis}, with its values from the database, solved once. Nothing "
+         f"is optimized."]
     lines.append(f"{run.objective_label}: {q.help}" if q is not None else run.objective_label)
     for i, spec in enumerate(run.constraint_spec):
         bound = float(spec[2]) if len(spec) > 2 else np.nan

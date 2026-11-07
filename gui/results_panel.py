@@ -51,6 +51,13 @@ VECTOR_HELP = ("magnitude shows the size at each point, for Displacement how far
                "Deformed shape draws the part moved by its displacement times Scale. The first Scale makes the "
                "largest movement about 5% of the part's largest size, so that the shape can be seen; the real "
                "movement is usually far smaller.")
+DESIGN_HELP = ("Analyse this design solves the run's design once more, as it would be built, with the supports and "
+               "loads the project has now: each element with a density above 0.5 solid, in its nearest material "
+               "with its values from the database, the others empty. Nothing is optimized.\n\n"
+               "Use it to see how a design holds up under other loads: change them in Supports and loads, then "
+               "analyse. The mesh must be the run's (the same Mesh dofs, single element layer and part).\n\n"
+               "The analysis is saved in the results, listed as Analysis: design of and the run's date. Compare "
+               "shows it beside its run.")
 SMOOTH = "Smooth (exported)"                             # the Show choice of a run's exported STL files
 UNSAVED = "analysis not saved"                           # the list's key of the analysis shown but not saved
 NO_HISTORY = "An analysis is one solve of the solid part, not an optimization: it has no {}."
@@ -277,7 +284,9 @@ class ResultsWindow(QtWidgets.QDialog):
         self.folder_button.clicked.connect(lambda: open_folder(self.current))
         self.delete_button = QtWidgets.QPushButton("Delete this run")
         self.delete_button.clicked.connect(self.delete_run)
-        for widget in (self.folder_button, self.delete_button):
+        self.design_button = QtWidgets.QPushButton("Analyse this design")
+        self.design_button.clicked.connect(lambda: self.analyse_design())
+        for widget in (self.folder_button, self.delete_button, self.design_button, Info(DESIGN_HELP)):
             after.addWidget(widget)
         after.addStretch()
         after.addWidget(Info(STL_HELP))
@@ -348,6 +357,8 @@ class ResultsWindow(QtWidgets.QDialog):
     def _update_buttons(self):
         mine = self.current is not None and self.current not in self.others and self.current != UNSAVED
         self.delete_button.setEnabled(mine)                         # others are for looking only
+        self.design_button.setEnabled(mine and self.records.get(self.current) is not None and
+                                      self.records[self.current].analysed_material is None)
         self.folder_button.setEnabled(self.current is not None and self.current != UNSAVED)
         self.compare_button.setEnabled(len(self.ticked()) == 2)
 
@@ -413,6 +424,7 @@ class ResultsWindow(QtWidgets.QDialog):
         if loaded is None:
             return
         run, _ = loaded
+        self._update_buttons()                                     # Analyse this design: for a run, not an analysis
         result_tabs(self.tabs, run)
         self._set_views(run)
         self.redraw()
@@ -516,6 +528,25 @@ class ResultsWindow(QtWidgets.QDialog):
             pieces = [(whole, draw_design.SOLID_COLOUR, "")]
         apart = self.apart.isChecked()
         self.window.set_design(lambda w: draw_design.smooth(w, pieces, apart, absent), wide=apart, run=mine)
+
+    def analyse_design(self):
+        """Analyse this design: the run shown, analysed as built under the project's supports and loads now, in
+        the Current run panel (run_panel.start_design_analysis)."""
+        if self.current is None or not self.design_button.isEnabled() or self.window.run_going_now():
+            return False
+        rw = self.window.open_run_panel()
+        return rw is not None and rw.start_design_analysis(self.current)
+
+    def offer_compare(self, analysis, run):
+        """An analysis of a run's design and the run ticked, so that Compare shows them side by side."""
+        key = lambda f: os.path.normcase(os.path.abspath(f)) if f else None                   # noqa: E731
+        for i in range(self.list.count()):
+            item = self.list.item(i)
+            if key(item.data(QtCore.Qt.UserRole)) in (key(analysis), key(run)):
+                item.setCheckState(QtCore.Qt.Checked)
+        self._update_buttons()
+        if self.compare_button.isEnabled():
+            self.status.setText("The analysis and its run are ticked: press Compare to see them side by side.")
 
     def delete_run(self):
         if self.current is None or self.current in self.others or self.current == UNSAVED:

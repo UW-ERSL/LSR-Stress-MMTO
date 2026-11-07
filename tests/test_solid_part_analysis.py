@@ -172,7 +172,8 @@ def test_stop_ends_it_and_nothing_is_written():
 def test_a_quantity_of_the_latent_points_is_not_given(monkeypatch):
     """The L-bracket's constraints are material volume fractions, worked out from the latent points: the
     analysis gives the objective; its record holds no value for the constraints, and its Summary and Compare
-    leave them out. Compared with a run that gives them, their rows are kept, empty for the analysis."""
+    leave them out. Compared with a run that gives them, only the rows both have are shown: the constraints and
+    what only an optimization has (grey elements, latent dimension, iterations) are left out."""
     import dataclasses
     from lsr_mmto.results import compare
     from lsr_mmto.results import tables
@@ -188,15 +189,21 @@ def test_a_quantity_of_the_latent_points_is_not_given(monkeypatch):
     assert "volume fraction" not in str(compare.table({"one": run, "two": run}))
     optimized = dataclasses.replace(run, config={k: v for k, v in run.config.items() if k != "analysis"},
                                     history=dict(run.history, constraints=[[-0.5, 0.0, 0.5]]))
-    rows = [r for r in compare.table({"run": optimized, "analysis": run}).tables[1].rows if "used" in str(r[0])]
-    assert len(rows) == 3 and all(r[2] == "" and isinstance(r[1], tables.Raw) for r in rows), rows
+    both = compare.table({"run": optimized, "analysis": run})
+    heads = [str(r[0]) for t in both.tables[1:] for r in t.rows]
+    assert not [h for h in heads if "used" in h or h in ("Grey (in between)", "Latent dimension", "Iterations",
+                                                         "Time per iteration")], heads
+    assert heads[0].startswith(run.objective_label) and "Solid" in heads and "Used" in heads and "Run time" in heads
+    rows = [r for r in compare.table({"run": optimized, "again": optimized}).tables[1].rows if "used" in str(r[0])]
+    assert len(rows) == 3 and all(isinstance(r[1], tables.Raw) for r in rows), rows
 
 
 # ---------------------------------------------------------------------- in the window
 def test_analyse_in_the_window(monkeypatch):
     """Analyse beside Run, with the same look; its window; not saved: shown first in Results, nothing
     written; saved: listed among the runs with its label; a run and an analysis compared: no convergence
-    or latent space to plot, said in their place."""
+    or latent space to plot, said in their place. Analyse this design in Results, for a run only: the
+    analysis of its design is saved, shown, and ticked with its run, ready for Compare."""
     from PyQt5 import QtCore, QtWidgets
     APP = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])   # noqa: F841
     from gui import main_window as G
@@ -295,6 +302,21 @@ def test_analyse_in_the_window(monkeypatch):
             assert isinstance(cw.tabs.widget(i), QtWidgets.QLabel) and "not an optimization" in cw.tabs.widget(i).text()
         cw.close()
 
+        for i in range(res.list.count()):                                    # Analyse this design: for a run
+            res.list.item(i).setCheckState(QtCore.Qt.Unchecked)
+        assert res.select(analysis) and not res.design_button.isEnabled()
+        assert res.select(run_folder) and res.design_button.isEnabled()
+        res.design_button.click()
+        assert w.run_going_now() and r.status.text().startswith("Analysing the design of ")
+        assert wait(lambda: not w.run_going_now()), "the analysis of the design did not finish"
+        assert r.status.text().startswith("Analysis of the design of ") and "saved in the results" in r.status.text()
+        design = next(f for f in project_folder.runs(w.project) if f not in folders)
+        assert project_folder.analysed_material(design).startswith("design of ") and res.current == design
+        assert sorted(res.ticked()) == sorted([design, run_folder]) and res.compare_button.isEnabled()
+        assert "press Compare" in res.status.text()
+        assert res.compare()
+        res.compare_window.close()
+
         w.project.formulation["objective"] = None                            # a project that cannot run
         assert not w.analyse() and "Cannot start" in r.status.text()
         empty = G.MMTOWindow()                                                # no project: greyed
@@ -306,3 +328,72 @@ def test_analyse_in_the_window(monkeypatch):
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+def _short_run(d):
+    """The L-bracket run briefly on a coarse mesh in a project folder d, its database a copy of its own (so the
+    test may change it), snapped to the real materials at the end. (project, run folder)."""
+    from lsr_mmto.materials.databases import DATABASE_DIR
+    from lsr_mmto.problem.project import run
+    p = Project.load(os.path.join(PROJECTS, "L-bracket.mmto"))
+    p.stl, p.base_dir = p.stl_path(), d
+    os.makedirs(os.path.join(d, "materials"))
+    for ending in (".xlsx", ".nt"):
+        shutil.copy(os.path.join(DATABASE_DIR, "BM1_3Mats_2Attr" + ending), os.path.join(d, "materials"))
+    p.database = "materials/BM1_3Mats_2Attr.xlsx"
+    p.n_dof, p.single_layer = 3000, True
+    p.settings["common"]["maxIterations"] = 4
+    p.settings["advanced"]["snap_to_real_material"] = True
+    folder = os.path.join(d, "results", "run")
+    run(p, save_dir=folder, verbose=False)
+    return p, folder
+
+
+def test_analyse_this_design():
+    """Analyse this design: a finished run's design as built (density above 0.5 solid, each element in its
+    nearest database material), solved once under the project's supports and loads now. With the design the
+    final check analysed (its solid elements) and the materials it used (the network's values of the real
+    materials, written into the run's database), it gives the run's own final check: the stress and the
+    displacement of every element and node, to 1 part in 10,000 of the largest. Twice the load gives twice the displacement; a project whose mesh
+    is not the run's is refused, saying what differs; saved, its record says which run it analysed."""
+    import openpyxl
+    from lsr_mmto.results.load_results import load
+    with tempfile.TemporaryDirectory() as d:
+        p, folder = _short_run(d)
+        ran = load(folder)
+        npz = os.path.join(folder, "run_data.npz")                       # the final check's design: its solid set
+        arrays = dict(np.load(npz, allow_pickle=True))
+        arrays["x_cont"] = ran.solid.astype(arrays["x_cont"].dtype)
+        np.savez_compressed(npz, **arrays)
+        book = openpyxl.load_workbook(os.path.join(d, "materials", "BM1_3Mats_2Attr.xlsx"))
+        sheet = book.worksheets[0]                                       # the final check's materials
+        heads = [sheet.cell(row=1, column=c).value for c in range(2, sheet.max_column + 1)]
+        for c, head in enumerate(heads, start=2):
+            if head is None:
+                continue
+            for r, value in enumerate(ran.material_property(head), start=3):
+                sheet.cell(row=r, column=c, value=float(value))
+        book.save(os.path.join(d, "materials", "BM1_3Mats_2Attr.xlsx"))
+
+        a = A.analyse_design(p, folder, save_dir=os.path.join(d, "results", "design check"))
+        assert a.analysed_material == f"design of {ran.config['run']['timestamp'].replace('T', ' ')}"
+        assert a.config["analysis"]["design_of"] == "run"
+        assert np.array_equal(a.solid, ran.solid) and np.array_equal(a.material_indices, ran.material_indices)
+        for name in ("von_mises", "displacement"):                       # to 1 part in 10,000 of the largest
+            got, want = a.results[name], ran.results[name]               # value: the run decodes the materials
+            assert np.abs(got - want).max() <= 1e-4 * np.abs(want).max(), name     # again, in its own precision
+
+        twice = p.copy()                                                  # the loads changed: the results follow
+        for bc in twice.bcs:
+            if bc["kind"] == "force":
+                bc["total"] = [2 * v for v in bc["total"]]
+        b = A.analyse_design(twice, folder)
+        assert np.allclose(b.results["displacement"], 2 * a.results["displacement"], rtol=1e-6,
+                           atol=1e-9 * np.abs(a.results["displacement"]).max())
+
+        other = p.copy()
+        other.n_dof = 4000
+        with pytest.raises(ValueError, match=r"another mesh than the project's now \(mesh dofs changed since\)"):
+            A.analyse_design(other, folder)
+        with pytest.raises(ValueError, match="this is an analysis, not a run"):
+            A.analyse_design(p, os.path.join(d, "results", "design check"))
