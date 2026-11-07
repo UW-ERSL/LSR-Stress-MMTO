@@ -286,10 +286,10 @@ class ResultsWindow(QtWidgets.QDialog):
         self.delete_button.clicked.connect(self.delete_run)
         self.design_button = QtWidgets.QPushButton("Analyse this design")
         self.design_button.clicked.connect(lambda: self.analyse_design())
-        for widget in (self.folder_button, self.delete_button, self.design_button, Info(DESIGN_HELP)):
+        for widget in (self.folder_button, self.delete_button, self.design_button):
             after.addWidget(widget)
         after.addStretch()
-        after.addWidget(Info(STL_HELP))
+        after.addWidget(Info(DESIGN_HELP + "\n\n" + STL_HELP))     # one (i) for the row: the analysis, then the export
         layout.addLayout(after)
         self.refresh()
 
