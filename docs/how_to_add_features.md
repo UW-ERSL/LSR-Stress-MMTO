@@ -192,13 +192,23 @@ with stored values; with MMA chosen they must not change.
 
 ## A material attribute
 
-One entry in `ATTRIBUTES` in `lsr_mmto/materials/databases.py`: its name, what it measures (one of
-`UNITS`, which gives its units), a one-line description, its name in the app, its allowed range,
-and other names it may be written under in a database. An attribute that measures `"ratio"` is
-dimensionless; its units cell may be left blank.
+The core has the two attributes the quantities every physics has read: `Density` (Mass) and `Cost`
+(Cost), in `CORE_ATTRIBUTES` in `lsr_mmto/materials/databases.py`. Every other attribute belongs to the
+physics that reads it: one entry in `NEW_PROPERTIES` on its front page, given as the arguments of an
+`Attribute`: its name, what it measures (one of `UNITS`, which gives its units), a one-line
+description, its name in the app, its allowed range, and other names it may be written under in a
+database. An attribute that measures `"ratio"` is dimensionless; its units cell may be left blank.
+The structural physics brings Young's modulus, Poisson's ratio and the yield strength this way:
 
-    Attribute("Yield_Strength", "stress", "yield strength, the stress at which the material yields",
-              "Yield strength", low=0, aliases=("Yield Strength", "Yield")),
+    dict(name="Yield_Strength", measures="stress", doc="yield strength, the stress at which the material yields",
+         shown="Yield strength", low=0, aliases=("Yield Strength", "Yield")),
+
+`ATTRIBUTES` joins the core's and every physics' entries when LSR MMTO starts (in Python scripts, the
+tests and the GUI alike). One name has one meaning: a physics may give an attribute another physics
+gives too only exactly as that one gives it, and it is then one entry shared by both; two different
+entries under one name stop LSR MMTO from starting, with a message naming both places. A name in a
+physics' `PROPERTIES` or in a quantity's `needs` that no entry defines stops it too. The quantities
+and the kinds of support and load are joined the same way.
 
 A new kind of quantity (a conductivity, say) belongs to the physics that uses it: an entry in
 `UNIT_KINDS` on its front page, with each unit's value in SI and its unit in each unit system
@@ -206,8 +216,8 @@ A new kind of quantity (a conductivity, say) belongs to the physics that uses it
 density, mass, cost per mass) is an entry in `UNITS` and `UNIT_SYSTEMS` in
 `lsr_mmto/materials/databases.py`.
 
-A database column not in `ATTRIBUTES` is an error, so a new attribute is added here before
-it is used. The check, the template and the database editor follow. Add a case to
+A database column not in `ATTRIBUTES` is an error, so a new attribute is added before it is
+used. The check, the template and the database editor follow. Add a case to
 `tests/test_databases.py`. What else to run: both generators above (the reference page lists the
 units, the user guide the attributes).
 
@@ -229,8 +239,10 @@ A physics is a folder in `lsr_mmto/physics/`, e.g. `thermoelastic/`, with four f
 plus one line in `MODULES` in `lsr_mmto/physics/available_physics.py`. The entries are described in
 `MODULE_ENTRIES` there; `structural/structural_module.py` is a complete example, and
 `tests/test_template_physics.py` registers and runs the template. A project names its physics with
-`"physics"` in its file (`p.physics` in code); an unknown name is an error before the run. What else to run: both generators
-above, since its settings, quantities and kinds join their lists.
+`"physics"` in its file (`p.physics` in code); an unknown name is an error before the run. The material
+attributes it reads that the core does not have (Density and Cost) are its own, in `NEW_PROPERTIES`
+(see "A material attribute"). What else to run: both generators above, since its settings,
+quantities, kinds and attributes join their lists.
 
 The results a run saves are the entries of `RESULT_FIELDS`, each `dict(view, title, measures, where,
 shape)`:

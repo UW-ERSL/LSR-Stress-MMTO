@@ -21,6 +21,21 @@ NAME = "structural"
 DOC = "linear elasticity, small strain"
 FIELDS = {"u": 3}                                   # the displacement, three unknowns per node
 PROPERTIES = ["Youngs_Modulus"]                     # Poisson's ratio may be one value for all (SETTINGS)
+
+# the material properties it brings, each as the arguments of an Attribute (materials/databases.py); the core
+# has Density and Cost
+NEW_PROPERTIES = [
+    dict(name="Youngs_Modulus", measures="stress", doc="Young's modulus, the stiffness", shown="Young's modulus",
+         low=0, aliases=("Youngs Modulus", "Young_Modulus", "E"),
+         wrong_unit_effect="Displacement and compliance come out {times} times too small; stress and failure "
+                           "factor are unaffected.",
+         legend_symbol="E", legend_rank=2),
+    dict(name="Poissons_Ratio", measures="ratio", doc="Poisson's ratio", shown="Poisson's ratio", low=-1, high=0.5,
+         aliases=("Poisson_Ratio", "Poissons Ratio", "nu")),
+    dict(name="Yield_Strength", measures="stress", doc="yield strength, the stress at which the material yields",
+         shown="Yield strength", low=0, aliases=("Yield Strength", "Yield"),
+         legend_symbol=r"\sigma_Y", legend_rank=1, iteration_label="Y", iteration_rank=1),
+]
 NEEDS = ("support", "load")                         # a structural problem with no load has nothing to solve
 PENALTIES = []                                      # none besides those every physics has
 

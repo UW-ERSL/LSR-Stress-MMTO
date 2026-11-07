@@ -871,7 +871,7 @@ def test_edit_a_database_with_an_unknown_column():
         book.save(path)
         errors = check_database(path)[0]
         assert len(errors) == 1 and errors[0].startswith("D1: 'E0' is not a property LSR MMTO knows (Density, "
-                                                         "Young's modulus, "), errors
+                                                         "Cost, Young's modulus, "), errors
         assert errors[0].endswith("Rename the column to one of them, or use Import..., which leaves out the "
                                   "columns it does not know.") and "lsr_mmto" not in errors[0]
         m = materials_panel.MaterialsPanel(w, w.project)

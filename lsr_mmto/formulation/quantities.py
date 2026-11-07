@@ -187,7 +187,7 @@ def _material_volume_fraction(m, opt):
                                     int(opt["material_id"]), float(opt.get("tau", DEFAULT_TAU)))
 
 
-QUANTITIES = [Quantity(physics=[m.NAME], **q) for m in MODULES for q in m.QUANTITIES] + [
+CORE_QUANTITIES = [
     Quantity("Mass", True, True, [], ["Density"],
              _mass, "sum of density * x_phys * element volume", "Mass",
              "The mass of the part, from each material's density.", "{mass}", scales_with={"Density": 1},
@@ -213,6 +213,23 @@ QUANTITIES = [Quantity(physics=[m.NAME], **q) for m in MODULES for q in m.QUANTI
              "of a solid part in that material", (("material_id", "material", None, ("heaviest", "lightest")),),
              start_bound=0.4),
 ]
+
+
+def quantities_of(modules):
+    """Every quantity: each module's (its QUANTITIES, as the arguments of a Quantity), then the core's, each
+    once (available_physics.joined): a quantity several physics give the same way is one, tagged with all of
+    them. Every material property a physics or a quantity names must be defined (undefined_properties)."""
+    from lsr_mmto.materials.databases import attributes_of
+    from lsr_mmto.physics.available_physics import joined, undefined_properties
+    entries = joined("quantities", {q.name: q for q in CORE_QUANTITIES}, modules,
+                     lambda m: {q["name"]: q for q in m.QUANTITIES})
+    out = [Quantity(physics=tags, **entry) for entry, tags in entries.values() if not isinstance(entry, Quantity)] + \
+        CORE_QUANTITIES
+    undefined_properties(modules, out, attributes_of(modules))
+    return out
+
+
+QUANTITIES = quantities_of(MODULES)
 
 
 def find_quantity(name):

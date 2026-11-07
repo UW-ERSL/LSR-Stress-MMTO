@@ -439,3 +439,52 @@ def test_the_mesh_is_sized_by_the_physics_unknowns_per_node():
         one = make_mesh(p.stl_path(), p.n_dof, p.single_layer, p.unknowns_per_node())
         three = make_mesh(p.stl_path(), p.n_dof, p.single_layer, 3)
     assert 2.0 < one.num_elems / three.num_elems < 4.5, (one.num_elems, three.num_elems)
+
+
+def _another_physics(**entries):
+    """A made-up second physics: what the core's lists read of a front page, empty unless given."""
+    import types
+    base = dict(NAME="another", FIELDS={"u": 3}, PROPERTIES=[], NEW_PROPERTIES=[], QUANTITIES=[],
+                SUPPORT_AND_LOAD_KINDS={})
+    return types.SimpleNamespace(**dict(base, **entries))
+
+
+def test_one_name_one_meaning_across_physics():
+    """The core's lists (material properties, quantities, kinds of support and load) join the core's entries and
+    every physics': an entry a second physics gives exactly as the structural one does is one entry, tagged
+    with both; a different entry under the same name, or a property no one defines, stops LSR MMTO with a
+    message naming the places. The template, which reads the structural Young's modulus, still joins."""
+    import pytest
+    from lsr_mmto.formulation.quantities import quantities_of
+    from lsr_mmto.materials.databases import attributes_of
+    from lsr_mmto.physics.structural import structural_module as STRUCTURAL
+    from lsr_mmto.problem.boundary_conditions import bc_kinds_of
+    yield_strength = next(p for p in STRUCTURAL.NEW_PROPERTIES if p["name"] == "Yield_Strength")
+    compliance = next(q for q in STRUCTURAL.QUANTITIES if q["name"] == "Compliance")
+    same = _another_physics(NEW_PROPERTIES=[yield_strength], PROPERTIES=["Yield_Strength"], QUANTITIES=[compliance],
+                            SUPPORT_AND_LOAD_KINDS={"force": STRUCTURAL.SUPPORT_AND_LOAD_KINDS["force"]})
+    modules = [STRUCTURAL, same]
+    attributes = attributes_of(modules)
+    assert list(attributes).count("Yield_Strength") == 1 and attributes["Yield_Strength"].physics == ("structural",
+                                                                                                     "another")
+    assert attributes["Density"].physics == () and attributes["Youngs_Modulus"].physics == ("structural",)
+    quantities = [q for q in quantities_of(modules) if q.name == "Compliance"]
+    assert len(quantities) == 1 and quantities[0].physics == {"structural", "another"}
+    assert bc_kinds_of(modules)["force"].physics == ("structural", "another")
+
+    other = dict(yield_strength, low=1)                             # the same name, another meaning
+    with pytest.raises(ValueError, match="one in the structural physics, one in the another physics"):
+        attributes_of([STRUCTURAL, _another_physics(NEW_PROPERTIES=[other])])
+    with pytest.raises(ValueError, match="'Mass': one in the core, one in the another physics"):
+        quantities_of([STRUCTURAL, _another_physics(QUANTITIES=[dict(compliance, name="Mass")])])
+    with pytest.raises(ValueError, match="'force': one in the structural physics, one in the another physics"):
+        bc_kinds_of([STRUCTURAL, _another_physics(SUPPORT_AND_LOAD_KINDS={
+            "force": dict(STRUCTURAL.SUPPORT_AND_LOAD_KINDS["force"], shown="Push")})])
+    with pytest.raises(ValueError, match="the another physics' PROPERTIES names the material property "
+                                         "'Conductivity', which neither the core nor any physics defines"):
+        quantities_of([STRUCTURAL, _another_physics(PROPERTIES=["Conductivity"])])
+    with pytest.raises(ValueError, match="the quantity Heat names the material property 'Conductivity'"):
+        quantities_of([STRUCTURAL, _another_physics(QUANTITIES=[dict(compliance, name="Heat",
+                                                                     needs=["Conductivity"])])])
+    assert len(quantities_of([STRUCTURAL, TEMPLATE])) == len(quantities_of([STRUCTURAL])) + len(TEMPLATE.QUANTITIES)
+    assert list(attributes_of([STRUCTURAL, TEMPLATE])) == list(attributes_of([STRUCTURAL]))

@@ -203,10 +203,10 @@ The attributes a material database can hold:
 | Attribute | What it is | Units |
 | --- | --- | --- |
 | Density | Mass per unit volume | kg/m^3, g/cm^3, t/mm^3, lb/in^3, lbf*s^2/in^4 |
+| Cost | Price per unit mass | USD/kg, USD/g, USD/t, USD/lb, USD/(lbf*s^2/in) |
 | Young's modulus | Young's modulus, the stiffness | Pa, kPa, MPa, GPa, psi, ksi |
 | Poisson's ratio | Poisson's ratio | - |
 | Yield strength | Yield strength, the stress at which the material yields | Pa, kPa, MPa, GPa, psi, ksi |
-| Cost | Price per unit mass | USD/kg, USD/g, USD/t, USD/lb, USD/(lbf*s^2/in) |
 
 <!-- end of list -->
 

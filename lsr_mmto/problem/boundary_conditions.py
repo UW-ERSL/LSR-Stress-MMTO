@@ -75,10 +75,11 @@ class BCKind:
     picks    optional: {type in the picking window: its values from the window's entry}, for a
              kind that can be picked on the part (None is an entry with no type)"""
 
-    def __init__(self, role, apply, shown, help, values=(), field=None, check=None, picks=None):
+    def __init__(self, role, apply, shown, help, values=(), field=None, check=None, picks=None, physics=()):
         if role not in ("support", "load"):
             raise ValueError(f"role must be support or load, not {role!r}")
         self.role, self.apply, self.shown, self.help, self.field = role, apply, shown, help, field
+        self.physics = tuple(physics)                       # the physics that give it
         self.values = tuple(Value(**v) for v in values)
         self.extra_check, self.picks = check, dict(picks or {})
 
@@ -104,9 +105,10 @@ class BCKind:
         return f"p.add_bc({name!r}, {on}{values})"
 
 
-def kinds_of(module):
+def kinds_of(module, physics=None):
     """{name: BCKind} of one physics module's SUPPORT_AND_LOAD_KINDS; a kind that names no field acts on
-    the module's one field."""
+    the module's one field. physics: the names of the physics each kind is tagged with (by default the
+    module's)."""
     out = {}
     for name, args in module.SUPPORT_AND_LOAD_KINDS.items():
         args = dict(args)
@@ -115,8 +117,20 @@ def kinds_of(module):
                 raise ValueError(f"{module.NAME} support or load {name}: say which field it acts on "
                                  f"({', '.join(module.FIELDS)})")
             args["field"] = next(iter(module.FIELDS))
-        out[name] = BCKind(**args)
+        out[name] = BCKind(physics=(physics or {}).get(name, [module.NAME]), **args)
     return out
 
 
-BC_KINDS = {name: kind for m in MODULES for name, kind in kinds_of(m).items()}
+def bc_kinds_of(modules):
+    """{name: BCKind} of every module's kinds, each once (available_physics.joined): a kind several physics give
+    the same way is one, tagged with all of them; two different kinds under one name are an error."""
+    from lsr_mmto.physics.available_physics import joined
+    entries = joined("kinds of support and load", {}, modules, lambda m: m.SUPPORT_AND_LOAD_KINDS)
+    tags = {name: t for name, (_, t) in entries.items()}
+    out = {}
+    for m in modules:
+        out.update({name: kind for name, kind in kinds_of(m, tags).items() if name not in out})
+    return out
+
+
+BC_KINDS = bc_kinds_of(MODULES)

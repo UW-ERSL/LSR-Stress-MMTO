@@ -50,6 +50,16 @@ FIELDS = {"c": 1}                                                  # FILL
 # refused before the run.
 PROPERTIES = [COEFFICIENT]                                         # FILL
 
+# NEW_PROPERTIES: the material properties this physics brings that no other gives, each the arguments of an
+# Attribute (materials/databases.py): its name (the database column), what it measures, a one-line doc, its
+# name in the app, its allowed range and other names. The core has Density and Cost; a property another
+# physics brings too may be given again only exactly as that physics gives it (one entry, shared). Every name
+# in PROPERTIES and in a quantity's needs must be defined somewhere, or LSR MMTO refuses to start. The template
+# reads Young's modulus, which the structural physics brings, so it brings none. For example:
+#   NEW_PROPERTIES = [dict(name="Conductivity", measures="conductivity", doc="thermal conductivity",
+#                          shown="Thermal conductivity", low=0, aliases=("k",))]
+NEW_PROPERTIES = []                                                # FILL, with your own properties
+
 # deflation_space: deflation_space(dsolver, mesh) builds the deflation space of this physics' system on
 # dsolver, so problems above the direct solver's limit use DPCG (structural: the rigid-body motions of
 # groups of nodes). None keeps the direct solver at every size. Read by optimize/optimization_loop.py.

@@ -117,10 +117,11 @@ class Attribute:
 
     def __init__(self, name, measures, doc, shown, low=None, high=None, closed=(), aliases=(),
                  wrong_unit_effect="", log_scaled=False, legend_symbol=None, legend_rank=None,
-                 iteration_label=None, iteration_rank=None):
+                 iteration_label=None, iteration_rank=None, physics=()):
         if measures not in UNITS:
             raise ValueError(f"attribute {name}: measures must be one of {', '.join(UNITS)}")
         self.name, self.measures, self.doc, self.shown = name, measures, doc, shown
+        self.physics = tuple(physics)               # the physics that bring it; empty: every problem has it
         self.low, self.high, self.closed = low, high, tuple(closed)
         self.units, self.aliases = tuple(UNITS[measures]), tuple(aliases)
         self.wrong_unit_effect, self.log_scaled = wrong_unit_effect, bool(log_scaled)
@@ -140,23 +141,27 @@ class Attribute:
         return f"{lo}value{hi}" if (lo or hi) else "any"
 
 
-# Every attribute a database may hold. To add one, add an entry; the check and the Excel
-# template follow. A column not listed here is an error.
-ATTRIBUTES = {a.name: a for a in [
+# The attributes every problem has, read by the quantities every physics has: Density (Mass, Mass fraction) and
+# Cost (Cost). Each physics brings the ones it reads (NEW_PROPERTIES on its front page, as the arguments of an
+# Attribute); ATTRIBUTES joins them all (available_physics.joined), so the check, the Excel template and the
+# database editor follow. A column in none of them is an error.
+CORE_ATTRIBUTES = [
     Attribute("Density", "density", "mass per unit volume", "Density", low=0, iteration_label="rho",
               iteration_rank=2),
-    Attribute("Youngs_Modulus", "stress", "Young's modulus, the stiffness", "Young's modulus", low=0,
-              aliases=("Youngs Modulus", "Young_Modulus", "E"),
-              wrong_unit_effect="Displacement and compliance come out {times} times too small; stress and "
-                                "failure factor are unaffected.",
-              legend_symbol="E", legend_rank=2),
-    Attribute("Poissons_Ratio", "ratio", "Poisson's ratio", "Poisson's ratio", low=-1, high=0.5,
-              aliases=("Poisson_Ratio", "Poissons Ratio", "nu")),
-    Attribute("Yield_Strength", "stress", "yield strength, the stress at which the material yields",
-              "Yield strength", low=0, aliases=("Yield Strength", "Yield"),
-              legend_symbol=r"\sigma_Y", legend_rank=1, iteration_label="Y", iteration_rank=1),
     Attribute("Cost", "cost per mass", "price per unit mass", "Cost", low=0, closed=("low",)),
-]}
+]
+
+
+def attributes_of(modules):
+    """{name: Attribute}: the core's attributes and those the modules bring (their NEW_PROPERTIES), each once."""
+    from lsr_mmto.physics.available_physics import joined
+    entries = joined("material properties", {a.name: a for a in CORE_ATTRIBUTES}, modules,
+                     lambda m: {p["name"]: p for p in m.NEW_PROPERTIES})
+    return {name: entry if isinstance(entry, Attribute) else Attribute(physics=tags, **entry)
+            for name, (entry, tags) in entries.items()}
+
+
+ATTRIBUTES = attributes_of(MODULES)
 # each attribute's name as a user reads it, from its entry
 SHOWN = {a.name: a.shown for a in ATTRIBUTES.values()}
 _BY_ALIAS = {k.lower(): a.name for a in ATTRIBUTES.values() for k in (a.name,) + a.aliases}

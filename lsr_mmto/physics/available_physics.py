@@ -24,6 +24,9 @@ MODULE_ENTRIES = {
     "UNIT_KINDS": "the kinds of quantity its values and quantities measure that the core does not have, "
                   "{kind: {'units': {unit: value in SI}, 'MKS': unit, 'mmKS': unit, 'IPS': unit}}",
     "PROPERTIES": "the material database columns every problem of it reads",
+    "NEW_PROPERTIES": "the material properties it brings that the core does not have (the core has Density and "
+                      "Cost), each as the arguments of an Attribute (materials/databases.py); a property another "
+                      "physics brings too is one entry, shared, when both give it the same way; may be empty",
     "make_solver": "make_solver(mesh, mat_prop, bcs, linear_solver, dsolver, elem_body_force): its finite "
                    "element solver; bcs holds one boundary condition per field",
     "analyse": "analyse(model): one iteration's solve inside the torch tree, from model.x_phys and model.props, "
@@ -62,6 +65,41 @@ def _checked(module):
 
 
 PHYSICS = {m.NAME: _checked(m) for m in MODULES}
+
+
+def joined(what, core, modules, entries):
+    """{name: (entry, the names of the physics that give it)}: the core's entries (core: {name: entry}, every
+    physics has them; tagged with none) and each module's (entries(module): {name: entry}) in one list, as the
+    core's lists of properties, quantities and kinds of support and load are made. An entry several physics
+    give the same way (the same object, or equal) is one entry tagged with all of them; two different
+    entries under one name are an error naming both places."""
+    out, where = {}, {}
+    for name, entry in core.items():
+        out[name], where[name] = (entry, []), "the core"
+    for m in modules:
+        for name, entry in entries(m).items():
+            here = f"the {m.NAME} physics"
+            if name not in out:
+                out[name], where[name] = (entry, [m.NAME]), here
+                continue
+            have, tags = out[name]
+            if not (have is entry or have == entry):
+                raise ValueError(f"two different {what} are named {name!r}: one in {where[name]}, one in {here}. "
+                                 f"Rename one of them, or give the same entry in both.")
+            if where[name] != "the core" and m.NAME not in tags:
+                tags.append(m.NAME)
+    return out
+
+
+def undefined_properties(modules, quantities, properties):
+    """Raises, naming the place, when a physics' PROPERTIES or a quantity's needs names a material property
+    that is not in properties (the joined list): every property is defined once, in the core or a physics."""
+    named = [(f"the {m.NAME} physics' PROPERTIES", c) for m in modules for c in m.PROPERTIES] + \
+        [(f"the quantity {q.name}", c) for q in quantities for c in q.needs]
+    for place, column in named:
+        if column not in properties:
+            raise ValueError(f"{place} names the material property {column!r}, which neither the core nor any "
+                             f"physics defines; add it to that physics' NEW_PROPERTIES")
 
 
 def physics_module(name):
