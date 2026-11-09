@@ -66,6 +66,7 @@ LSR MMTO
 │   ├── materials_panel.py, database_editor.py, formulation_panel.py, settings_panel.py,
 │   │   supports_and_loads_panel.py, run_panel.py, results_panel.py   one panel each
 │   ├── draw_design.py            a design in the 3D view, with the views its run saved
+│   ├── crash_report.py           crashes, errors, freezes and the last actions, in crash_report.log
 │   ├── dark_and_light_3d_view.py, panel_widgets.py, user_guide_window.py, assets/
 │   └── pyto_ad_imports.py
 │

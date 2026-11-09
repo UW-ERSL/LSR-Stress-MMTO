@@ -16,9 +16,11 @@ picture with the icon says the app is starting until the window shows.
 import os
 import sys
 
+from gui.crash_report import FOLDER  # noqa: E402 (standard library only: quick to load)
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 _app = None
-LOG = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "LSR MMTO", "gui.log")
+LOG = os.path.join(FOLDER, "gui.log")                              # beside the crash report
 
 
 def without_console():

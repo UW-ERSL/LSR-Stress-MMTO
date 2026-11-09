@@ -44,6 +44,8 @@ https://github.com/user-attachments/assets/abb986d8-c686-4a75-b559-3b81c5ae498f
 
 Each panel's (i) button explains that panel, and Help > User guide covers every step.
 
+If the app crashes or stops responding, `crash_report.log` in `%LOCALAPPDATA%\LSR MMTO` (paste that into the File Explorer address bar) records what happened; send it along with a description of what you were doing.
+
 ## Your first project in Python
 
 `docs/reference.md` has every call, with examples (also in the GUI under Help > Researcher guide > Reference). `Python_walkthrough.ipynb` takes the U-bracket from its STL to the optimized design in Python, with no GUI. Open it in VS Code or Jupyter and select the kernel **Python (lsr-stress-mmto-ad)**.

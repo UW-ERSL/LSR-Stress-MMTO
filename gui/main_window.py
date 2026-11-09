@@ -1738,6 +1738,8 @@ class MMTOWindow(MainWindow):
                                                             options=FILE_DIALOG_OPTIONS)
             if not path:
                 return False
+        from gui import crash_report
+        crash_report.write(f"opening the project {os.path.abspath(path)}")
         error = mmto_file_error(path)
         if error is None:
             try:
@@ -2515,17 +2517,27 @@ class MMTOWindow(MainWindow):
 def install_error_handler(window):
     """An error inside the app (in what a button or a field does) shown in a message box and written to the
     log, with the app left running. Without it, PyQt ends the whole app at once and unsaved work is lost."""
+    import html
     import traceback
+
+    from gui import crash_report
 
     def handler(kind, value, tb):
         if issubclass(kind, KeyboardInterrupt):
             return sys.__excepthook__(kind, value, tb)
         print("".join(traceback.format_exception(kind, value, tb)), file=sys.stderr, flush=True)
+        crash_report.error(kind, value, tb)
         try:
             window.message_text.append(f"Error: {kind.__name__}: {value}")
-            QtWidgets.QMessageBox.critical(
-                window, APP, f"Something went wrong:\n\n{kind.__name__}: {value}\n\nLSR MMTO is still "
-                             f"running. If anything looks wrong, save the project and start the app again.")
+            text = (f"Something went wrong:\n\n{kind.__name__}: {value}\n\nLSR MMTO is still running. If anything "
+                    f"looks wrong, save the project and start the app again.")
+            if crash_report.started():                              # the path on one line: the box made wide enough
+                path = crash_report.where()
+                width = QtGui.QFontMetrics(QtWidgets.QApplication.font()).horizontalAdvance(path) + 24
+                text = (html.escape(text).replace("\n", "<br>") +
+                        f"<br><br>Details are saved in<table width='{width}' cellspacing='0' cellpadding='0'>"
+                        f"<tr><td>{html.escape(path)}</td></tr></table>")
+            QtWidgets.QMessageBox.critical(window, APP, text)
         except Exception:                                           # noqa: BLE001
             pass
     sys.excepthook = handler
@@ -2538,6 +2550,8 @@ def main(argv=(), splash=None):
     apply_style(app)
     from PyQt5.QtGui import QIcon
     app.setWindowIcon(QIcon(ICON))                                 # title bar and taskbar
+    from gui import crash_report
+    crash_report.start()
     window = MMTOWindow()
     install_error_handler(window)
     window.show()
