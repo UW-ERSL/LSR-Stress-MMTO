@@ -198,3 +198,27 @@ if __name__ == "__main__":
             print(f"FAIL {name}: {type(e).__name__}: {e}")
     print("all passed" if not failed else f"{failed} failed")
     sys.exit(1 if failed else 0)
+
+
+def test_a_design_with_no_material_says_so_and_writes_nothing():
+    """A design with no material anywhere (a run stopped after a few iterations): a plain message, nothing
+    written. VTK's surface of an all-void grid ended the whole program; the export runs in its own process
+    here, so a return of that crash fails this test only."""
+    import subprocess
+    code = (
+        "import sys, os, numpy as np; from types import SimpleNamespace\n"
+        f"sys.path.insert(0, {ROOT!r})\n"
+        "from lsr_mmto.results import stl_export as X\n"
+        "run = SimpleNamespace(x_cont=np.zeros(8), material_indices=np.zeros(8, int), solid=np.zeros(8, bool),\n"
+        "                      material_labels=['m0'])\n"
+        "mesh = SimpleNamespace(elem_centers=np.argwhere(np.ones((2, 2, 2))) + 0.5, elem_size=np.ones(3))\n"
+        "folder = sys.argv[1]\n"
+        "try:\n"
+        "    X.export(run, mesh, folder)\n"
+        "except ValueError as e:\n"
+        "    print('message:', e)\n"
+        "print('files:', os.listdir(folder))\n")
+    with tempfile.TemporaryDirectory() as folder:
+        done = subprocess.run([sys.executable, "-c", code, folder], capture_output=True, text=True, timeout=120)
+    assert done.returncode == 0, f"the export ended the program (code {done.returncode}):\n{done.stderr[-2000:]}"
+    assert f"message: {X.EMPTY}" in done.stdout and "files: []" in done.stdout, done.stdout

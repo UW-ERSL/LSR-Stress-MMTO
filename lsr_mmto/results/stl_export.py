@@ -46,6 +46,7 @@ SIGMA = 0.5        # Gaussian width, in elements: PyTO-AD's STL recovery default
 FINE = 3           # each element split FINE x FINE x FINE for the per-material surfaces
 TAUBIN = (30, 0.05) # Taubin smoothing of the shared surface: iterations, pass band (removes the
                    # third-of-an-element staircase without shrinking, unlike plain smoothing)
+EMPTY = "the design has no material yet. Run more iterations, then export."   # after "The STL export failed:"
 
 
 @dataclass
@@ -295,8 +296,12 @@ def export(run, mesh, folder, materials=True):
     folder: the folder the files go into, usually the run's own
     materials: True also writes one file for each material, False only the whole part
     Example: report = export(r, mesh, folder)
+    ValueError (EMPTY), with nothing written, when the design has no material: VTK's surface of an
+    all-void grid ends the program instead of failing.
     """
     import trimesh
+    if not np.any(run.solid):
+        raise ValueError(EMPTY)
     h3 = float(np.prod(mesh.elem_size))
     report = Report(whole_path=os.path.join(folder, "design.stl"),
                     design_volume=float(np.count_nonzero(run.solid)) * h3)
@@ -309,6 +314,8 @@ def export(run, mesh, folder, materials=True):
     regions = None
     if materials or not report.whole_closed:
         label, origin, spacing = material_labels(run, mesh)
+        if not label.any():                                         # (no cell kept a material)
+            raise ValueError(EMPTY)
         pts, quads, bl, behind = material_surfaces(label, origin, spacing)
         regions = piece(pts, quads, bl, behind, 0)                  # the material regions' outer surface
         report.pieces_whole_volume = float(regions.volume)
