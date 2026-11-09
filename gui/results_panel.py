@@ -282,11 +282,13 @@ class ResultsWindow(QtWidgets.QDialog):
         after = QtWidgets.QHBoxLayout()
         self.folder_button = QtWidgets.QPushButton("Open folder")
         self.folder_button.clicked.connect(lambda: open_folder(self.current))
+        self.rename_button = QtWidgets.QPushButton("Rename")
+        self.rename_button.clicked.connect(lambda: self.rename_run())
         self.delete_button = QtWidgets.QPushButton("Delete this run")
         self.delete_button.clicked.connect(self.delete_run)
         self.design_button = QtWidgets.QPushButton("Analyse this design")
         self.design_button.clicked.connect(lambda: self.analyse_design())
-        for widget in (self.folder_button, self.delete_button, self.design_button):
+        for widget in (self.folder_button, self.rename_button, self.delete_button, self.design_button):
             after.addWidget(widget)
         after.addStretch()
         after.addWidget(Info(DESIGN_HELP + "\n\n" + STL_HELP))     # one (i) for the row: the analysis, then the export
@@ -296,7 +298,7 @@ class ResultsWindow(QtWidgets.QDialog):
     # ------------------------------------------------------------------ the list
     def refresh(self):
         """The list again: this project's runs, newest first, then the other results opened."""
-        from lsr_mmto.problem.project_folder import analysed_material, is_run, run_facts, runs
+        from lsr_mmto.problem.project_folder import analysed_material, is_run, run_facts, run_name, runs
         keep = self.current
         self.others = [f for f in self.others if is_run(f)]
         self.list.blockSignals(True)
@@ -311,6 +313,8 @@ class ResultsWindow(QtWidgets.QDialog):
             material = analysed_material(folder)
             if material is not None:
                 text = f"Analysis: {material} · {when}"
+            if run_name(folder):                                    # renamed by the user: the name first
+                text = f"{run_name(folder)} · {text}"
             if folder in self.others:
                 text = OTHER + f"{os.path.basename(os.path.dirname(folder))}, {text}"
             self._add_item(folder, text, folder)
@@ -357,6 +361,7 @@ class ResultsWindow(QtWidgets.QDialog):
     def _update_buttons(self):
         mine = self.current is not None and self.current not in self.others and self.current != UNSAVED
         self.delete_button.setEnabled(mine)                         # others are for looking only
+        self.rename_button.setEnabled(mine)
         self.design_button.setEnabled(mine and self.records.get(self.current) is not None and
                                       self.records[self.current].analysed_material is None)
         self.folder_button.setEnabled(self.current is not None and self.current != UNSAVED)
@@ -561,6 +566,31 @@ class ResultsWindow(QtWidgets.QDialog):
             self.tabs.clear()
             self.refresh()
 
+    def rename_run(self, new=None):
+        """The shown run's folder renamed; its name then leads its line in the list. new given: no dialog (tests).
+        Returns the new folder, or None when nothing was renamed."""
+        from lsr_mmto.problem.project_folder import rename_run, run_name
+        if self.current is None or self.current in self.others or self.current == UNSAVED:
+            return None
+        folder = self.current
+        if new is None:
+            new, ok = QtWidgets.QInputDialog.getText(self, "Rename run", "New name", text=run_name(folder) or "")
+            if not ok:
+                return None
+        try:
+            renamed = rename_run(folder, new)
+        except (OSError, ValueError) as e:
+            QtWidgets.QMessageBox.warning(self, "Rename run", f"Not renamed: {e}")
+            return None
+        if renamed != folder:
+            self.end_compare()
+            if folder in self.records:                              # the loaded run kept, under its new folder
+                self.records[renamed] = self.records.pop(folder)
+            self.current = renamed
+            self.window.message_text.append(f"Renamed the run {folder} to {os.path.basename(renamed)}")
+        self.refresh()
+        return renamed
+
     # ------------------------------------------------------------------ two runs
     def compare(self):
         """The two runs ticked, in a Compare window of their own; their designs side by side on the part."""
@@ -607,13 +637,14 @@ class ResultsWindow(QtWidgets.QDialog):
         super().closeEvent(event)
 
     def _name(self, folder):
-        from lsr_mmto.problem.project_folder import run_facts
-        from lsr_mmto.problem.project_folder import analysed_material
+        from lsr_mmto.problem.project_folder import analysed_material, run_facts, run_name
         if folder == UNSAVED:
             return f"Analysis: {self.unsaved[0].analysed_material}, not saved"
         when = run_facts(folder)[0]
         material = analysed_material(folder)
         when = when if material is None else f"Analysis: {material}, {when}"
+        if run_name(folder):
+            when = f"{run_name(folder)}, {when}"
         return (OTHER + when) if folder in self.others else when
 
     def _draw_compare(self):

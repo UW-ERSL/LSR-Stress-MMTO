@@ -2501,6 +2501,22 @@ def test_results_compare_delete():
         assert res.comparing is None and "result_design_2" not in w.plotter.actors
         assert res.compare()
 
+        assert res.select(folders[0]) and res.rename_button.isEnabled()      # Rename: the folder renamed, its
+        renamed = res.rename_run("Low stress try")                            # name first in its line
+        assert renamed == os.path.join(d, "P", "results", "Low stress try") and not os.path.exists(folders[0])
+        assert res.current == renamed and res.comparing is None and res.tabs.count() == 3
+        assert res.list.currentItem().text().startswith("Low stress try · 20"), res.list.currentItem().text()
+        assert res._name(renamed).startswith("Low stress try, 20")             # and in Compare
+        with answers():
+            assert res.rename_run("a/b") is None                              # not a folder name
+            assert res.rename_run(os.path.basename(folders[1])) is None       # taken
+        stamp = os.path.join(d, "P", "results", "2030-01-01_00-00-00")      # renamed in Explorer to a date stamp:
+        os.rename(renamed, stamp)                                             # shown as not renamed
+        res.refresh()
+        assert "2030" not in res.list.item(res.folders().index(stamp)).text()
+        os.rename(stamp, folders[0])                                          # back, for the rest of the test
+        res.refresh()
+
         moved = shutil.copytree(os.path.join(d, "P"), os.path.join(d, "Q"))  # a project zipped and sent
         other = os.path.join(moved, "results", os.path.basename(folders[0]))
         assert res.add_other(other) == other and res.current == other

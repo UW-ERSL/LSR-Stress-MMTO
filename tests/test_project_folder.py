@@ -114,6 +114,19 @@ def test_runs_listed_and_deleted():
             raise AssertionError("deleted a folder that holds no run")
         except ValueError:
             pass
+        assert F.run_name(made[0]) is None and F.run_name(made[0] + "_2") is None        # names a run is given
+        renamed = F.rename_run(made[0], "  Low stress try ")
+        assert renamed == os.path.join(os.path.dirname(made[0]), "Low stress try")
+        assert F.run_name(renamed) == "Low stress try" and set(F.runs(p)) == {made[1], renamed}
+        for bad in ("", "a/b", "x:y", os.path.basename(made[1])):              # empty, not a name, taken
+            try:
+                F.rename_run(renamed, bad)
+                raise AssertionError(f"renamed to {bad!r}")
+            except ValueError:
+                pass
+        assert F.rename_run(renamed, "Low stress try") == renamed               # the same name: nothing to do
+        made[0] = F.rename_run(renamed, os.path.basename(made[0]))             # back to its date: unnamed again
+        assert F.run_name(made[0]) is None
         F.delete_run(made[0])
         assert F.runs(p) == [made[1]] and os.path.isdir(os.path.join(d, "P", "part"))
         old = Project.load(os.path.join(PROJECTS, "beam.mmto"))              # not in a folder of its own:

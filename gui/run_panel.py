@@ -68,10 +68,11 @@ def open_folder(path):
 
 def ask_delete_run(parent, folder):
     """A run's folder deleted after a yes; True when it was."""
-    from lsr_mmto.problem.project_folder import delete_run, run_facts
-    when = run_facts(folder)[0]
+    from lsr_mmto.problem.project_folder import delete_run, run_facts, run_name
+    when, name = run_facts(folder)[0], run_name(folder)
+    which = f"the run {name} ({when})" if name else f"the run of {when}"
     answer = QtWidgets.QMessageBox.question(
-        parent, "Delete this run", f"Delete the run of {when}? Its folder, with everything in it, is removed. "
+        parent, "Delete this run", f"Delete {which}? Its folder, with everything in it, is removed. "
                                    f"This cannot be undone.",
         QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No, QtWidgets.QMessageBox.No)
     if answer != QtWidgets.QMessageBox.Yes:
@@ -353,11 +354,11 @@ class RunWindow(StructuralTopOptWindow):
         and loads now (solid_part_analysis.analyse_design), in the worker thread, as Analyse goes; saved in the
         project's results, after the save a run asks for."""
         from lsr_mmto.optimize.solid_part_analysis import analyse_design
-        from lsr_mmto.problem.project_folder import run_facts
+        from lsr_mmto.problem.project_folder import run_facts, run_name
         if not self._checked() or not self._saved("Analyse this design"):
             return False
         self.design_of = run_folder
-        return self._start_analysis(f"the design of {run_facts(run_folder)[0]}", True,
+        return self._start_analysis(f"the design of {run_name(run_folder) or run_facts(run_folder)[0]}", True,
                                     lambda p, folder, stop: analyse_design(p, run_folder, folder, stop))
 
     def _start_analysis(self, what, save, analyse):

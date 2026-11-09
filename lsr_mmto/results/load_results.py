@@ -352,7 +352,8 @@ def load(path: str) -> Run:
     if os.path.isfile(path[:-4] + ".config.json"):
         with open(path[:-4] + ".config.json") as fh:
             config = absolute_paths(json.load(fh), os.path.dirname(path))
-    return from_arrays(path, r, config)
+    with r:                                                         # closed once read: an open file stops Windows
+        return from_arrays(path, r, config)                         # renaming or deleting the run's folder
 
 
 def from_arrays(path: str, r, config) -> Run:

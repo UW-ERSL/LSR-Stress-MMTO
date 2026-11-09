@@ -31,12 +31,15 @@ script alone, so a script never rewrites itself.
     write_setup_script(project)  the setup script written from the project (the window only)
     new_run_folder(project)      the folder for the next run's results
     runs(project)                the project's runs, newest first
+    run_name(folder)             the name the user gave a run, or None
+    rename_run(folder, new)      a run's folder renamed
 """
 import datetime
 import filecmp
 import json
 import math
 import os
+import re
 import shutil
 
 PART, MATERIALS, RESULTS = "part", "materials", "results"
@@ -275,6 +278,32 @@ def new_run_folder(project):
     while os.path.exists(path):
         path, k = os.path.join(root, f"{stamp}_{k}"), k + 1
     return path
+
+
+STAMP = re.compile(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(_\d+)?")   # a name new_run_folder gives
+
+
+def run_name(folder):
+    """The name the user gave a run (or an analysis) by renaming its folder, or None while its folder still
+    has a name new_run_folder gives."""
+    name = os.path.basename(os.path.normpath(folder))
+    return None if STAMP.fullmatch(name) else name
+
+
+def rename_run(folder, new):
+    """Renames a run's folder, beside the others; returns its new path. ValueError, with the reason in plain
+    words, when the name cannot be used; OSError when the system refuses (a file of the run is open)."""
+    new = new.strip()
+    problem = name_problem(new)
+    if problem:
+        raise ValueError(problem)
+    target = os.path.join(os.path.dirname(os.path.normpath(folder)), new)
+    if os.path.normcase(os.path.abspath(target)) == os.path.normcase(os.path.abspath(folder)):
+        return folder
+    if os.path.exists(target) and os.path.normcase(new) != os.path.normcase(os.path.basename(folder)):
+        raise ValueError(f"{new} is already used in this project's results; choose another name")
+    os.rename(folder, target)
+    return target
 
 
 def is_run(folder):
