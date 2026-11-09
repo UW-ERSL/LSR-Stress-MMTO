@@ -3,7 +3,8 @@ test_ad_quantities.py
 =====================
 Autodiff gradients of the objectives and constraints against central finite
 differences, on a coarse U-bracket (n_dof = 3000, about 12,000 DOF;
-6-material database with Density and Yield_Strength).
+6-material database with Density and Yield_Strength; Cost on the 20-alloy database,
+which has a Cost column).
 
     python tests/test_ad_quantities.py        (or: python -m pytest tests)
 
@@ -45,23 +46,29 @@ QUANTITIES = [
     ("constraint MaterialVolumeFraction, material 2", None,
      ("MaterialVolumeFraction", {"material_id": 2, "tau": 0.5}, 0.15)),
     ("constraint MassFraction, the lightest", None, ("MassFraction", {"material_id": "lightest"}, 0.4)),
+    ("objective Cost", ("Cost", None), None),
+    ("constraint Cost", None, ("Cost", None, 1.0)),
 ]
+# the database a check uses when not the U-bracket's own: Cost needs a Cost column
+DATABASE = {"objective Cost": "CustomAlloys20_3D", "constraint Cost": "CustomAlloys20_3D"}
 # the quantities not checked here, each with the reason (tests/test_extending.py makes sure every other one is)
-NOT_CHECKED = {"Cost": "no database with a Cost column is small enough"}
+NOT_CHECKED = {}
 # Mass fraction is also checked against a hand calculation (test_mass_fraction_by_hand).
 
 _SETUP = {}
 
 
-def _setup():
-    """The U-bracket model at a random design, built once."""
-    if _SETUP:
-        return _SETUP
+def _setup(database=None):
+    """The U-bracket model at a random design, built once for each database (None: the U-bracket's own)."""
+    if database in _SETUP:
+        return _SETUP[database]
     from lsr_mmto.problem.project import Project, _run_arguments
 
     p = Project.load(os.path.join(ROOT, "projects", "U-bracket.mmto"))
     p.n_dof = N_DOF
     p.settings["common"]["maxIterations"] = 1
+    if database is not None:
+        p.database = database
     args = _run_arguments(p, verbose=False)
     s = _model_from_setup(args)
     model = s["model"]
@@ -70,8 +77,8 @@ def _setup():
     zeta = np.empty_like(s["lb"])
     zeta[:n] = rng.uniform(0.05, 1.0, n)
     zeta[n:] = rng.uniform(s["lb"][n:], s["ub"][n:])
-    _SETUP.update(model=model, beta=s["beta"], eta=s["eta"], zeta=zeta)
-    return _SETUP
+    _SETUP[database] = dict(model=model, beta=s["beta"], eta=s["eta"], zeta=zeta)
+    return _SETUP[database]
 
 
 def _value_and_gradient(model, zeta, beta, eta, objective, constraint):
@@ -93,7 +100,7 @@ def _value_and_gradient(model, zeta, beta, eta, objective, constraint):
 
 def check(name, objective, constraint, n_x=3, n_z=3):
     """Smallest relative difference over the step sizes, for each picked variable."""
-    s = _setup()
+    s = _setup(DATABASE.get(name))
     model, zeta, beta, eta = s["model"], s["zeta"], s["beta"], s["eta"]
     saved = (model.to_params.Objective, list(model.to_params.Constraints))
     try:
