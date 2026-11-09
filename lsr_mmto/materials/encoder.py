@@ -4,7 +4,7 @@ from torch.func import vmap, jacrev
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from sklearn.decomposition import PCA
+from lsr_mmto.materials.pca import PCA
 import matplotlib.cm as cm
 import os
 import sys

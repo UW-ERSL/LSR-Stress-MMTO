@@ -96,6 +96,7 @@ if __name__ == "__main__":
     try:
         sys.path.insert(0, ROOT)
         from gui.main_window import main
+        import pandas  # noqa: F401 (reads the material database; loaded here, while the picture shows)
     except Exception as e:                                          # noqa: BLE001
         splash.close()
         if not windowed:

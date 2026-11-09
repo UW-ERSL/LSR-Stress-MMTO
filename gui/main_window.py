@@ -886,7 +886,10 @@ class MMTOWindow(MainWindow):
         """The buttons of SIDEBAR_STEPS marked by the run's own check (Project.validate, as Run uses it; errors
         when already found): a tick once the step is set up and the check finds nothing wrong in it, a red
         mark when it finds an error in it, and the button's own picture while the step is not set up yet.
-        Warnings mark nothing."""
+        Warnings mark nothing. While a project is being shown (_show), the marks wait until it is drawn: the check
+        reads the material database, and PyTO-AD asks for the marks several times while the part loads."""
+        if errors is None and getattr(self, "_marks_later", False):
+            return
         p = getattr(self, "project", None)                          # (PyTO-AD may ask before there is one)
         wrong = {e.step for e in (p.validate() if errors is None else errors)} if p is not None else set()
         for name, step in SIDEBAR_STEPS.items():
@@ -1924,12 +1927,17 @@ class MMTOWindow(MainWindow):
         for actor in self._rulers:                                  # the old part's scales
             self.plotter.remove_actor(actor, reset_camera=False)
         self._rulers = []
-        if os.path.isfile(project.stl_path()):
-            loader = PartLoader(self)                               # draws the STL, picking on
-            loader.load_geometry(project.stl_path())
-            loader.deleteLater()
-        else:
-            self.plotter.clear_actors()
+        self._marks_later = True                                    # the side marks once the part is drawn
+        try:
+            if os.path.isfile(project.stl_path()):
+                loader = PartLoader(self)                           # draws the STL, picking on
+                loader.load_geometry(project.stl_path())
+                loader.deleteLater()
+            else:
+                self.plotter.clear_actors()
+        finally:
+            self._marks_later = False
+        QtCore.QTimer.singleShot(0, self.update_side_marks)
         self.draw_ruler()
         self._view_changed()
         self.message_text.clear()                                   # the loader's own lines go too

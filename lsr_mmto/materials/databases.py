@@ -253,7 +253,7 @@ def participation_ratio(X):
     """d_eff = (sum of PCA eigenvalues)^2 / sum of their squares, with the eigenvalues
     and the explained variance ratios. 0 when every eigenvalue is zero."""
     import numpy as np
-    from sklearn.decomposition import PCA
+    from lsr_mmto.materials.pca import PCA
     pca = PCA().fit(X)
     lambdas = np.asarray(pca.explained_variance_, dtype=float)
     if np.all(lambdas <= 1e-16):

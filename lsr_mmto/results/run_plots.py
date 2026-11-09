@@ -178,7 +178,7 @@ def latent_projection(z_real):
     zr = np.asarray(z_real, float)
     if zr.ndim < 2 or zr.shape[1] <= 3:
         return None
-    from sklearn.decomposition import PCA
+    from lsr_mmto.materials.pca import PCA
     return PCA(n_components=2).fit(zr)
 
 

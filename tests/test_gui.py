@@ -415,6 +415,7 @@ def test_side_marks():
     with scratch() as d:
         assert w.open_project(shutil.copy(os.path.join(PROJECTS, "L-bracket.mmto"), d))
         assert w.project.validate() == [] and w.project.warnings()                # warnings: still ticked
+        APP.processEvents()                                                    # the marks, once the part is drawn
         assert marks(w) == {"Units": "check", "Materials": "check", "Supports and loads": "check",
                             "Formulation": "check", "Settings": None, "Run": None, "Results": None,
                             "Display Options": None}
@@ -432,11 +433,13 @@ def test_side_marks():
         assert all(m in ("check", None) for m in marks(w).values()), marks(w)
         with answers(Box.Discard):
             assert w.open_project(shutil.copy(os.path.join(PROJECTS, "U-bracket.mmto"), d))
+        APP.processEvents()
         assert w.project.units == "none" and marks(w)["Units"] == "plain"         # not set up yet
         empty = P("empty", stl=w.project.stl, base_dir=w.project.base_dir)
         assert {"no supports", "no loads", "no material database", "no objective"} <= set(empty.validate())
         with answers(Box.Discard):
             w._show(empty, None)
+        APP.processEvents()
         assert {n: marks(w)[n] for n in G.SIDEBAR_STEPS} == dict.fromkeys(G.SIDEBAR_STEPS, "plain")
         empty.bcs.append({"kind": "fixed", "on": "nowhere", "dofs": "xyz"})       # begun, and wrong: red
         w.project_changed()
