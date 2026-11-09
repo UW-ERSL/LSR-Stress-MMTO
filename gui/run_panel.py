@@ -263,9 +263,6 @@ class RunWindow(StructuralTopOptWindow):
         after.addStretch()
         layout.addLayout(after)
 
-    def problem_physics(self):
-        return "structural"
-
     def selection_names(self):
         return list(self.window.project.selections)
 
