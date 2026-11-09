@@ -21,16 +21,14 @@ app = QtWidgets.QApplication(sys.argv)
 from gui import crash_report, main_window as G
 
 def wait(seconds):
-    end = time.monotonic() + seconds
-    while time.monotonic() < end:
-        app.processEvents()
-        time.sleep(0.05)
+    QtTest.QTest.qWait(int(seconds * 1000))                     # Qt's own event loop, as the app runs
 
 QtWidgets.QMessageBox.critical = staticmethod(lambda *a, **k: QtWidgets.QMessageBox.Ok)
 crash_report.start(sys.argv[1], freeze_after=2)
 w = G.MMTOWindow()
 G.install_error_handler(w)
 w.show()
+wait(3)                                                         # the window's start-up is not normal use
 
 crash_report.write("=== normal")
 ok = QtWidgets.QPushButton("Planted button", w)
