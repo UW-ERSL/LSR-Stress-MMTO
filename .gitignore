@@ -35,3 +35,6 @@ _verify_environment.py
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# soak test output and its working copies (tests/gui_soak.py)
+soak_results/
