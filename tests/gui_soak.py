@@ -70,7 +70,7 @@ def measures():
         from ctypes import wintypes
         k32, psapi, user32 = ctypes.windll.kernel32, ctypes.windll.psapi, ctypes.windll.user32
         k32.GetCurrentProcess.restype = wintypes.HANDLE
-        me = k32.GetCurrentProcess()
+        me = wintypes.HANDLE(k32.GetCurrentProcess())               # a handle, not a plain int: (HANDLE)-1
 
         class Counters(ctypes.Structure):
             _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD)] + \
@@ -91,7 +91,7 @@ def measures():
                         ("th32OwnerProcessID", wintypes.DWORD), ("tpBasePri", ctypes.c_long),
                         ("tpDeltaPri", ctypes.c_long), ("dwFlags", wintypes.DWORD)]
         k32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
-        snap = k32.CreateToolhelp32Snapshot(4, 0)                   # TH32CS_SNAPTHREAD
+        snap = wintypes.HANDLE(k32.CreateToolhelp32Snapshot(4, 0))  # TH32CS_SNAPTHREAD
         e, pid, count = Entry(), os.getpid(), 0
         e.dwSize = ctypes.sizeof(e)
         ok = k32.Thread32First(snap, ctypes.byref(e))
