@@ -21,6 +21,7 @@ import os
 import shutil
 import sys
 import tempfile
+import threading
 
 import numpy as np
 
@@ -2442,12 +2443,15 @@ def test_results_compare_delete():
         w.project.settings["common"]["maxIterations"] = 2
         assert w.save_project_as(os.path.join(d, "P", "P.mmto")) and w.own_folder()
         r = w.open_run_panel()
-        folders = []
-        for _ in range(2):
+        folders, threads, real = [], [], r.run_optimization          # every run on the one background thread: a
+        r.run_optimization = lambda *a: (threads.append(threading.current_thread()), real(*a))[1]   # new thread per
+        for _ in range(2):                                           # run left its maths thread pool behind
             assert r.start_optimization()
             assert _wait(lambda: not r.optimization_running), "the run did not finish"
             assert r.status.text().startswith("Run finished"), r.status.text()
             folders.append(r.save_dir)
+        del r.run_optimization
+        assert len(threads) == 2 and threads[0] is threads[1], "each run had a thread of its own"
         assert all(os.path.dirname(f) == os.path.join(d, "P", "results") for f in folders)
         assert r.results_button.isVisibleTo(r) and r.delete_button.isVisibleTo(r)
 

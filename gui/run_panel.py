@@ -295,11 +295,11 @@ class RunWindow(StructuralTopOptWindow):
         return True
 
     def start_optimization(self):
-        """The project's checks, a save, then _run_topopt in PyTO-AD's worker thread."""
+        """The project's checks, a save, then _run_topopt on the background thread (gui/background_work.py)."""
         w = self.window
         if not self._checked() or not self._saved("Run"):
             return False
-        import threading
+        from gui.background_work import run_in_background
         self.analysis = None
         self.project = w.project.copy()                            # the run's own copy: edits go to the next run
         self.save_dir = results_folder(self.project)
@@ -317,9 +317,7 @@ class RunWindow(StructuralTopOptWindow):
         self._start_live_latent()
         self.status.setText("Starting: building the mesh and the material network...")
         w.message_text.append(f"Run started: results in {self.save_dir}")
-        self.optimization_thread = threading.Thread(target=self.run_optimization, args=(None, None, None),
-                                                    daemon=True)
-        self.optimization_thread.start()
+        run_in_background(self.run_optimization, None, None, None)
         return True
 
     def analyse(self):
@@ -360,7 +358,7 @@ class RunWindow(StructuralTopOptWindow):
 
     def _start_analysis(self, what, save, analyse):
         """An analysis of what (in words) started in the worker thread: analyse(project, save_dir, should_stop)."""
-        import threading
+        from gui.background_work import run_in_background
         w = self.window
         self.project = w.project.copy()
         self.analysis = (what, analyse)
@@ -373,9 +371,7 @@ class RunWindow(StructuralTopOptWindow):
         self.formulation.log_view.clear()
         self.status.setText(f"Analysing {what}...")
         w.message_text.append(f"Analysis started: {what}" + (f", saved in {self.save_dir}" if save else ", not saved"))
-        self.optimization_thread = threading.Thread(target=self.run_optimization, args=(None, None, None),
-                                                    daemon=True)
-        self.optimization_thread.start()
+        run_in_background(self.run_optimization, None, None, None)
         return True
 
     def _run_optimization(self, plan, fe_solver, spec):
