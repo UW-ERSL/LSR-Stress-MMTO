@@ -9,12 +9,18 @@ makes the element-to-unknown table it needs (PyTO-AD's structural and thermal so
 surface_faces(mesh): the faces of the mesh's surface, with their outward normals and areas, for loads
 that act on the surface (a pressure along the normal, a heat flux, convection).
 """
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from lsr_mmto.pyto_ad_imports import hex_mesher
 
+if TYPE_CHECKING:
+    from pyto.core.hex_mesher import HexMesher
 
-def make_mesh(stl_path, nDOFDesired, single_layer=False, unknowns_per_node=3):
+
+def make_mesh(stl_path: str, nDOFDesired: int, single_layer: bool = False,
+              unknowns_per_node: int = 3) -> "HexMesher":
     """The voxel mesh of an STL, with nDOFDesired / unknowns_per_node elements asked for."""
     mesh = hex_mesher.HexMesher()
     if single_layer:
@@ -29,7 +35,7 @@ def make_mesh(stl_path, nDOFDesired, single_layer=False, unknowns_per_node=3):
 HEX_FACES = np.array([[0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [3, 7, 6, 2], [0, 4, 7, 3], [1, 2, 6, 5]])
 
 
-def surface_faces(mesh):
+def surface_faces(mesh: "HexMesher") -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """(quads, normals, areas) of the voxel mesh's surface: every element face that belongs to one
     element only, as its four nodes (an array of shape (F, 4)), its outward unit normal (F, 3) and its
     area (F,). Voxel faces are axis-aligned, so each normal is one of +-x, +-y, +-z. All faces at once,

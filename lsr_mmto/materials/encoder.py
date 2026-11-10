@@ -1,3 +1,12 @@
+"""
+encoder.py
+==========
+MaterialEncoder: a material database read and scaled to [0, 1], the variational autoencoder (networks.py)
+trained on it or read from its .nt file, and what the run and the app ask of it: each material's latent point,
+the properties decoded at latent points, the closest database material, the network's errors.
+"""
+from typing import TYPE_CHECKING, Any, Callable
+
 from lsr_mmto.materials.networks import VariationalAutoencoder
 import torch
 from torch.func import vmap, jacrev
@@ -12,13 +21,16 @@ import warnings
 from lsr_mmto.materials.databases import (SHOWN, once_per_file_version, attribute_name, database_pca, log_scaled,
                                           normalize)
 
+if TYPE_CHECKING:
+    from lsr_mmto.materials.databases import VAEParams
+
 STOP_CHECK_EVERY = 100            # epochs between two asks of trainAutoencoder's should_stop
 
 
 class TrainingStopped(Exception):
     """The training was asked to stop (trainAutoencoder's should_stop); nothing was saved."""
 
-    def __init__(self, epoch):
+    def __init__(self, epoch: int) -> None:
         super().__init__(f"the material network's training was stopped at epoch {epoch}; nothing was saved")
         self.epoch = epoch
 
@@ -28,7 +40,7 @@ class NetworkRunCancelled(Exception):
     run was not wanted (_run_topopt's on_network_error answered False): nothing was optimized."""
 
 
-def network_warning(errors, limit):
+def network_warning(errors: dict[str, float], limit: float) -> str | None:
     """The warning for a network whose largest error (errors: {attribute: % of its range}) is above limit (%),
     listing every attribute, largest first; None when it is within the limit."""
     if not errors or max(errors.values()) <= limit:
@@ -39,7 +51,7 @@ def network_warning(errors, limit):
 
 
 @once_per_file_version
-def network_reconstruction(xlsx, nt):
+def network_reconstruction(xlsx: str, nt: str) -> list[dict[str, Any]] | None:
     """MaterialEncoder.reconstruction() of the network saved in nt for the database xlsx, its shape read
     from the file; None when nt is not a network for this database."""
     from lsr_mmto.materials.databases import VAEParams
@@ -57,7 +69,7 @@ def network_reconstruction(xlsx, nt):
     return enc.reconstruction()
 
 
-def largest_errors(rows):
+def largest_errors(rows: list[dict[str, Any]]) -> dict[str, tuple[float, float, str | float]]:
     """{property: (largest error in % of its range, largest difference in its unit, unit)} over the
     materials, from MaterialEncoder.reconstruction() rows."""
     out = {}
@@ -68,11 +80,34 @@ def largest_errors(rows):
 
 
 class MaterialEncoder:
-    def __init__(self, vae_params):
+    """A material database and its network. readExcel reads the database (and makes an untrained network of
+    the shape vae_params gives); loadAutoencoderFromFile or trainAutoencoder then gives the network its
+    weights. Latent points are rows, (points, latentDim); properties are {database column: (points,)}."""
+
+    nAttributes: int                         # property columns of the database (0 before readExcel)
+    vae_params: "VAEParams"
+    excel_file: str
+    nMaterials: int
+    vaeSettings: dict[str, dict[str, int]]
+    vaeNet: VariationalAutoencoder
+    rawData: np.ndarray                      # the database's numbers, (materials, attributes)
+    materialNames: list[Any]                 # as pandas reads the first column: text, or a number
+    scaledMaterialData: torch.Tensor         # rawData scaled to [0, 1] (normalize), (materials, attributes)
+    materialAttributes: dict[str, dict[str, Any]]   # {column: {"idx", "unit", "scaleMin", "scaleMax"}}
+                                                    # (a blank unit is NaN)
+    attribute_means: np.ndarray              # of the scaled columns
+    attribute_stds: np.ndarray
+    intrinsic_dim: float                     # d_eff, the participation ratio (databases.database_pca)
+    pca_explained_variance: np.ndarray
+    pca_explained_variance_ratio: np.ndarray
+    training_latents: torch.Tensor           # each material's latent point, (materials, latentDim)
+
+    def __init__(self, vae_params: "VAEParams") -> None:
         self.nAttributes = 0
         self.vae_params = vae_params
 
-    def readExcel(self, excel_file):
+    def readExcel(self, excel_file: str) -> None:
+        """Read and scale the database (preprocessData) and make an untrained network of its shape."""
         self.excel_file = excel_file
         self.preprocessData()
 
@@ -93,7 +128,10 @@ class MaterialEncoder:
         }
         self.vaeNet = VariationalAutoencoder(self.vaeSettings)
 
-    def preprocessData(self):
+    def preprocessData(self) -> None:
+        """Read excel_file: row 1 the column names (aliases made registry names), row 2 their units, then one row
+        per material, its name first. Sets rawData, materialNames, scaledMaterialData, materialAttributes,
+        attribute_means, attribute_stds, and the database's PCA (computeParticipationRatio)."""
         with warnings.catch_warnings():
             # the databases carry Excel data validation, which openpyxl drops
             warnings.filterwarnings("ignore", message="Data Validation extension")
@@ -128,7 +166,7 @@ class MaterialEncoder:
         self.attribute_stds = attribute_stds
         self.computeParticipationRatio()
 
-    def computeParticipationRatio(self):
+    def computeParticipationRatio(self) -> float:
         """
         Effective intrinsic dimensionality estimate from PCA eigenvalues of the normalized database:
         databases.database_pca, worked out once per version of the file. Shown by results/tables.pca and the
@@ -139,7 +177,9 @@ class MaterialEncoder:
         return self.intrinsic_dim
 
 
-    def largestEncodingErrorPercent(self):
+    def largestEncodingErrorPercent(self) -> float:
+        """The largest error over every material and attribute, encoded and decoded, in % of its range (of its
+        log10 for a log-scaled attribute)."""
         was = self.vaeNet.encoder.isTraining                # put back as found: left on, the encoder samples at random
         self.vaeNet.encoder.isTraining = False
         with torch.no_grad():
@@ -150,7 +190,7 @@ class MaterialEncoder:
         self.vaeNet.encoder.isTraining = was
         return largestErrorPercent
 
-    def encodingErrorsPercent(self):
+    def encodingErrorsPercent(self) -> dict[str, float]:
         """{attribute: the largest error over the materials, in % of the attribute's range}."""
         was = self.vaeNet.encoder.isTraining
         self.vaeNet.encoder.isTraining = False
@@ -159,7 +199,7 @@ class MaterialEncoder:
         self.vaeNet.encoder.isTraining = was
         return {name: 100.0 * float(diff[:, a["idx"]].abs().max()) for name, a in self.materialAttributes.items()}
 
-    def reconstruction(self):
+    def reconstruction(self) -> list[dict[str, Any]]:
         """Every material's every property as the database gives it and as the network gives it back
         (encoded to its latent point, then decoded), one dict each: material, property, unit, database,
         network, difference (network - database, in the unit), percent_of_range (the difference in % of
@@ -180,7 +220,8 @@ class MaterialEncoder:
                              "percent_of_range": 100.0 * float(diff[i, a["idx"]])})
         return rows
 
-    def printEncodingErrors(self):
+    def printEncodingErrors(self) -> None:
+        """Print each property's largest error (largest_errors of reconstruction()) as a table."""
         print("-" * 72)
         print("{:<25} {:>22} {:>23}".format("Property", "Largest error", "Largest difference"))
         print("{:<25} {:>22} {:>23}".format("", "[% of its range]", "[its unit]"))
@@ -188,17 +229,20 @@ class MaterialEncoder:
         for name, (pct, diff, unit) in largest_errors(self.reconstruction()).items():
             print("{:<25} {:>22.6f} {:>23}".format(SHOWN.get(name, name), pct, f"{diff:.6g} {unit or ''}".strip()))
         print("-" * 72)
-    def compute_parameter_norm(self):
+    def compute_parameter_norm(self) -> float:
+        """The 2-norm of every parameter of the network (weights and biases) together."""
         total_sq = 0.0
         with torch.no_grad():
             for p in self.vaeNet.parameters():
                 total_sq += torch.sum(p.detach() ** 2).item()
         return total_sq ** 0.5
-    def loadAutoencoderFromFile(self, fileName):
+    def loadAutoencoderFromFile(self, fileName: str) -> None:
+        """The network's weights read from fileName (a .nt file); sets training_latents."""
         self.vaeNet.load_state_dict(torch.load(fileName))
         self.vaeNet.eval()
         self.training_latents = self.vaeNet.encoder(self.scaledMaterialData).cpu()
-    def _compute_vae_loss(self, klFactor):
+    def _compute_vae_loss(self, klFactor: float) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """(reconstruction loss, klFactor * KL, their sum) of the whole database, keeping the autograd graph."""
         predData = self.vaeNet(self.scaledMaterialData)
         klLoss = klFactor * self.vaeNet.encoder.kl
         reconLoss = ((self.scaledMaterialData - predData) ** 2).sum()
@@ -206,16 +250,20 @@ class MaterialEncoder:
         return reconLoss, klLoss, loss
     def trainAutoencoder(
         self,
-        numEpochs,
-        klFactor,
-        savedNet,
-        learningRate,
-        maxAttributeErrorPercent=0.0005,
-        sharpAwareMinimization=False,
-        sam_rho=0.05,
-        Sam_diagnostics=False,
-        should_stop=None,
-    ):
+        numEpochs: int,
+        klFactor: float,
+        savedNet: str,
+        learningRate: float,
+        maxAttributeErrorPercent: float = 0.0005,
+        sharpAwareMinimization: bool = False,
+        sam_rho: float = 0.05,
+        Sam_diagnostics: bool = False,
+        should_stop: Callable[[], bool] | None = None,
+    ) -> dict[str, list[float]]:
+        """Train the network on the database, save its weights to savedNet and set
+        training_latents. It trains for up to numEpochs (AdamW), stopping once the largest error is below
+        maxAttributeErrorPercent; a largest error still at or above it is printed, not refused. Returns the loss
+        history."""
         # should_stop: optional function, asked every STOP_CHECK_EVERY epochs; True ends the training by
         # raising TrainingStopped, before the network is saved (savedNet is left as it was).
         opt = torch.optim.AdamW(self.vaeNet.parameters(), learningRate)
@@ -317,13 +365,16 @@ class MaterialEncoder:
         self.training_latents = self.vaeNet.encoder(self.scaledMaterialData).cpu()
         return convgHistory
 
-    def getMaterialPropertiesAtLatentPoints(self, zPts, compute_gradients=False):
+    def getMaterialPropertiesAtLatentPoints(self, zPts: torch.Tensor, compute_gradients: bool = False) \
+            -> dict[str, torch.Tensor] | tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+        """The properties at latent points zPts, without the autograd graph; with compute_gradients, also each
+        property's gradient w.r.t. its point, {column: (points, latentDim)}. Not used anywhere in this repository."""
         if compute_gradients:
             zPts_tensor = torch.tensor(zPts, dtype=torch.get_default_dtype()) \
                         if not isinstance(zPts, torch.Tensor) \
                         else zPts.clone().detach()
 
-            def compute_single_element(z_elem):
+            def compute_single_element(z_elem: torch.Tensor) -> torch.Tensor:
                 z_batch = z_elem.unsqueeze(0)
                 decoded = self.vaeNet.decoder(z_batch)
                 props = self.getMaterialProperties(decoded)
@@ -347,7 +398,9 @@ class MaterialEncoder:
                 material_properties = self.getMaterialProperties(decoded)
             return material_properties
 
-    def getMaterialProperties(self, decoded):
+    def getMaterialProperties(self, decoded: torch.Tensor) -> dict[str, torch.Tensor]:
+        """Decoder outputs (points, attributes) in [0, 1] back to each column's numbers, {column: (points,)}:
+        normalize undone (and log10 undone for a log-scaled column); the autograd graph is kept when decoded has one."""
         properties = {}
         for name, attribute in self.materialAttributes.items():
             idx = attribute['idx']
@@ -359,7 +412,8 @@ class MaterialEncoder:
                 properties[name] = (decoded[:, idx] * (scaleMax - scaleMin) + scaleMin)
         return properties
 
-    def getClosestRealMaterialIndex(self, zDesign):
+    def getClosestRealMaterialIndex(self, zDesign: torch.Tensor) -> torch.Tensor:
+        """The database row of the material whose latent point is closest to each of zDesign, (points,)."""
         with torch.no_grad():
             zReal = self.vaeNet.encoder(self.scaledMaterialData)
 
@@ -367,7 +421,8 @@ class MaterialEncoder:
         closest_indices = torch.argmin(distances, dim=1)
         return closest_indices
 
-    def getClosestRealMaterialZValues(self, zDesign):
+    def getClosestRealMaterialZValues(self, zDesign: torch.Tensor) -> np.ndarray:
+        """The latent point of the closest database material to each of zDesign, (points, latentDim)."""
         with torch.no_grad():
             zReal = self.vaeNet.encoder(self.scaledMaterialData)
 
@@ -375,7 +430,10 @@ class MaterialEncoder:
         closest_indices = torch.argmin(distances, dim=1)
         return zReal[closest_indices].detach().numpy()
 
-    def plotLSR(self, zRealPts, zDesignPts=None, xDesign=None):
+    def plotLSR(self, zRealPts: np.ndarray, zDesignPts: np.ndarray | None = None,
+                xDesign: np.ndarray | None = None) -> None:
+        """A matplotlib window of the latent space: the materials, and the design's points where xDesign > 0.5
+        (none without xDesign); projected to 2D by PCA above 3 dimensions. Not used anywhere in this repository."""
         zRealPts = np.asarray(zRealPts, dtype=float)
         if zRealPts.ndim == 1:
             zRealPts = zRealPts.reshape(-1, 1)
@@ -500,7 +558,8 @@ class MaterialEncoder:
         else:
             raise ValueError(f"Unsupported latent dimension: {latentDim}")
 
-    def getHeaviestMaterial(self):
+    def getHeaviestMaterial(self) -> np.ndarray:
+        """The latent point (latentDim,) of the material the network gives the highest density."""
         with torch.no_grad():
             z_real = self.vaeNet.encoder(self.scaledMaterialData)
             decoded = self.vaeNet.decoder(z_real)
@@ -511,7 +570,8 @@ class MaterialEncoder:
         heaviest_z = z_real[heaviest_idx].detach().cpu().numpy()
         return heaviest_z
 
-    def getLightestMaterial(self):
+    def getLightestMaterial(self) -> np.ndarray:
+        """The latent point (latentDim,) of the material the network gives the lowest density."""
         with torch.no_grad():
             z_real = self.vaeNet.encoder(self.scaledMaterialData)
             decoded = self.vaeNet.decoder(z_real)
@@ -523,7 +583,7 @@ class MaterialEncoder:
         return lightest_z
 
 
-def _density_column(properties):
+def _density_column(properties: dict[str, torch.Tensor]) -> str:
     """The column the lightest and heaviest starts compare: the first one that measures density."""
     from lsr_mmto.materials.databases import density_column
     name = density_column(properties)

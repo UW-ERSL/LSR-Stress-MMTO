@@ -10,12 +10,19 @@ colour and the label it is shown with (material_display).
 """
 import os
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Sequence
+
+if TYPE_CHECKING:
+    from types import ModuleType
+
+    import numpy as np
+    import pandas as pd
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))     # the repository folder
 DATABASE_DIR = os.path.join(REPO, "data", "databases")
 
 
-def in_shipped_folder(path):
+def in_shipped_folder(path: str) -> bool:
     """True when path is in DATABASE_DIR, the folder of the shipped databases and their networks,
     which a run never writes into."""
     norm = lambda p: os.path.normcase(os.path.realpath(p))                   # noqa: E731
@@ -72,7 +79,7 @@ UNIT_SYSTEMS = {
 }
 
 
-def _add_unit_kinds(module):
+def _add_unit_kinds(module: "ModuleType") -> None:
     """A physics' own kinds of quantity (its UNIT_KINDS: {kind: {"units": {unit: value in SI}, and the
     kind's unit in each unit system}}) added to UNITS and UNIT_SYSTEMS. A kind another physics gives
     too must be given the same way."""
@@ -95,7 +102,7 @@ for _module in MODULES:
     _add_unit_kinds(_module)
 
 
-def unit_ratio(measures, unit, system):
+def unit_ratio(measures: str, unit: str, system: str) -> float:
     """How many times larger a number written in unit is than the same value in the unit
     system's unit: 10^6 for a stress in Pa in an mmKS project."""
     return UNITS[measures][UNIT_SYSTEMS[system][measures]] / UNITS[measures][unit]
@@ -115,9 +122,28 @@ class Attribute:
     iteration_label, iteration_rank: a short label for the line each iteration prints about the solid
     elements' materials ("Y"), in the order of rank; an attribute without a label is not printed."""
 
-    def __init__(self, name, measures, doc, shown, low=None, high=None, closed=(), aliases=(),
-                 wrong_unit_effect="", log_scaled=False, legend_symbol=None, legend_rank=None,
-                 iteration_label=None, iteration_rank=None, physics=()):
+    name: str
+    measures: str
+    doc: str
+    shown: str
+    physics: tuple[str, ...]                 # the physics that bring it; empty: every problem has it
+    low: float | None
+    high: float | None
+    closed: tuple[str, ...]                  # "low", "high": the ends that are allowed
+    units: tuple[str, ...]                   # the units of UNITS[measures]
+    aliases: tuple[str, ...]
+    wrong_unit_effect: str
+    log_scaled: bool
+    legend_symbol: str | None
+    legend_rank: int | None
+    iteration_label: str | None
+    iteration_rank: int | None
+
+    def __init__(self, name: str, measures: str, doc: str, shown: str, low: float | None = None,
+                 high: float | None = None, closed: Iterable[str] = (), aliases: Iterable[str] = (),
+                 wrong_unit_effect: str = "", log_scaled: bool = False, legend_symbol: str | None = None,
+                 legend_rank: int | None = None, iteration_label: str | None = None,
+                 iteration_rank: int | None = None, physics: Iterable[str] = ()) -> None:
         if measures not in UNITS:
             raise ValueError(f"attribute {name}: measures must be one of {', '.join(UNITS)}")
         self.name, self.measures, self.doc, self.shown = name, measures, doc, shown
@@ -128,14 +154,16 @@ class Attribute:
         self.legend_symbol, self.legend_rank = legend_symbol, legend_rank
         self.iteration_label, self.iteration_rank = iteration_label, iteration_rank
 
-    def in_range(self, v):
+    def in_range(self, v: float) -> bool:
+        """True when v is within low and high (each end allowed only when named in closed)."""
         if self.low is not None and (v < self.low or (v == self.low and "low" not in self.closed)):
             return False
         if self.high is not None and (v > self.high or (v == self.high and "high" not in self.closed)):
             return False
         return True
 
-    def range_text(self):
+    def range_text(self) -> str:
+        """The range as text, "0 < value", "-1 < value < 0.5", or "any"."""
         lo = "" if self.low is None else f"{self.low} {'<=' if 'low' in self.closed else '<'} "
         hi = "" if self.high is None else f" {'<=' if 'high' in self.closed else '<'} {self.high}"
         return f"{lo}value{hi}" if (lo or hi) else "any"
@@ -152,7 +180,7 @@ CORE_ATTRIBUTES = [
 ]
 
 
-def attributes_of(modules):
+def attributes_of(modules: "list[ModuleType]") -> dict[str, Attribute]:
     """{name: Attribute}: the core's attributes and those the modules bring (their NEW_PROPERTIES), each once."""
     from lsr_mmto.physics.available_physics import joined
     entries = joined("material properties", {a.name: a for a in CORE_ATTRIBUTES}, modules,
@@ -167,20 +195,20 @@ SHOWN = {a.name: a.shown for a in ATTRIBUTES.values()}
 _BY_ALIAS = {k.lower(): a.name for a in ATTRIBUTES.values() for k in (a.name,) + a.aliases}
 
 
-def density_column(names):
+def density_column(names: Iterable[str]) -> str | None:
     """The first of names (database columns) whose attribute measures density, the one a mass is made
     from; None when there is none."""
     return next((n for n in names if n in ATTRIBUTES and ATTRIBUTES[n].measures == "density"), None)
 
 
-def iteration_columns(names):
+def iteration_columns(names: Iterable[str]) -> list[tuple[str, str]]:
     """(column, its label) of the columns among names that the per-iteration materials line prints, in the
     order of their iteration_rank."""
     marked = [ATTRIBUTES[n] for n in names if n in ATTRIBUTES and ATTRIBUTES[n].iteration_label]
     return [(a.name, a.iteration_label) for a in sorted(marked, key=lambda a: a.iteration_rank)]
 
 
-def attribute_name(name):
+def attribute_name(name: Any) -> Any:
     """The registry name of a database column; the name itself when it is not in the registry."""
     return _BY_ALIAS.get(str(name).strip().lower(), name)
 
@@ -189,7 +217,7 @@ def attribute_name(name):
 _READ_CACHE = {}                 # once_per_file_version: (function, files, arguments) -> result
 
 
-def once_per_file_version(read):
+def once_per_file_version(read: Callable[..., Any]) -> Callable[..., Any]:
     """read(path, ...) done once for each version of the file (and of any other file named in its
     arguments): the result is kept, keyed by each file's path, modification time and size, and a copy
     of it handed back, so a panel that looks at a database several times reads it once, and a file
@@ -198,12 +226,12 @@ def once_per_file_version(read):
     import functools
     import os
 
-    def version(a):
+    def version(a: str) -> tuple[str, int, int]:
         st = os.stat(a)
         return os.path.abspath(a), st.st_mtime_ns, st.st_size
 
     @functools.wraps(read)
-    def wrapper(path, *args):
+    def wrapper(path: str, *args: Any) -> Any:
         try:
             files = [version(path)] + [version(a) for a in args if isinstance(a, str) and os.path.isfile(a)]
         except OSError:
@@ -218,7 +246,8 @@ def once_per_file_version(read):
 
 
 @once_per_file_version
-def _read(path):
+def _read(path: str) -> "pd.DataFrame":
+    """The first sheet of a database, every cell as pandas reads it, no header."""
     import warnings
     import pandas as pd
     with warnings.catch_warnings():
@@ -226,13 +255,13 @@ def _read(path):
         return pd.read_excel(path, header=None)
 
 
-def log_scaled(name):
+def log_scaled(name: str) -> bool:
     """True for a column whose attribute says log_scaled: normalize scales log10 of its values, and the
     network's output is turned back with 10 ** (encoder.getMaterialProperties)."""
     return name in ATTRIBUTES and ATTRIBUTES[name].log_scaled
 
 
-def normalize(values, attribute_names):
+def normalize(values: "np.ndarray", attribute_names: Sequence[str]) -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
     """Each column scaled to [0, 1] (log10 first for an attribute that says log_scaled):
     the normalized data, and each column's minimum and maximum before scaling."""
     import numpy as np
@@ -249,7 +278,7 @@ def normalize(values, attribute_names):
     return normalized, scale_min, scale_max
 
 
-def participation_ratio(X):
+def participation_ratio(X: "np.ndarray") -> "tuple[float, np.ndarray, np.ndarray]":
     """d_eff = (sum of PCA eigenvalues)^2 / sum of their squares, with the eigenvalues
     and the explained variance ratios. 0 when every eigenvalue is zero."""
     import numpy as np
@@ -262,12 +291,12 @@ def participation_ratio(X):
             np.asarray(pca.explained_variance_ratio_, dtype=float))
 
 
-def database_attributes(path):
+def database_attributes(path: str) -> list[str]:
     """The registry names of a database's columns, in order."""
     return [attribute_name(n) for n in _read(path).iloc[0, 1:].tolist()]
 
 
-def database_units(path):
+def database_units(path: str) -> dict[str, str | None]:
     """Each column's unit as written in row 2 (None when blank), by registry name."""
     df = _read(path)
     out = {}
@@ -277,7 +306,7 @@ def database_units(path):
     return out
 
 
-def database_table(path):
+def database_table(path: str) -> "tuple[list[str], list[str], list[str | None], np.ndarray]":
     """(names, attributes, units, values): the materials, the columns' registry names, each
     column's unit as written (None when blank) and the numbers, one row per material."""
     import numpy as np
@@ -289,14 +318,14 @@ def database_table(path):
     return names, attributes, units, values
 
 
-def recommended_latent_dim(path):
+def recommended_latent_dim(path: str) -> tuple[float, int]:
     """(d_eff, n_z): the participation ratio of the normalized database, and the latent
     dimension recommended for it, the smallest integer at or above d_eff (at least 1)."""
     d_eff, n_z, _ = latent_dim_breakdown(path)
     return d_eff, n_z
 
 
-def latent_dim_breakdown(path):
+def latent_dim_breakdown(path: str) -> "tuple[float, int, np.ndarray]":
     """(d_eff, n_z, ratios): as recommended_latent_dim, with the share of the variation each
     principal component of the normalized database explains (largest first, summing to 1)."""
     import math
@@ -305,7 +334,7 @@ def latent_dim_breakdown(path):
 
 
 @once_per_file_version
-def database_pca(path):
+def database_pca(path: str) -> "tuple[float, np.ndarray, np.ndarray]":
     """participation_ratio of the normalized database: (d_eff, the PCA eigenvalues, their explained variance
     ratios), worked out once for each version of the file, whoever asks (the project's checks, the
     Materials window, the material encoder)."""
@@ -315,7 +344,7 @@ def database_pca(path):
     return participation_ratio(normalize(values, names)[0])
 
 
-def check_database(path):
+def check_database(path: str) -> tuple[list[str], list[str]]:
     """(errors, warnings) for a database file. A unit must be one of its attribute's; whether
     it suits a project's unit system is checked by the project (Project.warnings)."""
     import math
@@ -330,7 +359,7 @@ def check_database(path):
 
     cell = _cell
 
-    def blank(v):
+    def blank(v: Any) -> bool:
         return v is None or (isinstance(v, float) and math.isnan(v)) or str(v).strip() == ""
 
     if df.shape[1] < 2 or df.shape[0] < 4:
@@ -469,7 +498,7 @@ material_colors = [ # these colors can be changed as desired for each example
 # ]
 
 
-def default_colours(n):
+def default_colours(n: int) -> list[str]:
     """The colour of each material with none given: material_colors for the
     first 20, then colours generated by turning the hue by the golden angle and alternating
     the lightness. The same n gives the same colours; no two are the same."""
@@ -489,7 +518,7 @@ def default_colours(n):
 
 
 @once_per_file_version
-def _linked_names(path, sheet, column):
+def _linked_names(path: str, sheet: str, column: int) -> dict[int, str]:
     """{row index, as pandas reads the sheet: material name} for the Material cells that are a formula
     pointing at one cell of a sheet, as the template's =Main!A3. The name is read from that cell, so
     the Display sheet follows the names on the first sheet whatever program saved the file, also one
@@ -515,7 +544,7 @@ def _linked_names(path, sheet, column):
 
 
 @once_per_file_version
-def _display(path, names):
+def _display(path: str, names: Sequence[str]) -> tuple[list[str], list[str], list[str], list[str]]:
     """(colours, labels, errors, warnings) for the materials named, in that order."""
     import math
     import re
@@ -524,7 +553,7 @@ def _display(path, names):
     colours, labels = [None] * len(names), [None] * len(names)
     errors, warnings_ = [], []
 
-    def blank(v):
+    def blank(v: Any) -> bool:
         return v is None or (isinstance(v, float) and math.isnan(v)) or str(v).strip() == ""
 
     with warnings.catch_warnings():
@@ -609,12 +638,13 @@ def _display(path, names):
     return colours, labels, errors, warnings_
 
 
-def _cell(r, c):
+def _cell(r: int, c: int) -> str:
+    """The Excel name of the cell at row r and column c, both counted from 0: _cell(0, 0) is "A1"."""
     from openpyxl.utils import get_column_letter
     return f"{get_column_letter(c + 1)}{r + 1}"
 
 
-def material_display(path, names=None):
+def material_display(path: str, names: Sequence[str] | None = None) -> tuple[list[str], list[str]]:
     """(colours, labels): the colour (#rrggbb) and the label each material of the database is
     shown with, in the order of the first sheet, or of names when given (a run's materials).
     ValueError when the Display sheet has errors."""
@@ -628,7 +658,7 @@ def material_display(path, names=None):
 
 
 # ---------------------------------------------------------------------- importing a table made elsewhere
-def import_table(path):
+def import_table(path: str) -> dict[str, list[Any]]:
     """A table of materials made elsewhere (.xlsx, .xls or .csv), read for the database editor: the first
     column holds the materials' names, row 1 the properties' names (a unit may follow in brackets,
     "Density [kg/m^3]"), and an optional row 2 their units, as in a database of LSR MMTO. A column is
@@ -646,14 +676,14 @@ def import_table(path):
         else:
             df = pd.read_excel(path, header=None)
 
-    def text(v):
+    def text(v: Any) -> str:
         if v is None or (isinstance(v, float) and v != v):
             return ""
         if isinstance(v, float):
             return format(v, ".12g")
         return str(v).strip()
 
-    def number(t):
+    def number(t: str) -> bool:
         try:
             float(t)
             return True
@@ -699,7 +729,9 @@ def import_table(path):
 
 
 # ---------------------------------------------------------------------- the Excel template
-def write_database(path, attributes, units, names, labels, colours, values):
+def write_database(path: str, attributes: Sequence[str], units: Sequence[str | None], names: Sequence[str],
+                   labels: Sequence[str | None], colours: Sequence[str],
+                   values: "np.ndarray | Sequence[Sequence[float]]") -> str:
     """A whole database, as the app's editor saves it: the template's layout and Excel checks
     (write_template), with each material's name, the numbers, each column's unit, and on the Display
     sheet each material's colour and label (None: shown by its name)."""
@@ -722,7 +754,7 @@ def write_database(path, attributes, units, names, labels, colours, values):
     return path
 
 
-def write_template(path, attributes, n_materials=5):
+def write_template(path: str, attributes: Sequence[str], n_materials: int = 5) -> str:
     """An empty database to fill in: the attributes in row 1, a units list under each in
     row 2, numbers only below; a Display sheet with each material's default colour and an
     empty label; and a Reference sheet describing every known attribute."""

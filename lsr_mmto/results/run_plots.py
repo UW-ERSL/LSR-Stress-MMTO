@@ -13,8 +13,17 @@ Panels are raw: one quad per element in 2D, one voxel face per element in 3D.
 from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from matplotlib.axes import Axes
+    from matplotlib.figure import Figure
+
+    from pyto.core.hex_mesher import HexMesher
+    from lsr_mmto.materials.pca import PCA
+    from lsr_mmto.problem.project import Project
 
 from .load_results import Run
 from .design_3d import MIRROR_AXES, RenderError, draw_panel, mesh_for, screenshot, voxel_surface
@@ -23,27 +32,28 @@ FS_LEGEND = 11
 DPI = 400
 
 
-def _rc():
+def _rc() -> None:
+    """Sets pyplot's font size, line width and math font (global rcParams); latent_scatter and design call it."""
     import matplotlib.pyplot as plt
     plt.rcParams.update({"font.size": 9, "axes.linewidth": 0.6,
                          "mathtext.fontset": "cm"})
 
 
-def new_figure(**kw):
+def new_figure(**kw: Any) -> Figure:
     """A figure pyplot does not keep: in the app, pyplot gives each of its figures a hidden window that kept the
     figure alive after plt.close, so every plot shown in Results stayed in memory."""
     from matplotlib.figure import Figure
     return Figure(**kw)
 
 
-def new_subplots(nrows=1, ncols=1, **kw):
+def new_subplots(nrows: int = 1, ncols: int = 1, **kw: Any) -> tuple[Figure, Any]:
     """new_figure with its axes, as plt.subplots gives them."""
     fig = new_figure(**kw)
     return fig, fig.subplots(nrows, ncols)
 
 
-def _save(fig, out, *, dpi=DPI):
-    """Write PNG and PDF. out is a path without extension; None returns fig.
+def _save(fig: Figure, out: str | None, *, dpi: int = DPI) -> Figure | list[str]:
+    """Write PNG and PDF. out is a path without extension; None returns fig, else the paths written.
 
     A failure on one format is reported and does not lose the other, which
     matters on Windows where an open viewer locks the file. The plots here are
@@ -72,7 +82,7 @@ def _save(fig, out, *, dpi=DPI):
     return written
 
 
-def _legend_beside(ax, run: Run):
+def _legend_beside(ax: Axes, run: Run) -> None:
     """Material legend to the right of a single panel, clear of the design."""
     from matplotlib.patches import Patch
     names, colours = run.material_labels, run.material_colors
@@ -99,7 +109,8 @@ def _legend_beside(ax, run: Run):
                   frameon=False, fontsize=FS_LEGEND - 1)
 
 
-def _panel_image(run, mesh, camera, size, png_path, view="iso", angles=(0, 0, 0, 1)):
+def _panel_image(run: Run, mesh: HexMesher | None, camera: Any, size: tuple[int, int], png_path: str | None,
+                 view: str = "iso", angles: tuple[float, float, float, float] = (0, 0, 0, 1)) -> np.ndarray:
     """One 3D panel as an RGB array, optionally also written to disk."""
     import pyvista as pv
     from .design_3d import _set_view, _rotate
@@ -126,7 +137,7 @@ def _panel_image(run, mesh, camera, size, png_path, view="iso", angles=(0, 0, 0,
     return img
 
 
-def convergence(run: Run, out=None):
+def convergence(run: Run, out: str | None = None) -> Figure | list[str]:
     """Objective and every constraint as a fraction of its budget.
 
     Ported from postprocess.py's plot_convergence, which produced the published
@@ -185,7 +196,7 @@ def convergence(run: Run, out=None):
     return _save(fig, out)
 
 
-def latent_projection(z_real):
+def latent_projection(z_real: np.ndarray) -> PCA | None:
     """Above three latent dimensions: a 2D PCA fitted once on the real materials, so that a live view
     keeps its axes; None at three or fewer."""
     zr = np.asarray(z_real, float)
@@ -195,7 +206,7 @@ def latent_projection(z_real):
     return PCA(n_components=2).fit(zr)
 
 
-def latent_agreement(pca, z, z_real):
+def latent_agreement(pca: PCA, z: np.ndarray, z_real: np.ndarray) -> float | None:
     """The share of the elements whose nearest real material in the 2D view through pca is their nearest
     in the full latent space: how far the picture can be trusted to show which material each element is
     heading for. None without elements."""
@@ -203,13 +214,15 @@ def latent_agreement(pca, z, z_real):
     if not len(z):
         return None
 
-    def nearest(a, b):
+    def nearest(a: np.ndarray, b: np.ndarray) -> np.ndarray:
         return np.argmin(np.sum((a[:, None, :] - b[None, :, :]) ** 2, axis=2), axis=1)
 
     return float(np.mean(nearest(z, zr) == nearest(pca.transform(z), pca.transform(zr))))
 
 
-def latent_title(n_latent, agreement=None):
+def latent_title(n_latent: int, agreement: float | None = None) -> str:
+    """The latent plot's title: its dimension; above 3D, that it is a PCA projection and, when agreement is given,
+    the share of the elements whose nearest material the projection shows right."""
     if n_latent > 3:
         return f"latent space, PCA projection from {n_latent}D" + (
             f"\n(nearest material shown right for {int(100 * agreement)}% of the elements)"
@@ -217,7 +230,7 @@ def latent_title(n_latent, agreement=None):
     return f"latent space ({n_latent}D)"
 
 
-def _stagger(x, span, rows=3):
+def _stagger(x: np.ndarray, span: float, rows: int = 3) -> np.ndarray:
     """A text row for each label along a line so neighbours closer than span/12 do not overlap."""
     row, last = np.zeros(len(x), int), {}
     for i in np.argsort(x):
@@ -226,7 +239,9 @@ def _stagger(x, span, rows=3):
     return row
 
 
-def latent_axes(fig, z, zr, names, *, where=111, pca=None, small=False, limits=None, view=None):
+def latent_axes(fig: Figure, z: np.ndarray, zr: np.ndarray, names: list[str], *, where: int | tuple[int, ...] = 111,
+                pca: PCA | None = None, small: bool = False, limits: list[tuple[float, float]] | None = None,
+                view: tuple[float, float] | None = None) -> Axes:
     """The latent field z (one row per element) against the real materials zr, on fig at where.
 
     1D: a histogram of the elements along z1, the real materials as stars on the axis with a dashed
@@ -287,7 +302,8 @@ def latent_axes(fig, z, zr, names, *, where=111, pca=None, small=False, limits=N
     return ax
 
 
-def latent_scatter(run: Run, out=None, *, max_points=20000, labels="display"):
+def latent_scatter(run: Run, out: str | None = None, *, max_points: int = 20000,
+                   labels: str = "display") -> Figure | list[str]:
     """The converged latent field against the real-material anchors (latent_axes): red for the
     optimized elements, black stars for the anchors; a histogram along the line in 1D, a plane in
     2D, 3D axes in 3D, a PCA projection above that.
@@ -333,8 +349,8 @@ def is_3d(run: Run) -> bool:
     return run.example in MIRROR_AXES
 
 
-def design(run: Run, out=None, *, field="material", size=(1200, 950),
-           view="iso", **kw):
+def design(run: Run, out: str | None = None, *, field: str = "material", size: tuple[int, int] = (1200, 950),
+           view: str = "iso", **kw: Any) -> Figure | list[str]:
     """The optimized design, drawn the way this example wants.
 
     2D examples get a matplotlib panel; 3D examples get a mirrored voxel render
@@ -381,7 +397,8 @@ def design(run: Run, out=None, *, field="material", size=(1200, 950),
     return _save(fig, out)
 
 
-def boundary_conditions(problem, out=None, *, size=(1400, 1050), zoom=0.82):
+def boundary_conditions(problem: Project, out: str | None = None, *, size: tuple[int, int] = (1400, 1050),
+                        zoom: float = 0.82) -> str | None:
     """Loads and supports of a Project on its meshed design domain, drawn by PyTO.
 
     A plotter is supplied so the render is full size rather than PyTO's default

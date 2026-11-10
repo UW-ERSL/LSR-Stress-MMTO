@@ -60,7 +60,7 @@ def run_postprocessing(history: dict[str, list[float | np.ndarray]], zetaOptimal
     if save_dir is not None:
         pass  # plot autosave disabled; figures are drawn by results/run_plots.py from the saved record
 
-    def _p(name):
+    def _p(name: str) -> str | None:
         return os.path.join(save_dir, name) if save_dir else None
 
     # Reconstruct physical fields

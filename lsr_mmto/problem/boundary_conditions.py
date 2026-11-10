@@ -6,9 +6,14 @@ module's SUPPORT_AND_LOAD_KINDS (the structural ones are in
 physics/structural/structural_supports_and_loads.py). A project adds one with
 p.add_bc(kind, on, **values), and its setup script is written the same way.
 """
+from typing import TYPE_CHECKING, Any, Callable, Iterable
+
 import numpy as np
 
 from lsr_mmto.physics.available_physics import MODULES
+
+if TYPE_CHECKING:
+    from types import ModuleType
 
 VALUE_KINDS = ("dofs", "number", "vector", "area")
 
@@ -21,12 +26,18 @@ class Value:
     doc what it is, for the reference page."""
     __slots__ = ("name", "kind", "measures", "label", "doc")
 
-    def __init__(self, name, kind, label, measures=None, doc=""):
+    name: str
+    kind: str
+    measures: str | None
+    label: str
+    doc: str
+
+    def __init__(self, name: str, kind: str, label: str, measures: str | None = None, doc: str = "") -> None:
         if kind not in VALUE_KINDS:
             raise ValueError(f"value {name}: kind must be one of {', '.join(VALUE_KINDS)}")
         self.name, self.kind, self.measures, self.label, self.doc = name, kind, measures, label, doc
 
-    def errors(self, v):
+    def errors(self, v: Any) -> list[str]:
         """What is wrong with v as this value, as a list of short texts (empty when it is fine)."""
         if self.kind == "dofs":
             if not isinstance(v, str) or not v or any(c not in "xyz" for c in v) or len(set(v)) != len(v):
@@ -50,7 +61,7 @@ class Value:
             return [f"{self.name} must be more than 0, or bbox"]
         return []
 
-    def stored(self, v):
+    def stored(self, v: Any) -> str | float | list[float]:
         """v as a project file keeps it: dofs as text, numbers as floats, "bbox" as it is."""
         if self.kind == "dofs":
             return str(v)
@@ -75,7 +86,21 @@ class BCKind:
     picks    optional: {type in the picking window: its values from the window's entry}, for a
              kind that can be picked on the part (None is an entry with no type)"""
 
-    def __init__(self, role, apply, shown, help, values=(), field=None, check=None, picks=None, physics=()):
+    role: str
+    apply: Callable[..., None]
+    shown: str
+    help: str
+    field: str | None                     # the field it acts on; kinds_of always fills it in
+    physics: tuple[str, ...]
+    values: tuple[Value, ...]
+    extra_check: Callable[[dict[str, Any]], list[str]] | None
+    picks: dict[str | None, Callable[[dict[str, Any]], dict[str, Any]]]
+
+    def __init__(self, role: str, apply: Callable[..., None], shown: str, help: str,
+                 values: Iterable[dict[str, Any]] = (), field: str | None = None,
+                 check: Callable[[dict[str, Any]], list[str]] | None = None,
+                 picks: dict[str | None, Callable[[dict[str, Any]], dict[str, Any]]] | None = None,
+                 physics: Iterable[str] = ()) -> None:
         if role not in ("support", "load"):
             raise ValueError(f"role must be support or load, not {role!r}")
         self.role, self.apply, self.shown, self.help, self.field = role, apply, shown, help, field
@@ -83,11 +108,11 @@ class BCKind:
         self.values = tuple(Value(**v) for v in values)
         self.extra_check, self.picks = check, dict(picks or {})
 
-    def value(self, name):
+    def value(self, name: str) -> Value | None:
         """The Value of that name, or None."""
         return next((v for v in self.values if v.name == name), None)
 
-    def errors(self, bc):
+    def errors(self, bc: dict[str, Any]) -> list[str]:
         """What is wrong with a support or load of this kind: its values, then the kind's own check."""
         out = []
         for v in self.values:
@@ -99,13 +124,14 @@ class BCKind:
             out += self.extra_check(bc)
         return out
 
-    def script(self, name, bc, on):
-        """The line of a setup script that adds this support or load."""
+    def script(self, name: str, bc: dict[str, Any], on: str) -> str:
+        """The line of a setup script that adds this support or load. on is written as given: the caller
+        passes the selection's name already quoted."""
         values = "".join(f", {v.name}={bc[v.name]!r}" for v in self.values if v.name in bc)
         return f"p.add_bc({name!r}, {on}{values})"
 
 
-def kinds_of(module, physics=None):
+def kinds_of(module: "ModuleType", physics: dict[str, list[str]] | None = None) -> dict[str, BCKind]:
     """{name: BCKind} of one physics module's SUPPORT_AND_LOAD_KINDS; a kind that names no field acts on
     the module's one field. physics: the names of the physics each kind is tagged with (by default the
     module's)."""
@@ -121,7 +147,7 @@ def kinds_of(module, physics=None):
     return out
 
 
-def bc_kinds_of(modules):
+def bc_kinds_of(modules: "list[ModuleType]") -> dict[str, BCKind]:
     """{name: BCKind} of every module's kinds, each once (available_physics.joined): a kind several physics give
     the same way is one, tagged with all of them; two different kinds under one name are an error."""
     from lsr_mmto.physics.available_physics import joined

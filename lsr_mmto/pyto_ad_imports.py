@@ -10,9 +10,13 @@ import os
 import re
 import sys
 from importlib.metadata import PackageNotFoundError, version
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from types import ModuleType
 
 
-def check_environment(root):
+def check_environment(root: str) -> None:
     """Warn about what is known to cause trouble. Packages are not imported."""
     warnings = []
 
@@ -62,7 +66,7 @@ import pyto
 PYTO_AD_DIR = os.path.dirname(os.path.abspath(pyto.__file__))   # the PyTO-AD package in use, for the run record
 
 
-def stl_recovery():
+def stl_recovery() -> "ModuleType":
     """PyTO-AD's STL recovery (pyto.io.topopt_stl_recovery), imported when first asked for: it takes
     a third of a second and only Export STL needs it."""
     from pyto.io import topopt_stl_recovery

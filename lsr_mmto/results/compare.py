@@ -10,18 +10,27 @@ designs(runs, out=None)    the optimized designs side by side, coloured by mater
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 import numpy as np
+
+if TYPE_CHECKING:
+    from matplotlib.figure import Figure
+
+    from lsr_mmto.results.load_results import Run
+    from lsr_mmto.results.tables import Table, Tables
 
 # arguments that say where a run was written or how it printed, not what it solved
 _IGNORE = {"save_dir", "plot_progress", "verbose", "plotter", "timeLimit", "saveNet"}
 _SWITCHED = {"use_z_smoothing", "use_penalization"}   # changed by the schedule during a run
 
 
-def _arguments(run):
+def _arguments(run: Run) -> dict[str, Any]:
+    """The run's arguments as its manifest resolved them; {} when it has none."""
     return dict((run.config or {}).get("arguments_resolved") or {})
 
 
-def settings(runs):
+def settings(runs: dict[str, Run]) -> Table:
     """Run arguments, one column per run; a row is marked where they differ."""
     from .tables import Table
     names = list(runs)
@@ -43,15 +52,17 @@ def settings(runs):
                  highlight=lambda row: row[-1] == "differs", symbol_cols=())
 
 
-def _runtime(run):
+def _runtime(run: Run) -> float:
+    """The run's time in seconds, from its manifest; NaN when it has none (or it is 0)."""
     return float(((run.config or {}).get("run") or {}).get("runtime_seconds") or np.nan)
 
 
-def _iterations(run):
+def _iterations(run: Run) -> int:
+    """Run.iterations."""
     return run.iterations                    # the starting design is not an iteration (records.Run.iterations)
 
 
-def table(runs):
+def table(runs: dict[str, Run]) -> Tables:
     """The runs side by side, one column each, in the sections of a run's summary (tables.summary):
     the result with each constraint met or not, the design, the materials and the run. Only the rows every
     run has: with an analysis among them (one solve, no optimization), a constraint it cannot give and what
@@ -92,7 +103,7 @@ def table(runs):
               right_cols=right))
 
 
-def histories(runs, out=None):
+def histories(runs: dict[str, Run], out: str | None = None) -> Figure | list[str]:
     """Objective, constraints (fraction of budget) and grayness, all runs overlaid,
     and the relative difference of each objective history from the first run's."""
     from .run_plots import _save, new_subplots
@@ -141,7 +152,8 @@ def histories(runs, out=None):
     return _save(fig, out)
 
 
-def designs(runs, out=None, *, size=(1000, 800), view="iso"):
+def designs(runs: dict[str, Run], out: str | None = None, *, size: tuple[int, int] = (1000, 800),
+            view: str = "iso") -> Figure | list[str]:
     """The optimized designs side by side, coloured by material, one shared legend.
 
     The same raw drawing as run_plots.design: one quad per element in 2D, one voxel

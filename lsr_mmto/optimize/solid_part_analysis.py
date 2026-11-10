@@ -28,9 +28,19 @@ import json
 import os
 import time
 import types
+from typing import TYPE_CHECKING, Any, Callable
 
 import numpy as np
 import torch
+
+if TYPE_CHECKING:
+    from types import ModuleType
+
+    from pyto.core.hex_mesher import HexMesher
+    from lsr_mmto.optimize.mmto_to_params import MMTOParams
+    from lsr_mmto.problem.project import Project
+    from lsr_mmto.problem.settings import RunSettings
+    from lsr_mmto.results.load_results import Run
 
 _DTYPE = torch.float64
 NOT_GIVEN = "not given by an analysis: it follows the material network"   # a quantity of the latent points
@@ -51,19 +61,27 @@ class _Materials:
     values. So a quantity of a database material (Mass fraction) reads the database, and the final check's mass
     is the materials' own."""
 
-    def __init__(self, xlsx, rows):
+    materialNames: list[str]
+    rawData: np.ndarray                  # the database's numbers, (materials, attributes)
+    rows: np.ndarray                     # each element's material, its row in the database
+    materialAttributes: dict[str, dict[str, Any]]   # {column: {"idx", "unit"}}
+    vaeNet: types.SimpleNamespace        # decoder(z) gives z back; getMaterialProperties reads only its row count
+
+    def __init__(self, xlsx: str, rows: np.ndarray) -> None:
         from lsr_mmto.materials.databases import database_table
         names, attributes, units, values = database_table(xlsx)
         self.materialNames, self.rawData, self.rows = names, values, np.asarray(rows, dtype=int)
         self.materialAttributes = {a: {"idx": j, "unit": units[j]} for j, a in enumerate(attributes)}
         self.vaeNet = types.SimpleNamespace(decoder=lambda z: z)
 
-    def properties(self, n):
+    def properties(self, n: int) -> dict[str, torch.Tensor]:
         """{column: each of the n elements' material's value}, as torch, the way a run's decode gives them."""
         return {a: torch.as_tensor(self.rawData[self.rows[:int(n)], c["idx"]], dtype=_DTYPE)
                 for a, c in self.materialAttributes.items()}
 
-    def getMaterialProperties(self, decoded):
+    def getMaterialProperties(self, decoded: torch.Tensor) -> dict[str, torch.Tensor]:
+        """properties(len(decoded)): each of the first len(decoded) elements' materials' values; decoded's
+        values are not read."""
         return self.properties(len(decoded))
 
 
@@ -72,7 +90,17 @@ class _Analysed:
     for the design analysed: x_phys its densities (1 solid, 0 empty), props each element's material's database
     values. It has no latent points: a quantity that reads them raises NoLatentPoints."""
 
-    def __init__(self, solver, physics, materials, settings, elem_volume, x):
+    fe: Any                              # the physics' solver
+    physics: "ModuleType"
+    enc: _Materials
+    settings: "RunSettings"
+    N: int
+    x_phys: torch.Tensor                 # (N,), 1 solid and 0 empty
+    props: dict[str, torch.Tensor]
+    elem_volume: float
+
+    def __init__(self, solver: Any, physics: "ModuleType", materials: _Materials, settings: "RunSettings",
+                 elem_volume: float, x: np.ndarray) -> None:
         self.fe, self.physics, self.enc, self.settings = solver, physics, materials, settings
         self.N = int(solver.mesh.num_elems)
         self.x_phys = torch.as_tensor(np.asarray(x, dtype=float), dtype=_DTYPE)
@@ -80,13 +108,15 @@ class _Analysed:
         self.elem_volume = float(elem_volume)
 
     @property
-    def z(self):
+    def z(self) -> torch.Tensor:
+        """Raises NoLatentPoints: an analysis has none (z_real too)."""
         raise NoLatentPoints
 
     z_real = z
 
 
-def _quantities(m, to_params, labels):
+def _quantities(m: _Analysed, to_params: "MMTOParams",
+                labels: list[str]) -> list[tuple[str, float | None, float | None]]:
     """[(name as the app shows it, value or None, limit or None)] of the objective and then each constraint,
     at the solid part; None for a quantity that reads the latent points."""
     from lsr_mmto.formulation.quantities import find_quantity, quantity_label
@@ -102,7 +132,7 @@ def _quantities(m, to_params, labels):
     return out
 
 
-def _print_quantities(title, values):
+def _print_quantities(title: str, values: list[tuple[str, float | None, float | None]]) -> None:
     """The objective and the constraints, as the final check prints its numbers."""
     print("\n" + "=" * 70)
     print(f"[ANALYSIS] {title}: the objective and the constraints")
@@ -112,7 +142,8 @@ def _print_quantities(title, values):
     print("=" * 70 + "\n")
 
 
-def analyse_solid_part(project, material, save_dir=None, should_stop=None):
+def analyse_solid_part(project: "Project", material: int, save_dir: str | None = None,
+                       should_stop: Callable[[], bool] | None = None) -> "Run":
     """The project's physics solved once on the solid part in one material of its database (material: its
     row), with the project's supports, loads, mesh and settings, checked as a run is checked (validate's
     errors refuse it). The record of the analysis, as a Run: written into save_dir and read back when it is
@@ -120,7 +151,7 @@ def analyse_solid_part(project, material, save_dir=None, should_stop=None):
     AnalysisStopped."""
     from lsr_mmto.materials.databases import database_table, material_display
 
-    def design(mesh, xlsx):
+    def design(mesh: "HexMesher", xlsx: str) -> tuple[np.ndarray, np.ndarray, str, str, dict[str, Any]]:
         names = database_table(xlsx)[0]
         if isinstance(material, bool) or not isinstance(material, (int, np.integer)) or \
                 not 0 <= int(material) < len(names):
@@ -131,7 +162,8 @@ def analyse_solid_part(project, material, save_dir=None, should_stop=None):
     return _analyse(project, design, save_dir, should_stop)
 
 
-def analyse_design(project, run_folder, save_dir=None, should_stop=None):
+def analyse_design(project: "Project", run_folder: str, save_dir: str | None = None,
+                   should_stop: Callable[[], bool] | None = None) -> "Run":
     """Analyses a saved run's design as built, solved once under the project's supports and loads as they are
     now, with its settings, checked as a run is checked. Each element with a density above 0.5 is solid, in its
     nearest material of the database the run used (the run's material_indices, as Export STL takes them), with
@@ -169,7 +201,7 @@ def analyse_design(project, run_folder, save_dir=None, should_stop=None):
                          f"since): set them back as the run had them to analyse its design")
     when = run_facts(run_folder)[0]
 
-    def design(mesh, xlsx):
+    def design(mesh: "HexMesher", xlsx: str) -> tuple[np.ndarray, np.ndarray, str, str, dict[str, Any]]:
         if int(mesh.num_elems) != int(run.n_elems):
             raise ValueError(f"the run was made on another mesh than the project's now: {run.n_elems} elements, "
                              f"the project's mesh {int(mesh.num_elems)}")
@@ -183,7 +215,10 @@ def analyse_design(project, run_folder, save_dir=None, should_stop=None):
     return _analyse(project, design, save_dir, should_stop)
 
 
-def _analyse(project, design, save_dir, should_stop):
+def _analyse(project: "Project",
+             design: "Callable[[HexMesher, str], tuple[np.ndarray, np.ndarray, str, str, dict[str, Any]]]",
+             save_dir: str | None,
+             should_stop: Callable[[], bool] | None) -> "Run":
     """The project's physics solved once on a design: design(mesh, the project's database) gives each element's
     density (1 or 0), its material's row in the database, that database, the design's title, and the record's
     "analysis" entry. See analyse_solid_part."""
@@ -197,7 +232,7 @@ def _analyse(project, design, save_dir, should_stop):
     from lsr_mmto.problem.settings import run_settings
     from lsr_mmto.results import load_results
 
-    def stop_if_asked():
+    def stop_if_asked() -> None:
         if should_stop is not None and should_stop():
             raise AnalysisStopped("the analysis was stopped; nothing was saved")
 

@@ -41,13 +41,19 @@ import math
 import os
 import re
 import shutil
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from lsr_mmto.formulation.quantities import Quantity
+    from lsr_mmto.problem.project import Project
+    from lsr_mmto.problem.selections import Selection
 
 PART, MATERIALS, RESULTS = "part", "materials", "results"
 BAD_CHARACTERS = '\\/:*?"<>|'
 RUN_FILE = "run_data.npz"
 
 
-def name_problem(name):
+def name_problem(name: str) -> str | None:
     """What is wrong with a name for a project folder, or None."""
     name = name.strip()
     if not name:
@@ -57,7 +63,7 @@ def name_problem(name):
     return None
 
 
-def folder_problem(folder):
+def folder_problem(folder: str) -> str | None:
     """What stops a new project folder being made at folder, or None."""
     problem = name_problem(os.path.basename(os.path.normpath(folder)))
     if problem:
@@ -70,13 +76,13 @@ def folder_problem(folder):
     return None
 
 
-def inside(path, folder):
+def inside(path: str, folder: str) -> bool:
     """True when path is folder or anything in it."""
     path, folder = os.path.normcase(os.path.abspath(path)), os.path.normcase(os.path.abspath(folder))
     return path == folder or path.startswith(folder.rstrip(os.sep) + os.sep)
 
 
-def copy_in(path, folder, sub):
+def copy_in(path: str, folder: str, sub: str) -> str:
     """path copied into folder/sub, unless it is in folder already. Returns its path relative to
     folder, with / between the parts. A different file of the same name there is kept, and the
     copy is named name_2, name_3, ...; the same file is not copied twice."""
@@ -93,12 +99,12 @@ def copy_in(path, folder, sub):
     return os.path.relpath(dest, folder).replace("\\", "/")
 
 
-def has_own_folder(project):
+def has_own_folder(project: "Project") -> bool:
     """True when the project lives in a project folder: its STL is in the folder's part/."""
     return inside(project.stl_path(), os.path.join(project.base_dir, PART))
 
 
-def _database_files(project):
+def _database_files(project: "Project") -> tuple[str | None, str | None]:
     """(xlsx, nt) as absolute paths: the database and the network next to it (None, None with no
     database). nt is None when settings.vae.saveNet names a network elsewhere: that one stays."""
     if project.database is None:
@@ -108,7 +114,7 @@ def _database_files(project):
     return os.path.abspath(xlsx), None if nt is None else os.path.abspath(nt)
 
 
-def _copy_database(project, xlsx, nt, folder):
+def _copy_database(project: "Project", xlsx: str, nt: str | None, folder: str) -> str | None:
     """The database file and its network into folder/materials; project.database names the copy.
     A network already beside a copy is kept: it may have been retrained there."""
     if not os.path.isfile(xlsx):                                # the same database moved: its settings stay
@@ -123,7 +129,7 @@ def _copy_database(project, xlsx, nt, folder):
     return rel
 
 
-def bring_in_database(project):
+def bring_in_database(project: "Project") -> str | None:
     """The project's database (a shipped one too) and its trained network copied into the
     project's materials/; project.database then names the copy. Returns the copy's path relative
     to the project folder, or None when there was nothing to copy."""
@@ -134,10 +140,11 @@ def bring_in_database(project):
     return _copy_database(project, xlsx, nt, project.base_dir)
 
 
-def pack(project, folder):
+def pack(project: "Project", folder: str) -> "Project":
     """Everything the project uses copied into folder, which becomes the project's folder: the
     STL, and any file a region names, into part/, the database and its network into materials/.
-    Results stay where they are."""
+    Results stay where they are. Changes the project itself (base_dir, stl, database, the regions'
+    file paths, and its settings completed) and returns it."""
     folder = os.path.abspath(folder)
     os.makedirs(folder, exist_ok=True)
     project.complete_settings()             # a shipped database's network settings, while it is named
@@ -153,7 +160,7 @@ def pack(project, folder):
     return project
 
 
-def _bring_in_files(selection, old_base, folder):
+def _bring_in_files(selection: "Selection", old_base: str | None, folder: str) -> None:
     """The files a region names (an inside_stl surface, a function selection's .py) copied into part/
     of folder, and the region pointed at the copies; inside combinations too."""
     from lsr_mmto.problem import selections as S
@@ -170,7 +177,7 @@ def _bring_in_files(selection, old_base, folder):
             selection.ref = f"{copy_in(os.path.abspath(path), folder, PART)}:{name}"
 
 
-def create(folder, stl, physics=None):
+def create(folder: str, stl: str, physics: str | None = None) -> tuple["Project", str]:
     """A new project in a new folder, named after the folder, with the STL copied into it, the physics
     given (the first of the list when None) and every setting at its default; saved as
     folder/<name>.mmto. Returns (project, its path)."""
@@ -192,12 +199,13 @@ def create(folder, stl, physics=None):
     return p, path
 
 
-def scale_part(project, factor):
+def scale_part(project: "Project", factor: float) -> str:
     """Every coordinate of the project's part times factor, written over the same file in part/ as a
     binary STL: part/ holds no more files than before, and scaling again multiplies again. Only the
     part of a project in a folder of its own is written; an STL anywhere else (an example's, the one
     the part came from) never is. Nothing else changes: the units, the loads, the limits and the
-    database stay as they are."""
+    database stay as they are. Returns the STL's path; ValueError for a project not in a folder of its
+    own or a factor that is not a finite number above 0."""
     from stl import mesh as stl_mesh
     from stl import Mode
     if not has_own_folder(project):
@@ -217,7 +225,8 @@ def scale_part(project, factor):
     return path
 
 
-def convert_database_units(project, limits=True):
+def convert_database_units(project: "Project", limits: bool = True) \
+        -> "tuple[list[tuple[str, str, str, float]], list[tuple[int, Quantity, float, float]]]":
     """The project's database in the project's units (Project.unit_conversion): each column in other units
     multiplied by its factor, written over the project's own copy in its folder. A database from elsewhere
     (a shipped one too) is first copied in with its network (bring_in_database), and only the copy is
@@ -250,19 +259,19 @@ def convert_database_units(project, limits=True):
     return columns, bounds
 
 
-def setup_script(project):
+def setup_script(project: "Project") -> str:
     """<name>_setup.py beside the project file: the project as a Python script."""
     return os.path.join(project.base_dir, f"{project.name}_setup.py")
 
 
-def write_setup_script(project):
+def write_setup_script(project: "Project") -> str:
     """The setup script written from the project as it is (Project.to_script). The window calls this
     at File > New and at every save; a script's own save does not. Returns its path."""
     return project.to_script(setup_script(project))
 
 
 # ---------------------------------------------------------------------- results
-def results_root(project):
+def results_root(project: "Project") -> str:
     """Where the project's runs go: results/ in its folder; for a project not in a folder of its
     own, results/<project name> beside the project file, as before."""
     if has_own_folder(project):
@@ -270,7 +279,7 @@ def results_root(project):
     return os.path.join(project.base_dir, RESULTS, project.name)
 
 
-def new_run_folder(project):
+def new_run_folder(project: "Project") -> str:
     """results/<date and time> for the next run (not made yet)."""
     stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     root = results_root(project)
@@ -283,14 +292,14 @@ def new_run_folder(project):
 STAMP = re.compile(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(_\d+)?")   # a name new_run_folder gives
 
 
-def run_name(folder):
+def run_name(folder: str) -> str | None:
     """The name the user gave a run (or an analysis) by renaming its folder, or None while its folder still
     has a name new_run_folder gives."""
     name = os.path.basename(os.path.normpath(folder))
     return None if STAMP.fullmatch(name) else name
 
 
-def rename_run(folder, new):
+def rename_run(folder: str, new: str) -> str:
     """Renames a run's folder, beside the others; returns its new path. ValueError, with the reason in plain
     words, when the name cannot be used; OSError when the system refuses (a file of the run is open)."""
     new = new.strip()
@@ -306,11 +315,12 @@ def rename_run(folder, new):
     return target
 
 
-def is_run(folder):
+def is_run(folder: str) -> bool:
+    """True when folder holds a run's record (run_data.npz)."""
     return os.path.isfile(os.path.join(folder, RUN_FILE))
 
 
-def runs(project):
+def runs(project: "Project") -> list[str]:
     """The project's run folders, newest first."""
     root = results_root(project)
     if not os.path.isdir(root):
@@ -319,8 +329,10 @@ def runs(project):
     return sorted(found, key=lambda d: (os.path.getmtime(os.path.join(d, RUN_FILE)), d), reverse=True)
 
 
-def run_facts(folder):
-    """(when, iterations, stopped) of a run, from its record's manifest; what is missing is None.
+def run_facts(folder: str) -> tuple[str, int | None, bool]:
+    """(when, iterations, stopped) of a run, from its record's manifest: when as "date time"; iterations None
+    when the manifest does not give it. Without a timestamp in the manifest, the record file's time is used;
+    without a manifest, stopped is False.
     iterations counts as the Run strip does: the starting design is iteration 0, so a run of 40
     iterations (41 designs in its record) gives 40."""
     when, iterations, stopped = None, None, False
@@ -339,7 +351,7 @@ def run_facts(folder):
     return when.replace("T", " "), iterations, stopped
 
 
-def analysed_material(folder):
+def analysed_material(folder: str) -> str | None:
     """The material of an analysis (Analyse: the solid part in one material, not optimized), as its label, from
     its record's manifest; None for a run, or when the manifest cannot be read."""
     try:
@@ -349,7 +361,7 @@ def analysed_material(folder):
         return None
 
 
-def delete_run(folder):
+def delete_run(folder: str) -> None:
     """A run's folder and everything in it removed; only a folder that holds a run."""
     if not is_run(folder):
         raise ValueError(f"{folder} holds no run")

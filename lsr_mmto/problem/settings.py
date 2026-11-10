@@ -17,8 +17,12 @@ project.settings[section]. A VAE setting whose default is FROM_DATABASE starts f
 known values (databases.DATABASE_VAE), or VAEParams for another database.
 """
 from enum import Enum
+from typing import TYPE_CHECKING, Any, Callable
 
 from lsr_mmto.physics.available_physics import MODULES
+
+if TYPE_CHECKING:
+    from lsr_mmto.problem.project import Project
 
 
 class Z0InitMethod(Enum):
@@ -47,18 +51,35 @@ class Setting:
     __slots__ = ("section", "key", "default", "label", "help", "group", "none_means", "integer", "choices",
                  "pyto_ad_field", "at_build", "physics")
 
-    def __init__(self, section, key, default, label, help, group, none_means=None, integer=False, choices=None,
-                 pyto_ad_field=None, at_build=None, physics=None):
+    section: str                         # "common", "advanced", "vae" or "mesh"
+    key: str
+    default: float | int | bool | str | None       # or FROM_DATABASE
+    label: str
+    help: str
+    group: str
+    none_means: str | None
+    integer: bool
+    choices: type[Enum] | None
+    pyto_ad_field: str | None
+    at_build: Callable[[Any], None] | None
+    physics: str | None
+
+    def __init__(self, section: str, key: str, default: float | int | bool | str | None, label: str, help: str,
+                 group: str, none_means: str | None = None, integer: bool = False,
+                 choices: type[Enum] | None = None,
+                 pyto_ad_field: str | None = None, at_build: Callable[[Any], None] | None = None,
+                 physics: str | None = None) -> None:
         self.section, self.key, self.default, self.label, self.help = section, key, default, label, help
         self.group, self.none_means, self.integer, self.choices = group, none_means, integer, choices
         self.pyto_ad_field, self.at_build, self.physics = pyto_ad_field, at_build, physics
 
-    def applies_to(self, physics):
+    def applies_to(self, physics: str) -> bool:
         """True for a setting of that physics, or one every project has."""
         return self.physics is None or self.physics == physics
 
     @property
-    def tab(self):
+    def tab(self) -> str:
+        """The Settings panel's tab it is on: VAE for a setting of the vae section, else OPTIMIZATION."""
         return VAE if self.section == "vae" else OPTIMIZATION
 
 
@@ -172,7 +193,7 @@ BY_KEY, DEFAULT_SETTINGS, MESH_DEFAULTS = {}, {}, {}
 VAE_PARAMS = RUN_KEYS = ()
 
 
-def _make_views():
+def _make_views() -> None:
     """BY_KEY, DEFAULT_SETTINGS, MESH_DEFAULTS, VAE_PARAMS and RUN_KEYS from SETTINGS. The dicts are
     filled in place, so a module that imported them sees a setting added later (as the tests do)."""
     global VAE_PARAMS, RUN_KEYS
@@ -194,23 +215,26 @@ _make_views()
 
 
 class RunSettings:
-    """The settings one run gets, read as s.<key>; an unknown name is an error, not None."""
+    """The settings one run gets, read as s.<key>; an unknown name is an error, not None. Its fields are the
+    names in RUN_KEYS, which _make_views makes from SETTINGS, so they are not declared here and a type checker
+    cannot see them. From run_settings, a setting with fixed choices holds the Enum member, not its name."""
 
-    def __init__(self, values):
+    def __init__(self, values: dict[str, Any]) -> None:
         missing = [k for k in RUN_KEYS if k not in values]
         unknown = [k for k in values if k not in RUN_KEYS]
         if missing or unknown:
             raise ValueError(f"run settings: missing {missing}, unknown {unknown}")
         self.__dict__.update(values)
 
-    def as_dict(self):
+    def as_dict(self) -> dict[str, Any]:
+        """{key: value} of every RUN_KEYS setting."""
         return {k: self.__dict__[k] for k in RUN_KEYS}
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"RunSettings({self.as_dict()!r})"
 
 
-def pyto_ad_value(setting, value):
+def pyto_ad_value(setting: Setting, value: float | int | bool | str | None) -> float | int | bool | str | None:
     """A setting's value as its TOParams field holds it: a whole number, a float, or as it is."""
     if value is None or isinstance(value, bool):
         return value
@@ -219,7 +243,7 @@ def pyto_ad_value(setting, value):
     return float(value) if isinstance(value, (int, float)) else value
 
 
-def run_settings(project):
+def run_settings(project: "Project") -> RunSettings:
     """The RunSettings of a project whose settings are complete: each stored value, and for a setting
     with fixed choices, the Enum member it names."""
     values = {}

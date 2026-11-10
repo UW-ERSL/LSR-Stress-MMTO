@@ -46,6 +46,7 @@ or "MaterialVolumeFraction(2, tau=0.5)"; every quantity is listed in docs/refere
 """
 import json
 import os
+from typing import TYPE_CHECKING, Any, Callable
 
 import numpy as np
 
@@ -59,6 +60,15 @@ from lsr_mmto.physics.available_physics import PHYSICS
 from lsr_mmto.problem.boundary_conditions import BC_KINDS
 from lsr_mmto.problem.settings import (BY_KEY, DEFAULT_SETTINGS, MESH_DEFAULTS, SETTINGS, VAE_PARAMS, pyto_ad_value,
                                        run_settings)
+
+if TYPE_CHECKING:
+    import pyvista
+
+    from pyto.core.bc import BC
+    from pyto.core.hex_mesher import HexMesher
+    from pyto.core.mat_lib import Material
+    from lsr_mmto.formulation.quantities import Quantity
+    from lsr_mmto.optimize.mmto_to_params import MMTOParams
 
 DEFAULT_PHYSICS = next(iter(PHYSICS))          # a project that names no physics: the first one listed
 
@@ -80,7 +90,9 @@ STEPS = {"part": lambda p: True,
 class Problem(str):
     """An error Project.validate finds: its text, with .step, the step of STEPS it is about."""
 
-    def __new__(cls, step, text):
+    step: str
+
+    def __new__(cls, step: str, text: str) -> "Problem":
         if step not in STEPS:
             raise ValueError(f"{step!r} is not a step of the setup ({', '.join(STEPS)})")
         problem = super().__new__(cls, text)
@@ -88,7 +100,7 @@ class Problem(str):
         return problem
 
 
-def network_shape(path):
+def network_shape(path: str) -> tuple[int, int, int] | None:
     """(inputs, hidden width, latent dimension) of the VAE saved in path, read from its weights;
     None when the file is not such a network."""
     import torch
@@ -100,8 +112,9 @@ def network_shape(path):
         return None
 
 
-def upgrade(m, name="project"):
-    """An mmto section brought to the current SCHEMA_VERSION, through _UPGRADES."""
+def upgrade(m: dict[str, Any], name: str = "project") -> dict[str, Any]:
+    """An mmto section brought to the current SCHEMA_VERSION, through _UPGRADES, as a shallow copy of m.
+    ValueError for a newer schema, or an older one with no upgrade."""
     m = dict(m)
     version = m.get("schema_version", SCHEMA_VERSION)
     if version > SCHEMA_VERSION:
@@ -118,7 +131,7 @@ def upgrade(m, name="project"):
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))     # the repository folder
 
 
-def _supports_and_loads(picks):
+def _supports_and_loads(picks: dict[str, list[dict[str, Any]]]) -> tuple[list[tuple], list[tuple]]:
     """Supports and loads as (kind, values, triangles, points, regions), from the window's
     constraint_data (supports) and force_data (loads) lists, each made a kind of BC_KINDS by the
     kind's picks."""
@@ -163,7 +176,24 @@ class Project:
         Example: p.settings["common"]["maxIterations"] = 50
     """
 
-    def __init__(self, name, stl, n_dof=None, single_layer=None, base_dir=None):
+    name: str
+    stl: str                                    # as given; relative paths are relative to base_dir
+    base_dir: str                               # absolute
+    n_dof: int
+    single_layer: bool
+    comment: str
+    physics: str                                # should be a name of PHYSICS; validate reports any other
+    selections: "dict[str, S.Selection]"
+    bcs: list[dict[str, Any]]                   # {"kind": should be a name of BC_KINDS, "on": a selection name, values}
+    keep_solid_names: list[str]
+    keep_support_elements: bool
+    _database: str | None                       # a shipped database's name or a path, behind the database property
+    formulation: dict[str, Any]                 # {"objective": {"expression", "sense"} or None, "constraints": [...]}
+    settings: dict[str, dict[str, Any]]         # {section: {key: value}}
+    _gui: dict[str, Any]                        # everything else in the file, kept for the GUI
+
+    def __init__(self, name: str, stl: str, n_dof: int | None = None, single_layer: bool | None = None,
+                 base_dir: str | None = None) -> None:
         self.name = name
         self.stl = stl                          # as given; relative paths are relative to base_dir
         self.base_dir = os.path.abspath(base_dir or os.getcwd())
@@ -181,7 +211,7 @@ class Project:
         self._gui = {}                          # everything else in the file, kept for the GUI
 
     # ------------------------------------------------------------------ building it up
-    def add_selection(self, name, selection):
+    def add_selection(self, name: str, selection: "S.Selection") -> str:
         """Adds a selection under a name, which supports, loads and keep solid can then use; returns the name.
 
         name: the selection's name, text
@@ -193,19 +223,20 @@ class Project:
         self.selections[name] = selection
         return name
 
-    def _free_name(self, prefix):
+    def _free_name(self, prefix: str) -> str:
+        """prefix1, prefix2, ...: the first that names no selection yet."""
         i = 1
         while f"{prefix}{i}" in self.selections:
             i += 1
         return f"{prefix}{i}"
 
-    def _on(self, on, kind):
+    def _on(self, on: "S.Selection | str", kind: str) -> str:
         """A selection name; a Selection given directly is stored under a generated name."""
         if isinstance(on, S.Selection):
             return self.add_selection(self._free_name(kind), on)
         return on
 
-    def adopt_picks(self, gui):
+    def adopt_picks(self, gui: dict[str, Any]) -> list[str]:
         """Supports and loads picked on the part in the window (its constraint_data and force_data
         lists) as selections and boundary conditions of this project, with the picking tools' own
         rules: faces as stl_faces (tol 0.8), a clicked node as its nearest boundary node, a dragged
@@ -214,7 +245,8 @@ class Project:
         if not supports and not loads:
             return []
 
-        def selection(triangles, points, regions, what):
+        def selection(triangles: list[int], points: list[list[float]], regions: list[dict[str, Any]],
+                      what: str) -> "S.Selection":
             parts = [S.stl_faces(triangles, tol=0.8)] if len(triangles) else []
             parts += [S.nearest(point, boundary=True) for point in points]
             parts += [S.halfspaces(r["normals"], r["origins"]) for r in regions]
@@ -232,7 +264,7 @@ class Project:
                 names.append(name)
         return names
 
-    def add_bc(self, kind, on, **values):
+    def add_bc(self, kind: str, on: "S.Selection | str", **values: Any) -> None:
         """A support or load of a kind of BC_KINDS (the structural ones: fixed, displacement, force,
         traction) on a selection, its name or a Selection (stored under a new name), with the kind's values,
         e.g. p.add_bc("fixed", "clamp", dofs="xyz"), p.add_bc("force", "corner", total=[0, -4, 0]).
@@ -253,7 +285,7 @@ class Project:
         self.bcs.append({"kind": kind, "on": self._on(on, k.role),
                          **{v.name: v.stored(values[v.name]) for v in k.values}})
 
-    def evaluate(self, selection, mesh, on="nodes"):
+    def evaluate(self, selection: "S.Selection | str", mesh: "HexMesher", on: str = "nodes") -> np.ndarray:
         """Indices of a selection (or of the selection with that name) on mesh, with every selection(name) in
         it looked up now, so a combination follows later edits of its parts. Elements of a selection that
         picks only nodes (stl_faces, rows, ...) are the elements touching those nodes.
@@ -276,7 +308,7 @@ class Project:
         touching = np.isin(np.asarray(mesh.elemArray), nodes).any(axis=1)
         return np.flatnonzero(touching).astype(int)
 
-    def rename_selection(self, old, new):
+    def rename_selection(self, old: str, new: str) -> None:
         """The selection and everything that names it: supports and loads, keep solid, other selections."""
         self.selections = {new if k == old else k: S.renamed(v, old, new) for k, v in self.selections.items()}
         for bc in self.bcs:
@@ -284,7 +316,7 @@ class Project:
                 bc["on"] = new
         self.keep_solid_names = [new if n == old else n for n in self.keep_solid_names]
 
-    def keep_solid(self, *names):
+    def keep_solid(self, *names: "S.Selection | str") -> None:
         """Keeps these selections solid: their elements are always material.
 
         names: one or more selections: their names, or selection types above (each added under a new name)
@@ -295,7 +327,7 @@ class Project:
             if n not in self.keep_solid_names:
                 self.keep_solid_names.append(n)
 
-    def objective(self, expression, sense="minimize"):
+    def objective(self, expression: str, sense: str = "minimize") -> None:
         """What the optimization makes as small as it can.
 
         expression: one quantity, text, such as "Mass()" or "FailureFactorPNorm()" (see Quantities)
@@ -304,7 +336,7 @@ class Project:
         """
         self.formulation["objective"] = {"expression": expression, "sense": sense}
 
-    def constraint(self, expression, op, bound):
+    def constraint(self, expression: str, op: str, bound: float) -> None:
         """A limit on a quantity, expression op bound; each call adds one more constraint.
 
         expression: one quantity, text, such as "Mass()" or "MaterialVolumeFraction(2, tau=0.5)" (see
@@ -316,16 +348,16 @@ class Project:
         self.formulation["constraints"].append({"expression": expression, "op": op, "bound": float(bound)})
 
     # ------------------------------------------------------------------ checks without a mesh
-    def stl_path(self):
+    def stl_path(self) -> str:
         return self.stl if os.path.isabs(self.stl) else os.path.join(self.base_dir, self.stl)
 
-    def unknowns_per_node(self):
+    def unknowns_per_node(self) -> int:
         """How many unknowns the project's physics solves for at each node (3 for structural: the
         displacement in x, y and z); the mesh is built for n_dof unknowns in all."""
         return sum(PHYSICS[self.physics if self.physics in PHYSICS else DEFAULT_PHYSICS].FIELDS.values())
 
     @property
-    def units(self):
+    def units(self) -> str:
         """The unit system: "MKS", "mmKS", "IPS" (those of the PyTO-AD GUI, kept where the GUI
         keeps it, settings.unit_system) or "none". Numbers are never converted; the unit
         system says what they are meant to be in, so that a database in other units is reported.
@@ -336,21 +368,21 @@ class Project:
         return (self._gui.get("settings") or {}).get("unit_system", "none")
 
     @units.setter
-    def units(self, system):
+    def units(self, system: str) -> None:
         if system == "none":
             (self._gui.get("settings") or {}).pop("unit_system", None)
             return
         settings = self._gui.setdefault("settings", {"temperature_unit": "Kelvin", "angle_unit": "Degree"})
         settings["unit_system"] = system
 
-    def unit_record(self):
+    def unit_record(self) -> dict[str, str]:
         """The units of the run's numbers, for the run record."""
         if self.units not in UNIT_SYSTEMS:
             return {"system": self.units}
         return dict(system=self.units, **UNIT_SYSTEMS[self.units])
 
     @property
-    def database(self):
+    def database(self) -> str | None:
         """The material database. When the database chosen has a trained network, and the trained network is
         used (the vae setting use_pretrained_vae), the settings that give the network its shape (latentDim,
         vae_hiddenDim) are set from the network itself, and a printed line says which changed.
@@ -362,14 +394,14 @@ class Project:
         return self._database
 
     @database.setter
-    def database(self, value):
+    def database(self, value: str | None) -> None:
         cleared = value != self._database and self.clear_hand_set_network()
         self._database = value
         for said in (cleared, self.match_network()):
             if said:
                 print(f"[{self.name}] {said}")
 
-    def clear_hand_set_network(self):
+    def clear_hand_set_network(self) -> str | None:
         """A VAE file set by hand (settings.vae.saveNet) cleared, as it belongs to the database chosen before;
         the network next to the database is then used. Returns the line saying so, or None when none was set."""
         vae = self.settings.setdefault("vae", {})
@@ -379,7 +411,7 @@ class Project:
         return (f"The VAE file set by hand ({os.path.basename(old)}) was for the database chosen before, so it no "
                 f"longer applies: the network next to the database is used.")
 
-    def match_network(self):
+    def match_network(self) -> str | None:
         """The settings that give the network its shape (latentDim, vae_hiddenDim) set from the database's
         trained network, when it has one and the trained network is used. Returns the line saying what
         changed from what a run would have used, or None when nothing did."""
@@ -399,14 +431,14 @@ class Project:
                 changed.append(f"{BY_KEY[key].label[:1].lower()}{BY_KEY[key].label[1:]} {value}")
         return f"Network settings set to match the trained network: {', '.join(changed)}" if changed else None
 
-    def database_paths(self):
+    def database_paths(self) -> tuple[str, dict[str, float] | None]:
         """(xlsx, VAE defaults or None) for the database name or path."""
         if self.database in DATABASE_VAE:
             return os.path.join(DATABASE_DIR, f"{self.database}.xlsx"), DATABASE_VAE[self.database]
         path = self.database if os.path.isabs(self.database) else os.path.join(self.base_dir, self.database)
         return path, None
 
-    def validate(self):
+    def validate(self) -> list[Problem]:
         """Problems that can be found without building the mesh; an empty list means none. Each is a
         Problem: its text, and the step of the setup it is about (Problem.step)."""
         errors = []
@@ -503,11 +535,11 @@ class Project:
                 errors.append(Problem("formulation", f"{where}: {q.shown} is not a {self.physics} quantity"))
         return errors
 
-    def set_up(self, step):
+    def set_up(self, step: str) -> bool:
         """True once the step of STEPS is begun (units chosen, a database, a support or load, an objective)."""
         return STEPS[step](self)
 
-    def needed_properties(self):
+    def needed_properties(self) -> list[str]:
         """The material properties (database columns) this project reads: its physics' PROPERTIES, and those
         its objective and constraints read (each quantity's needs), in that order, each once."""
         from lsr_mmto.formulation.quantities import QUANTITIES
@@ -522,7 +554,7 @@ class Project:
             out += list(q.needs if q else ())
         return list(dict.fromkeys(out))
 
-    def _missing_columns(self, columns):
+    def _missing_columns(self, columns: list[str]) -> list[Problem]:
         """Columns the physics and the objective and constraints read that the database lacks."""
         from lsr_mmto.formulation.quantities import QUANTITIES
         out = [Problem("materials", f"material database: the {self.physics} model needs a {c} column")
@@ -540,7 +572,7 @@ class Project:
                     out.append(Problem("materials", f"material database: {q.name} needs a {c} column"))
         return out
 
-    def _unit_ratios(self, xlsx):
+    def _unit_ratios(self, xlsx: str) -> tuple[dict[str, str | None], dict[str, float]]:
         """(units, ratio): each database column's unit as written, and how many times larger the numbers of
         each column with a unit (not a ratio) are than the same values in the project's units."""
         units = database_units(xlsx)
@@ -548,17 +580,17 @@ class Project:
                        if u is not None and ATTRIBUTES[n].measures != "ratio"}
 
     @staticmethod
-    def _quantity_ratio(q, ratio):
+    def _quantity_ratio(q: "Quantity", ratio: dict[str, float]) -> float:
         """How many times its real value a quantity comes out with columns that many times too large."""
         return float(np.prod([ratio[c] ** k for c, k in q.scales_with.items() if c in ratio]))
 
-    def quantity_unit(self, q):
+    def quantity_unit(self, q: "Quantity") -> str:
         """A quantity's unit in the project's units, with a space before it; "" for one without units."""
         system = UNIT_SYSTEMS[self.units]
         unit = q.unit.format(**system) if "{" in q.unit else q.unit
         return "" if unit == "no units" or unit.startswith("fraction") else f" {unit}"
 
-    def unit_conversion(self):
+    def unit_conversion(self) -> "tuple[list[tuple[str, str, str, float]], list[tuple[int, Quantity, float, float]]]":
         """What converting the database into the project's units changes: (columns, limits). columns: (name,
         unit, the project's unit, factor) for each column in other units, its numbers to be multiplied by
         factor; limits: (index of the constraint, its quantity, limit, converted limit) for each limit the
@@ -590,7 +622,7 @@ class Project:
                 limits.append((i, q, c["bound"], c["bound"] / factor))
         return columns, limits
 
-    def _unit_warnings(self, xlsx):
+    def _unit_warnings(self, xlsx: str) -> list[str]:
         """A database column in units other than the project's, with what it does to the results."""
         from lsr_mmto.formulation.quantities import QUANTITIES
         if self.units not in UNIT_SYSTEMS:
@@ -606,7 +638,7 @@ class Project:
                 pass
         units, ratio = self._unit_ratios(xlsx)
 
-        def times(r):
+        def times(r: float) -> str:
             e = np.log10(r)
             return f"10^{int(round(e))}" if abs(e - round(e)) < 1e-9 else f"{r:.4g}"
 
@@ -643,7 +675,7 @@ class Project:
                                     f"of {bound:g} is really a limit of {bound / factor:g}{unit}.")
         return out
 
-    def warnings(self):
+    def warnings(self) -> list[str]:
         """What is allowed but deserves a look before a run: the database's warnings, a
         database in units other than the project's, a latent dimension other than the
         one recommended for the database, and what a constraint's quantity says about its limit."""
@@ -660,7 +692,7 @@ class Project:
         out += self._bound_warnings()
         return out
 
-    def _bound_warnings(self):
+    def _bound_warnings(self) -> list[str]:
         """What each constraint's quantity says about its limit (Quantity.bound_warning)."""
         from lsr_mmto.formulation.quantities import QUANTITIES
         by_name = {q.name: q for q in QUANTITIES}
@@ -675,13 +707,13 @@ class Project:
                 out.append(f"constraint {i} ({q.shown} <= {float(c['bound']):g}): {said}")
         return out
 
-    def network_path(self):
+    def network_path(self) -> str:
         """The VAE file a run loads or trains: settings.vae.saveNet, or else the .nt next to the
         database's .xlsx with the same name (my_db.xlsx, my_db.nt)."""
         xlsx, _ = self.database_paths()
         return self.settings.get("vae", {}).get("saveNet") or os.path.splitext(xlsx)[0] + ".nt"
 
-    def vae_check(self):
+    def vae_check(self) -> tuple[list[Problem], list[str], str]:
         """(errors, warnings, status) about the VAE: a run that would train into the shipped folder,
         a trained network that does not fit the settings or the database, a network a run would
         replace, a latent dimension other than the recommended one; status says which network the
@@ -735,7 +767,7 @@ class Project:
                                          f"none yet. The first run trains {name}.")
         return errors, warnings_, status
 
-    def network_error(self):
+    def network_error(self) -> tuple[list[dict[str, Any]], str] | tuple[None, None]:
         """How closely the database's trained network gives back its materials: (rows, line). rows: one for
         each material and property, the database's value and the network's; line: the same in one sentence,
         as the Materials panel shows it. (None, None) when the database has no trained network yet, or the
@@ -756,7 +788,7 @@ class Project:
         worst = max(r["percent_of_range"] for r in rows)
         return rows, f"The trained network gives back every material within {worst:.2g}% of each property's range."
 
-    def complete_settings(self):
+    def complete_settings(self) -> list[str]:
         """Fill every missing setting from the defaults; returns what was filled."""
         filled = []
         for section, defaults in DEFAULT_SETTINGS.items():
@@ -779,7 +811,7 @@ class Project:
         return filled
 
     # ------------------------------------------------------------------ the problem
-    def mesh(self):
+    def mesh(self) -> "HexMesher":
         """The voxel mesh of the part, made from the mesh settings (n_dof, single_layer) as a run makes it.
 
         Example: mesh = p.mesh()
@@ -787,7 +819,8 @@ class Project:
         from lsr_mmto.problem.mesh import make_mesh
         return make_mesh(self.stl_path(), self.n_dof, self.single_layer, self.unknowns_per_node())
 
-    def build(self, verbose=True):
+    def build(self, verbose: bool = True) \
+            -> "tuple[HexMesher, Material, dict[str, BC], None, MMTOParams, VAEParams]":
         """mesh, mat_prop, bc, elem_body_force, to_params, vae_params."""
         filled = self.complete_settings()
         if filled and verbose:
@@ -855,14 +888,14 @@ class Project:
                   f"keep solid={0 if to_params.ElemsToKeep is None else len(to_params.ElemsToKeep)}")
         return mesh, mat_prop, bcs, None, to_params, vae_params
 
-    def supports_and_loads(self, mesh):
+    def supports_and_loads(self, mesh: "HexMesher") -> "tuple[dict[str, BC], dict[str, np.ndarray]]":
         """({field: PyTO-AD BC}, {selection name: its nodes}): the supports, then the loads (BC_KINDS), on
         mesh, one boundary condition for each field of the project's physics. ValueError for a selection
         with no nodes or a dof given two values."""
         from lsr_mmto.pyto_ad_imports import bound_cond
         nodes_of = {}
 
-        def nodes(name, where):
+        def nodes(name: str, where: str) -> np.ndarray:
             if name not in nodes_of:
                 nodes_of[name] = self.evaluate(name, mesh, "nodes")
             if len(nodes_of[name]) == 0:
@@ -886,13 +919,13 @@ class Project:
             bcs[field] = bound_cond.BC(force=force, fixed_dofs=fixed_dofs, dirichlet_values=dirichlet_values)
         return bcs, nodes_of
 
-    def supports_and_loads_error(self, mesh, bcs):
+    def supports_and_loads_error(self, mesh: "HexMesher", bcs: "dict[str, BC]") -> str | None:
         """Why the supports and loads leave the problem without a solution (the part free to move), or None:
         the physics' own check."""
         return PHYSICS[self.physics].supports_and_loads_error(mesh, bcs)
 
     # ------------------------------------------------------------------ files
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {"schema_version": SCHEMA_VERSION, "name": self.name, "physics": self.physics,
                 "comment": self.comment,
                 "mesh": {"n_dof": self.n_dof, "single_layer": self.single_layer},
@@ -905,7 +938,7 @@ class Project:
                                 "constraints": [dict(c) for c in self.formulation.get("constraints", [])]},
                 "settings": {k: dict(v) for k, v in self.settings.items()}}
 
-    def _file_data(self, path):
+    def _file_data(self, path: str) -> dict[str, Any]:
         """The JSON a project file at path holds, with the STL path relative to it."""
         data = dict(self._gui)
         stl = self.stl_path()
@@ -917,7 +950,7 @@ class Project:
         data["mmto"] = self.to_dict()
         return data
 
-    def save(self, path):
+    def save(self, path: str) -> None:
         """Write the project, every setting included, with the other sections it was loaded with.
         Always as .mmto. Its folder becomes the project's folder, as the window keeps it: the part and
         the database with its network are copied into part/ and materials/ there (project_folder.pack),
@@ -937,7 +970,7 @@ class Project:
             json.dump(data, fh, indent=2)
         self.base_dir, self.stl = os.path.dirname(path), data["stl_file_path"]
 
-    def to_script(self, path):
+    def to_script(self, path: str) -> str:
         """Write a Python script that rebuilds this project with the same calls, next to it.
 
         Settings that differ from a new project's are written; the rest are the defaults.
@@ -956,7 +989,7 @@ class Project:
         reference.complete_settings()
         mine = self.copy()
         mine.complete_settings()
-        def explained(block, what):                         # the comment above each block of calls
+        def explained(block: str, what: str) -> list[str]:      # the comment above each block of calls
             return [f"# {block}: {what} are in docs/reference.md",
                     "# (in the LSR MMTO folder), or in the GUI under Help > Researcher guide > Reference."]
 
@@ -1017,27 +1050,27 @@ class Project:
             fh.write("\n".join(lines))
         return path
 
-    def copy(self, **changes):
+    def copy(self, **changes: Any) -> "Project":
         import copy
         p = copy.deepcopy(self)
         for k, v in changes.items():
             setattr(p, k, v)
         return p
 
-    def to_record(self):
+    def to_record(self) -> dict[str, Any]:
         """The project as a run record stores it."""
         return {"project": self.to_dict(), "stl_file_path": self.stl_path(), "base_dir": self.base_dir,
                 "gui": self._gui}
 
     @classmethod
-    def from_record(cls, record):
+    def from_record(cls, record: dict[str, Any]) -> "Project":
         """The project a run record stores, its paths as load gives them (absolute, in the project folder
         where it is now: load_results.absolute_paths)."""
         data = dict(record.get("gui") or {}, mmto=record["project"], stl_file_path=record["stl_file_path"])
         return cls._from_data(data, record["base_dir"], record["project"].get("name", "project"))
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path: str) -> "Project":
         """A project read from its .mmto file, as the GUI and p.save write it.
 
         path: the .mmto file, absolute or relative to the folder Python runs in
@@ -1053,7 +1086,9 @@ class Project:
         return cls._from_data(data, os.path.dirname(path), os.path.splitext(os.path.basename(path))[0])
 
     @classmethod
-    def _from_data(cls, data, base_dir, default_name):
+    def _from_data(cls, data: dict[str, Any], base_dir: str, default_name: str) -> "Project":
+        """A project from the JSON a project file holds (upgraded to SCHEMA_VERSION first); base_dir is the folder
+        its relative paths start from, default_name its name when the data gives none."""
         m = upgrade(data.get("mmto") or {}, default_name)
         mesh = m.get("mesh", {})
         p = cls(m.get("name") or default_name, data.get("stl_file_path", ""),
@@ -1075,8 +1110,11 @@ class Project:
 
 
 # ---------------------------------------------------------------------- running
-def _run_arguments(project, save_dir=None, verbose=True, plot_progress=False, plot_bcs=False, plotter=None,
-                  progress=None, should_stop=None, on_network_error=None):
+def _run_arguments(project: Project, save_dir: str | None = None, verbose: bool = True, plot_progress: bool = False,
+                   plot_bcs: bool = False, plotter: "pyvista.Plotter | None" = None,
+                   progress: Callable[[dict[str, Any]], None] | None = None,
+                   should_stop: Callable[[], bool] | None = None,
+                   on_network_error: Callable[[str], bool] | None = None) -> dict[str, Any]:
     """The keyword arguments _run_topopt gets for this project: its settings as one object s
     (settings.run_settings), the project, where the results go, and how the run is watched.
     Internal: a project runs through run(p). With no save_dir, the results go where the window puts
@@ -1089,7 +1127,7 @@ def _run_arguments(project, save_dir=None, verbose=True, plot_progress=False, pl
                 progress=progress, should_stop=should_stop, on_network_error=on_network_error)
 
 
-def _prepared(project):
+def _prepared(project: Project) -> Project:
     """The project as a run gets it: its settings completed (saying which came from the defaults),
     checked, and copied, so that the run records the project as it is now."""
     filled = project.complete_settings()
@@ -1101,7 +1139,7 @@ def _prepared(project):
     return project.copy()
 
 
-def run(project, save_dir=None, **run_options):
+def run(project: Project, save_dir: str | None = None, **run_options: Any) -> str | None:
     """Optimizes the project. The run's record keeps the project as it was run (Project.from_record
     rebuilds it). Returns the folder the results went to; None when nothing was saved.
 

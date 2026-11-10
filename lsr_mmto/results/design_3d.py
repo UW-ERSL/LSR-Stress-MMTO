@@ -14,8 +14,17 @@ nothing else here does.
 from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
+if TYPE_CHECKING:
+    import pyvista
+    from matplotlib.axes import Axes
+    from matplotlib.collections import PolyCollection
+
+    from pyto.core.hex_mesher import HexMesher
+    from lsr_mmto.problem.project import Project
 
 from .load_results import Run
 
@@ -29,7 +38,7 @@ class RenderError(RuntimeError):
 _MESH_CACHE: dict = {}
 
 
-def _problem(run: Run):
+def _problem(run: Run) -> Project:
     """The Project a run was made from."""
     try:
         from lsr_mmto.problem.project import Project
@@ -43,7 +52,7 @@ def _problem(run: Run):
     return Project.from_record(spec)
 
 
-def mesh_for(run: Run):
+def mesh_for(run: Run) -> HexMesher:
     """The voxel mesh this run used, rebuilt and cached.
 
     nDOFDesired comes from the run's own config, so the rebuild matches the grid
@@ -76,7 +85,7 @@ def mesh_for(run: Run):
 # 2D
 # --------------------------------------------------------------------------- #
 
-def build_quads(mesh):
+def build_quads(mesh: HexMesher) -> np.ndarray:
     """(n_elems, 4, 2) corners, one axis-aligned quad per element."""
     c = np.asarray(mesh.elem_centers, float)
     dx, dy = float(mesh.elem_size[0]), float(mesh.elem_size[1])
@@ -90,9 +99,10 @@ def build_quads(mesh):
     ], axis=1)
 
 
-def draw_panel(ax, run: Run, field: str = "material", *,
-               mesh=None, quads=None, edges: bool = False,
-               cmap: str = "viridis", vmin=None, vmax=None, colours=None):
+def draw_panel(ax: Axes, run: Run, field: str = "material", *,
+               mesh: HexMesher | None = None, quads: np.ndarray | None = None, edges: bool = False,
+               cmap: str = "viridis", vmin: float | None = None, vmax: float | None = None,
+               colours: list[str] | None = None) -> PolyCollection:
     """Draw one run as raw element quads.
 
     field: material | topology    solid elements only
@@ -156,7 +166,8 @@ MIRROR_AXES = {
 }
 
 
-def _reflect_centroids(c, mat, d, axes):
+def _reflect_centroids(c: np.ndarray, mat: np.ndarray, d: np.ndarray | tuple[float, float, float],
+                       axes: tuple[int, ...]) -> tuple[np.ndarray, np.ndarray]:
     """Mirror centroids about the minimum plane of each axis.
 
     The symmetry plane sits half an element outside the first centroid layer,
@@ -173,7 +184,8 @@ def _reflect_centroids(c, mat, d, axes):
     return C, M
 
 
-def voxel_surface(run: Run, *, mesh=None, mirror: bool = True):
+def voxel_surface(run: Run, *, mesh: HexMesher | None = None, mirror: bool = True) -> tuple[pyvista.PolyData, int,
+                  np.ndarray]:
     """Raw voxel surface of the design. Returns (surf, n_solid, materials)."""
     try:
         import pyvista as pv
@@ -196,7 +208,7 @@ def voxel_surface(run: Run, *, mesh=None, mirror: bool = True):
     C, M = _reflect_centroids(centers[solid], run.material_indices[solid],
                               (dx, dy, dz), axes)
 
-    def lattice(coord, step):
+    def lattice(coord: np.ndarray, step: float) -> tuple[np.ndarray, float]:
         o = coord.min()
         return np.rint((coord - o) / step).astype(int), o
 
@@ -231,10 +243,10 @@ def voxel_surface(run: Run, *, mesh=None, mirror: bool = True):
     return surf, n_half, M
 
 
-def screenshot(run: Run, png_path: str, *, mesh=None, mirror: bool = True,
-               camera=None, view: str = "iso", azimuth=0.0, elevation=0.0,
-               roll=0.0, zoom=1.0, size=(2000, 1600),
-               edges: bool = False, transparent: bool = False):
+def screenshot(run: Run, png_path: str, *, mesh: HexMesher | None = None, mirror: bool = True,
+               camera: Any = None, view: str = "iso", azimuth: float = 0.0, elevation: float = 0.0,
+               roll: float = 0.0, zoom: float = 1.0, size: tuple[int, int] = (2000, 1600),
+               edges: bool = False, transparent: bool = False) -> tuple[str, int, np.ndarray]:
     """Render one 3D run off-screen to a PNG.
 
     view: iso | xy | xz | yz | -xy | -xz | -yz, used when camera is None.
@@ -264,7 +276,8 @@ def screenshot(run: Run, png_path: str, *, mesh=None, mirror: bool = True,
     return png_path, n_half, M
 
 
-def _rotate(plotter, azimuth=0.0, elevation=0.0, roll=0.0, zoom=1.0):
+def _rotate(plotter: pyvista.Plotter, azimuth: float = 0.0, elevation: float = 0.0, roll: float = 0.0,
+            zoom: float = 1.0) -> None:
     """Nudge the camera off a named view, in degrees."""
     if azimuth:
         plotter.camera.azimuth += float(azimuth)
@@ -276,7 +289,7 @@ def _rotate(plotter, azimuth=0.0, elevation=0.0, roll=0.0, zoom=1.0):
         plotter.camera.zoom(float(zoom))
 
 
-def _set_view(plotter, view: str):
+def _set_view(plotter: pyvista.Plotter, view: str) -> None:
     """Apply one of pyvista's built-in cameras by name."""
     key = view.lstrip("-")
     if key not in ("iso", "xy", "xz", "yz"):

@@ -19,7 +19,18 @@ import datetime
 import platform
 import importlib
 import subprocess
+from typing import TYPE_CHECKING, Any, TextIO
+
 import numpy as np
+
+if TYPE_CHECKING:
+    import torch
+
+    from pyto.core.bc import BC
+    from pyto.core.hex_mesher import HexMesher
+    from lsr_mmto.materials.databases import VAEParams
+    from lsr_mmto.materials.encoder import MaterialEncoder
+    from lsr_mmto.optimize.mmto_to_params import MMTOParams
 
 
 # Full-precision pickle alongside the record: zeta, void latents, float64,
@@ -34,7 +45,11 @@ WRITE_FILES = True
 # sanitisation: turn enums / numpy / torch / dataclasses / params into plain   #
 # python so the config is both YAML-readable and pickle-safe.                  #
 # --------------------------------------------------------------------------- #
-def _to_plain(obj, _depth=0):
+def _to_plain(obj: Any, _depth: int = 0) -> Any:
+    """obj as plain Python a manifest can hold: Enums as their names, numpy and torch numbers and small arrays
+    as numbers and lists (a large array as its shape, dtype and first 8 values), an object with to_record (a
+    Project) as its record, dataclasses, dicts and other objects' public fields as dicts, lists, tuples and sets
+    as lists; anything else, or deeper than 12 levels, as its text."""
     if _depth > 12:
         return str(obj)
     if obj is None or isinstance(obj, (bool, int, float, str)):
@@ -77,7 +92,7 @@ def _to_plain(obj, _depth=0):
     return str(obj)
 
 
-def _params_dict(p):
+def _params_dict(p: Any) -> dict[str, Any]:
     """Every public field of a params object (dataclass or plain class)."""
     try:
         import dataclasses
@@ -99,7 +114,7 @@ def _params_dict(p):
     return out
 
 
-def _read_pnorm_exponent():
+def _read_pnorm_exponent() -> float | None:
     """The p-norm exponent is a module global on topopt_material_model."""
     for getter in (
         lambda: importlib.import_module("topopt_material_model"),
@@ -114,7 +129,9 @@ def _read_pnorm_exponent():
     return None
 
 
-def _loading_bc_summary(mesh, bc, ndof_per_node=3):
+def _loading_bc_summary(mesh: "HexMesher", bc: "BC", ndof_per_node: int = 3) -> dict[str, Any]:
+    """For the manifest: how many nodes are loaded and their centroid, the net load, and how many dofs and nodes
+    are held. An error in the loads or the held dofs is kept as its text; a centroid that fails is left out."""
     out = {}
     try:
         force = np.asarray(bc.force).ravel()
@@ -142,7 +159,8 @@ def _loading_bc_summary(mesh, bc, ndof_per_node=3):
     return out
 
 
-def _mesh_summary(mesh):
+def _mesh_summary(mesh: "HexMesher") -> dict[str, Any]:
+    """For the manifest: the mesh's counts, element size and extent; what cannot be read is left out."""
     out = {}
     for attr in ("num_elems", "num_nodes"):
         try:
@@ -162,7 +180,10 @@ def _mesh_summary(mesh):
     return out
 
 
-def _material_summary(mat_encoder, z_real_points, material_colors, material_labels=None):
+def _material_summary(mat_encoder: "MaterialEncoder", z_real_points: "torch.Tensor | np.ndarray",
+                      material_colors: list[str], material_labels: list[str] | None = None) -> dict[str, Any]:
+    """For the manifest: the materials' names, latent points, colours and labels, and the properties the network
+    gives at their latent points; what fails is left out (the properties' error is kept as text)."""
     out = {}
     try:
         out["material_names"] = list(mat_encoder.materialNames)
@@ -202,7 +223,8 @@ NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)   # Windows: no console w
                                                          # when the app runs without a console of its own
 
 
-def _git(folder, *args):
+def _git(folder: str, *args: str) -> str | None:
+    """What git prints for these arguments in folder; None when it fails or takes over 10 s."""
     try:
         out = subprocess.run(["git", "-C", folder, *args], capture_output=True, text=True, timeout=10,
                              creationflags=NO_WINDOW)
@@ -211,7 +233,7 @@ def _git(folder, *args):
         return None
 
 
-def git_state(folder):
+def git_state(folder: str) -> dict[str, Any]:
     """Commit, branch and the tracked files changed since that commit; "unknown" when the
     folder is not a git checkout (a zip download) or git is not installed."""
     commit = _git(folder, "rev-parse", "HEAD")
@@ -223,7 +245,7 @@ def git_state(folder):
             "changed_files": [line[3:] for line in status.splitlines() if line.strip()]}
 
 
-def provenance():
+def provenance() -> dict[str, Any]:
     """The code this run is made with: this repository and PyTO-AD as git commits with
     their uncommitted changes, the Python version, the platform and the package versions.
     Never raises."""
@@ -253,10 +275,12 @@ def provenance():
 # --------------------------------------------------------------------------- #
 # public API                                                                  #
 # --------------------------------------------------------------------------- #
-def build_run_config(example_name, run_args, to_params, vae_params, beta_schedule,
-                     mesh, bcs, fields, mat_encoder, z_real_points, material_colors,
-                     mma_settings=None, runtime_sec=None, iterations=None,
-                     comment="", pnorm_exponent=None, material_labels=None):
+def build_run_config(example_name: str, run_args: dict[str, Any], to_params: "MMTOParams", vae_params: "VAEParams",
+                     beta_schedule: dict[str, float], mesh: "HexMesher", bcs: "dict[str, BC]", fields: dict[str, int],
+                     mat_encoder: "MaterialEncoder", z_real_points: "torch.Tensor | np.ndarray",
+                     material_colors: list[str], mma_settings: dict[str, Any] | None = None,
+                     runtime_sec: float | None = None, iterations: int | None = None, comment: str = "",
+                     pnorm_exponent: float | None = None, material_labels: list[str] | None = None) -> dict[str, Any]:
     """Assemble the complete sectioned parameter manifest. Never raises."""
     if pnorm_exponent is None:
         pnorm_exponent = _read_pnorm_exponent()
@@ -304,7 +328,7 @@ def build_run_config(example_name, run_args, to_params, vae_params, beta_schedul
     return cfg
 
 
-def write_run_config_yaml(config, path):
+def write_run_config_yaml(config: dict[str, Any], path: str) -> None:
     """Sectioned, human-readable manifest. Prefers PyYAML, falls back cleanly."""
     sections = list(config.items())
     try:
@@ -318,7 +342,7 @@ def write_run_config_yaml(config, path):
     except Exception:
         pass
 
-    def _emit(f, val, indent):
+    def _emit(f: TextIO, val: Any, indent: int) -> None:
         pad = "  " * indent
         if isinstance(val, dict):
             for k, v in val.items():
@@ -345,14 +369,16 @@ def write_run_config_yaml(config, path):
 SCHEMA_VERSION = 2          # 2: the physics' per-element results by name (results), not a von_mises field
 
 
-def files_written():
+def files_written() -> list[str]:
     """The names of the files save_run_data writes into a run's folder."""
     return ["run_data.npz", "run_data.config.json", "run_config.yaml"] + (["run_data.pkl"] if SAVE_PICKLE else [])
 
 
-def save_run_data(save_dir, config, fields, vae_state_dict, history,
-                  example_name, z_real_points, material_colors, material_names,
-                  latent_dim, num_elems, num_nodes, material_labels=None, results=None):
+def save_run_data(save_dir: str, config: dict[str, Any], fields: dict[str, np.ndarray],
+                  vae_state_dict: dict[str, Any] | None, history: dict[str, list[Any]],
+                  example_name: str, z_real_points: np.ndarray, material_colors: list[str], material_names: list[str],
+                  latent_dim: int, num_elems: int, num_nodes: int, material_labels: list[str] | None = None,
+                  results: dict[str, dict[str, Any]] | None = None) -> str | None:
     """Write the record, run_config.yaml, and the pickle if SAVE_PICKLE. results: the physics'
     results, {name: dict(view, title, measures, where, shape, value)} with value the array (where and
     shape may be left out: load_results.result_info).
@@ -369,8 +395,11 @@ def save_run_data(save_dir, config, fields, vae_state_dict, history,
     return write_run_data(save_dir, data)
 
 
-def run_data(config, fields, vae_state_dict, history, example_name, z_real_points, material_colors,
-             material_names, latent_dim, num_elems, num_nodes, material_labels=None, results=None):
+def run_data(config: dict[str, Any], fields: dict[str, np.ndarray], vae_state_dict: dict[str, Any] | None,
+             history: dict[str, list[Any]], example_name: str, z_real_points: np.ndarray,
+             material_colors: list[str], material_names: list[str], latent_dim: int, num_elems: int, num_nodes: int,
+             material_labels: list[str] | None = None, results: dict[str,
+             dict[str, Any]] | None = None) -> dict[str, Any]:
     """Everything save_run_data writes, as one dict (its arguments as save_run_data takes them)."""
     from lsr_mmto.results.load_results import result_info
     sd = {}
@@ -399,7 +428,7 @@ def run_data(config, fields, vae_state_dict, history, example_name, z_real_point
     return data
 
 
-def write_run_data(save_dir, data):
+def write_run_data(save_dir: str, data: dict[str, Any]) -> str:
     """run_data's dict written into save_dir: the record, run_config.yaml, and the pickle if SAVE_PICKLE.
     Their paths are relative to the project folder (load_results.relative_paths), so the project folder
     can be moved with its runs. Returns the path of the primary artefact, as save_run_data."""
@@ -420,7 +449,7 @@ def write_run_data(save_dir, data):
     return pkl_path or rec_path
 
 
-def _save_record(save_dir, data):
+def _save_record(save_dir: str, data: dict[str, Any]) -> str:
     """Write run_data.npz and run_data.config.json into save_dir.
 
     x_bin is stored bitpacked; z_elem is stored for solid elements only.
@@ -440,7 +469,7 @@ def _save_record(save_dir, data):
     return base + ".npz"
 
 
-def record_arrays(save_dir, data):
+def record_arrays(save_dir: str, data: dict[str, Any]) -> tuple[dict[str, np.ndarray | np.generic], dict[str, Any]]:
     """(the arrays of run_data.npz, the manifest of run_data.config.json) of run_data's dict, as
     _save_record writes them for a record in save_dir (its folder name is the record's descriptor)."""
     f = data["fields"]

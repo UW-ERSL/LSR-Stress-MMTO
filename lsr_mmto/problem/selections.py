@@ -67,13 +67,22 @@ import operator
 import os
 import re
 
+from typing import TYPE_CHECKING, Any, Callable, Sequence
+
 import numpy as np
+
+if TYPE_CHECKING:
+    import pyvista
+
+    from pyto.core.hex_mesher import HexMesher
 
 _AXES = {"x": 0, "y": 1, "z": 2}
 _TYPES = {}
 
 
-def _points(mesh, on):
+def _points(mesh: "HexMesher", on: str) -> np.ndarray:
+    """The points tested, (points, 3): the mesh nodes for on="nodes", the element centres for "elements";
+    ValueError otherwise."""
     if on == "nodes":
         return np.asarray(mesh.node_xyz, dtype=float)
     if on == "elements":
@@ -85,7 +94,7 @@ _ARITHMETIC = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.
                ast.Pow: lambda a, b: float(a) ** float(b), ast.USub: operator.neg, ast.UAdd: operator.pos}
 
 
-def plain_value(node, names=None):
+def plain_value(node: ast.AST, names: dict[str, float] | None = None) -> Any:
     """The value of a parsed piece of text made only of numbers, text, True/False/None, lists, tuples,
     dicts, and arithmetic on numbers: + - * / ** ( ) and the names in names (pi by default): 38/2,
     2*pi*5. Nothing else is accepted: no other names, no calls, no attributes. ValueError otherwise."""
@@ -115,7 +124,7 @@ def plain_value(node, names=None):
 _K_H = re.compile(r"((?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)\s*h\b")       # "1.5h", "1.5 h": 1.5 times h
 
 
-def _length_text(v):
+def _length_text(v: str) -> ast.expr | None:
     """The parsed form of a length text, "1.5h" read as 1.5 * h; None when it does not parse."""
     try:
         return ast.parse(_K_H.sub(r"(\1*h)", v.strip()), mode="eval").body
@@ -123,7 +132,7 @@ def _length_text(v):
         return None
 
 
-def _length_value(v, h):
+def _length_value(v: str, h: float) -> float:
     """The length text v worked out with h (the largest element size), or ValueError."""
     tree = _length_text(v)
     try:
@@ -136,7 +145,7 @@ def _length_value(v, h):
     return value
 
 
-def _length(mesh, v):
+def _length(mesh: "HexMesher", v: float | str) -> float:
     """A length: a number in model units, or text in numbers, pi and h, the largest element size
     ("1.5h", "5 + 1h"), worked out on this mesh."""
     if isinstance(v, str):
@@ -144,7 +153,7 @@ def _length(mesh, v):
     return float(v)
 
 
-def _keep(v):
+def _keep(v: float | str) -> float | str:
     """A length as given: a number, or text with h in it kept as text until there is a mesh; text
     without h (38/2) becomes its number."""
     if isinstance(v, str):
@@ -154,7 +163,7 @@ def _keep(v):
     return float(v)
 
 
-def _pad(mesh, pad, on, axis=None):
+def _pad(mesh: "HexMesher", pad: float | str, on: str, axis: int | str | None = None) -> float | np.ndarray:
     """pad in model units; "half" is half the smallest element size, or along axis (0, 1, 2) if given,
     or with axis="each" half the size along each axis (three numbers)."""
     if pad == "auto":
@@ -167,7 +176,8 @@ def _pad(mesh, pad, on, axis=None):
     return _length(mesh, pad)
 
 
-def _axis_vector(axis):
+def _axis_vector(axis: str | Sequence[float]) -> np.ndarray:
+    """The unit vector (3,) of an axis letter "x", "y", "z", or of a direction given as three numbers."""
     if isinstance(axis, str):
         v = np.zeros(3)
         v[_AXES[axis]] = 1.0
@@ -186,7 +196,15 @@ class Field:
     words, for the form's (i)."""
     __slots__ = ("kind", "choices", "editable", "optional", "files", "help")
 
-    def __init__(self, kind, choices=(), editable=False, optional=False, files=None, help=None):
+    kind: str
+    choices: tuple[tuple[str, str], ...]
+    editable: bool
+    optional: bool
+    files: str | None
+    help: str | None
+
+    def __init__(self, kind: str, choices: Sequence[tuple[str, str]] = (), editable: bool = False,
+                 optional: bool = False, files: str | None = None, help: str | None = None) -> None:
         self.kind, self.choices, self.editable = kind, tuple(choices), editable
         self.optional, self.files, self.help = optional, files, help
 
@@ -202,35 +220,39 @@ LENGTH, POINT = Field("length"), Field("point")
 
 class Selection:
     """A region; evaluate(mesh, on) gives sorted unique indices."""
-    TYPE = None
-    fields = ()
-    field_kinds = {}                                # {field: Field}, one for each of fields
+    TYPE: str | None = None                         # its name in a project file; a type with one is in _TYPES
+    fields: tuple[str, ...] = ()                    # its arguments, in order, as to_dict and repr write them
+    field_kinds: dict[str, Field] = {}              # {field: Field}, one for each of fields
 
-    def __init_subclass__(cls, **kw):
+    def __init_subclass__(cls, **kw: Any) -> None:
         super().__init_subclass__(**kw)
         if cls.TYPE:
             _TYPES[cls.TYPE] = cls
 
-    def _mask(self, p, mesh, on):
+    def _mask(self, p: np.ndarray, mesh: "HexMesher", on: str) -> np.ndarray:
+        """True for each point of p (points, 3) inside the region; a type gives this or its own evaluate."""
         raise NotImplementedError
 
-    def evaluate(self, mesh, on="nodes", base_dir=None):
+    def evaluate(self, mesh: "HexMesher", on: str = "nodes", base_dir: str | None = None) -> np.ndarray:
+        """The sorted indices of the nodes (on="nodes") or elements (on="elements") of the mesh in the region.
+        base_dir: the project's folder, for a type that reads a file."""
         p = _points(mesh, on)
         return np.flatnonzero(self._mask(p, mesh, on)).astype(int)
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
+        """The JSON form a project file stores: {"type": TYPE, field: value, ...}."""
         d = {"type": self.TYPE}
         for f in self.fields:
             v = getattr(self, f)
             d[f] = v.tolist() if isinstance(v, np.ndarray) else v
         return d
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         args = ", ".join(f"{f}={getattr(self, f)!r}" for f in self.fields)
         return f"{self.TYPE}({args})"
 
 
-def from_dict(d):
+def from_dict(d: dict[str, Any]) -> Selection:
     """A Selection from its JSON form."""
     d = dict(d)
     kind = d.pop("type", None)
@@ -256,11 +278,12 @@ class box(Selection):
     TYPE, fields = "box", ("lo", "hi", "pad")
     field_kinds = {"lo": POINT, "hi": POINT, "pad": PAD}
 
-    def __init__(self, lo, hi, pad="auto"):
+    def __init__(self, lo: Sequence[float] | np.ndarray, hi: Sequence[float] | np.ndarray,
+                 pad: float | str = "auto") -> None:
         a, b = np.asarray(lo, dtype=float), np.asarray(hi, dtype=float)
         self.lo, self.hi, self.pad = np.minimum(a, b).tolist(), np.maximum(a, b).tolist(), pad
 
-    def _mask(self, p, mesh, on):
+    def _mask(self, p: np.ndarray, mesh: "HexMesher", on: str) -> np.ndarray:
         t = _pad(mesh, self.pad, on, axis="each")
         return np.all((p >= np.array(self.lo) - t) & (p <= np.array(self.hi) + t), axis=1)
 
@@ -284,7 +307,9 @@ class cylinder(Selection):
     field_kinds = {"center": POINT, "axis": AXIS, "radius": LENGTH, "inner_radius": LENGTH,
                    "along": Field("length", optional=True), "pad": PAD, "boundary": Field("tick")}
 
-    def __init__(self, center, axis, radius, inner_radius=0.0, along=None, pad="auto", boundary=False):
+    def __init__(self, center: Sequence[float], axis: str | Sequence[float], radius: float | str,
+                 inner_radius: float | str = 0.0, along: Sequence[float | str] | None = None, pad: float | str = "auto",
+                 boundary: bool = False) -> None:
         self.center = list(map(float, center))
         self.axis = axis if isinstance(axis, str) else list(map(float, axis))
         self.radius, self.inner_radius = _keep(radius), _keep(inner_radius)
@@ -292,7 +317,7 @@ class cylinder(Selection):
         self.pad = pad
         self.boundary = bool(boundary)
 
-    def evaluate(self, mesh, on="nodes", base_dir=None):
+    def evaluate(self, mesh: "HexMesher", on: str = "nodes", base_dir: str | None = None) -> np.ndarray:
         found = super().evaluate(mesh, on, base_dir)
         if not self.boundary:
             return found
@@ -300,17 +325,17 @@ class cylinder(Selection):
             raise ValueError("cylinder with boundary=True selects nodes only")
         return np.intersect1d(found, np.asarray(mesh.get_boundary_nodes())).astype(int)
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         if not d["boundary"]:                                       # files without it stay as they were
             del d["boundary"]
         return d
 
-    def __repr__(self):                                             # the code line: boundary only when on
+    def __repr__(self) -> str:                                             # the code line: boundary only when on
         args = ", ".join(f"{k}={v!r}" for k, v in self.to_dict().items() if k != "type")
         return f"{self.TYPE}({args})"
 
-    def _mask(self, p, mesh, on):
+    def _mask(self, p: np.ndarray, mesh: "HexMesher", on: str) -> np.ndarray:
         t = _pad(mesh, self.pad, on)
         d = p - np.array(self.center)
         if isinstance(self.axis, str):                 # exact arithmetic for x, y, z axes
@@ -344,10 +369,10 @@ class sphere(Selection):
     TYPE, fields = "sphere", ("center", "radius", "pad")
     field_kinds = {"center": POINT, "radius": LENGTH, "pad": PAD}
 
-    def __init__(self, center, radius, pad="auto"):
+    def __init__(self, center: Sequence[float], radius: float | str, pad: float | str = "auto") -> None:
         self.center, self.radius, self.pad = list(map(float, center)), _keep(radius), pad
 
-    def _mask(self, p, mesh, on):
+    def _mask(self, p: np.ndarray, mesh: "HexMesher", on: str) -> np.ndarray:
         r = np.sqrt(np.sum((p - np.array(self.center)) ** 2, axis=1))
         return r <= _length(mesh, self.radius) + _pad(mesh, self.pad, on)
 
@@ -368,7 +393,8 @@ class plane(Selection):
     TYPE, fields = "plane", ("axis", "value", "pad", "limits")
     field_kinds = {"axis": AXIS, "value": LENGTH, "pad": PAD, "limits": Field("limits", optional=True)}
 
-    def __init__(self, axis, value, pad="auto", limits=None):
+    def __init__(self, axis: str, value: float, pad: float | str = "auto",
+                 limits: dict[str, Sequence[float]] | None = None) -> None:
         self.axis, self.value, self.pad = axis, float(value), pad
         self.limits = None
         if limits:
@@ -377,7 +403,7 @@ class plane(Selection):
                 raise ValueError(f"limits are for the other axes than {axis!r}, not {bad}")
             self.limits = {a: sorted(map(float, ab)) for a, ab in limits.items()}
 
-    def _mask(self, p, mesh, on):
+    def _mask(self, p: np.ndarray, mesh: "HexMesher", on: str) -> np.ndarray:
         k = _AXES[self.axis]
         mask = np.abs(p[:, k] - self.value) <= _pad(mesh, self.pad, "nodes", axis=k)
         for a, (lo, hi) in (self.limits or {}).items():
@@ -386,14 +412,14 @@ class plane(Selection):
             mask &= (p[:, j] >= lo - t) & (p[:, j] <= hi + t)
         return mask
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         if d["limits"] is None:                                     # files without limits stay as they were
             del d["limits"]
         return d
 
 
-def _side(side):
+def _side(side: str) -> tuple[int, str]:
     if len(side) != 4 or side[0] not in _AXES or side[1:] not in ("min", "max"):
         raise ValueError(f"side must be one of xmin, xmax, ymin, ymax, zmin, zmax, not {side!r}")
     return _AXES[side[0]], side[1:]
@@ -410,11 +436,11 @@ class face(Selection):
     TYPE, fields = "face", ("side", "pad")
     field_kinds = {"side": SIDE, "pad": PAD}
 
-    def __init__(self, side, pad="auto"):
+    def __init__(self, side: str, pad: float | str = "auto") -> None:
         _side(side)
         self.side, self.pad = side, pad
 
-    def _mask(self, p, mesh, on):
+    def _mask(self, p: np.ndarray, mesh: "HexMesher", on: str) -> np.ndarray:
         k, end = _side(self.side)
         extreme = p[:, k].min() if end == "min" else p[:, k].max()
         return np.abs(p[:, k] - extreme) < _pad(mesh, self.pad, "nodes")
@@ -430,11 +456,11 @@ class near_face(Selection):
     TYPE, fields = "near_face", ("side", "distance")
     field_kinds = {"side": SIDE, "distance": LENGTH}
 
-    def __init__(self, side, distance):
+    def __init__(self, side: str, distance: float | str) -> None:
         _side(side)
         self.side, self.distance = side, _keep(distance)
 
-    def _mask(self, p, mesh, on):
+    def _mask(self, p: np.ndarray, mesh: "HexMesher", on: str) -> np.ndarray:
         k, end = _side(self.side)
         d = _length(mesh, self.distance)
         if end == "min":
@@ -453,11 +479,11 @@ class nearest(Selection):
     TYPE, fields = "nearest", ("point", "boundary")
     field_kinds = {"point": POINT, "boundary": Field("tick")}
 
-    def __init__(self, point, boundary=False):
+    def __init__(self, point: Sequence[float], boundary: bool = False) -> None:
         self.point = list(map(float, point))
         self.boundary = bool(boundary)
 
-    def evaluate(self, mesh, on="nodes", base_dir=None):
+    def evaluate(self, mesh: "HexMesher", on: str = "nodes", base_dir: str | None = None) -> np.ndarray:
         p = _points(mesh, on)
         if not self.boundary:
             return np.array([int(np.argmin(np.sum((p - np.array(self.point)) ** 2, axis=1)))])
@@ -478,10 +504,10 @@ class ids(Selection):
     TYPE, fields = "ids", ("indices",)
     field_kinds = {"indices": Field("numbers")}
 
-    def __init__(self, indices):
+    def __init__(self, indices: Sequence[int]) -> None:
         self.indices = sorted(set(int(i) for i in np.asarray(indices).ravel()))
 
-    def evaluate(self, mesh, on="nodes", base_dir=None):
+    def evaluate(self, mesh: "HexMesher", on: str = "nodes", base_dir: str | None = None) -> np.ndarray:
         n = len(_points(mesh, on))
         bad = [i for i in self.indices if not 0 <= i < n]
         if bad:
@@ -501,11 +527,11 @@ class stl_faces(Selection):
     TYPE, fields = "stl_faces", ("triangles", "tol")
     field_kinds = {"triangles": Field("numbers"), "tol": Field("number", optional=True)}
 
-    def __init__(self, triangles, tol=None):
+    def __init__(self, triangles: Sequence[int], tol: float | None = None) -> None:
         self.triangles = [int(t) for t in triangles]
         self.tol = None if tol is None else float(tol)
 
-    def evaluate(self, mesh, on="nodes", base_dir=None):
+    def evaluate(self, mesh: "HexMesher", on: str = "nodes", base_dir: str | None = None) -> np.ndarray:
         if on != "nodes":
             raise ValueError("stl_faces selects nodes only")
         stl = mesh.stlGeom
@@ -537,12 +563,13 @@ class halfspaces(Selection):
     TYPE, fields = "halfspaces", ("normals", "origins", "boundary")
     field_kinds = {"normals": Field("numbers"), "origins": Field("numbers"), "boundary": Field("tick")}
 
-    def __init__(self, normals, origins, boundary=True):
+    def __init__(self, normals: Sequence[Sequence[float] | np.ndarray], origins: Sequence[Sequence[float] | np.ndarray],
+                 boundary: bool = True) -> None:
         self.normals = [list(map(float, n)) for n in normals]
         self.origins = [list(map(float, o)) for o in origins]
         self.boundary = bool(boundary)
 
-    def evaluate(self, mesh, on="nodes", base_dir=None):
+    def evaluate(self, mesh: "HexMesher", on: str = "nodes", base_dir: str | None = None) -> np.ndarray:
         p = _points(mesh, on)
         n, o = np.asarray(self.normals, dtype=float), np.asarray(self.origins, dtype=float)
         if self.boundary:
@@ -568,13 +595,13 @@ class rows(Selection):
     field_kinds = {"face": SIDE, "axis": AXIS, "n": Field("number"),
                    "end": Field("choice", (("High end", "max"), ("Low end", "min")))}
 
-    def __init__(self, face, axis, n, end="max"):
+    def __init__(self, face: str, axis: str, n: int, end: str = "max") -> None:
         _side(face)
         if axis not in _AXES or end not in ("min", "max"):
             raise ValueError(f"rows: axis must be x, y or z and end 'min' or 'max'")
         self.face, self.axis, self.n, self.end = face, axis, int(n), end
 
-    def evaluate(self, mesh, on="nodes", base_dir=None):
+    def evaluate(self, mesh: "HexMesher", on: str = "nodes", base_dir: str | None = None) -> np.ndarray:
         if on != "nodes":
             raise ValueError("rows selects nodes only")
         p = _points(mesh, "nodes")
@@ -589,7 +616,8 @@ class rows(Selection):
         return np.flatnonzero(on_face & np.isin(row, chosen)).astype(int)
 
 
-def _resolve(path, base_dir):
+def _resolve(path: str, base_dir: str | None) -> str:
+    """path as it is when absolute or base_dir is None, else joined to base_dir."""
     return path if os.path.isabs(path) or base_dir is None else os.path.join(base_dir, path)
 
 
@@ -606,13 +634,13 @@ class inside_stl(Selection):
                    "shift": Field("point", help="Moves the shape before nodes are selected, for example when "
                                                 "the STL was saved shifted to 0, 0, 0.")}
 
-    def __init__(self, path, shift=(0.0, 0.0, 0.0)):
+    def __init__(self, path: str, shift: Sequence[float] = (0.0, 0.0, 0.0)) -> None:
         self.path = path
         self.shift = [float(v) for v in shift]
         if len(self.shift) != 3:
             raise ValueError(f"shift needs x, y and z, not {shift!r}")
 
-    def surface(self, base_dir=None):
+    def surface(self, base_dir: str | None = None) -> "pyvista.PolyData":
         """The closed surface, moved by shift."""
         import pyvista as pv
         path = _resolve(self.path, base_dir)
@@ -621,19 +649,19 @@ class inside_stl(Selection):
         surface = pv.read(path)
         return surface.translate(self.shift, inplace=False) if any(self.shift) else surface
 
-    def evaluate(self, mesh, on="nodes", base_dir=None):
+    def evaluate(self, mesh: "HexMesher", on: str = "nodes", base_dir: str | None = None) -> np.ndarray:
         import pyvista as pv
         pts = pv.PolyData(_points(mesh, on))
         sel = pts.select_enclosed_points(self.surface(base_dir), tolerance=0.0, check_surface=False)
         return np.flatnonzero(np.asarray(sel.point_data["SelectedPoints"]).astype(bool)).astype(int)
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         if not any(d["shift"]):                                     # files without a move stay as they were
             del d["shift"]
         return d
 
-    def __repr__(self):                                             # the code line: shift only when not zero
+    def __repr__(self) -> str:                                             # the code line: shift only when not zero
         args = ", ".join(f"{k}={v!r}" for k, v in self.to_dict().items() if k != "type")
         return f"{self.TYPE}({args})"
 
@@ -648,12 +676,12 @@ class function(Selection):
     TYPE, fields = "function", ("ref",)
     field_kinds = {"ref": Field("file", files="Python files (*.py)")}
 
-    def __init__(self, ref):
+    def __init__(self, ref: str) -> None:
         if ":" not in ref:
             raise ValueError(f"function selection {ref!r}: write it as 'file.py:name'")
         self.ref = ref
 
-    def evaluate(self, mesh, on="nodes", base_dir=None):
+    def evaluate(self, mesh: "HexMesher", on: str = "nodes", base_dir: str | None = None) -> np.ndarray:
         file, name = self.ref.rsplit(":", 1)
         path = _resolve(file, base_dir)
         spec = importlib.util.spec_from_file_location(os.path.splitext(os.path.basename(path))[0], path)
@@ -670,16 +698,16 @@ class Union(Selection):
     """Points in any of the parts."""
     TYPE = "union"
 
-    def __init__(self, *parts):
+    def __init__(self, *parts: Selection) -> None:
         self.parts = parts
 
-    def evaluate(self, mesh, on="nodes", base_dir=None):
+    def evaluate(self, mesh: "HexMesher", on: str = "nodes", base_dir: str | None = None) -> np.ndarray:
         return np.unique(np.concatenate([s.evaluate(mesh, on, base_dir) for s in self.parts])).astype(int)
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {"type": self.TYPE, "of": [s.to_dict() for s in self.parts]}
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.TYPE}({', '.join(map(repr, self.parts))})"
 
 
@@ -687,7 +715,7 @@ class Intersect(Union):
     """Points in all of the parts."""
     TYPE = "intersect"
 
-    def evaluate(self, mesh, on="nodes", base_dir=None):
+    def evaluate(self, mesh: "HexMesher", on: str = "nodes", base_dir: str | None = None) -> np.ndarray:
         out = self.parts[0].evaluate(mesh, on, base_dir)
         for s in self.parts[1:]:
             out = np.intersect1d(out, s.evaluate(mesh, on, base_dir))
@@ -698,10 +726,10 @@ class Difference(Union):
     """Points in the first part but not the second."""
     TYPE = "difference"
 
-    def __init__(self, a, b):
+    def __init__(self, a: Selection, b: Selection) -> None:
         super().__init__(a, b)
 
-    def evaluate(self, mesh, on="nodes", base_dir=None):
+    def evaluate(self, mesh: "HexMesher", on: str = "nodes", base_dir: str | None = None) -> np.ndarray:
         a, b = self.parts
         return np.setdiff1d(a.evaluate(mesh, on, base_dir), b.evaluate(mesh, on, base_dir)).astype(int)
 
@@ -716,17 +744,17 @@ class selection(Selection):
     TYPE, fields = "selection", ("name",)
     field_kinds = {"name": Field("choice")}
 
-    def __init__(self, name):
+    def __init__(self, name: str) -> None:
         self.name = name
 
-    def evaluate(self, mesh, on="nodes", base_dir=None):
+    def evaluate(self, mesh: "HexMesher", on: str = "nodes", base_dir: str | None = None) -> np.ndarray:
         raise ValueError(f"selection({self.name!r}) is looked up by the project: evaluate it with Project.evaluate")
 
 
 LINKS = ("selection",)                  # the JSON types that name another selection
 
 
-def _walk(d, f):
+def _walk(d: dict[str, Any], f: Callable[[dict[str, Any]], dict[str, Any]]) -> dict[str, Any]:
     """The JSON form d with f applied to every link to another selection in it."""
     if d.get("type") in LINKS:
         return f(d)
@@ -735,17 +763,17 @@ def _walk(d, f):
     return d
 
 
-def names_in(selection):
+def names_in(selection: Selection) -> list[str]:
     """The names of the other selections a selection refers to."""
     out = []
     _walk(selection.to_dict(), lambda d: out.append(d["name"]) or d)
     return out
 
 
-def resolved(selection, lookup, seen=()):
+def resolved(selection: Selection, lookup: "dict[str, Selection]", seen: tuple[str, ...] = ()) -> Selection:
     """The selection with every selection(name) replaced by lookup[name], itself resolved; ValueError for a
     name lookup does not have, or a selection that refers back to itself."""
-    def put_in(d):
+    def put_in(d: dict[str, Any]) -> dict[str, Any]:
         name = d["name"]
         if name in seen:
             raise ValueError(f"{' -> '.join(seen + (name,))}: a selection cannot contain itself")
@@ -755,18 +783,18 @@ def resolved(selection, lookup, seen=()):
     return from_dict(_walk(selection.to_dict(), put_in))
 
 
-def renamed(selection, old, new):
+def renamed(selection: Selection, old: str, new: str) -> Selection:
     """The selection with selection(old) changed to selection(new); written as selection, whatever it said."""
     return from_dict(_walk(selection.to_dict(),
                            lambda d: dict(d, type="selection", name=new) if d["name"] == old else d))
 
 
-def holds_typed_lengths(selection):
+def holds_typed_lengths(selection: Selection) -> bool:
     """True when the selection holds a coordinate or a length typed in model units: a field given as a
     point or a length (field_kinds) whose value is not in element sizes h ("1.5h" is, "5 + 1h" is not;
     so are the words of a choice, such as "auto"). Such values stay as typed when the part is scaled.
     Inside combinations too."""
-    def typed(v):
+    def typed(v: Any) -> bool:
         if isinstance(v, (list, tuple)):
             return any(typed(x) for x in v)
         if isinstance(v, str):
@@ -781,7 +809,7 @@ def holds_typed_lengths(selection):
                for name, field in selection.field_kinds.items())
 
 
-def union(*parts):
+def union(*parts: Selection) -> "Union":
     """Points in any of the parts.
 
     parts: two or more selections, each a selection type above or a name in selection("name")
@@ -790,7 +818,7 @@ def union(*parts):
     return Union(*parts)
 
 
-def intersect(*parts):
+def intersect(*parts: Selection) -> "Intersect":
     """Points in all of the parts.
 
     parts: two or more selections, each a selection type above or a name in selection("name")
@@ -799,7 +827,7 @@ def intersect(*parts):
     return Intersect(*parts)
 
 
-def difference(a, b):
+def difference(a: Selection, b: Selection) -> "Difference":
     """Points in the first part but not the second.
 
     a: the selection to start from

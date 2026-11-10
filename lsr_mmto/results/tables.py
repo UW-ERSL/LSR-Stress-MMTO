@@ -20,8 +20,14 @@ from __future__ import annotations
 
 import html
 import re
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from lsr_mmto.formulation.quantities import Quantity
+    from lsr_mmto.materials.encoder import MaterialEncoder
+    from lsr_mmto.results.load_results import Run
 
 # Greek names to the character, so tables read like the paper
 _GREEK = {
@@ -60,22 +66,26 @@ _TD = ("padding:4px 12px;text-align:{align};border-bottom:1px solid #eee;"
 class Raw:
     """A cell with its own HTML, e.g. a colour swatch, and a text fallback."""
 
-    def __init__(self, html_text, text=""):
+    html: str
+    text: str
+
+    def __init__(self, html_text: str, text: str = "") -> None:
         self.html = html_text
         self.text = text
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.text
 
 
-def swatch(colour, text=""):
+def swatch(colour: str, text: str = "") -> Raw:
     """A filled square in the table, for showing a material's colour."""
     return Raw(f"<span style='display:inline-block;width:16px;height:16px;"
                f"background:{colour};border:1px solid #888;border-radius:3px;"
                f"vertical-align:middle;'></span>", text)
 
 
-def _is_number(value) -> bool:
+def _is_number(value: Any) -> bool:
+    """True when value reads as a number, ignoring % and thousands commas."""
     try:
         float(str(value).replace("%", "").replace(",", ""))
         return True
@@ -86,8 +96,19 @@ def _is_number(value) -> bool:
 class Table:
     """Rows of strings, with optional headers, title and footnote."""
 
-    def __init__(self, rows, headers=None, title=None, note=None,
-                 scroll=None, highlight=None, symbol_cols=(0,), right_cols=None):
+    rows: list[list[str | Raw]]
+    headers: list[str] | None
+    title: str | None
+    note: str | None
+    scroll: int | None
+    highlight: Callable[[list[str | Raw]], bool]
+    symbol_cols: set[int]                # the columns whose names (Greek, subscripts) are shown as symbols
+    right_cols: set[int] | None          # the columns aligned right; None: the columns of numbers
+
+    def __init__(self, rows: Iterable[Iterable[Any]], headers: Iterable[Any] | None = None, title: str | None = None,
+                 note: str | None = None, scroll: int | None = None,
+                 highlight: Callable[[list[str | Raw]], bool] | None = None, symbol_cols: Iterable[int] | None = (0,),
+                 right_cols: Iterable[int] | None = None) -> None:
         self.rows = [[c if isinstance(c, Raw) else ("" if c is None else str(c))
                       for c in r] for r in rows]
         self.headers = [str(h) for h in headers] if headers else None
@@ -98,7 +119,9 @@ class Table:
         self.symbol_cols = set(symbol_cols or ())
         self.right_cols = None if right_cols is None else set(right_cols)
 
-    def _aligns(self):
+    def _aligns(self) -> list[str]:
+        """"left" or "right" for each column: right_cols' columns, or else those whose text cells (Raw and empty
+        ones left out) are all numbers; a column with none is "left"."""
         ncol = max([len(r) for r in self.rows] + [len(self.headers or [])])
         if self.right_cols is not None:
             return ["right" if c in self.right_cols else "left" for c in range(ncol)]
@@ -109,12 +132,12 @@ class Table:
             out.append("right" if col and all(_is_number(v) for v in col) else "left")
         return out
 
-    def _text(self, value, col=None):
+    def _text(self, value: str, col: int | None = None) -> str:
         if col is None or col in self.symbol_cols:
             return symbols_text(value)
         return value
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         ncol = max([len(r) for r in self.rows] + [len(self.headers or [])])
         widths = [0] * ncol
         for r in [self.headers] if self.headers else []:
@@ -139,7 +162,7 @@ class Table:
             lines.append(symbols_text(self.note))
         return "\n".join(lines)
 
-    def _repr_html_(self):
+    def _repr_html_(self) -> str:
         aligns = self._aligns()
         parts = []
         if self.title:
@@ -186,14 +209,14 @@ class Table:
 class Note:
     """One highlighted sentence, for a result that should not be missed."""
 
-    def __init__(self, text, tone="info"):
+    def __init__(self, text: str, tone: str = "info") -> None:
         self.text = text
         self.tone = tone
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return symbols_text(self.text)
 
-    def _repr_html_(self):
+    def _repr_html_(self) -> str:
         edge = {"info": "#3b7dd8", "warn": "#c77700"}.get(self.tone, "#3b7dd8")
         back = {"info": "#f2f7fd", "warn": "#fdf6ec"}.get(self.tone, "#f2f7fd")
         return (f"<div style=\"border-left:4px solid {edge};background:{back};"
@@ -206,39 +229,40 @@ class Note:
 class Heading:
     """A heading above the tables: the run they are about."""
 
-    def __init__(self, text):
+    def __init__(self, text: str) -> None:
         self.text = text
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.text
 
-    def _repr_html_(self):
+    def _repr_html_(self) -> str:
         return f"<div style='font-weight:700;font-size:15px;margin:2px 0 8px 0;'>{html.escape(self.text)}</div>"
 
 
 class Tables:
     """Several tables shown one after another."""
 
-    def __init__(self, *tables):
+    def __init__(self, *tables: Any) -> None:
         self.tables = [t for t in tables if t is not None]
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Any]:
         return iter(self.tables)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "\n\n".join(repr(t) for t in self.tables)
 
-    def _repr_html_(self):
+    def _repr_html_(self) -> str:
         return "".join(t._repr_html_() for t in self.tables)
 
 
 
-def label_of(run):
+def label_of(run: "Run") -> str:
+    """load_results.label of the run."""
     from .load_results import label
     return label(run)
 
 
-def run_time_label(run):
+def run_time_label(run: "Run") -> str | None:
     """When the run was made, from its folder name: '3 Nov 2026, 03:31' for 2026-11-03_03-31-08."""
     m = re.match(r"(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})", str(run.descriptor))
     if not m:
@@ -248,7 +272,7 @@ def run_time_label(run):
     return f"{int(d)} {months[int(mo) - 1]} {y}, {h}:{mi}"
 
 
-def run_title(run):
+def run_title(run: "Run") -> str:
     """'L-bracket \u00b7 run of 3 Nov 2026, 03:31', or the run's folder name when it is not a date;
     'L-bracket \u00b7 Analysis: Steel' for an analysis."""
     if run.analysed_material is not None:
@@ -257,12 +281,13 @@ def run_title(run):
     return f"{run.example} \u00b7 " + (f"run of {when}" if when else f"run {run.descriptor}")
 
 
-def _quantity(name):
+def _quantity(name: str) -> "Quantity | None":
+    """The quantity of that name, or None for a name that is not one."""
     from lsr_mmto.formulation.quantities import QUANTITIES
     return next((q for q in QUANTITIES if q.name == name), None)
 
 
-def _unit(run, name):
+def _unit(run: "Run", name: str) -> str:
     """The unit of a quantity in the run's unit system: 'MPa' for a stress, '' when it has none."""
     q = _quantity(name)
     unit = q.unit if q is not None else ""
@@ -277,7 +302,7 @@ def _unit(run, name):
     return unit
 
 
-def _amount(run, name, value):
+def _amount(run: "Run", name: str, value: float) -> str:
     """A value of a quantity with its unit: '14.7 %' for a fraction of the design domain, '3.733 MPa'."""
     unit = _unit(run, name)
     if unit.startswith("fraction"):
@@ -285,7 +310,7 @@ def _amount(run, name, value):
     return f"{value:.4g} {unit}".rstrip()
 
 
-def constraint_name(run, i):
+def constraint_name(run: "Run", i: int) -> str:
     """A constraint's short name: a quantity of one material is named by its material first,
     'Ti-6Al-4V volume fraction'."""
     spec = run.constraint_spec[i]
@@ -306,17 +331,18 @@ def constraint_name(run, i):
 MET_TOLERANCE = 1e-3          # a constraint within 0.1 % of its limit counts as met
 
 
-def given(run, i):
+def given(run: "Run", i: int) -> bool:
     """False for constraint i of an analysis that cannot give it (one of the latent points, which an analysis
     has none of): its row is left out."""
     return run.analysed_material is None or bool(np.isfinite(run.utilisation(i)))
 
 
-def met(run, i):
+def met(run: "Run", i: int) -> bool:
+    """True when constraint i is met at the last iteration, within MET_TOLERANCE."""
     return run.constraint(i) <= MET_TOLERANCE
 
 
-def met_cell(ok, before=""):
+def met_cell(ok: bool, before: str = "") -> Raw:
     """'met' with a green check, or 'not met' with a red cross, after the text before."""
     lead = f"{html.escape(before)} " if before else ""
     return Raw(lead + ("<span style='color:#2b8a3e;font-weight:600'>&#10003; met</span>" if ok else
@@ -324,7 +350,7 @@ def met_cell(ok, before=""):
                f"{before} " * bool(before) + ("met" if ok else "NOT MET"))
 
 
-def summary(run):
+def summary(run: "Run") -> Tables:
     """One run at a glance, in sections: the result (objective and each constraint, met or not), the
     design, the materials and the run. An analysis: the same for its one solve, without what only an
     optimization has (grey elements, the latent space, iterations) and the constraints it cannot give. A
@@ -366,7 +392,7 @@ def summary(run):
         Table(run_rows, title="Run", right_cols=(1,)) if run_rows else None)
 
 
-def summary_details(run):
+def summary_details(run: "Run") -> str:
     """What the summary's words mean, and each constraint's exact value and limit: the text behind its (i)."""
     obj = (run.config or {}).get("topopt_params", {}).get("Objective") or ["objective", None]
     q = _quantity(obj[0])
@@ -395,7 +421,7 @@ def summary_details(run):
 # the database, its PCA, and how well the network encodes it                   #
 # --------------------------------------------------------------------------- #
 
-def materials(mat_encoder):
+def materials(mat_encoder: "MaterialEncoder") -> Table:
     """The candidate materials, with the colour and label each is shown with (the
     database's Display sheet).
 
@@ -428,7 +454,7 @@ def materials(mat_encoder):
                  symbol_cols=(1,))
 
 
-def pca(mat_encoder):
+def pca(mat_encoder: "MaterialEncoder") -> Tables:
     """Explained variance per principal component, and the latent dimension.
 
     d_eff is the participation ratio of the PCA eigenvalues; the latent
@@ -460,7 +486,7 @@ def pca(mat_encoder):
     return Tables(lead, t1, t2)
 
 
-def encoding_errors(mat_encoder, per_material=False):
+def encoding_errors(mat_encoder: "MaterialEncoder", per_material: bool = False) -> Table:
     """How faithfully the network reproduces each real material.
 
     Each material is encoded to its latent point and decoded back. Per property: the median and

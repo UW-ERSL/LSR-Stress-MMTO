@@ -22,6 +22,7 @@ import ntpath
 import os
 import posixpath
 from dataclasses import dataclass, field
+from typing import Any, Mapping
 
 import numpy as np
 
@@ -32,7 +33,7 @@ RESULT_WHERE = ("element", "node")
 RESULT_SHAPES = {"scalar": (), "vector": (3,)}
 
 
-def result_info(entry):
+def result_info(entry: Mapping[str, Any]) -> dict[str, Any]:
     """A RESULT_FIELDS entry (or a record's description of a result) as a record describes it: view, title,
     measures, where and shape, the last two filled in when it does not say them. ValueError for another
     where or shape."""
@@ -45,7 +46,7 @@ def result_info(entry):
     return info
 
 
-def result_shape(info, n_elems, n_nodes):
+def result_shape(info: Mapping[str, Any], n_elems: int, n_nodes: int) -> tuple[int, ...]:
     """The numpy shape of a result's values, from its description (result_info): (n_elems,) for a number at
     each element, (n_nodes, 3) for a vector at each node."""
     return ((n_elems if info["where"] == "element" else n_nodes),) + RESULT_SHAPES[info["shape"]]
@@ -57,31 +58,33 @@ RECORD_PATHS = (("arguments_resolved", "to_problem", "stl_file_path"), ("argumen
                 ("arguments_resolved", "save_dir"), ("topopt_params", "MaterialsExcelFile"))
 
 
-def _get(config, keys):
+def _get(config: dict[str, Any], keys: tuple[str, ...]) -> str | None:
+    """The text at config[keys[0]][keys[1]]...; None when a key is missing or the value is not text or is empty."""
     for key in keys:
         config = config.get(key) if isinstance(config, dict) else None
     return config if isinstance(config, str) and config else None
 
 
-def _set(config, keys, value):
+def _set(config: dict[str, Any], keys: tuple[str, ...], value: str) -> None:
+    """config[keys[0]][keys[1]]... = value, in place; the dicts on the way must exist."""
     for key in keys[:-1]:
         config = config[key]
     config[keys[-1]] = value
 
 
-def _absolute(path):
+def _absolute(path: str) -> bool:
     """True for an absolute path of either kind (a record written on Windows read elsewhere, and back)."""
     return ntpath.isabs(path) or posixpath.isabs(path)
 
 
-def _below(path, folder):
+def _below(path: str, folder: str) -> str | None:
     """path relative to folder, its parts joined by /, when it is inside folder; else None. Either kind of
     separator, and case, are ignored, so a record written on Windows is read anywhere."""
     p, f = path.replace("\\", "/"), folder.replace("\\", "/").rstrip("/")
     return p[len(f) + 1:] if p.lower().startswith(f.lower() + "/") else None
 
 
-def relative_paths(config, run_folder):
+def relative_paths(config: dict[str, Any], run_folder: str) -> dict[str, Any]:
     """A copy of the record's manifest with RECORD_PATHS inside the project folder relative to it, and the
     project folder relative to the run's folder (run_folder), joined by /. A path elsewhere stays as it is."""
     config = copy.deepcopy(config)
@@ -99,7 +102,7 @@ def relative_paths(config, run_folder):
     return config
 
 
-def absolute_paths(config, run_folder):
+def absolute_paths(config: dict[str, Any], run_folder: str) -> dict[str, Any]:
     """A copy of a record's manifest with its paths absolute again, for the run in run_folder: relative ones
     against the project folder, found from the run's folder. An older record holds them absolute: when one
     no longer exists, the same place inside the run's project folder now is taken, if it is there (the
@@ -132,6 +135,8 @@ def absolute_paths(config, run_folder):
 
 
 class RecordError(RuntimeError):
+    """A run's record that cannot be read (missing, unreadable, from an older version, or inconsistent), or a
+    value a Run is asked for that its record does not hold."""
     pass
 
 
@@ -155,44 +160,47 @@ class Run:
     Example: print(r.iterations, r.final_objective)
     """
     path: str
-    meta: dict
-    config: dict
+    meta: dict[str, Any]           # the record's meta_json: example, descriptor, results, ...
+    config: dict[str, Any]         # the manifest (run_data.config.json, or made in memory), paths absolute
 
     n_elems: int
     material_indices: np.ndarray   # (n_elems,)      int
     solid: np.ndarray              # (n_elems,)      bool, binarized topology
     x_cont: np.ndarray             # (n_elems,)      float32
-    results: dict                  # name -> float32, (n_elems,) or as its where and shape say (result_shape)
-    result_info: dict              # name -> {view, title, measures, where, shape} (result_info)
+    results: dict[str, np.ndarray]           # name -> float32, (n_elems,) or as its where and shape say
+    result_info: dict[str, dict[str, Any]]   # name -> {view, title, measures, where, shape} (result_info)
     z_elem: np.ndarray             # (n_elems, n_z)  float32, NaN in voids
     z_real: np.ndarray             # (n_mats, n_z)   latent anchors
-    material_names: list
-    material_colors: list          # (n_mats,)       #rrggbb, as drawn
-    material_labels: list          # (n_mats,)       as shown in legends and tables
-    history: dict = field(repr=False)
+    material_names: list[str]
+    material_colors: list[str]     # (n_mats,)       #rrggbb, as drawn
+    material_labels: list[str]     # (n_mats,)       as shown in legends and tables
+    history: dict[str, np.ndarray] = field(repr=False)   # name -> one value (or row) per design, the start first
 
     @property
     def example(self) -> str:
+        """The project's name, from meta; "?" when it is missing."""
         return self.meta.get("example", "?")
 
     @property
     def descriptor(self) -> str:
+        """The run's folder name as recorded, from meta; "?" when it is missing."""
         return self.meta.get("descriptor", "?")
 
     @property
-    def analysed_material(self):
+    def analysed_material(self) -> str | None:
         """The material of an analysis (the solid part in one material, analysed once, not optimized:
         optimize/solid_part_analysis.py), as its label; None for a run."""
         return ((self.config or {}).get("analysis") or {}).get("material")
 
     @property
-    def analysed_design(self):
+    def analysed_design(self) -> str | None:
         """For an analysis of a run's design (Analyse this design), the folder name of the run it analysed; None
         otherwise."""
         return ((self.config or {}).get("analysis") or {}).get("design_of")
 
     @property
     def n_latent(self) -> int:
+        """The latent dimension."""
         return self.z_elem.shape[1]
 
     def last(self, key: str, col: int = 0) -> float:
@@ -245,6 +253,7 @@ class Run:
 
     @property
     def grey(self) -> float:
+        """The share of grey elements (0.1 < x_phys < 0.9) at the last iteration."""
         return self.last("grey")
 
     def constraint(self, i: int) -> float:
@@ -257,6 +266,7 @@ class Run:
 
     @property
     def constraint_spec(self) -> list:
+        """The constraints as the record's topopt_params holds them, [name, options, bound] each; [] for none."""
         return self.config.get("topopt_params", {}).get("Constraints", [])
 
     def material_property(self, key: str) -> np.ndarray:
@@ -273,6 +283,7 @@ class Run:
 
     @property
     def elem_size(self) -> np.ndarray:
+        """An element's size along x, y and z, (3,), from the manifest."""
         try:
             return np.asarray(self.config["fea"]["mesh"]["elem_size"], float)
         except KeyError as e:
@@ -281,9 +292,11 @@ class Run:
 
     @property
     def elem_volume(self) -> float:
+        """One element's volume."""
         return float(np.prod(self.elem_size))
 
     def materials_used(self) -> np.ndarray:
+        """The database rows of the materials at least one solid element has, sorted."""
         return np.unique(self.material_indices[self.solid])
 
     def mass_by_material(self) -> np.ndarray:
@@ -302,8 +315,11 @@ class Run:
         return self.z_elem[self.solid]
 
 
-def _build(path, meta, config, n, mat, solid, x_cont, results, z, z_real,
-           names, history, colours, labels) -> Run:
+def _build(path: str, meta: dict[str, Any], config: dict[str, Any], n: int, mat: np.ndarray, solid: np.ndarray,
+           x_cont: np.ndarray, results: dict[str, np.ndarray], z: np.ndarray, z_real: np.ndarray,
+           names: list[str], history: dict[str, np.ndarray], colours: list[str], labels: list[str]) -> Run:
+    """The Run of a record's pieces, after checking that material_indices, x_bin and z_elem have n rows
+    (RecordError otherwise); each result reshaped as its description says."""
     tag = meta.get("descriptor", "?")
     mat = np.asarray(mat).ravel()
     if mat.size != n:
@@ -356,7 +372,7 @@ def load(path: str) -> Run:
         return from_arrays(path, r, config)                         # renaming or deleting the run's folder
 
 
-def from_arrays(path: str, r, config) -> Run:
+def from_arrays(path: str, r: Mapping[str, np.ndarray | np.generic], config: dict[str, Any] | None) -> Run:
     """A record from its arrays (r: run_data.npz's, or the same arrays not written, as
     save_results.record_arrays makes them) and its manifest (run_data.config.json's; None when the
     record has none)."""

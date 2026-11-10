@@ -39,8 +39,16 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    import pyvista
+    import trimesh
+
+    from pyto.core.hex_mesher import HexMesher
+    from lsr_mmto.results.load_results import Run
 
 SIGMA = 0.5        # Gaussian width, in elements: PyTO-AD's STL recovery default
 FINE = 3           # each element split FINE x FINE x FINE for the per-material surfaces
@@ -65,15 +73,16 @@ class Report:
     whole_volume: float = float("nan")
     design_volume: float = float("nan")
     from_regions: bool = False                  # design.stl is the material regions' outer surface
-    pieces: list = field(default_factory=list)
+    pieces: list[Piece] = field(default_factory=list)
     pieces_whole_volume: float = float("nan")   # the per-material set's own outer surface
 
     @property
-    def sum_off(self):
+    def sum_off(self) -> float:
         """How far the pieces' volumes sum from the per-material set's whole: a gap or an overlap shows here."""
         return sum(p.volume for p in self.pieces) / self.pieces_whole_volume - 1.0
 
-    def lines(self, unit=""):
+    def lines(self, unit: str = "") -> list[str]:
+        """The report as lines of text for the window, volumes in unit cubed."""
         u = f" {unit}³" if unit else ""
         out = [f"Whole part: {os.path.basename(self.whole_path)}, {self.whole_volume:,.4g}{u} "
                f"(design {self.design_volume:,.4g}){'' if self.whole_closed else ', NOT closed'}"]
@@ -90,7 +99,7 @@ class Report:
         return out
 
 
-def _grid(mesh):
+def _grid(mesh: HexMesher) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Element (i, j, k) indices on the voxel grid, its shape, its lowest corner and the element size."""
     c = np.asarray(mesh.elem_centers, dtype=float)
     h = np.asarray(mesh.elem_size, dtype=float)
@@ -99,7 +108,7 @@ def _grid(mesh):
     return ijk, ijk.max(axis=0) + 1, lo - h / 2, h
 
 
-def _vtu(mesh, density):
+def _vtu(mesh: HexMesher, density: np.ndarray) -> pyvista.UnstructuredGrid:
     """The hex mesh with the element density, for PyTO-AD's STL recovery."""
     import pyvista as pv
     e = np.asarray(mesh.elemArray)[:, :8]
@@ -111,7 +120,7 @@ def _vtu(mesh, density):
     return grid
 
 
-def whole_part(run, mesh):
+def whole_part(run: Run, mesh: HexMesher) -> pyvista.PolyData:
     """PyTO-AD's STL recovery of the run's design, the part as a surface."""
     from lsr_mmto.pyto_ad_imports import stl_recovery
     extract_isosurface, subtract_voids_from_stl = stl_recovery().extract_isosurface, stl_recovery().subtract_voids_from_stl
@@ -120,14 +129,15 @@ def whole_part(run, mesh):
     return subtract_voids_from_stl(stl, voids)
 
 
-def material_labels(run, mesh, fine=FINE, sigma=SIGMA):
+def material_labels(run: Run, mesh: HexMesher, fine: int = FINE, sigma: float = SIGMA) -> tuple[np.ndarray, np.ndarray,
+                    np.ndarray]:
     """The fine label grid: 0 void, m + 1 material m; its lowest corner and spacing."""
     from scipy.ndimage import gaussian_filter
     ijk, shape, origin, h = _grid(mesh)
     x = np.clip(np.asarray(run.x_cont, dtype=float), 0.0, 1.0)
     mat = np.asarray(run.material_indices, dtype=int)
     used = np.unique(mat[np.asarray(run.solid, dtype=bool)])
-    def smoothed(f):                                               # as the whole-part recovery smooths: on the
+    def smoothed(f: np.ndarray) -> np.ndarray:      # as the whole-part recovery smooths: on the
         return gaussian_filter(f.repeat(fine, 0).repeat(fine, 1).repeat(fine, 2),   # grid itself, its edges
                                sigma * fine, mode="nearest")                         # extended (padding first
     density = np.zeros(shape)                                                        # would blur a plate one
@@ -148,7 +158,7 @@ def material_labels(run, mesh, fine=FINE, sigma=SIGMA):
     return label, origin - pad * h / fine, h / fine
 
 
-def contacts_joined(label, max_rounds=200):
+def contacts_joined(label: np.ndarray, max_rounds: int = 200) -> tuple[np.ndarray, int]:
     """The label grid with every edge-only or corner-only contact made a face contact. Where two cells of
     one label meet only along an edge (a 2 x 2 checkerboard) or only at a corner (a 2 x 2 x 2 window with
     none of its other cells theirs), one cell of the window changes: an edge contact makes a surface that
@@ -163,10 +173,10 @@ def contacts_joined(label, max_rounds=200):
     shape = label.shape
     flat = label.reshape(-1)
 
-    def raise_to(cells, new):                                       # cells (flat indices) to at least new
+    def raise_to(cells: np.ndarray, new: np.ndarray) -> None:      # cells (flat indices) to at least new
         np.maximum.at(flat, cells, new)
 
-    def index(i, j, k):
+    def index(i: np.ndarray, j: np.ndarray, k: np.ndarray) -> np.ndarray:
         return np.ravel_multi_index((i, j, k), shape)
 
     for _ in range(max_rounds):
@@ -179,7 +189,7 @@ def contacts_joined(label, max_rounds=200):
             corners = [(i, j), (i + 1, j + 1), (i + 1, j), (i, j + 1)]          # p, q (one diagonal), r, t
             lab = [L[x, y, k] for x, y in corners]
 
-            def cell(x, y):
+            def cell(x: np.ndarray, y: np.ndarray) -> np.ndarray:
                 axes = [None] * 3
                 axes[a], axes[b], axes[c] = x, y, k
                 return index(*axes)
@@ -217,7 +227,8 @@ def contacts_joined(label, max_rounds=200):
     return label, int(np.count_nonzero(label != before))
 
 
-def material_surfaces(label, origin, spacing):
+def material_surfaces(label: np.ndarray, origin: np.ndarray, spacing: np.ndarray) -> tuple[np.ndarray, np.ndarray,
+                      np.ndarray, np.ndarray]:
     """(points, quads, boundary labels, label behind each quad) of the multi-label surface: VTK's
     extraction without its own smoothing, each quad's side decided where quads lie on cell faces, then
     Taubin's smoothing (non-shrinking) of the shared surface, so the pieces stay matched."""
@@ -245,7 +256,8 @@ def material_surfaces(label, origin, spacing):
     return np.asarray(smooth.points), quads, bl, behind
 
 
-def piece(points, quads, bl, behind, m):
+def piece(points: np.ndarray, quads: np.ndarray, bl: np.ndarray, behind: np.ndarray,
+          m: int | np.integer) -> trimesh.Trimesh:
     """The closed surface of label m, its faces pointing away from it (m = 0: the whole, from outside)."""
     import trimesh
     keep = (bl == m).any(axis=1) if m else (bl == 0).any(axis=1)
@@ -255,11 +267,13 @@ def piece(points, quads, bl, behind, m):
     return trimesh.Trimesh(points, np.vstack([q[:, [0, 1, 2]], q[:, [0, 2, 3]]]), process=True)
 
 
-def safe_name(label):
+def safe_name(label: str) -> str:
+    """label for a file name: each run of characters other than ASCII letters, digits, . _ - made one _, then _ trimmed
+    from both ends; "material" when nothing is left."""
     return re.sub(r"[^A-Za-z0-9._-]+", "_", str(label)).strip("_") or "material"
 
 
-def piece_stem(name, i, used):
+def piece_stem(name: str, i: int | np.integer, used: set[str]) -> str:
     """The file name (no .stl) of the piece of the material named name, label i of the grid: design_<name>,
     or design_<name>_<i> when another piece took that name (two names that clean to the same file; Windows
     ignores case). used: the stems taken so far, in lower case; this one is added."""
@@ -269,7 +283,7 @@ def piece_stem(name, i, used):
     return stem
 
 
-def exported(run, folder):
+def exported(run: Run, folder: str) -> tuple[str, list[tuple[int, str]]] | None:
     """The STL files an export of run wrote into folder: (design.stl, [(material index, path)]) for the
     files there, or None when folder holds no design.stl. Each material is matched to its file by the
     names export gives (piece_stem), in the order of the materials."""
@@ -287,7 +301,7 @@ def exported(run, folder):
     return whole, pieces
 
 
-def export(run, mesh, folder, materials=True):
+def export(run: Run, mesh: HexMesher, folder: str, materials: bool = True) -> Report:
     """design.stl (and design_<material>.stl) into folder, as Export STL in the GUI writes them; returns
     the Report, whose lines() say what was written and whether each file is closed.
 
