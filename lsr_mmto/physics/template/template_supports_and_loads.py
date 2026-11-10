@@ -38,20 +38,27 @@ That f is what the solver uses.
 
 To add a kind, copy one entry of SUPPORT_AND_LOAD_KINDS and change the lines marked FILL.
 """
+from typing import TYPE_CHECKING, Any
+
 import numpy as np
+
+if TYPE_CHECKING:
+    from pyto.core.bc import BC
+    from pyto.core.hex_mesher import HexMesher
 
 FIELD = "c"                    # FILL: the field, as in FIELDS in template_module.py (read below)
 
 
 # ----------------------------------------------------------------------------- what each kind does
-def _check_total(bc):
+def _check_total(bc: dict[str, Any]) -> list[str]:
     """Errors its values' kinds do not catch, as a list of short texts (empty when it is fine). Read by
     Project.validate and by the form before it accepts. That total is a number is checked already, from
     its value's kind; here only that it is not zero."""
     return [] if float(bc["total"]) != 0.0 else ["total must not be zero"]
 
 
-def _apply_set_value(bc, n, mesh, state, where):
+def _apply_set_value(bc: dict[str, Any], n: np.ndarray, mesh: "HexMesher",
+                     state: dict[str, Any], where: str) -> None:
     """Hold c at the value on the nodes n. Here dof = node (one unknown per node).
     where names the support in error messages ("boundary condition 2")."""
     values, v = state["values"], float(bc.get("value", 0.0))
@@ -61,7 +68,8 @@ def _apply_set_value(bc, n, mesh, state, where):
         values[int(d)] = v
 
 
-def _apply_source(bc, n, mesh, state, where):
+def _apply_source(bc: dict[str, Any], n: np.ndarray, mesh: "HexMesher",
+                  state: dict[str, Any], where: str) -> None:
     """Add the total to f, shared equally by the nodes n (the worked example above)."""
     state["force"][np.asarray(n, dtype=int)] += float(bc["total"]) / len(n)
 
@@ -106,7 +114,7 @@ SUPPORT_AND_LOAD_KINDS = {
 }
 
 
-def supports_and_loads_error(mesh, bcs):
+def supports_and_loads_error(mesh: "HexMesher", bcs: "dict[str, BC]") -> str | None:
     """Why the supports and loads leave the problem without a solution, as one sentence, or None.
     Read by Project.build before the run (and by the preview). For diffusion: if c is held nowhere,
     K is singular (any constant can be added to c), so at least one Set value is needed."""

@@ -30,6 +30,8 @@ Glossary:
 
 To make your own physics, change the lines marked FILL. The rest can stay as it is.
 """
+from typing import TYPE_CHECKING, Any
+
 import numpy as np
 import torch
 
@@ -37,6 +39,16 @@ import lsr_mmto.pyto_ad_imports  # noqa: F401  # keep as is: puts PyTO-AD on sys
 from lsr_mmto.pyto_ad_imports import hex_element_stiffness as _hex_ek, mat_lib
 from lsr_mmto.pyto_ad_imports import topopt_material_model as ad_mm
 from lsr_mmto.pyto_ad_imports import hex_thermal_fea
+
+if TYPE_CHECKING:
+    from pyto.autodiff.material_model import MaterialModel
+    from pyto.core.bc import BC
+    from pyto.core.hex_mesher import HexMesher
+    from pyto.core.mat_lib import Material
+    from pyto.solve.deflation import DeflationSolver
+    from pyto.solve.solvers import Solvers
+    from lsr_mmto.optimize.design_model import MMTOModelAD
+    from lsr_mmto.optimize.solid_part_analysis import _Analysed
 
 _DTYPE = torch.float64
 
@@ -58,7 +70,14 @@ class DiffusionHexFEA(hex_thermal_fea.HexThermalFEA):
     set_coefficient by what your elements need (the structural solver takes E and nu per element).
     """
 
-    def __init__(self, mesh, bc, solver, mat_prop=None, **kwargs):
+    K_unit: torch.Tensor                 # the element matrix of a unit coefficient, (8, 8)
+    edof: torch.Tensor                   # each element's dofs, (elements, 8), long
+    total_force: torch.Tensor            # f, one per dof
+    k: torch.Tensor                      # set by set_coefficient, (elements,)
+    elem_stiff_torch: torch.Tensor       # (elements, 8, 8), what PyTO-AD's solve() assembles
+
+    def __init__(self, mesh: "HexMesher", bc: "BC", solver: "Solvers", mat_prop: "Material | None" = None,
+                 **kwargs: Any) -> None:
         if mat_prop is None:                                   # PyTO-AD's constructor wants a material;
                                                                # the real values come in set_coefficient
             mat_prop = mat_lib.create_material_with_defaults(name="unit", thermal_conductivity=1.0)
@@ -70,20 +89,22 @@ class DiffusionHexFEA(hex_thermal_fea.HexThermalFEA):
         self.edof = torch.as_tensor(np.asarray(mesh.edofMatThermal), dtype=torch.long)   # (elements, 8)
         self.total_force = torch.tensor(np.asarray(bc.force, dtype=float), dtype=_DTYPE)  # f, one per dof
 
-    def set_coefficient(self, k):
+    def set_coefficient(self, k: torch.Tensor) -> None:
         """k: the coefficient of each element, torch, shape (elements,). solve() uses it next."""
         self.k = k
         self.elem_stiff_torch = k[:, None, None] * self.K_unit                 # (elements, 8, 8)
 
-    def solve(self, x=None, material_model=None, **kwargs):
-        """PyTO-AD's solve(); also takes a numpy x, as the final check passes one."""
+    def solve(self, x: torch.Tensor | np.ndarray | None = None, material_model: "MaterialModel | None" = None,
+              **kwargs: Any) -> torch.Tensor:
+        """PyTO-AD's solve(); also takes a numpy x, as the final check passes one. Returns c, one value per node."""
         if x is not None and not torch.is_tensor(x):
             x = torch.as_tensor(np.asarray(x, dtype=float), dtype=_DTYPE)
         return super().solve(x, material_model, **kwargs)
 
 
 # ----------------------------------------------------------------------------- the module's entries
-def make_solver(mesh, mat_prop, bcs, linear_solver, dsolver, elem_body_force):
+def make_solver(mesh: "HexMesher", mat_prop: "Material", bcs: "dict[str, BC]", linear_solver: "Solvers",
+                dsolver: "DeflationSolver | None", elem_body_force: np.ndarray | None) -> DiffusionHexFEA:
     """The solver of this physics. Called once per run by optimize/optimization_loop.py.
 
     mesh            the voxel mesh (PyTO-AD's)
@@ -98,7 +119,7 @@ def make_solver(mesh, mat_prop, bcs, linear_solver, dsolver, elem_body_force):
                            solver=linear_solver, dsolver=dsolver, rtol=1e-8)
 
 
-def analyse(m):
+def analyse(m: "MMTOModelAD | _Analysed") -> None:
     """One iteration's solve, inside the torch tree. Called by MMTOModelAD.evaluate.
 
     m is the iteration's model (optimize/design_model.py). What it already holds:
@@ -108,6 +129,8 @@ def analyse(m):
         m.settings   every setting of the project, as m.settings.<name>
         m.N          the number of elements
     What this must leave on m: whatever your quantities read (template_quantities.py). Here, m.c.
+
+    Sets m.c (nodes,); and the solver's coefficient (set_coefficient).
     """
     k = m.props[COEFFICIENT] * float(m.settings.template_coefficient_scale)   # FILL: your properties
     m.fe.set_coefficient(k)

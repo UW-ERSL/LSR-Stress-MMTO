@@ -11,17 +11,23 @@ Element stiffness and constitutive matrix are linear in the two Lame parameters:
 exact for every linear isotropic material, constant nu or not. The basis matrices are
 identified once from PyTO-AD's own element routines, so the integration is identical.
 """
+from typing import TYPE_CHECKING, Callable
+
 import numpy as np
 
+if TYPE_CHECKING:
+    import torch
 
-def lame_parameters(E, nu):
+
+def lame_parameters(E: "float | torch.Tensor",
+                    nu: "float | torch.Tensor") -> "tuple[float | torch.Tensor, float | torch.Tensor]":
     """(lam, mu) from (E, nu); works on torch tensors and keeps them in the tree."""
     lam = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu))
     mu = E / (2.0 * (1.0 + nu))
     return lam, mu
 
 
-def lame_basis(fn):
+def lame_basis(fn: Callable[[float, float], np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
     """Basis (A_lam, A_mu) with fn(E, nu) = lam*A_lam + mu*A_mu, for fn linear in D.
 
     nu = 0 gives lam = 0, which isolates A_mu; a second nu then isolates A_lam.
@@ -33,7 +39,7 @@ def lame_basis(fn):
     return A_lam, A_mu
 
 
-def structural_B_matrix(elem_size):
+def structural_B_matrix(elem_size: np.ndarray | tuple[float, float, float]) -> np.ndarray:
     """6x24 strain-displacement matrix at the hex element center (same as PyTO postprocess)."""
     gradN = (1.0 / 8.0) * np.array([
         [-1, 1, 1, -1, -1, 1, 1, -1],

@@ -8,9 +8,10 @@ to_params holds.
 import re
 
 
-def parse_expression(text):
+def parse_expression(text: str | None) -> tuple[str, list[float | str], dict[str, float]]:
     """'Name(a, b=1)' -> ('Name', [a], {'b': 1}). Only a single quantity is accepted. An argument written by
-    position may be a word (a material word: 'MassFraction(lightest)'), kept as text; the rest are numbers."""
+    position may be a word (a material word: 'MassFraction(lightest)'), kept as text; the rest are numbers.
+    ValueError for anything else, None included."""
     m = re.fullmatch(r"\s*([A-Za-z_]\w*)\s*\(([^()]*)\)\s*", text or "")
     if not m:
         raise ValueError(f"expression {text!r}: write one quantity, e.g. 'Mass()'; "
@@ -32,10 +33,13 @@ def parse_expression(text):
     return name, args, kwargs
 
 
-def to_params_form(text, role, bound=None):
+def to_params_form(text: str | None, role: str, bound: float | None = None) -> \
+        tuple[str, dict[str, int | float | str] | None] | tuple[str, dict[str, int | float | str] | None, float]:
     """What to_params holds for an expression: (name, options) for the objective, (name, options,
     bound) for a constraint; name is the quantity's, options None for a quantity that takes no
-    arguments, else {argument: value} in the order the quantity declares them."""
+    arguments, else {argument: value} in the order the quantity declares them. role is "objective" or
+    "constraint"; ValueError for text that cannot be read (None included), an unknown quantity, one that
+    cannot take that role, or wrong arguments."""
     from lsr_mmto.formulation.quantities import QUANTITIES
     name, args, kwargs = parse_expression(text)
     by_name = {q.name: q for q in QUANTITIES}
@@ -60,7 +64,7 @@ def to_params_form(text, role, bound=None):
     return (name, opt) if role == "objective" else (name, opt, float(bound))
 
 
-def _argument(text, typ, words, value):
+def _argument(text: str, typ: str, words: tuple[str, ...], value: float | str) -> int | float | str:
     """An argument's value as to_params holds it: a whole number for a material (or one of the material words
     it takes, as the word), a number otherwise."""
     if isinstance(value, str):

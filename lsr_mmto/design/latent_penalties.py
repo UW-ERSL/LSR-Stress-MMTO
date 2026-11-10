@@ -11,6 +11,8 @@ and a physics may give its own (PENALTIES on its front page), added after these.
 latent sensitivity filter, which smooths the latent blocks of a gradient with the material filter
 (switched off in the loop; kept for other physics).
 """
+from typing import TYPE_CHECKING, Callable, Iterable
+
 import numpy as np
 import torch
 
@@ -18,9 +20,17 @@ import lsr_mmto.pyto_ad_imports  # noqa: F401  puts PyTO-AD on sys.path (and its
 from lsr_mmto.design.density_filter_and_projection import sparse_matmul
 from lsr_mmto.physics.available_physics import MODULES
 
+if TYPE_CHECKING:
+    from scipy.sparse import spmatrix
 
-def distance_penalty(xb, z, z_real, eps=1e-12):
-    """Dp = sum_e xb_e * d_min(z_e) / n_active, with xb a frozen weight (no gradient)."""
+    from lsr_mmto.design.density_filter_and_projection import SparseOperator
+    from lsr_mmto.optimize.design_model import MMTOModelAD
+    from lsr_mmto.optimize.optimization_loop import Iteration, RunState
+
+
+def distance_penalty(xb: torch.Tensor, z: torch.Tensor, z_real: torch.Tensor, eps: float = 1e-12) -> torch.Tensor:
+    """Dp = sum_e xb_e * d_min(z_e) / n_active, with xb a frozen weight (no gradient). xb (N,), z (N, latentDim),
+    z_real (materials, latentDim); n_active the elements with xb > 0.1, at least 1."""
     w = xb.detach()
     dist = torch.sqrt(torch.clamp(((z[:, None, :] - z_real[None, :, :]) ** 2).sum(-1), min=eps))
     d_min = dist.gather(1, dist.argmin(dim=1, keepdim=True))[:, 0]
@@ -28,8 +38,9 @@ def distance_penalty(xb, z, z_real, eps=1e-12):
     return torch.sum(w * d_min) / n_active
 
 
-def latent_smoothing(xb, z, Hm, Hsm):
-    """Pz = sum_e xb_e * || z_e - (Hm z)_e / Hsm_e ||^2  (latent smoothing, weight 1)."""
+def latent_smoothing(xb: torch.Tensor, z: torch.Tensor, Hm: "SparseOperator", Hsm: torch.Tensor) -> torch.Tensor:
+    """Pz = sum_e xb_e * || z_e - (Hm z)_e / Hsm_e ||^2  (latent smoothing, weight 1). xb and Hsm (N,), z (N,
+    latentDim); differentiable w.r.t. both xb and z."""
     zbar = sparse_matmul(Hm, z) / Hsm[:, None]
     return torch.sum(xb[:, None] * (z - zbar) ** 2)
 
@@ -58,28 +69,45 @@ SCALES = ("raw", "first value")
 
 
 class Penalty:
+    """One term added to the objective, as the comment above describes its arguments. ValueError for a scale
+    not in SCALES."""
     __slots__ = ("name", "shown", "help", "fn", "weight", "scale", "key", "raw_key", "physics")
 
-    def __init__(self, name, shown, help, fn, weight, scale, key, raw_key=None, physics=()):
+    name: str
+    shown: str
+    help: str
+    fn: "Callable[[MMTOModelAD], torch.Tensor]"
+    weight: "Callable[[RunState, Iteration], float]"
+    scale: str
+    key: str
+    raw_key: str | None
+    physics: frozenset[str]
+
+    def __init__(self, name: str, shown: str, help: str, fn: "Callable[[MMTOModelAD], torch.Tensor]",
+                 weight: "Callable[[RunState, Iteration], float]", scale: str, key: str, raw_key: str | None = None,
+                 physics: Iterable[str] = ()) -> None:
         if scale not in SCALES:
             raise ValueError(f"penalty {name!r}: scale must be one of {', '.join(map(repr, SCALES))}, "
                              f"not {scale!r}")
         self.name, self.shown, self.help, self.fn, self.weight = name, shown, help, fn, weight
         self.scale, self.key, self.raw_key, self.physics = scale, key, raw_key, frozenset(physics)
 
-    def keys(self):
+    def keys(self) -> list[str]:
         """Its history keys: its raw value's (if it has one), then what it adds."""
         return ([self.raw_key] if self.raw_key else []) + [self.key]
 
-    def applies_to(self, physics):
+    def applies_to(self, physics: str) -> bool:
         """True for a penalty of that physics, or one every physics has."""
         return not self.physics or physics in self.physics
 
 
-def _latent_smoothing_weight(state, it):
+def _latent_smoothing_weight(state: "RunState", it: "Iteration") -> float:
     """z_smoothing_weight while Latent smoothing is on; off from z_smoothing_disable_after_iter on.
     Raw scale: the penalty is zero at a spatially uniform start, so it has no first value to be
-    divided by; the weight multiplies the raw roughness directly."""
+    divided by; the weight multiplies the raw roughness directly.
+
+    Reads state.use_z_smoothing, state.iteration (and the settings). Sets state.use_z_smoothing (False, for
+    the rest of the run) and state.during_run (z_smoothing_off_at_iter) when it switches off."""
     s = state.s
     if (
         state.use_z_smoothing
@@ -93,11 +121,17 @@ def _latent_smoothing_weight(state, it):
     return float(s.z_smoothing_weight) if state.use_z_smoothing else 0.0
 
 
-def _distance_penalty_weight(state, it):
+def _distance_penalty_weight(state: "RunState", it: "Iteration") -> float:
     """gamma, a pure ratio: the penalty's share of the objective, its value divided by its first value.
     Off from distance_penalty_disable_after_iter on and before penalty_start_iter (both only with the
     plateau start off); each iteration it is on, gamma grows by gamma_factor up to gamma_max (with the
-    plateau start, once the ramp has started). Returns this iteration's gamma; the growth is for the next."""
+    plateau start, once the ramp has started). Returns this iteration's gamma; the growth is for the next.
+
+    Reads state.use_distance_penalty, state.iteration, state.gamma (and the settings and MaxIterations);
+    with the plateau start also it.Jn, state.gamma_ramp_started, state.objective_history.
+    Sets state.use_distance_penalty (False, for the rest of the run) and state.during_run when it switches
+    off; state.objective_history (with the plateau start); state.gamma_ramp_started and state.during_run
+    when the ramp starts; state.gamma, its next value."""
     s = state.s
     if (
         state.use_distance_penalty
@@ -152,7 +186,8 @@ PENALTIES = [
 ] + [Penalty(physics=[m.NAME], **p) for m in MODULES for p in m.PENALTIES]
 
 
-def smooth_latent_gradient_inplace(vec, H_material, Hs_material, num_elems, latentDim):
+def smooth_latent_gradient_inplace(vec: np.ndarray, H_material: "spmatrix", Hs_material: np.ndarray, num_elems: int,
+                                   latentDim: int) -> None:
     """Sensitivity-filter (in place) each latent block of an objective gradient.
 
     Applies (H_material @ g)/Hs_material to each per-latent-dim slice. This is a
@@ -166,8 +201,10 @@ def smooth_latent_gradient_inplace(vec, H_material, Hs_material, num_elems, late
         vec[sl] = (H_material @ vec[sl]) / Hs_material
 
 
-def smooth_latent_constraint_gradient_inplace(mat, H_material, Hs_material, num_elems, latentDim):
-    """Same latent-block sensitivity filter as above, for the constraint Jacobian."""
+def smooth_latent_constraint_gradient_inplace(mat: np.ndarray, H_material: "spmatrix", Hs_material: np.ndarray,
+                                              num_elems: int, latentDim: int) -> None:
+    """Same latent-block sensitivity filter as above, for the constraint Jacobian (constraints, design
+    variables), each row in place."""
     nCons = mat.shape[0]
     for i in range(nCons):
         for ell in range(latentDim):

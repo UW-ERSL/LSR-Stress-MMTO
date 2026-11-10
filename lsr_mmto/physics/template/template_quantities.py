@@ -22,6 +22,8 @@ the tree, and the gradient of whatever comes after is silently zero.
 
 To make your own, change the lines marked FILL.
 """
+from typing import TYPE_CHECKING, Callable
+
 import numpy as np
 import torch
 
@@ -30,14 +32,23 @@ from lsr_mmto.pyto_ad_imports import topopt_material_model as ad_mm
 
 from lsr_mmto.physics.template.template_physics import COEFFICIENT
 
+if TYPE_CHECKING:
+    import pyvista
+
+    from lsr_mmto.materials.encoder import MaterialEncoder
+    from lsr_mmto.optimize.design_model import MMTOModelAD
+    from lsr_mmto.optimize.solid_part_analysis import _Analysed, _Materials
+    from lsr_mmto.physics.template.template_physics import DiffusionHexFEA
+    from lsr_mmto.problem.settings import RunSettings
+
 
 # ----------------------------------------------------------------------------- objectives and constraints
-def _diffusion_compliance(m, opt):
+def _diffusion_compliance(m: "MMTOModelAD | _Analysed", opt: dict[str, int | float | str] | None) -> torch.Tensor:
     """f . c: large when the sources sit far (in diffusion terms) from where c is held. The diffusion
     counterpart of structural compliance F . u. It is zero for a problem with no source (held values
     only), and the loop divides every objective by its first value, so such a problem needs another
     objective. m: the iteration's model (see analyse in template_physics.py); opt: the options written
-    in the formula, {} here."""
+    in the formula, None here (it takes none)."""
     return torch.dot(m.fe.total_force, m.c)                  # FILL: your quantity, torch only
 
 
@@ -83,14 +94,17 @@ RESULT_FIELDS = {
 }
 
 
-def _element_mean(solver, c):
+def _element_mean(solver: "DiffusionHexFEA", c: torch.Tensor) -> torch.Tensor:
     """c at each element: the mean of its 8 nodes."""
     return c[solver.edof].mean(1)
 
 
 # ----------------------------------------------------------------------------- each iteration, and the end
-def iteration_diagnostics(history, iteration, solver, x_phys, properties, elem_volume, design_domain_volume,
-                          plot_progress=False, plotter=None, verbose=True):
+def iteration_diagnostics(history: dict[str, list[float | np.ndarray]], iteration: int, solver: "DiffusionHexFEA",
+                          x_phys: np.ndarray, properties: dict[str, torch.Tensor], elem_volume: float,
+                          design_domain_volume: float,
+                          plot_progress: bool = False, plotter: "pyvista.Plotter | None" = None,
+                          verbose: bool = True) -> None:
     """After each iteration's solve. history is the run's record ({name: list}); append to it what you want
     to keep, and print a line when verbose. Here: the largest c of the last solve."""
     if solver.sol is None:
@@ -101,8 +115,10 @@ def iteration_diagnostics(history, iteration, solver, x_phys, properties, elem_v
         print(f"[TEMPLATE] iteration {iteration}: largest value {largest:.4g}")
 
 
-def final_summary(designs, solver, properties_of, settings, encoder, latent_dim, elem_volume,
-                  design_domain_volume):
+def final_summary(designs: "list[tuple[str, np.ndarray, np.ndarray | torch.Tensor]]", solver: "DiffusionHexFEA",
+                  properties_of: Callable[[torch.Tensor], dict[str, torch.Tensor]], settings: "RunSettings",
+                  encoder: "MaterialEncoder | _Materials", latent_dim: int, elem_volume: float,
+                  design_domain_volume: float) -> dict[str, np.ndarray]:
     """Once, at the end. designs is [(label, x, z)] for the continuous, binarized and binarized-and-snapped
     final designs (x per element, z per element and latent dimension); properties_of(z) decodes latent
     points to properties. Solve each, print its numbers, and return the results a run saves,

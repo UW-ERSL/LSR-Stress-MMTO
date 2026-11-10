@@ -10,8 +10,19 @@ A module's files import the layers below them (elements/, design/, the PyTO-AD s
 the core's lists: a module gives its quantities, its penalties, its kinds of support and load and
 its settings as plain arguments, and the core makes them into Quantity, Penalty, BCKind and
 Setting entries.
+
+A front page is duck typed: any module that has every name of MODULE_ENTRIES below, checked only for
+presence (_checked) when PHYSICS is made, not for signatures.
 """
+from typing import TYPE_CHECKING, Any, Callable
+
 from lsr_mmto.physics.structural import structural_module
+
+if TYPE_CHECKING:
+    from types import ModuleType
+
+    from lsr_mmto.formulation.quantities import Quantity
+    from lsr_mmto.materials.databases import Attribute
 
 MODULES = [structural_module]
 
@@ -57,7 +68,8 @@ MODULE_ENTRIES = {
 }
 
 
-def _checked(module):
+def _checked(module: "ModuleType") -> "ModuleType":
+    """Returns the module; raises TypeError naming every MODULE_ENTRIES entry it does not give."""
     missing = [k for k in MODULE_ENTRIES if not hasattr(module, k)]
     if missing:
         raise TypeError(f"physics module {module.__name__} does not give {', '.join(missing)}")
@@ -67,12 +79,14 @@ def _checked(module):
 PHYSICS = {m.NAME: _checked(m) for m in MODULES}
 
 
-def joined(what, core, modules, entries):
+def joined(what: str, core: dict[str, Any], modules: "list[ModuleType]",
+           entries: "Callable[[ModuleType], dict[str, Any]]") -> dict[str, tuple[Any, list[str]]]:
     """{name: (entry, the names of the physics that give it)}: the core's entries (core: {name: entry}, every
     physics has them; tagged with none) and each module's (entries(module): {name: entry}) in one list, as the
     core's lists of properties, quantities and kinds of support and load are made. An entry several physics
     give the same way (the same object, or equal) is one entry tagged with all of them; two different
-    entries under one name are an error naming both places."""
+    entries under one name are an error naming both places. what names the kind of entry in that error.
+    Entries are of any kind (Quantity, Attribute, the arguments of one as a dict), compared with is or ==."""
     out, where = {}, {}
     for name, entry in core.items():
         out[name], where[name] = (entry, []), "the core"
@@ -91,7 +105,8 @@ def joined(what, core, modules, entries):
     return out
 
 
-def undefined_properties(modules, quantities, properties):
+def undefined_properties(modules: "list[ModuleType]", quantities: "list[Quantity]",
+                         properties: "dict[str, Attribute]") -> None:
     """Raises, naming the place, when a physics' PROPERTIES or a quantity's needs names a material property
     that is not in properties (the joined list): every property is defined once, in the core or a physics."""
     named = [(f"the {m.NAME} physics' PROPERTIES", c) for m in modules for c in m.PROPERTIES] + \
@@ -102,7 +117,7 @@ def undefined_properties(modules, quantities, properties):
                              f"physics defines; add it to that physics' NEW_PROPERTIES")
 
 
-def physics_module(name):
+def physics_module(name: str) -> "ModuleType":
     """The front page of physics name; an unknown name is an error that lists the known ones."""
     if name not in PHYSICS:
         raise ValueError(f"physics {name!r}: one of {', '.join(PHYSICS)}")

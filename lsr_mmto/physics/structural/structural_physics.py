@@ -12,6 +12,8 @@ The FE solve is PyTO-AD's differentiable sparse solve, a custom autograd node wh
 the adjoint solve, reusing the forward factorization. PyTO-AD is imported and inherited, never
 edited. PyTO-AD sets torch's default dtype to float64 on import; everything here is float64.
 """
+from typing import TYPE_CHECKING, Any
+
 import numpy as np
 import torch
 
@@ -19,6 +21,17 @@ from lsr_mmto.pyto_ad_imports import hex_element_stiffness as _hex_ek, hex_struc
 from lsr_mmto.pyto_ad_imports import topopt_material_model as ad_mm
 
 from lsr_mmto.elements.hex_element import lame_basis, lame_parameters, structural_B_matrix
+
+if TYPE_CHECKING:
+    from pyto.autodiff.material_model import MaterialModel
+    from pyto.core.bc import BC
+    from pyto.core.hex_mesher import HexMesher
+    from pyto.core.mat_lib import Material
+    from pyto.solve.deflation import DeflationSolver
+    from pyto.solve.solvers import Solvers
+    from lsr_mmto.optimize.design_model import MMTOModelAD
+    from lsr_mmto.optimize.solid_part_analysis import _Analysed
+    from lsr_mmto.problem.settings import RunSettings
 
 _HexStructuralFEA_AD = hex_structural_fea.HexStructuralFEA
 _DTYPE = torch.float64
@@ -34,7 +47,18 @@ class MultiMaterialHexFEA(_HexStructuralFEA_AD):
     driver, diagnostics and post-processing call it exactly as before.
     """
 
-    def __init__(self, mesh, bc, solver, mat_prop=None, **kwargs):
+    K_lam: torch.Tensor                  # element stiffness parts, (24, 24): K_e = lam K_lam + mu K_mu
+    K_mu: torch.Tensor
+    D_lam: torch.Tensor                  # constitutive matrix parts, (6, 6)
+    D_mu: torch.Tensor
+    B: torch.Tensor                      # strain-displacement at the element centre, (6, 24)
+    edof: torch.Tensor                   # each element's dofs, (N, 24), long
+    lam: torch.Tensor                    # set by set_material_fields, (N,)
+    mu: torch.Tensor
+    elem_stiff_torch: torch.Tensor       # (N, 24, 24), what PyTO-AD's solve() assembles
+
+    def __init__(self, mesh: "HexMesher", bc: "BC", solver: "Solvers", mat_prop: "Material | None" = None,
+                 **kwargs: Any) -> None:
         if mat_prop is None:
             mat_prop = mat_lib.create_material_with_defaults(name="unit", youngs_modulus=1.0)
         super().__init__(mesh=mesh, mat_prop=mat_prop, bc=bc, solver=solver, **kwargs)
@@ -48,13 +72,13 @@ class MultiMaterialHexFEA(_HexStructuralFEA_AD):
         self.B = torch.tensor(structural_B_matrix(es), dtype=_DTYPE)
         self.edof = torch.as_tensor(np.asarray(mesh.edofMatStructural), dtype=torch.long)
 
-    def set_material_fields(self, E, nu):
+    def set_material_fields(self, E: torch.Tensor, nu: torch.Tensor) -> None:
         """Per-element E, nu (torch, shape (N,)) -> element stiffness used by solve()."""
         self.lam, self.mu = lame_parameters(E, nu)
         self.elem_stiff_torch = (self.lam[:, None, None] * self.K_lam
                                  + self.mu[:, None, None] * self.K_mu)
 
-    def set_material(self, mat_prop):
+    def set_material(self, mat_prop: "Material | list[Material]") -> None:
         """PyTO-style material update: one Material or a per-element list.
 
         Refreshes the element stiffness that solve() uses (PyTO-AD's own constructor-time copy
@@ -66,13 +90,15 @@ class MultiMaterialHexFEA(_HexStructuralFEA_AD):
         self.set_material_fields(E, nu)
         self.mat_prop = mat_prop
 
-    def solve(self, x=None, material_model=None, **kwargs):
-        """PyTO-AD's solve(); also accepts a numpy x, as PyTO's solver did."""
+    def solve(self, x: torch.Tensor | np.ndarray | None = None, material_model: "MaterialModel | None" = None,
+              **kwargs: Any) -> torch.Tensor:
+        """PyTO-AD's solve(); also accepts a numpy x, as PyTO's solver did. Returns the displacement, one value per
+        dof, (3 * nodes,), in the tree when x and the material fields are."""
         if x is not None and not torch.is_tensor(x):
             x = torch.as_tensor(np.asarray(x, dtype=float), dtype=_DTYPE)
         return super().solve(x, material_model, **kwargs)
 
-    def postprocess(self):
+    def postprocess(self) -> None:
         """Element-center strains, stresses, von Mises, p-norm: same outputs as PyTO-AD's postprocess().
 
         Replaces it rather than calling it, for two reasons:
@@ -81,6 +107,8 @@ class MultiMaterialHexFEA(_HexStructuralFEA_AD):
           - pNormStress uses the CURRENT p-norm exponent: PyTO-AD's FEA module copies
             _PNORM_EXPONENT at import (from ... import), so a per-problem override never reaches it.
         Stress relaxation is xb^q, exactly as element_stress() (the objective) and PyTO's postprocess.
+        Reads the last solve's sol, x and elem_thermal_strain, and lam, mu; sets strainComponents,
+        stressComponents, vonMisesStress, elemStrainEnergy (numpy, per element) and pNormStress.
         """
         with torch.no_grad():
             u = self.sol.detach()
@@ -98,7 +126,7 @@ class MultiMaterialHexFEA(_HexStructuralFEA_AD):
         p = ad_mm.get_pNorm_exponent()
         self.pNormStress = (np.sum(self.vonMisesStress ** p)) ** (1.0 / p)
 
-    def element_stress(self, u, xb):
+    def element_stress(self, u: torch.Tensor, xb: torch.Tensor) -> torch.Tensor:
         """Relaxed element-center stress, xb^q * D(E, nu) * B * u_e, shape (N, 6)."""
         strain = u[self.edof] @ self.B.T                                    # (N, 6)
         D = (self.lam[:, None, None] * self.D_lam + self.mu[:, None, None] * self.D_mu)
@@ -106,24 +134,26 @@ class MultiMaterialHexFEA(_HexStructuralFEA_AD):
         return stress * (xb ** ad_mm.get_stress_relaxation_factor())[:, None]
 
 
-def von_mises(s):
+def von_mises(s: torch.Tensor) -> torch.Tensor:
+    """The von Mises stress of each row of s (N, 6): xx, yy, zz, then the three shears; at least 1e-12, so
+    its gradient is finite at zero stress."""
     vm2 = 0.5 * ((s[:, 0] - s[:, 1]) ** 2 + (s[:, 1] - s[:, 2]) ** 2 + (s[:, 2] - s[:, 0]) ** 2) \
         + 3.0 * (s[:, 3] ** 2 + s[:, 4] ** 2 + s[:, 5] ** 2)
     return torch.sqrt(torch.clamp(vm2, min=1e-24))
 
 
-def pnorm(v, p):
+def pnorm(v: torch.Tensor, p: float) -> torch.Tensor:
     """(sum v^p)^(1/p), as in PyTO's postprocess (no 1/N)."""
     return torch.sum(v ** p) ** (1.0 / p)
 
 
 # ----------------------------------------------------------------------------- the module's entries
-def set_pnorm_exponent(p):
+def set_pnorm_exponent(p: float) -> None:
     """The p-norm exponent where PyTO-AD's material model keeps it, read by every p-norm."""
     ad_mm._PNORM_EXPONENT = float(p)
 
 
-def elastic_constants(props, settings):
+def elastic_constants(props: dict[str, torch.Tensor], settings: "RunSettings") -> tuple[torch.Tensor, torch.Tensor]:
     """E and nu per element from the decoded properties: the database's Poisson's ratio, or one value
     for every element when the setting asks for it or the database has none."""
     E = props["Youngs_Modulus"]                 # column names are registry names (databases.ATTRIBUTES)
@@ -132,13 +162,14 @@ def elastic_constants(props, settings):
     return E, nu
 
 
-def make_solver(mesh, mat_prop, bcs, linear_solver, dsolver, elem_body_force):
+def make_solver(mesh: "HexMesher", mat_prop: "Material", bcs: "dict[str, BC]", linear_solver: "Solvers",
+                dsolver: "DeflationSolver | None", elem_body_force: np.ndarray | None) -> MultiMaterialHexFEA:
     """The structural solver of the mesh, with the boundary condition of the displacement field u."""
     return MultiMaterialHexFEA(mesh=mesh, mat_prop=mat_prop, bc=bcs["u"], solver=linear_solver, dsolver=dsolver,
                                rtol=1e-8, elem_body_force=elem_body_force)
 
 
-def deflation_space(dsolver, mesh):
+def deflation_space(dsolver: "DeflationSolver", mesh: "HexMesher") -> None:
     """The deflation space of the structural system on dsolver, for DPCG on large problems: the mesh in
     groups of nodes, and the rigid-body motions of each group (three unknowns per node)."""
     nGroups = dsolver.getRecommendedNumberOfGroups(nDOF=3 * mesh.num_nodes)
@@ -146,9 +177,11 @@ def deflation_space(dsolver, mesh):
     dsolver.create_deflation_matrix(mesh)
 
 
-def analyse(m):
+def analyse(m: "MMTOModelAD | _Analysed") -> None:
     """One iteration's solve, inside the torch tree: E and nu from m.props, the displacement m.u at the
-    density m.x_phys, and the relaxed von Mises stress m.svm that the stress quantities read."""
+    density m.x_phys, and the relaxed von Mises stress m.svm that the stress quantities read.
+
+    Sets m.u (3 * nodes,), m.svm (N,); and the solver's material fields (set_material_fields)."""
     E, nu = elastic_constants(m.props, m.settings)
     m.fe.set_material_fields(E, nu)
     m.u = m.fe.solve(m.x_phys, ad_mm.MaterialModel.SIMP)

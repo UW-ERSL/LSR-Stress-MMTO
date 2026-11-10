@@ -6,6 +6,8 @@ p-norm stress, p-norm failure factor), each iteration's stress diagnostics (max 
 stress-violation counts) recorded into the history (iteration_diagnostics), and the final
 designs' compliance, stresses and mass, printed by the final check (final_summary).
 """
+from typing import TYPE_CHECKING, Any, Callable
+
 import numpy as np
 import torch
 
@@ -14,16 +16,31 @@ from lsr_mmto.pyto_ad_imports import topopt_material_model as ad_mm
 from lsr_mmto.optimize.history import _property_to_numpy, compute_mass_from_x_and_z
 from lsr_mmto.physics.structural.structural_physics import pnorm
 
+if TYPE_CHECKING:
+    import pyvista
 
-def _compliance(m, opt):
+    from pyto.autodiff.material_model import MaterialModel
+    from pyto.core.bc import BC
+    from pyto.core.hex_mesher import HexMesher
+    from lsr_mmto.materials.encoder import MaterialEncoder
+    from lsr_mmto.optimize.design_model import MMTOModelAD
+    from lsr_mmto.optimize.solid_part_analysis import _Analysed, _Materials
+    from lsr_mmto.physics.structural.structural_physics import MultiMaterialHexFEA
+    from lsr_mmto.problem.settings import RunSettings
+
+
+def _compliance(m: "MMTOModelAD | _Analysed", opt: dict[str, int | float | str] | None) -> torch.Tensor:
+    """F . u, a torch scalar, from the solver's total force and the displacement m.u."""
     return torch.dot(m.fe.total_force, m.u)               # F . u, as main's total_force . sol
 
 
-def _stress_pnorm(m, opt):
+def _stress_pnorm(m: "MMTOModelAD | _Analysed", opt: dict[str, int | float | str] | None) -> torch.Tensor:
+    """(sum svm^p)^(1/p) of the relaxed von Mises stress m.svm, p the current p-norm exponent."""
     return pnorm(m.svm, ad_mm.get_pNorm_exponent())     # no 1/N, as PyTO's pNormStress
 
 
-def _failure_factor_pnorm(m, opt):
+def _failure_factor_pnorm(m: "MMTOModelAD | _Analysed", opt: dict[str, int | float | str] | None) -> torch.Tensor:
+    """((1/N) sum (svm / Y)^p)^(1/p), Y each element's yield strength (at least 1e-12)."""
     p = ad_mm.get_pNorm_exponent()                      # mean form (1/N), as the manual code on main
     Y = torch.clamp(m.props["Yield_Strength"], min=1e-12)
     return (torch.sum((m.svm / Y) ** p) / m.N) ** (1.0 / p)
@@ -46,7 +63,7 @@ QUANTITIES = [
 ]
 
 
-def compute_max_failure_factor(vm, material_properties):
+def compute_max_failure_factor(vm: np.ndarray, material_properties: dict[str, torch.Tensor]) -> float | None:
     """
     Compute max failure factor = max(vonMises / Yield_Strength).
 
@@ -62,14 +79,14 @@ def compute_max_failure_factor(vm, material_properties):
 
 
 def compute_stress_violation_diagnostics(
-    vm,
-    material_properties,
-    x_vec=None,
-    active_thresh=0.5,
-    mesh=None,
-    bc=None,
-    violation_tol=0.0,
-):
+    vm: np.ndarray,
+    material_properties: dict[str, torch.Tensor],
+    x_vec: np.ndarray | None = None,
+    active_thresh: float = 0.5,
+    mesh: "HexMesher | None" = None,
+    bc: "BC | None" = None,
+    violation_tol: float = 0.0,
+) -> dict[str, Any] | None:
     """
     Compute elementwise stress-constraint diagnostics.
 
@@ -80,7 +97,10 @@ def compute_stress_violation_diagnostics(
     An element violates the local stress constraint when:
         Q_e > violation_tol
 
-    The active-topology count uses x_vec > active_thresh.
+    The active-topology count uses x_vec > active_thresh (every element when x_vec is None).
+    Returns a dict of the failure factors, masks, indices, counts, fractions and maxima, or None when the
+    properties have no Yield_Strength. When some active element violates and mesh has elem_centers, also where
+    the violations are; when bc also has a force and mesh node_xyz, how far they are from the loaded nodes.
     """
     yield_strength = _property_to_numpy(material_properties, "Yield_Strength")
     if yield_strength is None:
@@ -166,9 +186,11 @@ def compute_stress_violation_diagnostics(
     return out
 
 
-def print_stress_violation_diagnostics(diag, iteration=None, prefix="[STRESS DIAG]"):
+def print_stress_violation_diagnostics(diag: dict[str, Any] | None, iteration: int | None = None,
+                                       prefix: str = "[STRESS DIAG]") -> None:
     """
-    Print compact stress violation diagnostics.
+    Print compact stress violation diagnostics (compute_stress_violation_diagnostics'). For None, a note that
+    there is no yield strength, printed only for iteration None or <= 1.
     """
     if diag is None:
         if iteration is None or int(iteration) <= 1:   # once per run, not every iteration
@@ -220,20 +242,21 @@ def print_stress_violation_diagnostics(diag, iteration=None, prefix="[STRESS DIA
 
 
 def update_paper_history(
-    history,
-    x_phys,
-    z_phys_elemmajor,
-    material_properties,
-    von_mises,
-    elem_volume,
-    design_domain_volume,
-):
+    history: dict[str, list[float | np.ndarray]],
+    x_phys: np.ndarray,
+    z_phys_elemmajor: np.ndarray | None,
+    material_properties: dict[str, torch.Tensor],
+    von_mises: np.ndarray,
+    elem_volume: float,
+    design_domain_volume: float,
+) -> None:
     """
     Update paper-style histories:
       - mass ratio: final mass / volume of the design domain (a density, kept under its old name)
       - maximum failure factor
 
-    If Density or Yield_Strength are unavailable, store np.nan.
+    If Density or Yield_Strength are unavailable, store np.nan. Appends to history["mass_ratio"] and
+    history["max_failure_factor"]; z_phys_elemmajor is not used.
     """
     density_vals = None
     yield_vals = None
@@ -259,12 +282,15 @@ def update_paper_history(
     history["max_failure_factor"].append(max_failure_factor)
 
 
-def record_fea_diagnostics(history, iteration, x_phys, z, material_properties,
-                           fe_solver, elem_volume, design_domain_volume,
-                           plot_progress=False, plotter=None, verbose=True):
+def record_fea_diagnostics(history: dict[str, list[float | np.ndarray]], iteration: int, x_phys: np.ndarray,
+                           z: np.ndarray | None, material_properties: dict[str, torch.Tensor],
+                           fe_solver: "MultiMaterialHexFEA",
+                           elem_volume: float, design_domain_volume: float, plot_progress: bool = False,
+                           plotter: "pyvista.Plotter | None" = None, verbose: bool = True) -> None:
     """After the FEA solve: update paper history (mass ratio, max FF), record
     stress-violation diagnostics into history, optionally print them (verbose),
-    and optionally draw the realtime topology (plot_progress)."""
+    and optionally draw the realtime topology (plot_progress). Reads the solver's vonMisesStress, so its
+    postprocess() must have run at this design. z is passed on to update_paper_history, which does not use it."""
     update_paper_history(
         history=history,
         x_phys=x_phys,
@@ -303,20 +329,22 @@ def record_fea_diagnostics(history, iteration, x_phys, z, material_properties,
 
 
 def eval_stress_compliance_metrics(
-    x_vec,
-    z_vec,
-    label,
-    active_thresh,
-    latentDim,
-    matEncoder,
-    fe_solver_structural,
-    MaterialModel,
-    elem_volume,
-    design_domain_volume,
-    decode,
-):
+    x_vec: np.ndarray,
+    z_vec: np.ndarray,
+    label: str,
+    active_thresh: float,
+    latentDim: int,
+    matEncoder: "MaterialEncoder | _Materials",
+    fe_solver_structural: "MultiMaterialHexFEA",
+    MaterialModel: "type[MaterialModel]",
+    elem_volume: float,
+    design_domain_volume: float,
+    decode: "Callable[[torch.Tensor], tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]]",
+) -> dict[str, float | None]:
     """The design's compliance, stresses and mass, printed under label. decode(z) gives the
-    per-element (E, nu, properties) the optimization used for latent points z."""
+    per-element (E, nu, properties) the optimization used for latent points z. x_vec (N,); z_vec latent-major
+    (latentDim * N). Solves on the solver (its state is left at this design) and returns the printed numbers;
+    final_mass, mass_ratio and max_failure_factor are None when the database has no column for them."""
     x_vec = np.asarray(x_vec, dtype=float).flatten()
     z_vec = np.asarray(z_vec, dtype=float).flatten()
 
@@ -387,8 +415,11 @@ def eval_stress_compliance_metrics(
     }
 
 
-def iteration_diagnostics(history, iteration, solver, x_phys, properties, elem_volume, design_domain_volume,
-                          plot_progress=False, plotter=None, verbose=True):
+def iteration_diagnostics(history: dict[str, list[float | np.ndarray]], iteration: int, solver: "MultiMaterialHexFEA",
+                          x_phys: np.ndarray, properties: dict[str, torch.Tensor], elem_volume: float,
+                          design_domain_volume: float,
+                          plot_progress: bool = False, plotter: "pyvista.Plotter | None" = None,
+                          verbose: bool = True) -> None:
     """After the iteration's solve: the solver's stresses at x_phys (postprocess), then the mass ratio,
     the max failure factor and the stress-violation counts recorded into history, printed when verbose."""
     solver.mesh.setPseudoDensity(torch.as_tensor(x_phys))   # PyTO-AD's mesh takes torch
@@ -397,15 +428,17 @@ def iteration_diagnostics(history, iteration, solver, x_phys, properties, elem_v
                            design_domain_volume, plot_progress=plot_progress, plotter=plotter, verbose=verbose)
 
 
-def final_summary(designs, solver, properties_of, settings, encoder, latent_dim, elem_volume,
-                  design_domain_volume):
+def final_summary(designs: "list[tuple[str, np.ndarray, np.ndarray | torch.Tensor]]", solver: "MultiMaterialHexFEA",
+                  properties_of: Callable[[torch.Tensor], dict[str, torch.Tensor]], settings: "RunSettings",
+                  encoder: "MaterialEncoder | _Materials", latent_dim: int, elem_volume: float,
+                  design_domain_volume: float) -> dict[str, np.ndarray]:
     """The final check's numbers: each design (label, x, z element-major) analysed and printed, then the
     stress violations of the last one. properties_of(z) gives the decoded properties of latent points z.
     Returns the results a run saves (RESULT_FIELDS), of the last design: von Mises at each element, and the
     displacement (x, y, z) at each node, the solver's last solution."""
     from lsr_mmto.physics.structural.structural_physics import elastic_constants
 
-    def decode(z):
+    def decode(z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
         props = properties_of(z)
         E, nu = elastic_constants(props, settings)
         return E, nu, props

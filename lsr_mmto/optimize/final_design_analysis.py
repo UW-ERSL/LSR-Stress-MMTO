@@ -12,6 +12,7 @@ import torch
 if TYPE_CHECKING:
     from types import ModuleType
 
+    from pyto.autodiff.material_model import MaterialModel
     from lsr_mmto.materials.encoder import MaterialEncoder
     from lsr_mmto.problem.settings import RunSettings
 
@@ -37,13 +38,13 @@ def checked_results(physics: "ModuleType", results: dict[str, np.ndarray] | None
 
 def run_postprocessing(history: dict[str, list[float | np.ndarray]], zetaOptimal: np.ndarray, fe_solver: Any,
                        matEncoder: "MaterialEncoder", mat_lib: "ModuleType",
-                       MaterialModel: type, physical_density: Callable[[np.ndarray], np.ndarray],
+                       MaterialModel: "type[MaterialModel]", physical_density: Callable[[np.ndarray], np.ndarray],
                        zRealPoints: torch.Tensor | np.ndarray, material_colors: list[str], num_elems: int,
                        latentDim: int, elem_volume: float, design_domain_volume: float,
                        binarize_topology: bool, snap_to_real_material: bool, save_dir: str | None = None,
                        run_config: dict[str, Any] | None = None, example_name: str | None = None,
                        material_labels: list[str] | None = None, physics: "ModuleType | None" = None,
-                       properties_of: Callable[[np.ndarray | torch.Tensor], dict[str, torch.Tensor]] | None = None,
+                       properties_of: Callable[[torch.Tensor], dict[str, torch.Tensor]] | None = None,
                        settings: "RunSettings | None" = None) -> None:
     """Reconstruct the optimal fields, have the physics analyse the continuous / binarized /
     snapped designs (its final_summary), and save the run.

@@ -149,7 +149,9 @@ class RunState:
     """Everything a run keeps from its setup to its end: what setup() built, and what changes from one
     iteration to the next (the iteration count, the Heaviside beta, the penalties' scales and weights).
     The steps of an iteration read and change it; nothing else is shared between them.
-    Its fields are the keywords setup() builds it with, declared below; the declarations give types only."""
+    Its fields are the keywords setup() builds it with, declared below; the declarations give types only.
+    A step's "Reads" line names the fields of the iteration and those of the run state that change during the
+    run; what setup built and does not change (the settings, to_params, the model) is not listed."""
 
     # what setup was given
     s: "RunSettings"

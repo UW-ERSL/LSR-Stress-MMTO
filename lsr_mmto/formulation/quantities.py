@@ -6,6 +6,8 @@ quantity_label. The quantities every physics has (mass, cost, volume fraction, m
 fraction, mass fraction) are computed here; each physics module gives its own (the structural ones are in
 physics/structural/structural_quantities.py), listed after these.
 """
+from typing import TYPE_CHECKING, Callable, Iterable
+
 import numpy as np
 import torch
 
@@ -13,11 +15,20 @@ import lsr_mmto.pyto_ad_imports  # noqa: F401  puts PyTO-AD on sys.path (and its
 from lsr_mmto.materials.databases import once_per_file_version
 from lsr_mmto.physics.available_physics import MODULES
 
+if TYPE_CHECKING:
+    from types import ModuleType
+
+    from lsr_mmto.optimize.design_model import MMTOModelAD
+    from lsr_mmto.optimize.solid_part_analysis import _Analysed
+    from lsr_mmto.problem.project import Project
+
 DEFAULT_TAU = 0.5        # sharpness of the material assignment, the same for every material volume fraction
 
 
-def material_volume_fraction(xb, z, z_real, material_id, tau):
-    """V_k = (1/N) sum_e xb_e * softmax_k(-||z_e - z_k||^2 / tau)."""
+def material_volume_fraction(xb: torch.Tensor, z: torch.Tensor, z_real: torch.Tensor, material_id: int,
+                             tau: float) -> torch.Tensor:
+    """V_k = (1/N) sum_e xb_e * softmax_k(-||z_e - z_k||^2 / tau). xb (N,), z (N, latentDim), z_real
+    (materials, latentDim); k = material_id, a row of the database."""
     logits = -((z[:, None, :] - z_real[None, :, :]) ** 2).sum(-1) / tau
     p = torch.softmax(logits, dim=1)
     return torch.sum(xb * p[:, material_id]) / xb.shape[0]
@@ -61,13 +72,37 @@ def material_volume_fraction(xb, z, z_real, material_id, tau):
 
 
 class Quantity:
+    """One objective or constraint a formula can name, as the comment above describes its arguments."""
     __slots__ = ("name", "objective", "constraint", "physics", "needs", "fn", "doc", "shown", "help", "unit",
                  "arguments", "scales_with", "sets_start_density", "bound_warning", "start_bound", "start_note",
                  "start_reference")
 
-    def __init__(self, name, objective, constraint, physics, needs, fn, doc, shown, help, unit="", arguments=(),
-                 scales_with=None, sets_start_density=False, bound_warning=None, start_bound=None, start_note="",
-                 start_reference=None):
+    name: str
+    objective: bool
+    constraint: bool
+    physics: frozenset[str]
+    needs: tuple[str, ...]
+    fn: "Callable[[MMTOModelAD | _Analysed, dict[str, int | float | str] | None], torch.Tensor]"
+    doc: str
+    shown: str
+    help: str
+    unit: str
+    arguments: tuple[tuple[str, str, float | None, tuple[str, ...]], ...]     # (name, type, default, words)
+    scales_with: dict[str, float]
+    sets_start_density: bool
+    bound_warning: "Callable[[Project, float], str | None] | None"
+    start_bound: "float | Callable[[Project], float | None] | None"
+    start_note: str
+    start_reference: "Callable[[Project], float | None] | None"
+
+    def __init__(self, name: str, objective: bool, constraint: bool, physics: Iterable[str], needs: Iterable[str],
+                 fn: "Callable[[MMTOModelAD | _Analysed, dict[str, int | float | str] | None], torch.Tensor]",
+                 doc: str, shown: str, help: str,
+                 unit: str = "", arguments: Iterable[tuple] = (), scales_with: dict[str, float] | None = None,
+                 sets_start_density: bool = False,
+                 bound_warning: "Callable[[Project, float], str | None] | None" = None,
+                 start_bound: "float | Callable[[Project], float | None] | None" = None, start_note: str = "",
+                 start_reference: "Callable[[Project], float | None] | None" = None) -> None:
         self.name, self.objective, self.constraint = name, objective, constraint
         self.physics, self.needs, self.fn, self.doc = frozenset(physics), tuple(needs), fn, doc
         self.shown, self.help, self.unit = shown, help, unit
@@ -76,15 +111,15 @@ class Quantity:
         self.bound_warning, self.start_bound = bound_warning, start_bound
         self.start_note, self.start_reference = start_note, start_reference
 
-    def takes(self, argument):
+    def takes(self, argument: str) -> bool:
         """True when the formula takes the argument of that name or type ("material", "tau")."""
         return any(argument in (name, typ) for name, typ, _, _ in self.arguments)
 
-    def words(self, argument):
+    def words(self, argument: str) -> tuple[str, ...]:
         """The MATERIAL_WORDS the argument of that name or type takes in place of a material's row."""
         return next((words for name, typ, _, words in self.arguments if argument in (name, typ)), ())
 
-    def first_bound(self, project):
+    def first_bound(self, project: "Project") -> float | None:
         """The limit a new constraint on it starts at (start_bound), or None when it declares none or the
         project cannot give it."""
         bound = self.start_bound
@@ -95,7 +130,7 @@ class Quantity:
                 bound = None
         return None if bound is None else float(bound)
 
-    def start_text(self, project):
+    def start_text(self, project: "Project") -> str | None:
         """Where a new constraint's starting limit comes from, in one line ("Starting limit 0.0035 kg: 40% of
         ... (0.00875 kg). Type your own limit to change it."), or None when it declares no start_note or the
         project cannot give the limit."""
@@ -117,7 +152,7 @@ class Quantity:
             note = note.format(reference=f"{reference:.3g}{unit}")
         return f"Starting limit {bound:.3g}{unit}: {note}. Type your own limit to change it."
 
-    def applies_to(self, physics):
+    def applies_to(self, physics: str) -> bool:
         """True for a quantity of that physics, or one every physics has."""
         return not self.physics or physics in self.physics
 
@@ -130,7 +165,7 @@ MATERIAL_WORDS = {
 }
 
 
-def material_row(value, values_of):
+def material_row(value: int | float | str, values_of: Callable[[str], np.ndarray]) -> int:
     """The database row a material argument means: the row itself, or the row a material word picks from
     values_of(column), each material's value of that column, in the database's order."""
     if isinstance(value, str):
@@ -139,7 +174,7 @@ def material_row(value, values_of):
     return int(value)
 
 
-def material_text(value, material_labels=None):
+def material_text(value: int | float | str, material_labels: list[str] | None = None) -> str:
     """A material argument as the app shows it: the material's label ('Ti-6Al-4V'), or 'the lightest'."""
     if isinstance(value, str):
         return MATERIAL_WORDS[value][0] if value in MATERIAL_WORDS else value
@@ -147,17 +182,18 @@ def material_text(value, material_labels=None):
     return material_labels[i] if material_labels is not None and 0 <= i < len(material_labels) else f"material {i}"
 
 
-def database_values(m, column):
+def database_values(m: "MMTOModelAD | _Analysed", column: str) -> np.ndarray:
     """Each database material's value of a column, as the database gives it (not through the network)."""
     a = m.enc.materialAttributes[column]
     return np.asarray(m.enc.rawData, dtype=float)[:, a["idx"]]
 
 
-def _mass(m, opt):
+def _mass(m: "MMTOModelAD | _Analysed", opt: dict[str, int | float | str] | None) -> torch.Tensor:
+    """sum of density * x_phys * element volume, a torch scalar."""
     return torch.sum(m.props["Density"] * m.x_phys) * m.elem_volume
 
 
-def _mass_fraction(m, opt):
+def _mass_fraction(m: "MMTOModelAD | _Analysed", opt: dict[str, int | float | str]) -> torch.Tensor:
     """mass / (reference density * design domain volume); the reference density is the database's, a constant."""
     k = material_row(opt["material_id"], lambda column: database_values(m, column))
     reference = float(database_values(m, "Density")[k])
@@ -165,13 +201,13 @@ def _mass_fraction(m, opt):
 
 
 @once_per_file_version
-def part_volume(stl):
+def part_volume(stl: str) -> float:
     """The volume of the part, its STL's, in the model's length unit cubed."""
     import pyvista
     return abs(float(pyvista.read(stl).volume))
 
 
-def solid_part_mass(project, material):
+def solid_part_mass(project: "Project", material: int | str) -> float | None:
     """The mass of the whole part (its STL's volume) solid in one material of the project's database, in the
     unit Mass is in: material is its row or a material word ("lightest"). None when the part or the database
     cannot be read or the database has no Density column."""
@@ -187,7 +223,7 @@ def solid_part_mass(project, material):
 LOW_MASS_SHARE = 0.01        # a mass limit below this share of the lightest solid part is warned about
 
 
-def _mass_limit_warning(project, bound):
+def _mass_limit_warning(project: "Project", bound: float) -> str | None:
     """A mass limit below 1 % of the part solid in the lightest material: a design this light is barely
     there, and usually the limit was typed in the wrong unit."""
     lightest = solid_part_mass(project, "lightest")
@@ -196,26 +232,30 @@ def _mass_limit_warning(project, bound):
     return f"This limit allows at most {100 * bound / lightest:.2g}% of the part even in the lightest material."
 
 
-def _lightest_solid_part(project):
+def _lightest_solid_part(project: "Project") -> float | None:
     """The mass of the whole part solid in the database's lightest material, or None."""
     return solid_part_mass(project, "lightest")
 
 
-def _mass_start_bound(project):
+def _mass_start_bound(project: "Project") -> float | None:
     """40 % of the part solid in the lightest material: a limit any design can meet, far above the warning's."""
     lightest = _lightest_solid_part(project)
     return None if lightest is None else 0.4 * lightest
 
 
-def _cost(m, opt):
+def _cost(m: "MMTOModelAD | _Analysed", opt: dict[str, int | float | str] | None) -> torch.Tensor:
+    """sum of density * cost * x_phys * element volume, a torch scalar."""
     return torch.sum(m.props["Density"] * m.props["Cost"] * m.x_phys) * m.elem_volume
 
 
-def _volume_fraction(m, opt):
+def _volume_fraction(m: "MMTOModelAD | _Analysed", opt: dict[str, int | float | str] | None) -> torch.Tensor:
+    """The mean of x_phys, a torch scalar."""
     return torch.mean(m.x_phys)
 
 
-def _material_volume_fraction(m, opt):
+def _material_volume_fraction(m: "MMTOModelAD | _Analysed", opt: dict[str, int | float | str]) -> torch.Tensor:
+    """material_volume_fraction of the material opt["material_id"], tau opt["tau"] or DEFAULT_TAU. It reads the
+    latent points, so at a solid part (_Analysed) it raises NoLatentPoints."""
     return material_volume_fraction(m.x_phys, m.z, m.z_real,
                                     int(opt["material_id"]), float(opt.get("tau", DEFAULT_TAU)))
 
@@ -250,7 +290,7 @@ CORE_QUANTITIES = [
 ]
 
 
-def quantities_of(modules):
+def quantities_of(modules: "list[ModuleType]") -> list[Quantity]:
     """Every quantity: each module's (its QUANTITIES, as the arguments of a Quantity), then the core's, each
     once (available_physics.joined): a quantity several physics give the same way is one, tagged with all of
     them. Every material property a physics or a quantity names must be defined (undefined_properties)."""
@@ -267,25 +307,27 @@ def quantities_of(modules):
 QUANTITIES = quantities_of(MODULES)
 
 
-def find_quantity(name):
-    """The registry entry of a quantity, by the name a project file uses."""
+def find_quantity(name: str) -> Quantity:
+    """The registry entry of a quantity, by the name a project file uses; KeyError for an unknown name."""
     for q in QUANTITIES:
         if q.name == name:
             return q
     raise KeyError(f"unknown quantity {name!r}; known: {', '.join(q.name for q in QUANTITIES)}")
 
 
-def takes(name, argument):
+def takes(name: str, argument: str) -> bool:
     """True when the quantity of that name takes the argument (by name or type); False for an unknown name."""
     return any(q.name == name and q.takes(argument) for q in QUANTITIES)
 
 
-def default_of(name, argument):
-    """The default of a quantity's argument (the tau of a material volume fraction)."""
+def default_of(name: str, argument: str) -> float | None:
+    """The default of a quantity's argument (the tau of a material volume fraction); None for a required
+    argument. StopIteration when the quantity or the argument does not exist."""
     return next(d for q in QUANTITIES if q.name == name for a, _, d, _ in q.arguments if a == argument)
 
 
-def quantity_label(name, opt=None, material_labels=None):
+def quantity_label(name: str, opt: dict[str, int | float | str] | None = None,
+                   material_labels: list[str] | None = None) -> str:
     """A quantity's name as the app shows it, with the material for a quantity of one material:
     'Material volume fraction of Ti-6Al-4V', 'Mass fraction of the lightest'."""
     shown = next((q.shown for q in QUANTITIES if q.name == name), str(name))
