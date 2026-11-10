@@ -60,6 +60,7 @@ DESIGN_HELP = ("Analyse this design solves the run's design once more, as it wou
                "shows it beside its run.")
 SMOOTH = "Smooth (exported)"                             # the Show choice of a run's exported STL files
 UNSAVED = "analysis not saved"                           # the list's key of the analysis shown but not saved
+KEEP_RUNS = 2                                                   # runs kept loaded (Compare shows two)
 NO_HISTORY = "An analysis is one solve of the solid part, not an optimization: it has no {}."
 RUN_COLOURS = ("#2b3a67", "#b2452e")                     # the left run, the right run
 
@@ -403,8 +404,12 @@ class ResultsWindow(QtWidgets.QDialog):
         from lsr_mmto.results import load_results
         if folder == UNSAVED:
             return self.unsaved[0]
-        if folder not in self.records:
+        if folder in self.records:
+            self.records[folder] = self.records.pop(folder)             # now the latest
+        else:
             self.records[folder] = load_results.load(os.path.join(folder, "run_data"))
+            while len(self.records) > KEEP_RUNS:                        # the oldest dropped: every run shown stayed
+                del self.records[next(iter(self.records))]              # loaded for the whole session
         return self.records[folder]
 
     def _loaded(self, folder):
