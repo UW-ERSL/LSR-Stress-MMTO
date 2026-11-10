@@ -29,13 +29,26 @@ def _rc():
                          "mathtext.fontset": "cm"})
 
 
+def new_figure(**kw):
+    """A figure pyplot does not keep: in the app, pyplot gives each of its figures a hidden window that kept the
+    figure alive after plt.close, so every plot shown in Results stayed in memory."""
+    from matplotlib.figure import Figure
+    return Figure(**kw)
+
+
+def new_subplots(nrows=1, ncols=1, **kw):
+    """new_figure with its axes, as plt.subplots gives them."""
+    fig = new_figure(**kw)
+    return fig, fig.subplots(nrows, ncols)
+
+
 def _save(fig, out, *, dpi=DPI):
     """Write PNG and PDF. out is a path without extension; None returns fig.
 
     A failure on one format is reported and does not lose the other, which
-    matters on Windows where an open viewer locks the file. Either way the
-    figure is let go by pyplot (a returned one still draws, in the app or a
-    notebook), so showing many runs does not pile up open figures.
+    matters on Windows where an open viewer locks the file. The plots here are
+    made with new_figure, which pyplot does not keep; plt.close lets go of any
+    figure a caller made with pyplot.
     """
     import matplotlib.pyplot as plt
     if out is None:
@@ -146,7 +159,7 @@ def convergence(run: Run, out=None):
     C_OBJ = "#2b3a67"
     CON_COLORS = ["#b2452e", "#2a7f62", "#7a5c99", "#b58b00", "#3a6ea5", "#a0522d"]
 
-    fig, axL = plt.subplots(figsize=(6.4, 4.0))
+    fig, axL = new_subplots(figsize=(6.4, 4.0))
     handles = [axL.plot(it, J, color=C_OBJ, lw=1.9, label=obj_label)[0]]
     axL.set_xlabel("Iteration")
     axL.set_ylabel(obj_label, color=C_OBJ)
@@ -299,7 +312,7 @@ def latent_scatter(run: Run, out=None, *, max_points=20000, labels="display"):
 
     pca = latent_projection(zr)
     agreement = latent_agreement(pca, z, zr) if pca is not None else None
-    fig = plt.figure(figsize=(6.4, 5.4) if zr.shape[1] == 3 else (6.0, 5.0))
+    fig = new_figure(figsize=(6.4, 5.4) if zr.shape[1] == 3 else (6.0, 5.0))
     ax = latent_axes(fig, z, zr, names, pca=pca)
     ax.set_title(latent_title(zr.shape[1], agreement), fontsize=11)
     if zr.shape[1] == 1:                                    # below the plot: the names run along its top
@@ -350,14 +363,14 @@ def design(run: Run, out=None, *, field="material", size=(1200, 950),
                 f"rendered, not {field!r}")
         img = _panel_image(run, mesh_for(run), None, size, None,
                            view=view, **kw)
-        fig, ax = plt.subplots(figsize=(size[0] / 190.0, size[1] / 190.0))
+        fig, ax = new_subplots(figsize=(size[0] / 190.0, size[1] / 190.0))
         ax.imshow(img)
         ax.axis("off")
         _legend_beside(ax, run)
         fig.tight_layout()
         return _save(fig, out)
 
-    fig, ax = plt.subplots(figsize=(6.6, 5.0))
+    fig, ax = new_subplots(figsize=(6.6, 5.0))
     pc = draw_panel(ax, run, field, mesh=mesh_for(run))
     if field == "density" or field in run.results:
         cb = fig.colorbar(pc, ax=ax, shrink=0.8, pad=0.02)

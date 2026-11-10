@@ -95,14 +95,13 @@ def table(runs):
 def histories(runs, out=None):
     """Objective, constraints (fraction of budget) and grayness, all runs overlaid,
     and the relative difference of each objective history from the first run's."""
-    import matplotlib.pyplot as plt
-    from .run_plots import _save
+    from .run_plots import _save, new_subplots
 
     names = list(runs)
     styles = ["-", "--", ":", "-."]
     colours = ["#2b3a67", "#b2452e", "#2a7f62", "#7a5c99"]
 
-    fig, ax = plt.subplots(2, 2, figsize=(11, 7))
+    fig, ax = new_subplots(2, 2, figsize=(11, 7))
     a_obj, a_con, a_grey, a_diff = ax[0, 0], ax[0, 1], ax[1, 0], ax[1, 1]
 
     J_ref = np.asarray(runs[names[0]].history.get("J_phys", []), dtype=float).ravel()
@@ -148,9 +147,8 @@ def designs(runs, out=None, *, size=(1000, 800), view="iso"):
     The same raw drawing as run_plots.design: one quad per element in 2D, one voxel
     face per element in 3D. No smoothing.
     """
-    import matplotlib.pyplot as plt
     from matplotlib.patches import Patch
-    from .run_plots import _panel_image, _save, is_3d
+    from .run_plots import _panel_image, _save, is_3d, new_subplots
     from .design_3d import draw_panel, mesh_for
 
     names = list(runs)
@@ -159,9 +157,9 @@ def designs(runs, out=None, *, size=(1000, 800), view="iso"):
     mesh = mesh_for(first)
 
     if is_3d(first):
-        fig, axs = plt.subplots(1, len(rs), figsize=(4.6 * len(rs), 4.2))
+        fig, axs = new_subplots(1, len(rs), figsize=(4.6 * len(rs), 4.2))
     else:
-        fig, axs = plt.subplots(1, len(rs), figsize=(4.4 * len(rs), 4.0))
+        fig, axs = new_subplots(1, len(rs), figsize=(4.4 * len(rs), 4.0))
     axs = np.atleast_1d(axs)
 
     for ax, n, r in zip(axs, names, rs):

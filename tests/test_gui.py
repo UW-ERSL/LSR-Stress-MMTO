@@ -2529,6 +2529,16 @@ def test_results_compare_delete():
         stack = res.tabs.findChild(QtWidgets.QStackedWidget)
         pages = [c for c in stack.children() if isinstance(c, QtWidgets.QWidget)]
         assert len(pages) == res.tabs.count(), f"{len(pages)} pages kept for {res.tabs.count()} tabs"
+        import gc
+        from matplotlib.figure import Figure
+        figures = []
+        for f in (folders[1], folders[0]):                                    # and their plots: the number of
+            assert res.select(f)                                              # figures alive does not grow
+            QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
+            gc.collect()
+            figures.append(sum(issubclass(type(o), Figure) for o in gc.get_objects()))   # (not isinstance:
+                                                                              # it wakes deprecated torch objects)
+        assert figures[0] == figures[1], f"figures alive went from {figures[0]} to {figures[1]}"
 
         moved = shutil.copytree(os.path.join(d, "P"), os.path.join(d, "Q"))  # a project zipped and sent
         other = os.path.join(moved, "results", os.path.basename(folders[0]))
@@ -2878,3 +2888,20 @@ def test_only_the_latest_meshes_are_kept():
         M.make_mesh = real
         draw_design._MESHES.clear()
         draw_design._MESHES.update(saved)
+
+
+def test_only_the_latest_runs_stay_loaded():
+    """Results keeps the latest KEEP_RUNS runs loaded, not every run shown in the session."""
+    from types import SimpleNamespace
+    from gui import results_panel as RP
+    import lsr_mmto.results.load_results as L
+    loaded, real = [], L.load
+    L.load = lambda path: loaded.append(os.path.dirname(path)) or object()
+    try:
+        panel = SimpleNamespace(records={}, unsaved=None)
+        for folder in ("a", "b", "a", "c"):
+            RP.ResultsWindow.record(panel, folder)
+        assert loaded == ["a", "b", "c"], loaded                             # "a" again: kept, not reloaded
+        assert list(panel.records) == ["a", "c"], list(panel.records)        # "b", the oldest, dropped
+    finally:
+        L.load = real
