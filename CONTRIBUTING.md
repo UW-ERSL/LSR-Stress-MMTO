@@ -59,7 +59,7 @@ six minutes. Each process needs up to about 2.5 GB of memory: on a computer with
 | `lsr_mmto/optimize/`, `lsr_mmto/design/`, `lsr_mmto/elements/` (the run itself) | `test_run_project.py`, `test_gradcheck.py`, `test_regression.py`, `test_solid_part_analysis.py` |
 | `lsr_mmto/results/` (reading runs back, tables, figures, STL export) | `test_stl_export.py`, `test_project_folder.py`, `test_solid_part_analysis.py` |
 | `gui/` | `test_gui.py`, `test_gui_look.py`, `test_user_guide.py` |
-| a docstring, or anything under `docs/` | `test_reference.py`, `test_user_guide.py`, `test_code_map.py` |
+| a docstring, or anything under `docs/` | `test_reference.py`, `test_user_guide.py`, `test_code_map.py`, `test_docstring_reads_and_sets.py` |
 | `setup_environment.py`, `make_shortcut.py`, `uninstall_lsr_mmto.py` | `test_launcher.py` |
 | `Python_walkthrough.ipynb` | `test_python_walkthrough.py` |
 
@@ -75,6 +75,12 @@ Run every test once before committing. To see which lines of the code no test ru
 
 - Every test passes, with no warnings. A failing test you did not touch means the change broke
   something that worked before.
+- New or changed code has type hints on every function, written from what its callers actually pass, and a
+  short docstring saying what it does and its limits. A function that changes an object it is given (the
+  run state, an iteration, the model) says what it reads and what it sets, in one line of code names:
+  `Reads it.x. Sets it.y.` (`tests/test_docstring_reads_and_sets.py` checks that line against the code). A
+  class lists its fields and their types at the top. Names needed only for hints are imported under
+  `if TYPE_CHECKING:`.
 - A test of something every physics has (a run goes through, its gradients, a run saved and read back,
   the final check) runs for every physics: `@pytest.mark.parametrize` over `available_physics.MODULES`
   and the template (`registered` in `tests/test_template_physics.py`). A new physics is then tested by
