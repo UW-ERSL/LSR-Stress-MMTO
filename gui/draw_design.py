@@ -41,7 +41,8 @@ PREFIX = "result_"
 VALUE_BAR = {"vertical": False, "position_x": 0.3, "position_y": 0.05, "width": 0.4, "height": 0.05,
              "n_labels": 2, "fmt": "%.3g", "unconstrained_font_size": True, "title_font_size": 16,
              "label_font_size": 14, "color": "#333333"}
-_MESHES = {}                                  # (STL, dofs, single layer) -> mesh, for saved runs
+_MESHES = {}                                  # (STL, dofs, single layer) -> mesh, for saved runs: the latest
+KEEP_MESHES = 2                               # KEEP_MESHES only (Compare shows two runs)
 
 
 def rgb(colour):
@@ -297,8 +298,12 @@ def mesh_of(window, project):
     key = (os.path.abspath(project.stl_path()), project.n_dof, project.single_layer, project.unknowns_per_node())
     if key == getattr(window, "_mesh_key", None) and window._mesh is not None:
         return window._mesh
-    if key not in _MESHES:
+    if key in _MESHES:
+        _MESHES[key] = _MESHES.pop(key)                         # now the latest
+    else:
         _MESHES[key] = make_mesh(*key)
+        while len(_MESHES) > KEEP_MESHES:                       # the oldest dropped: kept for the whole session,
+            del _MESHES[next(iter(_MESHES))]                    # every project and mesh size shown stayed in memory
     return _MESHES[key]
 
 

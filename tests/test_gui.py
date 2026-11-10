@@ -2523,6 +2523,12 @@ def test_results_compare_delete():
         assert "2030" not in res.list.item(res.folders().index(stamp)).text()
         os.rename(stamp, folders[0])                                          # back, for the rest of the test
         res.refresh()
+        for f in (folders[0], folders[1], folders[0]):                        # Results keeps only the shown run's
+            assert res.select(f)                                              # pages; the earlier ones are deleted
+        QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
+        stack = res.tabs.findChild(QtWidgets.QStackedWidget)
+        pages = [c for c in stack.children() if isinstance(c, QtWidgets.QWidget)]
+        assert len(pages) == res.tabs.count(), f"{len(pages)} pages kept for {res.tabs.count()} tabs"
 
         moved = shutil.copytree(os.path.join(d, "P"), os.path.join(d, "Q"))  # a project zipped and sent
         other = os.path.join(moved, "results", os.path.basename(folders[0]))
@@ -2849,3 +2855,26 @@ def test_colour_scale_title_never_meets_its_numbers():
         assert text.GetPosition()[1] > bar_top                                   # over the bar, the numbers under it
         w._remove_design()                                                    # what drawing anything else does
         assert draw_design.PREFIX + "scale title " + title not in w.plotter.actors and title not in w.plotter.scalar_bars
+
+
+def test_only_the_latest_meshes_are_kept():
+    """draw_design keeps the meshes of saved runs: the latest KEEP_MESHES only, not every part and size shown."""
+    from types import SimpleNamespace
+    from gui import draw_design
+    import lsr_mmto.problem.mesh as M
+    made, real = [], M.make_mesh
+    M.make_mesh = lambda *key: made.append(key) or object()
+    saved = dict(draw_design._MESHES)
+    draw_design._MESHES.clear()
+    try:
+        window = SimpleNamespace(_mesh_key=None, _mesh=None)
+        project = lambda n: SimpleNamespace(stl_path=lambda: "part.stl", n_dof=n, single_layer=False,
+                                            unknowns_per_node=lambda: 3)
+        for n in (1000, 2000, 1000, 3000):
+            draw_design.mesh_of(window, project(n))
+        assert [k[1] for k in made] == [1000, 2000, 3000], made                # 1000 again: kept, not remade
+        assert [k[1] for k in draw_design._MESHES] == [1000, 3000]           # 2000, the oldest, dropped
+    finally:
+        M.make_mesh = real
+        draw_design._MESHES.clear()
+        draw_design._MESHES.update(saved)

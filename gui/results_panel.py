@@ -322,7 +322,7 @@ class ResultsWindow(QtWidgets.QDialog):
         self.empty.setVisible(self.list.count() == 0)
         if keep is not None and not self.select(keep):
             self.current = None
-            self.tabs.clear()
+            self.clear_tabs()
         self._update_buttons()
 
     def _add_item(self, folder, text, tip):
@@ -357,6 +357,14 @@ class ResultsWindow(QtWidgets.QDialog):
                 self.list.setCurrentRow(i)
                 return True
         return False
+
+    def clear_tabs(self):
+        """The tabs removed and their pages deleted: QTabWidget.clear() only hides the pages, so every run shown
+        kept its plots and tables in memory for the rest of the session."""
+        while self.tabs.count():
+            page = self.tabs.widget(0)
+            self.tabs.removeTab(0)
+            page.deleteLater()
 
     def _update_buttons(self):
         mine = self.current is not None and self.current not in self.others and self.current != UNSAVED
@@ -425,7 +433,7 @@ class ResultsWindow(QtWidgets.QDialog):
         self._update_buttons()
         self.status.setText("")
         loaded = self._loaded(folder)
-        self.tabs.clear()
+        self.clear_tabs()
         if loaded is None:
             return
         run, _ = loaded
@@ -563,7 +571,7 @@ class ResultsWindow(QtWidgets.QDialog):
             self.window.show_setup_view()
             self.window.set_design(None, show=False)
             self.current = None
-            self.tabs.clear()
+            self.clear_tabs()
             self.refresh()
 
     def rename_run(self, new=None):
