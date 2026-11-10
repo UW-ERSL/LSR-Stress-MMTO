@@ -44,9 +44,11 @@ in one line what is in the file. `structural_supports_and_loads.py` passes; `loo
 Run the checks in a Miniforge Prompt, from inside this folder, with the environment active:
 
     conda activate lsr-stress-mmto-ad
-    python -m pytest tests -q
+    python -m pytest tests -q -n 4
 
-That is every test, about six minutes. While working, run only the files of the part you changed:
+That is every test, spread over 4 processes at once; one after another, without `-n 4`, they take about
+six minutes. Each process needs up to about 2.5 GB of memory: on a computer with less than 16 GB, use
+`-n 2`. While working, run only the files of the part you changed:
 
 | What you changed | The tests that cover it |
 |---|---|
@@ -73,6 +75,12 @@ Run every test once before committing. To see which lines of the code no test ru
 
 - Every test passes, with no warnings. A failing test you did not touch means the change broke
   something that worked before.
+- A test of something every physics has (a run goes through, its gradients, a run saved and read back,
+  the final check) runs for every physics: `@pytest.mark.parametrize` over `available_physics.MODULES`
+  and the template (`registered` in `tests/test_template_physics.py`). A new physics is then tested by
+  the tests already there, and adds tests only for what is its own: its solver against a case with a known
+  answer, its quantities, its supports and loads. A test written for one physics only becomes such a loop
+  the next time it is changed.
 - A change that moves code or renames things changes no number: the first iterations of the shipped
   projects give the same objective and constraints, to 1 part in a million, before and after
   (`tests/test_regression.py` checks it). Later iterations drift by tiny amounts from one run to the
