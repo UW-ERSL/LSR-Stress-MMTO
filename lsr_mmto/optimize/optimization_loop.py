@@ -36,6 +36,8 @@ A CONSTRAINT METHOD decides what is done with the constraints. CONSTRAINT_METHOD
 hands them to its subproblem as constraints (g <= 0). How to add another: docs/how_to_add_features.md,
 "A constraint method".
 """
+from typing import TYPE_CHECKING, Any, Callable
+
 import numpy as np
 import torch
 import time
@@ -75,7 +77,22 @@ from lsr_mmto.optimize.history import (
     log_objective_and_constraints,
 )
 from lsr_mmto.optimize.final_design_analysis import run_postprocessing
-def get_beta_schedule(scheme: BetaScheduleScheme):
+
+if TYPE_CHECKING:
+    from types import ModuleType
+
+    import pyvista
+    from scipy.sparse import spmatrix
+
+    from pyto.core.bc import BC
+    from pyto.core.hex_mesher import HexMesher
+    from pyto.core.mat_lib import Material
+    from lsr_mmto.design.latent_penalties import Penalty
+    from lsr_mmto.materials.databases import VAEParams
+    from lsr_mmto.optimize.mmto_to_params import MMTOParams
+    from lsr_mmto.problem.project import Project
+    from lsr_mmto.problem.settings import RunSettings
+def get_beta_schedule(scheme: BetaScheduleScheme) -> dict[str, float]:
     """Return the Heaviside beta-continuation parameters (PAPER scheme).
 
     Keys: beta_init/beta_max (range), beta_factor (growth per update),
@@ -101,7 +118,7 @@ def get_beta_schedule(scheme: BetaScheduleScheme):
 
     raise ValueError(f"Unknown beta schedule scheme: {scheme}")
     
-def update_beta(beta_proj, mmaIterations, beta_schedule):
+def update_beta(beta_proj: float, mmaIterations: int, beta_schedule: dict[str, float]) -> tuple[float, bool]:
     """Decide whether to increase the Heaviside sharpness beta this iteration.
 
     Multiplies beta by beta_factor every beta_update_every iterations after
@@ -131,21 +148,90 @@ MMA_MOVE_LIMIT, MMA_KKT_TOL = 0.05, 1e-6
 class RunState:
     """Everything a run keeps from its setup to its end: what setup() built, and what changes from one
     iteration to the next (the iteration count, the Heaviside beta, the penalties' scales and weights).
-    The steps of an iteration read and change it; nothing else is shared between them."""
+    The steps of an iteration read and change it; nothing else is shared between them.
+    Its fields are the keywords setup() builds it with, declared below; the declarations give types only."""
 
-    def __init__(self, **fields):
+    # what setup was given
+    s: "RunSettings"
+    to_problem: "Project"
+    save_dir: str
+    verbose: bool
+    plot_progress: bool
+    plotter: "pyvista.Plotter | None"
+    progress: Callable[[dict[str, Any]], None] | None
+    should_stop: Callable[[], bool] | None
+    args_at_start: dict[str, Any]                 # the run's arguments as given, for the run record
+    provenance: dict[str, Any]                    # save_results.provenance()
+    save_net: str                                 # the network file, resolved
+    # what it built
+    physics: "ModuleType"
+    mesh: "HexMesher"
+    bcs: "dict[str, BC]"
+    to_params: "MMTOParams"
+    vae_params: "VAEParams"
+    solver: Any                                   # the physics' solver, whatever its make_solver returns
+    encoder: MaterialEncoder
+    network_errors: dict[str, float]              # {attribute: % of its range}
+    model: MMTOModelAD
+    history: dict[str, list[float | np.ndarray]]
+    material_colors: list[str]
+    material_labels: list[str]
+    z_real: torch.Tensor                          # the database's materials in latent space, (materials, latent_dim)
+    num_elems: int
+    latent_dim: int
+    num_design_var: int                           # n = num_elems * (1 + latent_dim)
+    elem_volume: float
+    design_domain_volume: float
+    H_material: "spmatrix"
+    Hs_material: np.ndarray
+    beta_schedule: dict[str, float]
+    initial_density: float
+    zeta0: np.ndarray                             # start design, (n, 1)
+    lower: np.ndarray                             # bounds, (n, 1)
+    upper: np.ndarray
+    # what changes from one iteration to the next
+    iteration: int
+    beta: float
+    objective_scale: float | None
+    penalties: "list[Penalty]"
+    penalty_scales: dict[str, float]
+    gamma: float
+    objective_history: list[float]
+    gamma_ramp_started: bool
+    use_z_smoothing: bool
+    use_distance_penalty: bool
+    during_run: dict[str, int]
+    last_zeta: np.ndarray                         # the last design evaluated, flat (n,)
+
+    def __init__(self, **fields: Any) -> None:
         self.__dict__.update(fields)
 
 
 class Iteration:
-    """The numbers of one design, as the steps of evaluate() compute them, in order."""
+    """The numbers of one design, as the steps of evaluate() compute them, in order. Only zeta is set at the
+    start; each step's docstring says which of the fields below it sets. n design variables, m constraints,
+    N elements."""
 
-    def __init__(self, zeta):
+    zeta: np.ndarray                    # the design as the method gives it, then flat (n,)
+    z: np.ndarray                       # latents, element-major (N, latent_dim)
+    J_t: torch.Tensor                   # the objective in the model's tree
+    cons_t: list[torch.Tensor]          # the constraints in the model's tree
+    x_phys: np.ndarray                  # (N,)
+    J_phys: float                       # the objective
+    Jn: float                           # the objective over its first value
+    obj: float                          # the objective the method gets: Jn plus the penalties
+    grad_obj: np.ndarray                # (n,) w.r.t. (x_phys, z), then (n, 1) w.r.t. the method's variables
+    cons: np.ndarray                    # (m, 1)
+    grad_cons: np.ndarray               # (m, n), w.r.t. (x_phys, z), then w.r.t. the method's variables
+    penalties: dict[str, float]         # {history key: value} of the penalties
+
+    def __init__(self, zeta: np.ndarray) -> None:
         self.zeta = zeta
 
 
-def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, plotter, progress, should_stop,
-                on_network_error):
+def _run_topopt(*, s: "RunSettings", to_problem: "Project", save_dir: str, verbose: bool, plot_progress: bool,
+                plot_bcs: bool, plotter: "pyvista.Plotter | None", progress: Callable[[dict[str, Any]], None] | None,
+                should_stop: Callable[[], bool] | None, on_network_error: Callable[[str], bool] | None) -> None:
     """One run of a project: setup(), then optimize(). Project.run calls it with the project's settings."""
     state = setup(s=s, to_problem=to_problem, save_dir=save_dir, verbose=verbose, plot_progress=plot_progress,
                   plot_bcs=plot_bcs, plotter=plotter, progress=progress, should_stop=should_stop,
@@ -155,14 +241,16 @@ def _run_topopt(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, pl
     return optimize(state)
 
 
-def problem_solver(physics, mesh, mat_prop, bcs, elem_body_force, to_params):
+def problem_solver(physics: "ModuleType", mesh: "HexMesher", mat_prop: "Material", bcs: "dict[str, BC]",
+                   elem_body_force: np.ndarray | None, to_params: "MMTOParams") -> Any:
     """The physics' solver of the problem (its make_solver), with the linear solver chosen by size.
 
     Direct (PARDISO) for small problems; iterative (DPCG + deflation) beyond the DOF cutoff, for a
     physics that builds a deflation space (its deflation_space); a physics without one keeps the
     direct solver at every size. Mirrors topopt_mma.py so the MMTO driver uses the same tested
     iterative path as single-material. The adjoint solve in PyTO-AD's differentiable solve reuses
-    fe_solver.solver and fe_solver.dsolver, so it follows this choice automatically."""
+    fe_solver.solver and fe_solver.dsolver, so it follows this choice automatically. elem_body_force: one
+    per element, or None (Project.build always gives None). Prints the solver chosen."""
     from lsr_mmto.pyto_ad_imports import DIRECT_SOLVER_DOF_CUTOFF    # dof limit for the direct solver; above it, DPCG
 
     linear_solver = linear_solvers.Solvers.PARDISO
@@ -174,8 +262,9 @@ def problem_solver(physics, mesh, mat_prop, bcs, elem_body_force, to_params):
     return physics.make_solver(mesh, mat_prop, bcs, linear_solver, dsolver, elem_body_force)
 
 
-def setup(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, plotter, progress, should_stop,
-          on_network_error):
+def setup(*, s: "RunSettings", to_problem: "Project", save_dir: str, verbose: bool, plot_progress: bool,
+          plot_bcs: bool, plotter: "pyvista.Plotter | None", progress: Callable[[dict[str, Any]], None] | None,
+          should_stop: Callable[[], bool] | None, on_network_error: Callable[[str], bool] | None) -> RunState | None:
     """
     Everything before the first design is evaluated: the problem built, the material network read or
     trained, the solver, the filters, the autodiff model, the start design and the bounds. Returns the
@@ -381,16 +470,20 @@ def setup(*, s, to_problem, save_dir, verbose, plot_progress, plot_bcs, plotter,
 # step reads and writes the run state and the iteration's numbers; the order is the order that gives
 # today's numbers, so a new step goes where its inputs are ready and before the steps that read it.
 
-def stop_if_asked(state, it):
-    """The window's Stop: the run ends before this design is evaluated."""
+def stop_if_asked(state: RunState, it: Iteration) -> None:
+    """The window's Stop: the run ends before this design is evaluated (raises _StopRequested when
+    should_stop() says so)."""
     if state.should_stop is not None and state.should_stop():
         raise _StopRequested
 
 
-def analyse_design(state, it):
+def analyse_design(state: RunState, it: Iteration) -> None:
     """The design through the autodiff model: density filter and Heaviside x -> x_phys, decode z ->
     material properties, the physics' solve and quantities, in one torch tree; then the design's log
-    and the physics' own per-iteration diagnostics."""
+    and the physics' own per-iteration diagnostics, appended to the history.
+
+    Reads it.zeta, state.beta, state.iteration. Sets it.zeta (flattened), it.z, it.J_t, it.cons_t,
+    it.x_phys; the model's tree (MMTOModelAD.evaluate)."""
     s, to_params, model = state.s, state.to_params, state.model
     it.zeta = np.asarray(it.zeta).flatten()
     it.z = it.zeta[state.num_elems:].reshape(state.latent_dim, -1).T   # numpy, element-major (N, latentDim)
@@ -409,9 +502,13 @@ def analyse_design(state, it):
                                         verbose=state.verbose)
 
 
-def objective_and_constraints(state, it):
+def objective_and_constraints(state: RunState, it: Iteration) -> None:
     """The objective and the constraints with their gradients with respect to (x_phys, z) by autograd;
-    the objective divided by its first value."""
+    the objective divided by its first value.
+
+    Reads it.J_t, it.cons_t, state.objective_scale. Sets it.J_phys (the objective), it.Jn and it.obj (both
+    the scaled objective), it.grad_obj (n,) scaled the same, it.cons (m, 1), it.grad_cons (m, n);
+    state.objective_scale on the first design."""
     model = state.model
     it.obj = float(it.J_t.detach())
     it.grad_obj = model.grad_phys(it.J_t)
@@ -426,14 +523,19 @@ def objective_and_constraints(state, it):
     it.obj = it.Jn
 
 
-def keep_solid(state, it):
-    """Elements to keep solid get the objective's most favourable slope."""
+def keep_solid(state: RunState, it: Iteration) -> None:
+    """Elements to keep solid get the objective's most favourable slope.
+
+    Sets it.grad_obj, in place, at to_params.ElemsToKeep (nothing when None)."""
     if state.to_params.ElemsToKeep is not None:
         it.grad_obj[state.to_params.ElemsToKeep] = np.min(it.grad_obj)
 
 
-def latent_sensitivity_filter(state, it):
-    """Smoothing of the latent gradient blocks (switched off: APPLY_LATENT_SENS_FILTER)."""
+def latent_sensitivity_filter(state: RunState, it: Iteration) -> None:
+    """Smoothing of the latent gradient blocks (switched off: APPLY_LATENT_SENS_FILTER).
+
+    Reads it.grad_cons (smoothed in place when switched on). Sets it.grad_obj (a copy, smoothed when
+    switched on)."""
     it.grad_obj = it.grad_obj.copy()
     if APPLY_LATENT_SENS_FILTER:
         smooth_latent_gradient_inplace(it.grad_obj, state.H_material, state.Hs_material, state.num_elems,
@@ -442,10 +544,14 @@ def latent_sensitivity_filter(state, it):
                                                   state.num_elems, state.latent_dim)
 
 
-def add_penalties(state, it):
+def add_penalties(state: RunState, it: Iteration) -> None:
     """Each penalty of the run (PENALTIES), in order, with its weight this iteration: weight * value /
     scale added to the objective and the same times the value's gradient to the objective's gradient;
-    its history keys get what it added and its raw value (0 while its weight is 0)."""
+    its history keys get what it added and its raw value (0 while its weight is 0).
+
+    Reads it.obj, state.penalties, state.penalty_scales. Sets it.penalties ({history key:
+    value}), it.obj, it.grad_obj (in place); state.penalty_scales (a penalty's first value). A penalty's
+    weight(state, it) may change the run state too (design/latent_penalties.py)."""
     model = state.model
     it.penalties = {}
     for p in state.penalties:
@@ -470,9 +576,11 @@ def add_penalties(state, it):
         it.penalties[p.key] = added
 
 
-def chain_to_design_variables(state, it):
+def chain_to_design_variables(state: RunState, it: Iteration) -> None:
     """The gradients carried back through the Heaviside projection and the density filter (autograd),
-    to the optimizer's variables, in the shapes the constraint method gets."""
+    to the optimizer's variables, in the shapes the constraint method gets.
+
+    Reads it.grad_obj, it.grad_cons, it.cons. Sets it.grad_obj (n, 1), it.cons (m, 1), it.grad_cons (m, n)."""
     model, n = state.model, state.num_design_var
     it.grad_obj = model.chain_to_x(it.grad_obj)
     for i in range(it.grad_cons.shape[0]):
@@ -482,8 +590,11 @@ def chain_to_design_variables(state, it):
     it.grad_cons = np.array(it.grad_cons).reshape((len(it.cons), n))
 
 
-def record(state, it):
-    """The iteration's line in the history and the log, and what the window's progress hears."""
+def record(state: RunState, it: Iteration) -> None:
+    """The iteration's line in the history and the log, and what the window's progress hears.
+
+    Reads it.obj, it.J_phys, it.Jn, it.penalties, it.cons, it.zeta, it.x_phys, it.z, state.iteration.
+    Sets state.last_zeta (a copy of the design)."""
     log_objective_and_constraints(state.history, it.obj, it.J_phys, it.Jn, it.penalties, it.cons,
                                   state.to_params, verbose=state.verbose, material_labels=state.material_labels)
     state.last_zeta = it.zeta.copy()
@@ -493,8 +604,13 @@ def record(state, it):
                         "z": np.array(it.z), "z_real": state.z_real.detach().cpu().numpy()})
 
 
-def continuation(state, it):
-    """The next iteration's count, SIMP penalty and Heaviside beta."""
+def continuation(state: RunState, it: Iteration) -> None:
+    """The next iteration's count, SIMP penalty and Heaviside beta.
+
+    Reads state.iteration, state.beta. Sets state.iteration (one more), state.beta (when the Heaviside
+    projection is on and the schedule raises it). The SIMP penalties are PyTO-AD's module-level values,
+    raised by 0.25, up to PyTO-AD's maximum, whenever the new count is a multiple of 10 and continuation
+    is on."""
     s = state.s
     state.iteration += 1
     if s.use_continuation and (state.iteration % 10 == 0):
@@ -525,9 +641,10 @@ ITERATION_STEPS = [
 ]
 
 
-def evaluate(state, zeta):
+def evaluate(state: RunState, zeta: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """One design through ITERATION_STEPS: (objective, its gradient, constraints, their gradients), the
-    objective scaled and with the penalties, the gradients with respect to the optimizer's variables."""
+    objective scaled and with the penalties, the gradients with respect to the optimizer's variables;
+    shapes (1, 1), (n, 1), (m, 1), (m, n). zeta: the n design variables, any shape."""
     it = Iteration(zeta)
     for step in ITERATION_STEPS:
         step(state, it)
@@ -535,8 +652,14 @@ def evaluate(state, zeta):
 
 
 # ---------------------------------------------------------------------- the optimizer
-def optimize(state):
-    """The constraint method runs from the start design; then the run record and the final analysis."""
+def optimize(state: RunState) -> None:
+    """The constraint method runs from the start design; then the run record and the final analysis
+    (saved to state's save_dir). A Stop from the window ends the method and keeps the last design evaluated;
+    another error of the method becomes a RuntimeError naming the constraints over their limit when some
+    are, and is raised as it is otherwise.
+
+    Reads state.iteration, state.last_zeta, state.beta, state.during_run. Sets state.during_run
+    (stopped_at_iter, when stopped)."""
     s, to_params, history = state.s, state.to_params, state.history
     method = CONSTRAINT_METHODS[CONSTRAINT_METHOD]
     tStart = time.time()
@@ -621,15 +744,18 @@ def optimize(state):
     )
 
 
-def mma_record(state):
+def mma_record(state: RunState) -> dict[str, str | float]:
     """What the run record keeps of the MMA run."""
     s = state.s
     return {"optimizer": "MMA (mmaWrapper)", "kktTol": MMA_KKT_TOL, "move_limit": MMA_MOVE_LIMIT,
             "fTolerance": s.rel_conv_tol, "gTolerance": s.rel_conv_tol}
 
 
-def mma(state, evaluate_design, zeta0, lower, upper):
-    """MMA with the constraints as its constraints (g <= 0)."""
+def mma(state: RunState,
+        evaluate_design: Callable[[np.ndarray], tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]],
+        zeta0: np.ndarray, lower: np.ndarray, upper: np.ndarray) -> tuple[np.ndarray, dict[str, str | float]]:
+    """MMA with the constraints as its constraints (g <= 0): PyTO-AD's runMMA, at most to_params.MaxIterations
+    iterations and the timeLimit setting; returns the design it ends at, flat (n,), and mma_record(state)."""
     s = state.s
     optResults = runMMA(
         state.num_design_var,
@@ -656,7 +782,7 @@ def mma(state, evaluate_design, zeta0, lower, upper):
 #       the objective scaled and with the penalties, every gradient with respect to the optimizer's
 #       variables (shapes (1, 1), (n, 1), (m, 1), (m, n)); constraints are met when <= 0.
 #       zeta0 is the start design, lower and upper the bounds of every variable, all (n, 1).
-#       run returns the best design it reached (n,) and what the run record keeps of how it ran.
+#       run returns the design it ends at (n,) and what the run record keeps of how it ran.
 #   record(state) -> what the run record keeps, also when the run is stopped from the window.
 # Its settings are entries of SETTINGS (problem/settings.py), read as state.s.<name>.
 CONSTRAINT_METHODS = {

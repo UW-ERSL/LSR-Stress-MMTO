@@ -4,14 +4,23 @@ final_design_analysis.py
 The final design analysed three ways (continuous, binarized, binarized with snapped materials) by
 the physics (its final_summary), and the run saved for later postprocessing.
 """
+from typing import TYPE_CHECKING, Any, Callable
+
 import numpy as np
 import torch
 
+if TYPE_CHECKING:
+    from types import ModuleType
 
-def checked_results(physics, results, n_elems, n_nodes):
+    from lsr_mmto.materials.encoder import MaterialEncoder
+    from lsr_mmto.problem.settings import RunSettings
+
+
+def checked_results(physics: "ModuleType", results: dict[str, np.ndarray] | None, n_elems: int,
+                    n_nodes: int) -> dict[str, np.ndarray] | None:
     """The physics' final_summary results, refused with a clear message when one of its RESULT_FIELDS is
     missing, or its values are not of the length and shape its entry declares (where and shape:
-    load_results.result_info)."""
+    load_results.result_info). Returns results itself, unchanged."""
     from lsr_mmto.results.load_results import result_info, result_shape
     missing = sorted(set(physics.RESULT_FIELDS) - set(results or {}))
     if missing:
@@ -26,19 +35,24 @@ def checked_results(physics, results, n_elems, n_nodes):
     return results
 
 
-def run_postprocessing(history, zetaOptimal, fe_solver, matEncoder, mat_lib,
-                       MaterialModel, physical_density,
-                       zRealPoints, material_colors, num_elems, latentDim,
-                       elem_volume, design_domain_volume,
-                       binarize_topology, snap_to_real_material, save_dir=None,
-                       run_config=None, example_name=None, material_labels=None, physics=None,
-                       properties_of=None, settings=None):
+def run_postprocessing(history: dict[str, list[float | np.ndarray]], zetaOptimal: np.ndarray, fe_solver: Any,
+                       matEncoder: "MaterialEncoder", mat_lib: "ModuleType",
+                       MaterialModel: type, physical_density: Callable[[np.ndarray], np.ndarray],
+                       zRealPoints: torch.Tensor | np.ndarray, material_colors: list[str], num_elems: int,
+                       latentDim: int, elem_volume: float, design_domain_volume: float,
+                       binarize_topology: bool, snap_to_real_material: bool, save_dir: str | None = None,
+                       run_config: dict[str, Any] | None = None, example_name: str | None = None,
+                       material_labels: list[str] | None = None, physics: "ModuleType | None" = None,
+                       properties_of: Callable[[np.ndarray | torch.Tensor], dict[str, torch.Tensor]] | None = None,
+                       settings: "RunSettings | None" = None) -> None:
     """Reconstruct the optimal fields, have the physics analyse the continuous / binarized /
     snapped designs (its final_summary), and save the run.
 
     properties_of(z) -> properties is the optimization's own decode, and settings its settings, so the
     final check analyses the design with the same materials as the optimization;
-    physical_density(x) -> x_phys is its own density filter and projection, at the last beta."""
+    physical_density(x) -> x_phys is its own density filter and projection, at the last beta.
+    zetaOptimal is the design vector [x (N) ; z latent-major], flat. mat_lib and MaterialModel are not used.
+    Saves nothing when save_dir is None; the physics and properties_of are required (ValueError)."""
     if physics is None or properties_of is None:
         raise ValueError("run_postprocessing needs the physics and properties_of, the optimization's decode")
     import os
