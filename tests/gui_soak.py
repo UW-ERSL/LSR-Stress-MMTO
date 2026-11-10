@@ -31,6 +31,9 @@ Reading soak_results/soak_<date>_<time>.csv (one row per cycle; open it in Excel
     pop_ups                                     the questions and dialogs answered in the cycle
     status                                      ok; or why the soak stopped: hung in a step (longer than
                                                 --step-limit), or memory over half the computer's RAM
+
+soak_<date>_<time>_steps.csv has one row per step with the same counts taken right after that step: subtract
+each row from the one before it to see which step added the threads, handles or memory a cycle gains.
 """
 import argparse
 import csv
@@ -58,6 +61,8 @@ SKIP = {"Open folder": "opens File Explorer",       # Results buttons not presse
 STEPS = ("open", "side_buttons", "run", "results", "analyse", "export_stl", "close")
 COLUMNS = ("cycle", "time", "project", "memory_mb", "handles", "gdi", "user", "os_threads", "python_threads",
            "windows", "objects_3d") + tuple(f"s_{s}" for s in STEPS) + ("exports", "pop_ups", "status")
+STEP_COLUMNS = ("cycle", "project", "step", "seconds", "memory_mb", "handles", "gdi", "user", "os_threads",
+                "python_threads")
 
 
 # ---------------------------------------------------------------------------------------- what is measured
@@ -141,6 +146,7 @@ class Soak:
         self.step, self.since = None, time.monotonic()
         self.lock = threading.Lock()
         self.csv_path = csv_path
+        self.steps_path = csv_path[:-4] + "_steps.csv"
         self.row = {}
         self.stopped = None
         self.answer = QtCore.QTimer()                           # pop-ups answered within a second
@@ -201,6 +207,18 @@ class Soak:
         with self.lock:
             self.row[f"s_{name}"] = round(time.monotonic() - self.since, 2)
             self.step = None
+        self.write_step(name)
+
+    def write_step(self, name):
+        """One row of the steps file: the counts right after this step, so a climb can be traced to its step."""
+        row = dict(cycle=self.row.get("cycle"), project=self.row.get("project"), step=name,
+                   seconds=self.row.get(f"s_{name}"), **measures())
+        new = not os.path.exists(self.steps_path)
+        with open(self.steps_path, "a", newline="", encoding="utf-8") as f:
+            out = csv.DictWriter(f, STEP_COLUMNS)
+            if new:
+                out.writeheader()
+            out.writerow({c: row.get(c, "") for c in STEP_COLUMNS})
 
     def open(self, cycle, path):
         work = os.path.join(OUT, f"{WORK}{cycle}")

@@ -36,3 +36,8 @@ def test_the_soak_tests_measurements_give_numbers():
     m = gui_soak.measures()
     assert m["memory_mb"] > 0 and m["os_threads"] >= 1 and m["python_threads"] >= 1, m
     assert gui_soak.ram_mb() > m["memory_mb"]
+
+
+def test_the_steps_file_holds_every_measurement():
+    gui_soak = soak()
+    assert set(gui_soak.measures()) <= set(gui_soak.STEP_COLUMNS)
