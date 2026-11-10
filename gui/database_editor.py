@@ -100,6 +100,8 @@ class FrozenFirstColumn(QtWidgets.QTableView):
             self.table.keyPressEvent(event)
             return
         super().keyPressEvent(event)
+        if self.state() == self.EditingState:       # a key that started typing in a cell here: not the table's too,
+            event.accept()                          # which would type it a second time (B became BB)
 
 
 class _Table(QtWidgets.QTableWidget):

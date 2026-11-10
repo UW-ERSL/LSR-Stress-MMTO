@@ -926,6 +926,32 @@ def test_database_editor():
         assert material_display(copy)[1] == ["Red", "Mat2_Blue", "Mate3_Green"]
 
 
+def test_typing_a_material_name_types_it_once():
+    """A letter typed in the Material column, which stays in place when the table scrolls sideways, opens one
+    editor and goes into the cell once (B stayed B, not BB), as one typed in any other column; Escape still
+    closes the editor."""
+    from PyQt5.QtTest import QTest
+    from gui import database_editor as DE
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        e = DE.DatabaseEditor(w, os.path.join(d, "materials"), unit_system=w.project.units, project=w.project)
+        e.show()
+        r = e.add_material()
+        for view, column in ((e.table.frozen, 0), (e.table, 3)):
+            view.setFocus()
+            view.setCurrentIndex(e.table.model().index(r, column))
+            QTest.keyClick(view, "B")
+            editors = [ed for v in (e.table, e.table.frozen) for ed in v.viewport().findChildren(QtWidgets.QLineEdit)
+                       if ed.isVisible()]
+            assert [ed.text() for ed in editors] == ["B"], (column, [ed.text() for ed in editors])
+            view.commitData(editors[0])
+            view.closeEditor(editors[0], QtWidgets.QAbstractItemDelegate.NoHint)
+            assert e.table.item(r, column).text() == "B", (column, e.table.item(r, column).text())
+        e.table.frozen.setFocus()
+        QTest.keyClick(e.table.frozen, QtCore.Qt.Key_Escape)
+        assert not e.isVisible()
+
+
 def test_database_editor_look():
     """The New database editor: the units row is part of the headers' band (no "Units" text, as tall as a
     material row, each unit's drop-down inside it with room for its text, "no unit" for Poisson's ratio); a
