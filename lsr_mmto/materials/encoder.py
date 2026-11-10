@@ -69,7 +69,7 @@ def network_reconstruction(xlsx: str, nt: str) -> list[dict[str, Any]] | None:
     return enc.reconstruction()
 
 
-def largest_errors(rows: list[dict[str, Any]]) -> dict[str, tuple[float, float, str | float]]:
+def largest_errors(rows: list[dict[str, Any]]) -> dict[str, tuple[float, float, str | None]]:
     """{property: (largest error in % of its range, largest difference in its unit, unit)} over the
     materials, from MaterialEncoder.reconstruction() rows."""
     out = {}
@@ -94,7 +94,7 @@ class MaterialEncoder:
     materialNames: list[Any]                 # as pandas reads the first column: text, or a number
     scaledMaterialData: torch.Tensor         # rawData scaled to [0, 1] (normalize), (materials, attributes)
     materialAttributes: dict[str, dict[str, Any]]   # {column: {"idx", "unit", "scaleMin", "scaleMax"}}
-                                                    # (a blank unit is NaN)
+                                                    # (unit None when its cell is blank)
     attribute_means: np.ndarray              # of the scaled columns
     attribute_stds: np.ndarray
     intrinsic_dim: float                     # d_eff, the participation ratio (databases.database_pca)
@@ -129,15 +129,15 @@ class MaterialEncoder:
         self.vaeNet = VariationalAutoencoder(self.vaeSettings)
 
     def preprocessData(self) -> None:
-        """Read excel_file: row 1 the column names (aliases made registry names), row 2 their units, then one row
-        per material, its name first. Sets rawData, materialNames, scaledMaterialData, materialAttributes,
+        """Read excel_file: row 1 the column names (aliases made registry names), row 2 their units (None when
+        blank, as databases.database_table reads them), then one row per material, its name first. Sets rawData, materialNames, scaledMaterialData, materialAttributes,
         attribute_means, attribute_stds, and the database's PCA (computeParticipationRatio)."""
         with warnings.catch_warnings():
             # the databases carry Excel data validation, which openpyxl drops
             warnings.filterwarnings("ignore", message="Data Validation extension")
             df = pd.read_excel(self.excel_file, header=None)
         attribute_names = [attribute_name(n) for n in df.iloc[0, 1:].tolist()]   # aliases -> registry names
-        units = df.iloc[1, 1:].tolist()
+        units = [None if (u is None or str(u).strip() in ("", "nan")) else str(u).strip() for u in df.iloc[1, 1:]]
         material_names = df.iloc[2:, 0].tolist()
         values = df.iloc[2:, 1:].to_numpy(dtype=float)
 

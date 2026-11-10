@@ -496,3 +496,22 @@ def test_columns_found_by_what_they_measure():
     assert density_column(["Youngs_Modulus"]) is None
     assert iteration_columns(["Density", "Youngs_Modulus", "Yield_Strength"]) == [("Yield_Strength", "Y"),
                                                                                    ("Density", "rho")]
+
+
+def test_a_blank_unit_is_no_unit_for_the_network_too():
+    """A blank unit cell (BM1_3Mats_2Attr's Poisson's ratio, a ratio) is no unit, None, for the material network
+    as for the database's own reader, so the network's error table shows nothing there, not "nan"."""
+    from lsr_mmto.materials.databases import database_table
+    from lsr_mmto.materials.encoder import MaterialEncoder
+    from lsr_mmto.results.tables import encoding_errors
+    path = os.path.join(DATABASE_DIR, "BM1_3Mats_2Attr.xlsx")
+    params = VAEParams()
+    params.latentDim, params.vae_hiddenDim = DATABASE_VAE["BM1_3Mats_2Attr"]["latentDim"], \
+        DATABASE_VAE["BM1_3Mats_2Attr"]["vae_hiddenDim"]
+    enc = MaterialEncoder(params)
+    enc.readExcel(path)
+    assert database_table(path)[2] == ["Pa", None]
+    assert {k: a["unit"] for k, a in enc.materialAttributes.items()} == {"Youngs_Modulus": "Pa", "Poissons_Ratio": None}
+    enc.loadAutoencoderFromFile(os.path.splitext(path)[0] + ".nt")
+    assert "nan" not in repr(encoding_errors(enc)) and "nan" not in repr(encoding_errors(enc, per_material=True))
+
