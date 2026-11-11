@@ -147,6 +147,8 @@ Is it about one physics only?
           test: tests/test_regression.py, and a test of its own
 ```
 
-Something that is both a new physics and a widening of the core (a property that depends on the
-temperature, a nonlinear solve) is two changes: the widening first, tested with a physics that
+A nonlinear solve, or a property that depends on the field, stays in the physics' folder: analyse
+runs the Newton iterations, and the gradient comes from the implicit function theorem (an adjoint
+solve in a torch.autograd.Function), so the core sees one more analyse. Something that is both a new
+physics and a widening of the core is two changes: the widening first, tested with a physics that
 already exists, then the physics that uses it.

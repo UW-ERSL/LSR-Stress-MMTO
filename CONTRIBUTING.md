@@ -11,7 +11,7 @@ Every change is one of three kinds.
 | Kind | What it is | Where |
 |---|---|---|
 | A module | a new physics, or more of one: its solver, supports and loads, quantities, settings, results | its folder in `lsr_mmto/physics/`, plus one line in `MODULES`; no core file changes |
-| A widening of the core | a new option the core does not have yet, e.g. an augmented Lagrangian next to the p-norm, or a field solve that is nonlinear in temperature | the one layer it belongs to |
+| A widening of the core | a new option the core does not have yet, e.g. an augmented Lagrangian next to the p-norm, or a new filter on the densities | the one layer it belongs to |
 | A new repository | anything every layer would have to check for | not here |
 
 A new physics starts as a copy of `lsr_mmto/physics/template/`, the blank form; `lsr_mmto/physics/thermal/`
@@ -67,10 +67,10 @@ six minutes. Each process needs up to about 2.5 GB of memory: on a computer with
 | `lsr_mmto/problem/` (the project, selections, mesh, supports and loads, settings, the project folder) | `test_project.py`, `test_selections.py`, `test_mesh.py`, `test_project_folder.py` |
 | `lsr_mmto/materials/` (databases, the material network) | `test_databases.py` |
 | `lsr_mmto/formulation/` (quantities, the formula text) | `test_extending.py`, `test_project.py`, `test_ad_quantities.py` |
-| `lsr_mmto/physics/` | `test_thermal_physics.py`, `test_physics_folders.py`, `test_final_check.py`, `test_solid_part_analysis.py` |
+| `lsr_mmto/physics/` | `test_thermal_physics.py`, `test_physics_folders.py`, `test_thermal_walk_through.py`, `test_final_check.py`, `test_solid_part_analysis.py` |
 | `lsr_mmto/optimize/`, `lsr_mmto/design/`, `lsr_mmto/elements/` (the run itself) | `test_run_project.py`, `test_gradcheck.py`, `test_regression.py`, `test_solid_part_analysis.py` |
 | `lsr_mmto/results/` (reading runs back, tables, figures, STL export) | `test_stl_export.py`, `test_project_folder.py`, `test_solid_part_analysis.py` |
-| `gui/` | `test_gui.py`, `test_gui_look.py`, `test_user_guide.py` |
+| `gui/` | `test_gui.py`, `test_gui_look.py`, `test_user_guide.py`, `test_thermal_walk_through.py` |
 | a docstring, or anything under `docs/` | `test_reference.py`, `test_user_guide.py`, `test_code_map.py`, `test_docstring_reads_and_sets.py` |
 | `setup_environment.py`, `make_shortcut.py`, `uninstall_lsr_mmto.py` | `test_launcher.py` |
 | `Python_walkthrough.ipynb` | `test_python_walkthrough.py` |
