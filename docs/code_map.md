@@ -63,7 +63,8 @@ LSR MMTO
 │   ├── <name>/<name>_results.py  slot: what each iteration records, the final check, the results a run
 │   │                             saves (RESULT_FIELDS) and its own Summary rows (SUMMARY_ROWS)
 │   ├── structural/               the one physics users have today
-│   └── template/                 a small working physics to copy; not offered in the GUI
+│   ├── thermal/                  steady heat conduction: the worked example, not offered in the GUI yet
+│   └── template/                 the blank form of a physics, to copy
 │
 ├── the GUI (gui/)                reads everything above; no physics written in it
 │   ├── main_window.py            the window, File and Help, New project (with the physics), the 3D view
@@ -77,7 +78,7 @@ LSR MMTO
 │
 ├── docs/                         this map, how the code works, how to add features, the reference
 │                                 page (generated), the user guide
-└── tests/                        one file per part; the template physics' test is the one to copy
+└── tests/                        one file per part; the thermal physics' test is the one to copy
 ```
 
 ## 2. Where does my feature go?
@@ -86,11 +87,12 @@ LSR MMTO
 Is it about one physics only?
 ├── yes → in that physics' folder, lsr_mmto/physics/<name>/
 │   ├── a new physics altogether?
-│   │     copy physics/template/ and follow its FILL lines; one line in available_physics.py
-│   │     test: tests/test_template_physics.py · docs: "A physics"
+│   │     copy physics/template/ and fill its FILL lines (physics/thermal/ is one done); one line in
+│   │     available_physics.py
+│   │     test: a copy of tests/test_thermal_physics.py, tests/test_physics_folders.py · docs: "A physics"
 │   ├── something to solve for, or a different solver?
 │   │     <name>_physics.py (make_solver, analyse), FIELDS on the front page
-│   │     test: a case whose answer is known, as the template's bar test · docs: "A physics"
+│   │     test: a case whose answer is known, as thermal's bar test · docs: "A physics"
 │   ├── something that holds or pushes the part?
 │   │     <name>_supports_and_loads.py, one entry of SUPPORT_AND_LOAD_KINDS
 │   │     test: tests/test_project.py · docs: "A kind of support or load"
@@ -99,13 +101,13 @@ Is it about one physics only?
 │   │     test: tests/test_ad_quantities.py · docs: "A quantity"
 │   ├── a result to show after a run?
 │   │     RESULT_FIELDS, its values returned by final_summary (<name>_results.py)
-│   │     test: tests/test_template_physics.py · docs: "A physics"
+│   │     test: tests/test_thermal_physics.py · docs: "A physics"
 │   ├── a number of its own in a run's Summary and Compare?
 │   │     SUMMARY_ROWS, one entry naming a history key (<name>_results.py)
 │   │     test: tests/test_extending.py · docs: "A physics"
 │   ├── a term added to the objective (a penalty) of this physics only?
 │   │     PENALTIES on the front page, one entry
-│   │     test: tests/test_template_physics.py · docs: "A penalty"
+│   │     test: tests/test_thermal_physics.py · docs: "A penalty"
 │   ├── a setting of this physics only?
 │   │     SETTINGS on the front page
 │   │     test: tests/test_run_project.py · docs: "A setting"
@@ -133,7 +135,7 @@ Is it about one physics only?
     │     test: tests/test_regression.py · docs: "A constraint method"
     ├── a term added to the objective (a penalty) every physics has?
     │     one entry of PENALTIES, lsr_mmto/design/latent_penalties.py
-    │     test: tests/test_template_physics.py, tests/test_regression.py · docs: "A penalty"
+    │     test: tests/test_thermal_physics.py, tests/test_regression.py · docs: "A penalty"
     ├── another step of each iteration (a continuation)?
     │     one step of ITERATION_STEPS, lsr_mmto/optimize/optimization_loop.py
     │     test: tests/test_regression.py · docs: CONTRIBUTING, "Where a change goes"

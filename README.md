@@ -195,7 +195,8 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad_imp
 | `structural/structural_supports_and_loads.py` | the structural supports and loads: fixed, displacement, force, traction, and the check that they hold the part |
 | `structural/structural_quantities.py` | the structural objectives and constraints: compliance, p-norm stress, p-norm failure factor |
 | `structural/structural_results.py` | what each iteration records, the final check, the results a run saves and its Summary rows |
-| `template/` | a small working steady diffusion, commented line by line: the place to start a physics of your own |
+| `thermal/thermal_module.py` | steady heat conduction, not yet offered in the GUI: the worked example of a physics, and its example materials |
+| `template/` | the blank form of a physics, with what goes in each blank: the place to start one of your own |
 
 #### `lsr_mmto/optimize/`
 

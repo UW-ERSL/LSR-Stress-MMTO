@@ -14,7 +14,19 @@ Every change is one of three kinds.
 | A widening of the core | a new option the core does not have yet, e.g. an augmented Lagrangian next to the p-norm, or a field solve that is nonlinear in temperature | the one layer it belongs to |
 | A new repository | anything every layer would have to check for | not here |
 
-A new physics starts as a copy of `lsr_mmto/physics/template/`.
+A new physics starts as a copy of `lsr_mmto/physics/template/`, the blank form; `lsr_mmto/physics/thermal/`
+is the same form filled in. A physics keeps to four bounds:
+
+1. The core reaches a physics only through its front page (`<name>_module.py`); nothing outside the
+   folder imports its other files.
+2. More files inside the folder are fine, when the name says the job.
+3. A physics may import and reuse another physics' code.
+4. Needing to change a file outside the folder means the core lacks something: propose the change to the
+   core as a widening (below), never patch it in from the physics.
+
+`tests/test_physics_folders.py` checks that each physics has the form's five files, puts each front-page
+entry where the form does, marks each function (`# ESSENTIAL:`, `# OPTIONAL:`, `# HELPER:`), and that the
+first bound holds.
 
 A widening of the core follows four rules:
 
@@ -55,7 +67,7 @@ six minutes. Each process needs up to about 2.5 GB of memory: on a computer with
 | `lsr_mmto/problem/` (the project, selections, mesh, supports and loads, settings, the project folder) | `test_project.py`, `test_selections.py`, `test_mesh.py`, `test_project_folder.py` |
 | `lsr_mmto/materials/` (databases, the material network) | `test_databases.py` |
 | `lsr_mmto/formulation/` (quantities, the formula text) | `test_extending.py`, `test_project.py`, `test_ad_quantities.py` |
-| `lsr_mmto/physics/` | `test_template_physics.py`, `test_final_check.py`, `test_solid_part_analysis.py` |
+| `lsr_mmto/physics/` | `test_thermal_physics.py`, `test_physics_folders.py`, `test_final_check.py`, `test_solid_part_analysis.py` |
 | `lsr_mmto/optimize/`, `lsr_mmto/design/`, `lsr_mmto/elements/` (the run itself) | `test_run_project.py`, `test_gradcheck.py`, `test_regression.py`, `test_solid_part_analysis.py` |
 | `lsr_mmto/results/` (reading runs back, tables, figures, STL export) | `test_stl_export.py`, `test_project_folder.py`, `test_solid_part_analysis.py` |
 | `gui/` | `test_gui.py`, `test_gui_look.py`, `test_user_guide.py` |
@@ -83,7 +95,7 @@ Run every test once before committing. To see which lines of the code no test ru
   `if TYPE_CHECKING:`.
 - A test of something every physics has (a run goes through, its gradients, a run saved and read back,
   the final check) runs for every physics: `@pytest.mark.parametrize` over `available_physics.MODULES`
-  and the template (`registered` in `tests/test_template_physics.py`). A new physics is then tested by
+  and thermal (`registered` in `tests/test_thermal_physics.py`). A new physics is then tested by
   the tests already there, and adds tests only for what is its own: its solver against a case with a known
   answer, its quantities, its supports and loads. A test written for one physics only becomes such a loop
   the next time it is changed.

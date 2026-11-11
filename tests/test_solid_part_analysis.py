@@ -11,7 +11,7 @@ material of the database, with that material's database values.
 - In the window: Analyse beside Run, its window, Results showing it with its label and no convergence
   or latent space, and a comparison of a run with an analysis that says so instead of plotting.
 
-The template physics is analysed in tests/test_template_physics.py.
+The thermal physics is analysed in tests/test_thermal_physics.py.
 
     python -m pytest tests/test_solid_part_analysis.py
 """

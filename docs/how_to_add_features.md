@@ -16,8 +16,9 @@ a docstring is laid out), and every example there must run. Each section below e
 
 ## A quantity (an objective or a constraint)
 
-`lsr_mmto/physics/template/template_quantities.py` has one quantity of a physics, commented: what it
-is given, what it returns, and how its gradient comes from autograd.
+`lsr_mmto/physics/template/template_quantities.py` says what each piece of a quantity of a physics is,
+what its function is given and returns, and how its gradient comes from autograd;
+`lsr_mmto/physics/thermal/thermal_quantities.py` has one filled in.
 
 A quantity every physics has (mass, cost, a volume fraction) is one entry in `QUANTITIES` in
 `lsr_mmto/formulation/quantities.py`. A quantity of one physics is one entry in `QUANTITIES` on that
@@ -62,7 +63,7 @@ as torch from the model's state; autograd gives the gradient.
 
 ## A penalty (a term added to the objective)
 
-`lsr_mmto/physics/template/template_module.py` has one penalty of a physics, commented: what it is
+`lsr_mmto/physics/template/template_module.py` has one penalty of a physics, commented out: what it is
 given, its weight and its scale.
 
 A penalty every physics has (latent smoothing, the distance penalty) is one entry in `PENALTIES` in
@@ -89,7 +90,7 @@ model's state; autograd gives the gradient.
 - Its settings are entries of `SETTINGS` (see "A setting"), on the physics' front page for a penalty
   of one physics.
 
-`tests/test_template_physics.py` registers a penalty on the template, checks the gradient against
+`tests/test_thermal_physics.py` registers a penalty on thermal, checks the gradient against
 finite differences and reads its history key; copy those tests for a penalty of your own. A new
 penalty every physics has changes every run unless its weight is 0 by default:
 `tests/test_regression.py` shows it.
@@ -120,8 +121,9 @@ both generators above (the user guide lists every selection type).
 
 ## A kind of support or load
 
-`lsr_mmto/physics/template/template_supports_and_loads.py` has one support and one load, with what
-each piece of an entry is, who reads it, and a worked example of how it reaches the solve.
+`lsr_mmto/physics/template/template_supports_and_loads.py` says what each piece of an entry is, who
+reads it, and has a worked example of how it reaches the solve;
+`lsr_mmto/physics/thermal/thermal_supports_and_loads.py` has one support and one load filled in.
 
 One entry in `SUPPORT_AND_LOAD_KINDS` on the front page of its physics (the structural ones are in
 `lsr_mmto/physics/structural/structural_supports_and_loads.py`), given as the arguments of a
@@ -226,9 +228,11 @@ units, the user guide the attributes).
 
 ## A physics
 
-Start from `lsr_mmto/physics/template/`: a small working steady diffusion, commented line by line.
-Copy the folder, rename its five files, change the lines marked `FILL`, and add one line to
-`MODULES`; the steps are at the top of `template/template_module.py`.
+Start from `lsr_mmto/physics/template/`, the blank form: each blank is marked `FILL` and says what
+goes in it, and its functions raise until they are filled in. `lsr_mmto/physics/thermal/` is the same
+form filled in, a working steady heat conduction with its own example materials. Copy the form, rename
+its five files, fill the blanks, and add one line to `MODULES`; the steps are at the top of
+`template/template_module.py`, with the four bounds a physics keeps to (also in CONTRIBUTING).
 
 A physics is a folder in `lsr_mmto/physics/`, e.g. `thermoelastic/`, with five files:
 
@@ -241,8 +245,10 @@ A physics is a folder in `lsr_mmto/physics/`, e.g. `thermoelastic/`, with five f
 | `thermoelastic_results.py` | what each iteration records, the final check, the results a run saves and its Summary rows |
 
 plus one line in `MODULES` in `lsr_mmto/physics/available_physics.py`. The entries are described in
-`MODULE_ENTRIES` there; `structural/structural_module.py` is a complete example, and
-`tests/test_template_physics.py` registers and runs the template. A project names its physics with
+`MODULE_ENTRIES` there; `thermal/thermal_module.py` and `structural/structural_module.py` are complete
+examples, and `tests/test_thermal_physics.py` registers and runs thermal (a physics not yet in
+`MODULES`): copy it for yours. `tests/test_physics_folders.py` checks that every physics keeps the form's
+files and places. A project names its physics with
 `"physics"` in its file (`p.physics` in code); an unknown name is an error before the run. The material
 attributes it reads that the core does not have (Density and Cost) are its own, in `NEW_PROPERTIES`
 (see "A material attribute"). What else to run: both generators above, since its settings,

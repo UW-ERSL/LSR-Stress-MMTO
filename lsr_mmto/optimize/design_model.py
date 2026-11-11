@@ -60,7 +60,7 @@ class MMTOModelAD:
 
     Built once per run (optimization_loop.setup); each evaluate() replaces x, z, x_phys, props, J and cons,
     and the physics' analyse adds its own attributes, the ones its quantities read (structural: u, svm;
-    template: c). grad_phys and chain_to_x differentiate the tree of the last evaluate().
+    thermal: T). grad_phys and chain_to_x differentiate the tree of the last evaluate().
     """
 
     fe: Any                                  # the physics' solver, whatever its make_solver returns
