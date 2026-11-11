@@ -1006,9 +1006,10 @@ def test_database_editor_look():
 
 
 def test_add_properties_window():
-    """Add property opens the Add properties window: with a project, the properties it needs (its physics'
-    and those its objective and constraints read) and the others, each part alphabetical; those in the table
-    ticked and greyed; several ticked are added at once, and OK says how many; the search box filters. From
+    """A new database for a project starts with Density, the properties the project needs and its physics'
+    optional ones. Add property opens the Add properties window: with a project, the properties it needs (its
+    physics' and those its objective and constraints read) and the others, each part alphabetical; those in
+    the table ticked and greyed; those ticked are added, and OK says how many; the search box filters. From
     elsewhere (no project) everything is one list."""
     from lsr_mmto.materials.databases import ATTRIBUTES, SHOWN
     from gui import database_editor as DE
@@ -1016,7 +1017,7 @@ def test_add_properties_window():
         w = opened("U-bracket", d)
         assert w.project.needed_properties() == ["Youngs_Modulus", "Yield_Strength", "Density"]
         e = DE.DatabaseEditor(w, d, unit_system=w.project.units, project=w.project)
-        assert e.attributes == ["Density", "Youngs_Modulus", "Poissons_Ratio"]
+        assert e.attributes == ["Density", "Youngs_Modulus", "Yield_Strength", "Poissons_Ratio"]
         seen = {}
 
         def tick(dialog):
@@ -1024,10 +1025,8 @@ def test_add_properties_window():
             seen["greyed"] = [k for k, item in dialog.items.items() if not item.flags() & QtCore.Qt.ItemIsEnabled]
             assert dialog.items["Density"].text(0) == "Density    (in the table)"
             assert dialog.add_button.text() == "Add" and not dialog.add_button.isEnabled()
-            dialog.items["Yield_Strength"].setCheckState(0, QtCore.Qt.Checked)
-            assert dialog.add_button.text() == "Add 1 property"
             dialog.items["Cost"].setCheckState(0, QtCore.Qt.Checked)
-            assert dialog.add_button.text() == "Add 2 properties"
+            assert dialog.add_button.text() == "Add 1 property"
             dialog.search.setText("young")
             seen["young"] = dialog.shown_keys()
             dialog.search.setText("yield")                                    # an other name too: "Yield"
@@ -1042,12 +1041,15 @@ def test_add_properties_window():
             DE.AddPropertiesDialog.exec_ = real
         assert seen["groups"] == {"Needed by this project": ["Density", "Yield_Strength", "Youngs_Modulus"],
                                   "Other properties": ["Cost", "Poissons_Ratio"]}
-        assert sorted(seen["greyed"]) == ["Density", "Poissons_Ratio", "Youngs_Modulus"]
+        assert sorted(seen["greyed"]) == ["Density", "Poissons_Ratio", "Yield_Strength", "Youngs_Modulus"]
         assert seen["young"] == ["Youngs_Modulus"] and seen["yield"] == ["Yield_Strength"]
-        assert e.attributes == ["Density", "Youngs_Modulus", "Poissons_Ratio", "Yield_Strength", "Cost"]
-        assert [e.table.horizontalHeaderItem(c).text() for c in (6, 7)] == ["Yield strength", "Cost"]
+        assert e.attributes == ["Density", "Youngs_Modulus", "Yield_Strength", "Poissons_Ratio", "Cost"]
+        assert e.table.horizontalHeaderItem(7).text() == "Cost"
         lone = DE.AddPropertiesDialog(w, ["Density"])                          # no project: one list
         assert lone.groups() == {None: sorted(ATTRIBUTES, key=lambda k: SHOWN[k].lower())}
+        lone.items["Yield_Strength"].setCheckState(0, QtCore.Qt.Checked)
+        lone.items["Cost"].setCheckState(0, QtCore.Qt.Checked)
+        assert lone.add_button.text() == "Add 2 properties"
 
 
 def test_import_database():

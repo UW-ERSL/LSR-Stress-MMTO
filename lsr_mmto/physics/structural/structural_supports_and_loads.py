@@ -32,6 +32,7 @@ _MARK_FIXED, _MARK_LOAD, _MARK_ROLLER = 1, 2, 3
 # the directions each support type of the picking tools holds
 _PICKED_SUPPORTS = {"Fixed XYZ": "xyz", "Fixed X": "x", "Fixed Y": "y", "Fixed Z": "z"}
 
+# HELPER: of _apply_support
 def _dofs(dofs: str) -> list[int]:
     """The dof offsets (0, 1, 2) of the letters x, y, z, in that order; ValueError for anything else."""
     if not dofs or any(c not in _AXES for c in dofs) or len(set(dofs)) != len(dofs):
@@ -39,12 +40,14 @@ def _dofs(dofs: str) -> list[int]:
     return [_AXES[c] for c in sorted(dofs, key="xyz".index)]
 
 
+# HELPER: the force kind's picks (SUPPORT_AND_LOAD_KINDS)
 def _picked_force(f: dict[str, Any]) -> dict[str, list[float]]:
     """A force picked on the part in the window (force_x, force_y, force_z, each 0 when absent) as this kind's
     values."""
     return {"total": [float(f.get("force_x", 0.0)), float(f.get("force_y", 0.0)), float(f.get("force_z", 0.0))]}
 
 
+# HELPER: the traction kind's check (SUPPORT_AND_LOAD_KINDS)
 def _check_direction(bc: dict[str, Any]) -> list[str]:
     """An area taken from the selection needs a direction along x, y or z."""
     d = np.asarray(bc["direction"], dtype=float)
@@ -53,6 +56,7 @@ def _check_direction(bc: dict[str, Any]) -> list[str]:
     return []
 
 
+# OPTIONAL: supports_and_loads_error, the check that the supports hold the part
 def supports_and_loads_error(mesh: "HexMesher", bcs: "dict[str, BC]") -> str | None:
     """Why the supports let the part move where the loads push, or None (PyTO-AD's check)."""
     from lsr_mmto.pyto_ad_imports import bound_cond
@@ -64,6 +68,7 @@ def supports_and_loads_error(mesh: "HexMesher", bcs: "dict[str, BC]") -> str | N
             f"add supports that hold it")
 
 
+# HELPER: the fixed and displacement kinds' apply (SUPPORT_AND_LOAD_KINDS)
 def _apply_support(bc: dict[str, Any], n: np.ndarray, mesh: "HexMesher",
                    state: dict[str, Any], where: str) -> None:
     """Hold the dofs named in bc["dofs"] of the nodes n at the value (0 when absent), in state["values"];
@@ -76,6 +81,7 @@ def _apply_support(bc: dict[str, Any], n: np.ndarray, mesh: "HexMesher",
     mesh.node_indices[n, 3] = _MARK_FIXED if len(bc["dofs"]) == 3 else _MARK_ROLLER
 
 
+# HELPER: of _apply_force and _apply_traction
 def _add_load(total: np.ndarray, n: np.ndarray, mesh: "HexMesher",
               state: dict[str, Any]) -> None:
     """Add the total force (3,) to state["force"], shared equally by the nodes n; marks them on
@@ -84,12 +90,14 @@ def _add_load(total: np.ndarray, n: np.ndarray, mesh: "HexMesher",
     mesh.node_indices[n, 3] = _MARK_LOAD
 
 
+# HELPER: the force kind's apply (SUPPORT_AND_LOAD_KINDS)
 def _apply_force(bc: dict[str, Any], n: np.ndarray, mesh: "HexMesher",
                  state: dict[str, Any], where: str) -> None:
     """The total force [Fx, Fy, Fz], shared equally by the nodes n (_add_load)."""
     _add_load(np.asarray(bc["total"], dtype=float), n, mesh, state)
 
 
+# HELPER: the traction kind's apply (SUPPORT_AND_LOAD_KINDS)
 def _apply_traction(bc: dict[str, Any], n: np.ndarray, mesh: "HexMesher",
                     state: dict[str, Any], where: str) -> None:
     """pressure * area along the unit direction, shared equally by the nodes n (_add_load); area "bbox" is the

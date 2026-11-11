@@ -180,7 +180,7 @@ def test_the_saved_run_keeps_the_properties_the_physics_reads(monkeypatch):
     are: here the template's coefficient taken from Density, so nothing of the structural physics is
     needed to finish a run."""
     from lsr_mmto.optimize import save_results
-    from lsr_mmto.physics.template import template_physics, template_quantities
+    from lsr_mmto.physics.template import template_physics, template_quantities, template_results
     from lsr_mmto.problem import selections as S
     from lsr_mmto.problem.project import run
     saved = {}
@@ -192,6 +192,7 @@ def test_the_saved_run_keeps_the_properties_the_physics_reads(monkeypatch):
     monkeypatch.setattr(save_results, "save_run_data", keep)
     monkeypatch.setattr(template_physics, "COEFFICIENT", "Density")
     monkeypatch.setattr(template_quantities, "COEFFICIENT", "Density")
+    monkeypatch.setattr(template_results, "COEFFICIENT", "Density")
     monkeypatch.setattr(TEMPLATE, "PROPERTIES", ["Density"])
     with registered(TEMPLATE):
         p = _project("template", "UBracket.STL", UBRACKET, 3000)
@@ -253,10 +254,10 @@ def test_a_result_the_physics_does_not_return_stops_the_save_with_a_message(monk
     """final_summary returns the value of every RESULT_FIELDS entry; one left out is a clear error, not a
     result silently missing or taken from an earlier solve."""
     import pytest
-    from lsr_mmto.physics.template import template_quantities
+    from lsr_mmto.physics.template import template_results
     from lsr_mmto.problem import selections as S
     from lsr_mmto.problem.project import run
-    real = template_quantities.final_summary
+    real = template_results.final_summary
     monkeypatch.setattr(TEMPLATE, "final_summary", lambda *a, **k: (real(*a, **k), {})[1])
     with registered(TEMPLATE):
         p = _project("template", "UBracket.STL", UBRACKET, 3000)

@@ -25,7 +25,7 @@ import torch
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from lsr_mmto.physics.structural import structural_quantities as U  # noqa: E402
+from lsr_mmto.physics.structural import structural_results as U  # noqa: E402
 from lsr_mmto.problem.project import Project, run  # noqa: E402
 from lsr_mmto.results.load_results import load  # noqa: E402
 

@@ -38,6 +38,7 @@ _DTYPE = torch.float64
 
 
 # ----------------------------------------------------------------------------- FE
+# HELPER: the solver class make_solver builds
 class MultiMaterialHexFEA(_HexStructuralFEA_AD):
     """PyTO-AD's structural FEA with per-element (E, nu) as torch tensors in the AD tree.
 
@@ -134,6 +135,7 @@ class MultiMaterialHexFEA(_HexStructuralFEA_AD):
         return stress * (xb ** ad_mm.get_stress_relaxation_factor())[:, None]
 
 
+# HELPER: of the solver's postprocess and analyse
 def von_mises(s: torch.Tensor) -> torch.Tensor:
     """The von Mises stress of each row of s (N, 6): xx, yy, zz, then the three shears; at least 1e-12, so
     its gradient is finite at zero stress."""
@@ -142,17 +144,20 @@ def von_mises(s: torch.Tensor) -> torch.Tensor:
     return torch.sqrt(torch.clamp(vm2, min=1e-24))
 
 
+# HELPER: of the p-norm stress quantity (structural_quantities.py)
 def pnorm(v: torch.Tensor, p: float) -> torch.Tensor:
     """(sum v^p)^(1/p), as in PyTO's postprocess (no 1/N)."""
     return torch.sum(v ** p) ** (1.0 / p)
 
 
 # ----------------------------------------------------------------------------- the module's entries
+# OPTIONAL: the p-norm exponent setting's at_build (SETTINGS)
 def set_pnorm_exponent(p: float) -> None:
     """The p-norm exponent where PyTO-AD's material model keeps it, read by every p-norm."""
     ad_mm._PNORM_EXPONENT = float(p)
 
 
+# HELPER: of analyse and final_summary
 def elastic_constants(props: dict[str, torch.Tensor], settings: "RunSettings") -> tuple[torch.Tensor, torch.Tensor]:
     """E and nu per element from the decoded properties: the database's Poisson's ratio, or one value
     for every element when the setting asks for it or the database has none."""
@@ -162,6 +167,7 @@ def elastic_constants(props: dict[str, torch.Tensor], settings: "RunSettings") -
     return E, nu
 
 
+# ESSENTIAL: make_solver, the finite element solver
 def make_solver(mesh: "HexMesher", mat_prop: "Material", bcs: "dict[str, BC]", linear_solver: "Solvers",
                 dsolver: "DeflationSolver | None", elem_body_force: np.ndarray | None) -> MultiMaterialHexFEA:
     """The structural solver of the mesh, with the boundary condition of the displacement field u."""
@@ -169,6 +175,7 @@ def make_solver(mesh: "HexMesher", mat_prop: "Material", bcs: "dict[str, BC]", l
                                rtol=1e-8, elem_body_force=elem_body_force)
 
 
+# OPTIONAL: deflation_space, for the deflation linear solver
 def deflation_space(dsolver: "DeflationSolver", mesh: "HexMesher") -> None:
     """The deflation space of the structural system on dsolver, for DPCG on large problems: the mesh in
     groups of nodes, and the rigid-body motions of each group (three unknowns per node)."""
@@ -177,6 +184,7 @@ def deflation_space(dsolver: "DeflationSolver", mesh: "HexMesher") -> None:
     dsolver.create_deflation_matrix(mesh)
 
 
+# ESSENTIAL: analyse, one iteration's solve
 def analyse(m: "MMTOModelAD | _Analysed") -> None:
     """One iteration's solve, inside the torch tree: E and nu from m.props, the displacement m.u at the
     density m.x_phys, and the relaxed von Mises stress m.svm that the stress quantities read.

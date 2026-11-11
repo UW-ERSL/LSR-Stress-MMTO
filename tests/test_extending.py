@@ -4,7 +4,9 @@ test_extending.py
 A new setting is one entry of SETTINGS (lsr_mmto/problem/settings.py), and a new objective or
 constraint is one entry of QUANTITIES (lsr_mmto/formulation/quantities.py): nothing else is written by
 hand. One made-up setting and one made-up quantity are added here, and each must reach every place
-that uses it: the defaults, the settings page, the app's panel, the settings a run gets.
+that uses it: the defaults, the settings page, the app's panel, the settings a run gets. A physics may
+leave out its optional entries, its Summary rows reach the Summary, and a new database starts with the
+columns its project's physics reads.
 
     python tests/test_extending.py        (or: python -m pytest tests)
 """
@@ -95,7 +97,57 @@ def test_every_quantity_has_its_gradient_checked():
     assert not missing, f"no gradient check in tests/test_ad_quantities.py for {', '.join(missing)}"
     assert set(ad.NOT_CHECKED) <= {q.name for q in QUANTITIES}
 
+def test_a_physics_may_leave_out_its_optional_entries():
+    """_checked gives a physics that leaves out an OPTIONAL_ENTRIES entry its "none" value, and refuses one
+    that leaves out any other entry, naming it."""
+    import types
+
+    from lsr_mmto.physics import available_physics as ap
+    from lsr_mmto.physics.structural import structural_module
+    required = [k for k in ap.MODULE_ENTRIES if k not in ap.OPTIONAL_ENTRIES]
+    bare = types.ModuleType("bare")
+    for k in required:
+        setattr(bare, k, getattr(structural_module, k))
+    ap._checked(bare)
+    assert bare.OPTIONAL_PROPERTIES == [] and bare.SUMMARY_ROWS == {} and bare.deflation_space is None
+    assert bare.supports_and_loads_error(None, None) is None
+    assert bare.iteration_diagnostics({}, 0) is None
+    del bare.analyse
+    try:
+        ap._checked(bare)
+        raise AssertionError("a physics with no analyse was taken")
+    except TypeError as e:
+        assert "analyse" in str(e)
+
+
+def test_a_physics_summary_rows_reach_the_summary():
+    """Each SUMMARY_ROWS entry is a row of the Summary with the last value its history key recorded, and a
+    key the run did not record (or recorded as nan) gives no row."""
+    from types import SimpleNamespace
+
+    from lsr_mmto.results.tables import physics_rows
+    history = {"max_failure_factor": [2.0, 0.5]}
+    run = SimpleNamespace(physics="structural", config={},
+                          last=lambda k: history[k][-1] if k in history else float("nan"))
+    assert physics_rows(run) == [("Max failure factor", "0.500", "")]
+    history.clear()
+    assert physics_rows(run) == []
+    assert physics_rows(SimpleNamespace(physics="no such physics", config={}, last=None)) == []
+
+
+def test_a_new_database_starts_with_the_columns_its_physics_reads():
+    """Density, the properties the project needs, then its physics' optional ones, in the property list's
+    order: an L-bracket that limits no stress needs no yield strength."""
+    p = Project.load(os.path.join(ROOT, "projects", "L-bracket.mmto"))
+    assert p.starting_properties() == ["Density", "Youngs_Modulus", "Poissons_Ratio"]
+    q = Project.load(os.path.join(ROOT, "projects", "U-bracket.mmto"))
+    assert q.starting_properties() == ["Density", "Youngs_Modulus", "Yield_Strength", "Poissons_Ratio"]
+
+
 if __name__ == "__main__":
     test_one_entry_makes_a_setting()
     test_one_entry_makes_a_quantity()
+    test_a_physics_may_leave_out_its_optional_entries()
+    test_a_physics_summary_rows_reach_the_summary()
+    test_a_new_database_starts_with_the_columns_its_physics_reads()
     print("ok")

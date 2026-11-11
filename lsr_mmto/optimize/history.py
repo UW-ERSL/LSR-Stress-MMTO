@@ -4,7 +4,7 @@ history.py
 What each iteration of a run records and prints: the history (objective, constraints, grey
 elements, material counts) and the log lines. A physics records its own numbers in its
 iteration_diagnostics (structural: the mass ratio, the max failure factor and the stress-violation counts,
-physics/structural/structural_quantities.py). Nothing here changes the design.
+physics/structural/structural_results.py). Nothing here changes the design.
 
 The history is a dict of lists: init_run_history's keys (those of every run), each penalty's keys (added by the
 loop's setup) and the keys a physics' iteration_diagnostics adds. Each iteration appends to the keys its steps

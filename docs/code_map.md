@@ -55,11 +55,13 @@ LSR MMTO
 │
 ├── the physics (lsr_mmto/physics/)   one folder each; available_physics.py lists them (MODULES)
 │   ├── <name>/<name>_module.py   the front page: every slot of a physics (MODULE_ENTRIES)
-│   │     FIELDS (what is solved for), PROPERTIES, UNIT_KINDS, NEEDS, SETTINGS, RESULT_FIELDS
+│   │     FIELDS (what is solved for), PROPERTIES, OPTIONAL_PROPERTIES, UNIT_KINDS, NEEDS, SETTINGS;
+│   │     the optional entries may be left out (OPTIONAL_ENTRIES gives each a default)
 │   ├── <name>/<name>_physics.py  slot: the solver (make_solver) and one design's analysis (analyse)
 │   ├── <name>/<name>_supports_and_loads.py   slot: a kind of support or load of this physics
-│   ├── <name>/<name>_quantities.py   slot: a quantity of this physics, the results a run saves,
-│   │                                 what each iteration and the final design print
+│   ├── <name>/<name>_quantities.py   slot: a quantity of this physics (QUANTITIES)
+│   ├── <name>/<name>_results.py  slot: what each iteration records, the final check, the results a run
+│   │                             saves (RESULT_FIELDS) and its own Summary rows (SUMMARY_ROWS)
 │   ├── structural/               the one physics users have today
 │   └── template/                 a small working physics to copy; not offered in the GUI
 │
@@ -96,8 +98,11 @@ Is it about one physics only?
 │   │     <name>_quantities.py, one entry of QUANTITIES
 │   │     test: tests/test_ad_quantities.py · docs: "A quantity"
 │   ├── a result to show after a run?
-│   │     RESULT_FIELDS on the front page, its values returned by final_summary (<name>_quantities.py)
+│   │     RESULT_FIELDS, its values returned by final_summary (<name>_results.py)
 │   │     test: tests/test_template_physics.py · docs: "A physics"
+│   ├── a number of its own in a run's Summary and Compare?
+│   │     SUMMARY_ROWS, one entry naming a history key (<name>_results.py)
+│   │     test: tests/test_extending.py · docs: "A physics"
 │   ├── a term added to the objective (a penalty) of this physics only?
 │   │     PENALTIES on the front page, one entry
 │   │     test: tests/test_template_physics.py · docs: "A penalty"

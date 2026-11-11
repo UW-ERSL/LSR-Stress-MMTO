@@ -7,13 +7,34 @@ linear elasticity with a different material in each element; the stresses are vo
 
     structural_physics.py              the solver, one iteration's solve, element stress
     structural_supports_and_loads.py   fixed, displacement, force, traction
-    structural_quantities.py           compliance, p-norm stress and failure factor, the stress
-                                       diagnostics of each iteration and of the final design
+    structural_quantities.py           compliance, p-norm stress and failure factor (QUANTITIES)
+    structural_results.py              what each iteration records, the final check, the results a run
+                                       saves and its Summary rows
+
+Each top-level function in the folder has a marker on the line above it:
+
+    # ESSENTIAL: ...    a required entry of this page, or the function one of them names
+    # OPTIONAL: ...     an optional entry (available_physics.OPTIONAL_ENTRIES); a physics that leaves it
+                        out gets a default that does nothing
+    # HELPER: ...       used only inside this folder, by the entry or function it names
+
+The helpers behind each entry:
+
+    make_solver              MultiMaterialHexFEA (its postprocess uses von_mises)
+    analyse                  elastic_constants, von_mises
+    QUANTITIES               _compliance, _stress_pnorm (pnorm), _failure_factor_pnorm
+    SUPPORT_AND_LOAD_KINDS   _apply_support (_dofs), _apply_force and _apply_traction (_add_load),
+                             _picked_force, _check_direction
+    iteration_diagnostics    record_fea_diagnostics: compute_max_failure_factor, update_paper_history,
+                             compute_stress_violation_diagnostics, print_stress_violation_diagnostics
+    final_summary            elastic_constants, eval_stress_compliance_metrics (compute_max_failure_factor),
+                             compute_stress_violation_diagnostics, print_stress_violation_diagnostics
 """
 from lsr_mmto.physics.structural.structural_physics import (analyse, deflation_space, make_solver,  # noqa: F401
                                                              set_pnorm_exponent)
-from lsr_mmto.physics.structural.structural_quantities import (QUANTITIES, final_summary,  # noqa: F401
-                                                               iteration_diagnostics)
+from lsr_mmto.physics.structural.structural_quantities import QUANTITIES  # noqa: F401
+from lsr_mmto.physics.structural.structural_results import (RESULT_FIELDS, SUMMARY_ROWS,  # noqa: F401
+                                                            final_summary, iteration_diagnostics)
 from lsr_mmto.physics.structural.structural_supports_and_loads import (SUPPORT_AND_LOAD_KINDS,  # noqa: F401
                                                                       supports_and_loads_error)
 
@@ -61,15 +82,4 @@ SETTINGS = [
          help="The Poisson's ratio used when Constant Poisson's ratio is ticked.", group="Material model"),
 ]
 
-# the results a run saves, by name: the view that shows it in the Results panel, its title on the colour scale,
-# what it measures (for its unit), where its values live and their shape (a number at each element unless it
-# says otherwise), and its value from the solver after the final check
-RESULT_FIELDS = {
-    "von_mises": dict(view="Stress", title="von Mises stress", measures="stress"),
-    "displacement": dict(view="Displacement", title="Displacement", measures="length", where="node", shape="vector"),
-}
 
-# the numbers of its own a run's Summary shows: the last value of each history key, when the run recorded it
-SUMMARY_ROWS = {
-    "max_failure_factor": dict(label="Max failure factor", unit="", format=".3f"),
-}

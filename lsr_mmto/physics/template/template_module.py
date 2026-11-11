@@ -12,12 +12,13 @@ the rest of LSR MMTO only ever reaches a physics through these names.
 
     template_physics.py              the solver, and one iteration's solve (start here next)
     template_supports_and_loads.py   Set value and Source, and how they reach the solve
-    template_quantities.py           Diffusion compliance, the saved result, the diagnostics
+    template_quantities.py           Diffusion compliance, the objective and constraint
+    template_results.py              the saved result, what each iteration records, the final numbers
 
 To make a physics of your own:
     1. Copy this folder, e.g. to physics/heat/.
-    2. Rename the four files (heat_module.py, heat_physics.py, heat_supports_and_loads.py,
-       heat_quantities.py) and the imports between them.
+    2. Rename the five files (heat_module.py, heat_physics.py, heat_supports_and_loads.py,
+       heat_quantities.py, heat_results.py) and the imports between them.
     3. Change every line marked FILL. The lines marked "keep as is" stay.
     4. Give it names of its own: NAME below, each kind in SUPPORT_AND_LOAD_KINDS, each quantity, each
        penalty and each setting key must not be used by another physics.
@@ -28,10 +29,11 @@ Large problems: above the direct solver's limit (DIRECT_SOLVER_DOF_CUTOFF in PyT
 DPCG only for a physics that builds its own deflation space (deflation_space below); the template has
 none, so it keeps the direct solver at every size.
 """
-# keep as is: the entries the other three files give
+# keep as is: the entries the other four files give
 from lsr_mmto.physics.template.template_physics import analyse, make_solver  # noqa: F401
-from lsr_mmto.physics.template.template_quantities import (QUANTITIES, RESULT_FIELDS,  # noqa: F401
-                                                           final_summary, iteration_diagnostics)
+from lsr_mmto.physics.template.template_quantities import QUANTITIES  # noqa: F401
+from lsr_mmto.physics.template.template_results import (RESULT_FIELDS, final_summary,  # noqa: F401
+                                                        iteration_diagnostics)
 from lsr_mmto.physics.template.template_supports_and_loads import (SUPPORT_AND_LOAD_KINDS,  # noqa: F401
                                                                   supports_and_loads_error)
 from lsr_mmto.physics.template.template_physics import COEFFICIENT
@@ -106,4 +108,5 @@ PENALTIES = []                                                     # FILL, if yo
 # The other entries come from the other files (imported above):
 #   make_solver, analyse                         template_physics.py
 #   SUPPORT_AND_LOAD_KINDS, supports_and_loads_error   template_supports_and_loads.py
-#   QUANTITIES, RESULT_FIELDS, iteration_diagnostics, final_summary   template_quantities.py
+#   QUANTITIES                                   template_quantities.py
+#   RESULT_FIELDS, iteration_diagnostics, final_summary   template_results.py

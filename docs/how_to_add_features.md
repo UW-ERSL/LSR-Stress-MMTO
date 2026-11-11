@@ -227,17 +227,18 @@ units, the user guide the attributes).
 ## A physics
 
 Start from `lsr_mmto/physics/template/`: a small working steady diffusion, commented line by line.
-Copy the folder, rename its four files, change the lines marked `FILL`, and add one line to
+Copy the folder, rename its five files, change the lines marked `FILL`, and add one line to
 `MODULES`; the steps are at the top of `template/template_module.py`.
 
-A physics is a folder in `lsr_mmto/physics/`, e.g. `thermoelastic/`, with four files:
+A physics is a folder in `lsr_mmto/physics/`, e.g. `thermoelastic/`, with five files:
 
 | File | What goes in it |
 |---|---|
 | `thermoelastic_module.py` | the front page: every entry `MODULE_ENTRIES` lists, by name |
 | `thermoelastic_physics.py` | the solver (`make_solver`) and one iteration's solve (`analyse`) |
 | `thermoelastic_supports_and_loads.py` | its kinds of support and load, and its check that they hold the part |
-| `thermoelastic_quantities.py` | its objectives and constraints, what each iteration records, the final check's numbers |
+| `thermoelastic_quantities.py` | its objectives and constraints (`QUANTITIES`) |
+| `thermoelastic_results.py` | what each iteration records, the final check, the results a run saves and its Summary rows |
 
 plus one line in `MODULES` in `lsr_mmto/physics/available_physics.py`. The entries are described in
 `MODULE_ENTRIES` there; `structural/structural_module.py` is a complete example, and
@@ -246,6 +247,23 @@ plus one line in `MODULES` in `lsr_mmto/physics/available_physics.py`. The entri
 attributes it reads that the core does not have (Density and Cost) are its own, in `NEW_PROPERTIES`
 (see "A material attribute"). What else to run: both generators above, since its settings,
 quantities, kinds and attributes join their lists.
+
+The entries in `OPTIONAL_ENTRIES` (`available_physics.py`) may be left out: no optional properties,
+unit kinds, settings, penalties or Summary rows, no deflation space, every problem held, nothing recorded
+each iteration. A physics gives them only when it has something to say.
+
+`PROPERTIES` are the database columns every problem of the physics reads; `OPTIONAL_PROPERTIES` those it
+reads when the database has them (structural: `Poissons_Ratio`, else the one value in its settings). A
+new database made in the app for a project starts with Density, the properties the project needs, then
+the physics' optional ones.
+
+`SUMMARY_ROWS` are the numbers of its own a run's Summary and Compare show: `{history key: dict(label,
+unit, format)}`, the last value of that key in the run's history, when the run recorded it. The unit is
+text with `{kind}` for a unit of the run's unit system, e.g. `"{stress}"`, or `""` for none.
+
+Each top-level function in a physics' folder has a marker on the line above it: `# ESSENTIAL:` for a
+required entry or the function one names, `# OPTIONAL:` for an optional entry, `# HELPER:` for one used
+only inside the folder, naming what uses it. The front page lists the helpers behind each entry.
 
 The results a run saves are the entries of `RESULT_FIELDS`, each `dict(view, title, measures, where,
 shape)`:
@@ -263,7 +281,7 @@ vector. The final check refuses one of another length or shape, with a message n
 each entry's where and shape, and a run saved before they existed loads as a number at each element.
 In Results, a value at each node is coloured smoothly over the faces, and a vector gets a picker
 (magnitude, x, y, z); a vector at each node that measures length can also draw the deformed shape.
-`structural_module.py` saves the displacement this way.
+`structural_results.py` saves the displacement this way.
 
 A module's files import the layers below them (`elements/`, `design/`, `pyto_ad_imports.py`), never
 the core's lists: its quantities, kinds and settings are given as plain arguments, and the core
