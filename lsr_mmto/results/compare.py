@@ -67,7 +67,7 @@ def table(runs: dict[str, Run]) -> Tables:
     the result with each constraint met or not, the design, the materials and the run. Only the rows every
     run has: with an analysis among them (one solve, no optimization), a constraint it cannot give and what
     only an optimization has (grey elements, the latent dimension, iterations) are left out."""
-    from .tables import Heading, Table, Tables, _unit, constraint_name, given, met, met_cell
+    from .tables import Heading, Table, Tables, _unit, constraint_name, given, met, met_cell, physics_rows
     names = list(runs)
     rs = [runs[n] for n in names]
     r0 = rs[0]
@@ -76,8 +76,10 @@ def table(runs: dict[str, Run]) -> Tables:
     unit = _unit(r0, obj[0])
     right = tuple(range(1, len(rs) + 1))
     result = [[f"{r0.objective_label}" + (f" ({unit})" if unit else "")] + [f"{r.final_objective:.4g}" for r in rs]]
-    if all(np.isfinite(r.max_ff) for r in rs):
-        result.append(["Max failure factor"] + [f"{r.max_ff:.3f}" for r in rs])
+    rows = [{label + (f" ({unit})" if unit else ""): text for label, text, unit in physics_rows(r)} for r in rs]
+    for label in rows[0]:
+        if all(label in row for row in rows):                  # only the rows every run has
+            result.append([label] + [row[label] for row in rows])
     for i in range(len(r0.constraint_spec)):
         if not all(given(r, i) for r in rs):               # an analysis's constraint it cannot give: left out
             continue

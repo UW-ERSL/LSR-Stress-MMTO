@@ -187,6 +187,13 @@ class Run:
         return self.meta.get("descriptor", "?")
 
     @property
+    def physics(self) -> str:
+        """The name of the run's physics, from its record; "structural" for a record that does not say (those
+        were all made before there was another)."""
+        project = (((self.config or {}).get("arguments_resolved") or {}).get("to_problem") or {}).get("project")
+        return (project or {}).get("physics") or "structural"
+
+    @property
     def analysed_material(self) -> str | None:
         """The material of an analysis (the solid part in one material, analysed once, not optimized:
         optimize/solid_part_analysis.py), as its label; None for a run."""

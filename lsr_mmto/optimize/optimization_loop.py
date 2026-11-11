@@ -713,6 +713,7 @@ def optimize(state: RunState) -> None:
         "apply_latent_sensitivity_filter": APPLY_LATENT_SENS_FILTER,
         "initial_density": float(state.initial_density),
         "simp_structural_penalty_at_end": float(topopt_material_model._SIMP_STRUCTURAL_PENALTY),
+        "simp_thermal_penalty_at_end": float(topopt_material_model._SIMP_THERMAL_PENALTY),
         "stress_relaxation_exponent": float(topopt_material_model._SIMP_STRESS_RELAXATION),
         "void_stiffness_relative": float(topopt_material_model._EVOID_RELATIVE),
     }

@@ -275,6 +275,14 @@ def provenance() -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # public API                                                                  #
 # --------------------------------------------------------------------------- #
+def _physics_settings(run_args: dict[str, Any]) -> dict[str, Any]:
+    """{key: value} of each setting of the run's own physics (its SETTINGS), from the run's arguments; for the
+    manifest's fea section."""
+    from lsr_mmto.problem.settings import SETTINGS
+    physics = getattr(run_args.get("to_problem"), "physics", None)
+    return {s.key: run_args.get(s.key) for s in SETTINGS if s.physics is not None and s.physics == physics}
+
+
 def build_run_config(example_name: str, run_args: dict[str, Any], to_params: "MMTOParams", vae_params: "VAEParams",
                      beta_schedule: dict[str, float], mesh: "HexMesher", bcs: "dict[str, BC]", fields: dict[str, int],
                      mat_encoder: "MaterialEncoder", z_real_points: "torch.Tensor | np.ndarray",
@@ -321,8 +329,7 @@ def build_run_config(example_name: str, run_args: dict[str, Any], to_params: "MM
     cfg["fea"] = {
         "mesh": _mesh_summary(mesh),
         "loading_and_bc": {field: _loading_bc_summary(mesh, bc, fields[field]) for field, bc in bcs.items()},
-        "use_constant_poissons_ratio": ra.get("use_constant_poissons_ratio"),
-        "constant_poissons_ratio": ra.get("constant_poissons_ratio"),
+        **_physics_settings(ra),
     }
     cfg["optimizer_mma"] = _to_plain(mma_settings or {})
     return cfg

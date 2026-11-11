@@ -21,6 +21,7 @@ NAME = "structural"
 DOC = "linear elasticity, small strain"
 FIELDS = {"u": 3}                                   # the displacement, three unknowns per node
 PROPERTIES = ["Youngs_Modulus"]                     # Poisson's ratio may be one value for all (SETTINGS)
+OPTIONAL_PROPERTIES = ["Poissons_Ratio"]            # each material's own when the database has it, else SETTINGS'
 
 # the material properties it brings, each as the arguments of an Attribute (materials/databases.py); the core
 # has Density and Cost
@@ -66,4 +67,9 @@ SETTINGS = [
 RESULT_FIELDS = {
     "von_mises": dict(view="Stress", title="von Mises stress", measures="stress"),
     "displacement": dict(view="Displacement", title="Displacement", measures="length", where="node", shape="vector"),
+}
+
+# the numbers of its own a run's Summary shows: the last value of each history key, when the run recorded it
+SUMMARY_ROWS = {
+    "max_failure_factor": dict(label="Max failure factor", unit="", format=".3f"),
 }

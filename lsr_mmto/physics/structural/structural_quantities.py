@@ -415,13 +415,21 @@ def eval_stress_compliance_metrics(
     }
 
 
+# the history keys structural records each iteration (iteration_diagnostics adds them)
+HISTORY_KEYS = ("mass_ratio", "max_failure_factor", "num_stress_violating_active", "frac_stress_violating_active",
+                "num_stress_violating_all", "frac_stress_violating_all", "max_q_active", "max_q_all")
+
+
 def iteration_diagnostics(history: dict[str, list[float | np.ndarray]], iteration: int, solver: "MultiMaterialHexFEA",
                           x_phys: np.ndarray, properties: dict[str, torch.Tensor], elem_volume: float,
                           design_domain_volume: float,
                           plot_progress: bool = False, plotter: "pyvista.Plotter | None" = None,
                           verbose: bool = True) -> None:
     """After the iteration's solve: the solver's stresses at x_phys (postprocess), then the mass ratio,
-    the max failure factor and the stress-violation counts recorded into history, printed when verbose."""
+    the max failure factor and the stress-violation counts recorded into history, printed when verbose. Adds
+    those keys (HISTORY_KEYS) to the history, each run's first time, so every structural record has them."""
+    for key in HISTORY_KEYS:
+        history.setdefault(key, [])
     solver.mesh.setPseudoDensity(torch.as_tensor(x_phys))   # PyTO-AD's mesh takes torch
     solver.postprocess()
     record_fea_diagnostics(history, iteration, x_phys, None, properties, solver, elem_volume,

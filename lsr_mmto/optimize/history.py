@@ -2,14 +2,14 @@
 history.py
 ==========
 What each iteration of a run records and prints: the history (objective, constraints, grey
-elements, material counts, mass) and the log lines. The stress diagnostics (max failure factor,
-stress-violation counts) are recorded by physics/structural/structural_quantities.py. Nothing
-here changes the design.
+elements, material counts) and the log lines. A physics records its own numbers in its
+iteration_diagnostics (structural: the mass ratio, the max failure factor and the stress-violation counts,
+physics/structural/structural_quantities.py). Nothing here changes the design.
 
-The history is a dict of lists: init_run_history's keys, each penalty's keys (added by the loop's setup) and
-those a physics' iteration_diagnostics appends to. Each iteration appends to the keys its steps record; a key a
-physics does not record (the stress keys for a database without yield strength, or another physics) stays
-short or empty.
+The history is a dict of lists: init_run_history's keys (those of every run), each penalty's keys (added by the
+loop's setup) and the keys a physics' iteration_diagnostics adds. Each iteration appends to the keys its steps
+record; a key a physics adds but does not record that run (the stress keys for a database without yield
+strength) stays empty.
 """
 from typing import TYPE_CHECKING, Any, Mapping
 
@@ -86,20 +86,13 @@ def compute_mass_from_x_and_z(
 # ============================================================================
 
 def init_run_history() -> dict[str, list[float | np.ndarray]]:
-    """Return a fresh history dict for a topopt run; the loop adds each penalty's keys (Penalty.keys)."""
+    """Return a fresh history dict for a topopt run, with the keys every run records; the loop adds each
+    penalty's keys (Penalty.keys), the physics its own (its iteration_diagnostics)."""
     return {
         "objective": [],
         "constraints": [],
         "J_phys": [],
         "grey": [],
-        "mass_ratio": [],
-        "max_failure_factor": [],
-        "num_stress_violating_active": [],
-        "frac_stress_violating_active": [],
-        "num_stress_violating_all": [],
-        "frac_stress_violating_all": [],
-        "max_q_active": [],
-        "max_q_all": [],
     }
 
 
@@ -192,12 +185,12 @@ def log_objective_and_constraints(history: dict[str, list[float | np.ndarray]], 
                 f"<= {to_params.Constraints[idx][2]:.3g}?"
             )
     else:
-        mass = history["mass_ratio"][-1] if history["mass_ratio"] else float("nan")
-        maxff = history["max_failure_factor"][-1] if history["max_failure_factor"] else float("nan")
         cons_str = " ".join(
             f"{constraint_names[idx]}={(val + 1) * to_params.Constraints[idx][2]:.3g}"
             for idx, val in enumerate(cons_flat)
         )
-        print(f"[iter] f={float(obj):.4g} J={J_phys:.4g} mass/V={mass:.3g} "
-              f"maxFF={maxff:.3g} | {cons_str}")
+        own = "".join(f"{label}={history[key][-1] if history.get(key) else float('nan'):.3g} "  # the physics'
+                      for key, label in (("mass_ratio", "mass/V"), ("max_failure_factor", "maxFF"))
+                      if key in history)
+        print(f"[iter] f={float(obj):.4g} J={J_phys:.4g} {own}| {cons_str}")
 

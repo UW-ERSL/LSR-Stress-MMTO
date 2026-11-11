@@ -554,6 +554,16 @@ class Project:
             out += list(q.needs if q else ())
         return list(dict.fromkeys(out))
 
+    def starting_properties(self) -> list[str]:
+        """The columns a new database for this project starts with: Density, then the properties it needs
+        (needed_properties), then those its physics reads when present (OPTIONAL_PROPERTIES), each once and
+        each group in the order of the property list (databases.ATTRIBUTES)."""
+        from lsr_mmto.materials.databases import ATTRIBUTES
+        optional = PHYSICS[self.physics].OPTIONAL_PROPERTIES if self.physics in PHYSICS else ()
+        needed = set(self.needed_properties())
+        return list(dict.fromkeys(["Density"] + [k for k in ATTRIBUTES if k in needed]
+                                  + [k for k in ATTRIBUTES if k in optional]))
+
     def _missing_columns(self, columns: list[str]) -> list[Problem]:
         """Columns the physics and the objective and constraints read that the database lacks."""
         from lsr_mmto.formulation.quantities import QUANTITIES

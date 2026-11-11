@@ -12,7 +12,8 @@ its settings as plain arguments, and the core makes them into Quantity, Penalty,
 Setting entries.
 
 A front page is duck typed: any module that has every name of MODULE_ENTRIES below, checked only for
-presence (_checked) when PHYSICS is made, not for signatures.
+presence (_checked) when PHYSICS is made, not for signatures. The entries in OPTIONAL_ENTRIES may be left
+out: _checked then gives the module the "none" value listed there.
 """
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -35,6 +36,9 @@ MODULE_ENTRIES = {
     "UNIT_KINDS": "the kinds of quantity its values and quantities measure that the core does not have, "
                   "{kind: {'units': {unit: value in SI}, 'MKS': unit, 'mmKS': unit, 'IPS': unit}}",
     "PROPERTIES": "the material database columns every problem of it reads",
+    "OPTIONAL_PROPERTIES": "the material database columns it reads when the database has them and replaces "
+                           "otherwise (structural: Poisson's ratio, else one value from its settings); a new "
+                           "database starts with these after PROPERTIES",
     "NEW_PROPERTIES": "the material properties it brings that the core does not have (the core has Density and "
                       "Cost), each as the arguments of an Attribute (materials/databases.py); a property another "
                       "physics brings too is one entry, shared, when both give it the same way; may be empty",
@@ -65,14 +69,45 @@ MODULE_ENTRIES = {
     "final_summary": "final_summary(designs, solver, ...): prints the final designs' numbers and returns "
                      "{name: values} of the last design, one for each RESULT_FIELDS entry: an array of "
                      "(elements,) or (nodes,), with a last axis of 3 for a vector",
+    "SUMMARY_ROWS": "the numbers of its own a run's Summary and Compare show, {history key: dict(label, unit, "
+                    "format)}: the key's last value (iteration_diagnostics records it), its row's label, its unit "
+                    "as a quantity's unit is written (e.g. '{stress}', '' for none) and its format (default "
+                    "'.4g'); a row a run did not record is left out",
+}
+
+
+def _always_held(mesh: Any, bcs: Any) -> None:
+    """supports_and_loads_error of a physics that gives none: every problem is held."""
+    return None
+
+
+def _records_nothing(*args: Any, **kwargs: Any) -> None:
+    """iteration_diagnostics of a physics that gives none: nothing recorded or printed."""
+    return None
+
+
+# the entries a front page may leave out, and the value it then has: "none" of each
+OPTIONAL_ENTRIES = {
+    "OPTIONAL_PROPERTIES": lambda: [],
+    "UNIT_KINDS": lambda: {},
+    "SETTINGS": lambda: [],
+    "PENALTIES": lambda: [],
+    "SUMMARY_ROWS": lambda: {},
+    "deflation_space": lambda: None,
+    "supports_and_loads_error": lambda: _always_held,
+    "iteration_diagnostics": lambda: _records_nothing,
 }
 
 
 def _checked(module: "ModuleType") -> "ModuleType":
-    """Returns the module; raises TypeError naming every MODULE_ENTRIES entry it does not give."""
-    missing = [k for k in MODULE_ENTRIES if not hasattr(module, k)]
+    """Returns the module, given the "none" value of each OPTIONAL_ENTRIES entry it leaves out; raises
+    TypeError naming every other MODULE_ENTRIES entry it does not give."""
+    missing = [k for k in MODULE_ENTRIES if not hasattr(module, k) and k not in OPTIONAL_ENTRIES]
     if missing:
         raise TypeError(f"physics module {module.__name__} does not give {', '.join(missing)}")
+    for k, none in OPTIONAL_ENTRIES.items():
+        if not hasattr(module, k):
+            setattr(module, k, none())
     return module
 
 

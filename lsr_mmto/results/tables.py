@@ -302,6 +302,25 @@ def _unit(run: "Run", name: str) -> str:
     return unit
 
 
+def physics_rows(run: "Run") -> list[tuple[str, str, str]]:
+    """(label, value as text, unit) of each SUMMARY_ROWS entry of the run's physics that the run recorded (a
+    finite last value); none when that physics is not in this version of the app."""
+    from lsr_mmto.physics.available_physics import PHYSICS
+    physics = PHYSICS.get(run.physics)
+    units = (run.config or {}).get("units") or {}
+    rows = []
+    for key, row in (physics.SUMMARY_ROWS if physics is not None else {}).items():
+        value = run.last(key)
+        if not np.isfinite(value):
+            continue
+        try:
+            unit = row.get("unit", "").format(**units)
+        except (KeyError, IndexError):
+            unit = ""
+        rows.append((row["label"], f"{value:{row.get('format', '.4g')}}", unit))
+    return rows
+
+
 def _amount(run: "Run", name: str, value: float) -> str:
     """A value of a quantity with its unit: '14.7 %' for a fraction of the design domain, '3.733 MPa'."""
     unit = _unit(run, name)
@@ -362,8 +381,7 @@ def summary(run: "Run") -> Tables:
     analysis = run.analysed_material
     obj = (run.config or {}).get("topopt_params", {}).get("Objective") or ["objective", None]
     result = [[run.objective_label, f"{run.final_objective:.4g}", _unit(run, obj[0])]]
-    if np.isfinite(run.max_ff):
-        result.append(["Max failure factor", f"{run.max_ff:.3f}", ""])
+    result += [list(row) for row in physics_rows(run)]
     rows = []
     for i, spec in enumerate(run.constraint_spec):
         bound = float(spec[2]) if len(spec) > 2 else np.nan
@@ -374,8 +392,10 @@ def summary(run: "Run") -> Tables:
     units = (run.config or {}).get("units") or {}
     run_rows = [["Iterations", str(run.iterations)]] if analysis is None else []
     if units.get("system") not in (None, "none"):
-        run_rows.append(["Units", f"{units['system']}: {units['length']}, {units['force']}, "
-                                  f"{units['stress']}, {units['mass']}"])
+        from lsr_mmto.physics.available_physics import PHYSICS
+        own = list(PHYSICS[run.physics].UNIT_KINDS) if run.physics in PHYSICS else []
+        shown_units = [units[k] for k in ["length"] + own + ["mass"] if k in units]  # the physics' kinds between
+        run_rows.append(["Units", f"{units['system']}: {', '.join(shown_units)}"])
     design = [["Elements", f"{run.n_elems:,}", ""],
               ["Solid", f"{int(run.solid.sum()):,}", f"{100 * run.solid.mean():.1f} % of the elements"]]
     if analysis is None:

@@ -14,8 +14,8 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 from .panel_widgets import GREY, Info, fit_columns, ok_cancel
 
-# the properties a new database starts with; Add property offers every property of the registry
-# (databases.ATTRIBUTES)
+# the properties a new database starts with when no project is open (with one, Project.starting_properties);
+# Add property offers every property of the registry (databases.ATTRIBUTES)
 STARTING = ["Density", "Youngs_Modulus", "Poissons_Ratio"]
 FIXED = ["Material", "Shown as", "Colour"]                  # the columns before the properties
 FIXED_WIDTHS = [160, 100, 80]                               # their least widths
@@ -313,7 +313,7 @@ class DatabaseEditor(QtWidgets.QDialog):
             self._fill(imported)
         elif path is None:
             self.name.setText(self._free_name("my_materials"))
-            self._columns(order=STARTING)
+            self._columns(order=self.project.starting_properties() if self.project is not None else STARTING)
             for _ in range(3):
                 self.add_material()
         else:
