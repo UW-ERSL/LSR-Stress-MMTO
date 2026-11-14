@@ -10,7 +10,7 @@ A project is an LSR MMTO project file (.mmto): the layout of a PyTO-AD project f
 |---|---|
 | `schema_version` | version of the project format |
 | `name, comment` | the project's name (also the run's name) and a description |
-| `physics` | "structural" for now |
+| `physics` | the physics the project uses, see Physics |
 | `mesh` | n_dof (degrees of freedom asked for) and single_layer (one element through the thickness) |
 | `selections` | named regions of the mesh, see Selection types |
 | `bcs` | boundary conditions, each on a named selection, see Boundary conditions |
@@ -48,12 +48,14 @@ Lengths are numbers in model units, or text in numbers, pi and h, the largest el
 
 A project file keeps each as {"kind": kind, "on": a selection's name, ...its values}; a setup script adds one with p.add_bc(kind, on, **values).
 
-| kind | values | means |
-|---|---|---|
-| `fixed` | `dofs` (the directions held) | Holds the selection still in the ticked directions. |
-| `displacement` | `dofs` (the directions moved), `value` (the displacement) | Moves the selection by a set distance in the ticked directions. |
-| `force` | `total` (the total force, split equally over the nodes) | A total force on the selection, shared equally by its nodes. |
-| `traction` | `pressure` (the pressure), `direction` (the direction it pushes), `area` (the area it acts on, or bbox: the selection's extent across the direction) | A pressure on the selection, turned into a force: Pressure times Area, pushing along Direction, shared equally by its nodes. Tick Area from the selection to use the selection's size across the direction (Direction must then be along x, y or z). |
+| kind | physics | values | means |
+|---|---|---|---|
+| `fixed` | `structural`, `thermoelastic` | `dofs` (the directions held) | Holds the selection still in the ticked directions. |
+| `displacement` | `structural`, `thermoelastic` | `dofs` (the directions moved), `value` (the displacement) | Moves the selection by a set distance in the ticked directions. |
+| `force` | `structural`, `thermoelastic` | `total` (the total force, split equally over the nodes) | A total force on the selection, shared equally by its nodes. |
+| `traction` | `structural`, `thermoelastic` | `pressure` (the pressure), `direction` (the direction it pushes), `area` (the area it acts on, or bbox: the selection's extent across the direction) | A pressure on the selection, turned into a force: Pressure times Area, pushing along Direction, shared equally by its nodes. Tick Area from the selection to use the selection's size across the direction (Direction must then be along x, y or z). |
+| `fixed_temperature` | `thermal`, `thermoelastic` | `value` (the temperature held) | Holds the selection at a set temperature. |
+| `heat_source` | `thermal`, `thermoelastic` | `total` (the heat put in, split equally over the nodes) | Puts heat into the selection, shared equally by its nodes. |
 
 ## Material database attributes
 
@@ -66,6 +68,8 @@ A database is an .xlsx file: attribute names in row 1, units in row 2, then one 
 | `Youngs_Modulus` | Youngs Modulus, Young_Modulus, E | Young's modulus, the stiffness | 0 < value | Pa, kPa, MPa, GPa, psi, ksi |
 | `Poissons_Ratio` | Poisson_Ratio, Poissons Ratio, nu | Poisson's ratio | -1 < value < 0.5 | none (may be blank) |
 | `Yield_Strength` | Yield Strength, Yield | yield strength, the stress at which the material yields | 0 < value | Pa, kPa, MPa, GPa, psi, ksi |
+| `Conductivity` | Thermal_Conductivity, Thermal Conductivity, k | thermal conductivity, how well heat flows through it | 0 < value | W/(m*K), mW/(mm*K), BTU/(s*in*°R) |
+| `Thermal_Expansion` | Thermal Expansion, CTE, alpha | coefficient of thermal expansion, the strain per degree of temperature rise | 0 < value | 1/K, 1/°R |
 
 An optional sheet `Display` gives each material the colour and the label it is shown with: columns Material, Color (#rrggbb) and Label, one row per material, matched by name. An empty Color is the default colour, an empty Label the material's name. Two materials with the same colour or the same label are an error. The run record stores both.
 
@@ -86,85 +90,92 @@ The `physics` of a project names the model its optimization uses.
 | physics | model | needs columns |
 |---|---|---|
 | `structural` | linear elasticity, small strain | Youngs_Modulus |
+| `thermal` | steady heat conduction, one temperature per node | Conductivity |
+| `thermoelastic` | linear isotropic thermoelasticity, one-way coupled: the temperature drives the displacement | Youngs_Modulus, Conductivity, Thermal_Expansion |
 
 ## Quantities
 
-An objective or a constraint is one quantity, e.g. `Mass()` or `MaterialVolumeFraction(2, tau=0.5)`. A material is its row in the database, counted from 0. `MassFraction` also takes `heaviest` or `lightest` in its place, e.g. `MassFraction(lightest)`. A constraint is value / bound - 1 <= 0.
+An objective or a constraint is one quantity, e.g. `Mass()` or `MaterialVolumeFraction(2, tau=0.5)`. A material is its row in the database, counted from 0. `MassFraction` also takes `heaviest` or `lightest` in its place, e.g. `MassFraction(lightest)`. A constraint is value / bound - 1 <= 0. An empty physics column: every physics has it.
 
-| name | shown as | objective | constraint | needs columns | value | meaning |
-|---|---|---|---|---|---|---|
-| `Compliance` | Compliance | yes | yes |  | F . u | How much the part gives under the loads. Lower is stiffer. |
-| `StressPNorm` | Stress (p-norm) | yes |  |  | p-norm of the relaxed von Mises stress, no 1/N | One value close to the highest von Mises stress in the part. |
-| `FailureFactorPNorm` | Failure factor (p-norm) | yes | yes | Yield_Strength | mean p-norm of von Mises / yield strength, per element | One value close to the highest stress / yield strength in the part. Above 1 means some element yields. |
-| `Mass` | Mass | yes | yes | Density | sum of density * x_phys * element volume | The mass of the part, from each material's density. |
-| `Cost` | Cost |  | yes | Density, Cost | sum of density * cost * x_phys * element volume | The cost of the part, from each material's density and cost per mass. |
-| `VolumeFraction` | Volume fraction |  | yes |  | mean of x_phys | The share of the design space filled with material, 0 to 1. |
-| `MaterialVolumeFraction` | Material volume fraction |  | yes |  | volume fraction of one database material, softmax weights | The share of the design space filled with one chosen material, 0 to 1. |
-| `MassFraction` | Mass fraction |  | yes | Density | mass / (reference density * design domain volume), reference from the database | The part's mass compared with the whole part made solid in one material: 0.4 allows 40 % of that mass. Choose the material, or the heaviest or the lightest of the database. |
+| name | shown as | physics | objective | constraint | needs columns | value | meaning |
+|---|---|---|---|---|---|---|---|
+| `Compliance` | Compliance | `structural` | yes | yes |  | F . u | How much the part gives under the loads. Lower is stiffer. |
+| `StressPNorm` | Stress (p-norm) | `structural` | yes |  |  | p-norm of the relaxed von Mises stress, no 1/N | One value close to the highest von Mises stress in the part. |
+| `FailureFactorPNorm` | Failure factor (p-norm) | `structural` | yes | yes | Yield_Strength | mean p-norm of von Mises / yield strength, per element | One value close to the highest stress / yield strength in the part. Above 1 means some element yields. |
+| `ThermalCompliance` | Thermal compliance | `thermal` | yes | yes | Conductivity | f . T | How hot the part gets where the heat goes in. Lower carries the heat away better. |
+| `ThermoelasticCompliance` | Thermoelastic compliance | `thermoelastic` | yes | yes |  | (F + F_th) . u, the total load including the thermal force | How much the part gives under the loads and the heating. Lower is stiffer. |
+| `Mass` | Mass |  | yes | yes | Density | sum of density * x_phys * element volume | The mass of the part, from each material's density. |
+| `Cost` | Cost |  |  | yes | Density, Cost | sum of density * cost * x_phys * element volume | The cost of the part, from each material's density and cost per mass. |
+| `VolumeFraction` | Volume fraction |  |  | yes |  | mean of x_phys | The share of the design space filled with material, 0 to 1. |
+| `MaterialVolumeFraction` | Material volume fraction |  |  | yes |  | volume fraction of one database material, softmax weights | The share of the design space filled with one chosen material, 0 to 1. |
+| `MassFraction` | Mass fraction |  |  | yes | Density | mass / (reference density * design domain volume), reference from the database | The part's mass compared with the whole part made solid in one material: 0.4 allows 40 % of that mass. Choose the material, or the heaviest or the lightest of the database. |
 
 ## Settings
 
-Every setting a run takes, under its own name. A new project starts from these values (the settings of the paper's examples); a file missing some is completed from them, and the run says which. The VAE's own settings start from the database's known values. The mesh settings are the file's `mesh` section; the others are `settings.<section>`.
+Every setting a run takes, under its own name. A new project starts from these values (the settings of the paper's examples); a file missing some is completed from them, and the run says which. The VAE's own settings start from the database's known values. The mesh settings are the file's `mesh` section; the others are `settings.<section>`. An empty physics column: every project has it.
 
 ### mesh
 
-| setting | default | meaning |
-|---|---|---|
-| `n_dof` | 30000 | How fine the mesh is: the number of unknowns it is built for, counting each unknown at each node (three per node for a structural problem: the movement in x, y and z). More is finer, and slower. |
-| `single_layer` | False | One element through the thickness, for a flat (2D) part. |
+| setting | physics | default | meaning |
+|---|---|---|---|
+| `n_dof` |  | 30000 | How fine the mesh is: the number of unknowns it is built for, counting each unknown at each node (three per node for a structural problem: the movement in x, y and z). More is finer, and slower. |
+| `single_layer` |  | False | One element through the thickness, for a flat (2D) part. |
 
 ### common
 
-| setting | default | meaning |
-|---|---|---|
-| `maxIterations` | 300 | The optimization stops after this many iterations. |
-| `relative_filter_radius` | 2.5 | The smallest feature the design may have, in element sizes. Larger gives smoother, simpler designs. |
-| `material_filter_radius` | None | How far material choices are smoothed between neighbouring elements, in element sizes. Ticked: the same as the density filter radius. Empty (None): same as density filter. |
-| `beta_schedule_scheme` | 'PAPER' (one of PAPER, PAPER_BM1) | How fast the design is pushed to clear solid and empty: the sharpness starts at 1 and grows 1.5 times every 5 iterations after iteration 50, up to 32 (PAPER) or 16 (PAPER_BM1). |
-| `pnorm_exponent` | 6.0 | How closely the single stress value follows the highest stress in the part. Larger is closer, but harder to optimize. |
+| setting | physics | default | meaning |
+|---|---|---|---|
+| `maxIterations` |  | 300 | The optimization stops after this many iterations. |
+| `relative_filter_radius` |  | 2.5 | The smallest feature the design may have, in element sizes. Larger gives smoother, simpler designs. |
+| `material_filter_radius` |  | None | How far material choices are smoothed between neighbouring elements, in element sizes. Ticked: the same as the density filter radius. Empty (None): same as density filter. |
+| `beta_schedule_scheme` |  | 'PAPER' (one of PAPER, PAPER_BM1) | How fast the design is pushed to clear solid and empty: the sharpness starts at 1 and grows 1.5 times every 5 iterations after iteration 50, up to 32 (PAPER) or 16 (PAPER_BM1). |
+| `pnorm_exponent` | `structural` | 6.0 | How closely the single stress value follows the highest stress in the part. Larger is closer, but harder to optimize. |
+| `reference_temperature` | `thermoelastic` | 293.15 | The temperature at which the part has no thermal strain, in the project's temperature unit. |
 
 ### advanced
 
-| setting | default | meaning |
-|---|---|---|
-| `timeLimit` | 36000 | The optimization stops after this many seconds. |
-| `rel_conv_tol` | 1e-07 | The optimization stops early once the objective changes by less than this, relatively, between iterations, and every constraint is met to within this. |
-| `use_heaviside_projection` | True | Pushes each element towards fully solid or fully empty. |
-| `eta_proj` | 0.5 | The density at which that push splits solid from empty. |
-| `use_penalization` | True | Pushes each element's material towards one of the real materials in the database. |
-| `gamma_init` | 0.001 | How strong that push is at the start. |
-| `gamma_max` | 10.0 | How strong it can get. |
-| `gamma_factor` | 1.1 | How much stronger it gets each iteration while it ramps up. |
-| `penalty_start_iter` | 0 | The iteration it starts at, when Start the ramp when the objective plateaus is off. |
-| `distance_penalty_disable_after_iter` | 250 | The iteration it stops at, when Start the ramp when the objective plateaus is off. |
-| `use_dynamic_gamma_scheduling` | True | Start the push when the design stops improving, instead of at a set iteration. |
-| `gamma_plateau_window` | 10 | The objective has plateaued when it changed by less than the plateau tolerance over this many iterations. |
-| `gamma_plateau_tolerance` | 0.001 | How little the objective may change over the plateau window, relatively, to count as plateaued. |
-| `gamma_plateau_earliest_iter` | 20 | The push never starts before this iteration. |
-| `gamma_ramp_end_margin` | 30 | If the objective never plateaus, the push starts in time to reach its largest weight this many iterations before Max iterations. |
-| `use_z_smoothing` | True | Discourages neighbouring elements from flickering between materials. |
-| `z_smoothing_weight` | 0.0001 | How strong that smoothing is. |
-| `z_smoothing_disable_after_iter` | 250 | The iteration it stops at. |
-| `use_continuation` | False | Raises the SIMP penalty by 0.25 every 10 iterations during the run. |
-| `z0_init_method` | 'ORIGIN' (one of LIGHTEST, HEAVIEST, ORIGIN, UNIFORM) | The material every element starts with: ORIGIN (the middle of the material map), the LIGHTEST or HEAVIEST material, or UNIFORM (random). |
-| `snap_to_real_material` | False | In the final design, give each element the nearest real material. |
-| `binarize_topology` | True | In the final design, make each element fully solid or empty, keeping the volume. |
-| `use_constant_poissons_ratio` | False | One Poisson's ratio for every material, instead of each material's own. |
-| `constant_poissons_ratio` | 0.3 | The Poisson's ratio used when Constant Poisson's ratio is ticked. |
+| setting | physics | default | meaning |
+|---|---|---|---|
+| `timeLimit` |  | 36000 | The optimization stops after this many seconds. |
+| `rel_conv_tol` |  | 1e-07 | The optimization stops early once the objective changes by less than this, relatively, between iterations, and every constraint is met to within this. |
+| `use_heaviside_projection` |  | True | Pushes each element towards fully solid or fully empty. |
+| `eta_proj` |  | 0.5 | The density at which that push splits solid from empty. |
+| `use_penalization` |  | True | Pushes each element's material towards one of the real materials in the database. |
+| `gamma_init` |  | 0.001 | How strong that push is at the start. |
+| `gamma_max` |  | 10.0 | How strong it can get. |
+| `gamma_factor` |  | 1.1 | How much stronger it gets each iteration while it ramps up. |
+| `penalty_start_iter` |  | 0 | The iteration it starts at, when Start the ramp when the objective plateaus is off. |
+| `distance_penalty_disable_after_iter` |  | 250 | The iteration it stops at, when Start the ramp when the objective plateaus is off. |
+| `use_dynamic_gamma_scheduling` |  | True | Start the push when the design stops improving, instead of at a set iteration. |
+| `gamma_plateau_window` |  | 10 | The objective has plateaued when it changed by less than the plateau tolerance over this many iterations. |
+| `gamma_plateau_tolerance` |  | 0.001 | How little the objective may change over the plateau window, relatively, to count as plateaued. |
+| `gamma_plateau_earliest_iter` |  | 20 | The push never starts before this iteration. |
+| `gamma_ramp_end_margin` |  | 30 | If the objective never plateaus, the push starts in time to reach its largest weight this many iterations before Max iterations. |
+| `use_z_smoothing` |  | True | Discourages neighbouring elements from flickering between materials. |
+| `z_smoothing_weight` |  | 0.0001 | How strong that smoothing is. |
+| `z_smoothing_disable_after_iter` |  | 250 | The iteration it stops at. |
+| `use_continuation` |  | False | Raises the SIMP penalty by 0.25 every 10 iterations during the run. |
+| `z0_init_method` |  | 'ORIGIN' (one of LIGHTEST, HEAVIEST, ORIGIN, UNIFORM) | The material every element starts with: ORIGIN (the middle of the material map), the LIGHTEST or HEAVIEST material, or UNIFORM (random). |
+| `snap_to_real_material` |  | False | In the final design, give each element the nearest real material. |
+| `binarize_topology` |  | True | In the final design, make each element fully solid or empty, keeping the volume. |
+| `use_constant_poissons_ratio` | `structural` | False | One Poisson's ratio for every material, instead of each material's own. |
+| `constant_poissons_ratio` | `structural` | 0.3 | The Poisson's ratio used when Constant Poisson's ratio is ticked. |
+| `te_use_constant_poissons_ratio` | `thermoelastic` | False | One Poisson's ratio for every material, instead of each material's own. |
+| `te_constant_poissons_ratio` | `thermoelastic` | 0.3 | The Poisson's ratio used when Constant Poisson's ratio is ticked. |
 
 ### vae
 
-| setting | default | meaning |
-|---|---|---|
-| `use_pretrained_vae` | True | Use the network already trained for this database. Unticked, the next run trains a new one. |
-| `saveNet` | None | The trained network: always the .nt file next to the database, with the same name. Empty (None): next to the database. |
-| `network_error_warning` | 5.0 | Before a run, you are warned if the network reproduces any material property less closely than this, in % of the property's range in the database. You can still run. |
-| `latentDim` | from the database | How many numbers describe one material in the material map. |
-| `learningRate` | from the database | The step size of the network's training. |
-| `vae_hiddenDim` | from the database | The size of the network's inner layers. |
-| `maxAttributeErrorPercent` | from the database | Training stops once the network reproduces every material property within this percent. |
-| `klFactor` | from the database | How strongly training keeps the material map compact and smooth. |
-| `numEpochs` | from the database | Training stops after this many passes at the latest. |
+| setting | physics | default | meaning |
+|---|---|---|---|
+| `use_pretrained_vae` |  | True | Use the network already trained for this database. Unticked, the next run trains a new one. |
+| `saveNet` |  | None | The trained network: always the .nt file next to the database, with the same name. Empty (None): next to the database. |
+| `network_error_warning` |  | 5.0 | Before a run, you are warned if the network reproduces any material property less closely than this, in % of the property's range in the database. You can still run. |
+| `latentDim` |  | from the database | How many numbers describe one material in the material map. |
+| `learningRate` |  | from the database | The step size of the network's training. |
+| `vae_hiddenDim` |  | from the database | The size of the network's inner layers. |
+| `maxAttributeErrorPercent` |  | from the database | Training stops once the network reproduces every material property within this percent. |
+| `klFactor` |  | from the database | How strongly training keeps the material map compact and smooth. |
+| `numEpochs` |  | from the database | Training stops after this many passes at the latest. |
 
 
 ## Python

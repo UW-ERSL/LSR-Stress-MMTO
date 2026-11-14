@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from lsr_mmto.optimize.solid_part_analysis import _Materials
     from lsr_mmto.physics.thermal.thermal_physics import ConductionHexFEA
     from lsr_mmto.problem.settings import RunSettings
-
+    from lsr_mmto.optimize.design_model import MMTOModelAD
 # the results a run saves, by name: the view that shows it in the Results panel, its title on the colour scale,
 # what it measures (for its unit), and where its values live
 RESULT_FIELDS = {
@@ -36,13 +36,14 @@ SUMMARY_ROWS = {
 
 
 # OPTIONAL: iteration_diagnostics, what each iteration records
-def iteration_diagnostics(history: dict[str, list[float | np.ndarray]], iteration: int, solver: "ConductionHexFEA",
+def iteration_diagnostics(history: dict[str, list[float | np.ndarray]], iteration: int, m: "MMTOModelAD",
                           x_phys: np.ndarray, properties: dict[str, torch.Tensor], elem_volume: float,
                           design_domain_volume: float,
                           plot_progress: bool = False, plotter: "pyvista.Plotter | None" = None,
                           verbose: bool = True) -> None:
     """After the iteration's solve: its highest temperature recorded into history (max_temperature),
-    printed when verbose."""
+    printed when verbose. m is the model after its solve; its solver is m.fe."""
+    solver = m.fe
     history.setdefault("max_temperature", [])
     if solver.sol is None:
         return

@@ -47,12 +47,12 @@ def _apply_heat_source(bc: dict[str, Any], n: np.ndarray, mesh: "HexMesher",
 
 SUPPORT_AND_LOAD_KINDS = {
     "fixed_temperature": dict(
-        role="support", apply=_apply_fixed_temperature, shown="Fixed temperature",
+        field="T", role="support", apply=_apply_fixed_temperature, shown="Fixed temperature",
         help="Holds the selection at a set temperature.",
         values=[dict(name="value", kind="number", measures="temperature", label="Temperature",
                      doc="the temperature held")]),
     "heat_source": dict(
-        role="load", apply=_apply_heat_source, check=_check_total, shown="Heat source",
+        field="T", role="load", apply=_apply_heat_source, check=_check_total, shown="Heat source",
         help="Puts heat into the selection, shared equally by its nodes.",
         values=[dict(name="total", kind="number", measures="heat", label="Total heat",
                      doc="the heat put in, split equally over the nodes")]),

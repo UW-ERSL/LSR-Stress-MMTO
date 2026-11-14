@@ -116,23 +116,23 @@ def _apply_traction(bc: dict[str, Any], n: np.ndarray, mesh: "HexMesher",
 _DOFS = dict(name="dofs", kind="dofs", label="Held in", doc="the directions held")
 SUPPORT_AND_LOAD_KINDS = {
     "fixed": dict(
-        role="support", apply=_apply_support, shown="Fixed support",
+        field="u", role="support", apply=_apply_support, shown="Fixed support",
         help="Holds the selection still in the ticked directions.",
         values=[_DOFS],
         picks={t: (lambda c, d=d: {"dofs": d}) for t, d in _PICKED_SUPPORTS.items()}),
     "displacement": dict(
-        role="support", apply=_apply_support, shown="Moved support",
+        field="u", role="support", apply=_apply_support, shown="Moved support",
         help="Moves the selection by a set distance in the ticked directions.",
         values=[dict(_DOFS, label="Moved in", doc="the directions moved"),
                 dict(name="value", kind="number", measures="length", label="Distance", doc="the displacement")]),
     "force": dict(
-        role="load", apply=_apply_force, shown="Force",
+        field="u", role="load", apply=_apply_force, shown="Force",
         help="A total force on the selection, shared equally by its nodes.",
         values=[dict(name="total", kind="vector", measures="force", label="Total force",
                      doc="the total force, split equally over the nodes")],
         picks={"force_xyz": _picked_force, None: _picked_force}),
     "traction": dict(
-        role="load", apply=_apply_traction, check=_check_direction, shown="Pressure",
+        field="u", role="load", apply=_apply_traction, check=_check_direction, shown="Pressure",
         help="A pressure on the selection, turned into a force: Pressure times Area, pushing along Direction, "
              "shared equally by its nodes. Tick Area from the selection to use the selection's size across the "
              "direction (Direction must then be along x, y or z).",

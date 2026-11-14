@@ -18,14 +18,15 @@ out: _checked then gives the module the "none" value listed there.
 from typing import TYPE_CHECKING, Any, Callable
 
 from lsr_mmto.physics.structural import structural_module
-
+from lsr_mmto.physics.thermal import thermal_module
+from lsr_mmto.physics.thermoelastic import thermoelastic_module
 if TYPE_CHECKING:
     from types import ModuleType
 
     from lsr_mmto.formulation.quantities import Quantity
     from lsr_mmto.materials.databases import Attribute
 
-MODULES = [structural_module]
+MODULES = [structural_module, thermal_module,thermoelastic_module]
 
 # what a module's front page gives, and what each is
 MODULE_ENTRIES = {
@@ -64,8 +65,10 @@ MODULE_ENTRIES = {
                      "where 'element' (one value per element, the default) or 'node' (one per node), shape "
                      "'scalar' (one number, the default) or 'vector' (x, y and z); final_summary returns their "
                      "values",
-    "iteration_diagnostics": "iteration_diagnostics(history, iteration, solver, x_phys, properties, ...): what each "
-                             "iteration records and prints besides the objective and the constraints",
+    "iteration_diagnostics": "iteration_diagnostics(history, iteration, m, x_phys, properties, ...): what each "
+                             "iteration records and prints besides the objective and the constraints; m is the "
+                             "model after its solve (its solver m.fe), live in the torch tree, so read .detach() "
+                             "values only",
     "final_summary": "final_summary(designs, solver, ...): prints the final designs' numbers and returns "
                      "{name: values} of the last design, one for each RESULT_FIELDS entry: an array of "
                      "(elements,) or (nodes,), with a last axis of 3 for a vector",

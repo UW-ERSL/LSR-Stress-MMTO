@@ -498,7 +498,7 @@ def analyse_design(state: RunState, it: Iteration) -> None:
     zTorch = model.z.detach()
     log_design_state(state.history, state.iteration, it.x_phys, it.z, material_properties,
                      zTorch, state.encoder, state.num_elems, state.beta, s.eta_proj, verbose=state.verbose)
-    state.physics.iteration_diagnostics(state.history, state.iteration, state.solver, it.x_phys,
+    state.physics.iteration_diagnostics(state.history, state.iteration, model, it.x_phys,
                                         material_properties, state.elem_volume, state.design_domain_volume,
                                         plot_progress=state.plot_progress, plotter=state.plotter,
                                         verbose=state.verbose)

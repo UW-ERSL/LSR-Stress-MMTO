@@ -29,7 +29,7 @@ PAGE = os.path.join(ROOT, "docs", "reference.md")
 SECTIONS = [
     ("schema_version", "version of the project format"),
     ("name, comment", "the project's name (also the run's name) and a description"),
-    ("physics", "\"structural\" for now"),
+    ("physics", "the physics the project uses, see Physics"),
     ("mesh", "n_dof (degrees of freedom asked for) and single_layer (one element through the thickness)"),
     ("selections", "named regions of the mesh, see Selection types"),
     ("bcs", "boundary conditions, each on a named selection, see Boundary conditions"),
@@ -50,6 +50,15 @@ ARGUMENT = re.compile(r"^(\w+)((?:\[\w+\]|\(\w+\))*): (.*)$")       # name: text
 
 def _value(v):
     return "None" if v is None else repr(v) if isinstance(v, str) else str(v)
+
+
+def _physics(names, order) -> str:
+    """The physics an entry belongs to, in the order of the list of physics, as code names; empty for an
+    entry every physics has. names is one physics' name, several, or None."""
+    if names is None:
+        return ""
+    names = {names} if isinstance(names, str) else set(names)
+    return ", ".join(f"`{p}`" for p in order if p in names)
 
 
 def generate():
@@ -85,9 +94,9 @@ def generate():
     out += ["", "## Boundary conditions", "",
             "A project file keeps each as {\"kind\": kind, \"on\": a selection's name, ...its values}; a setup "
             "script adds one with p.add_bc(kind, on, **values).", "",
-            "| kind | values | means |", "|---|---|---|"]
-    out += [f"| `{k}` | " + ", ".join(f"`{v.name}` ({v.doc})" for v in kind.values) + f" | {kind.help} |"
-            for k, kind in BC_KINDS.items()]
+            "| kind | physics | values | means |", "|---|---|---|---|"]
+    out += [f"| `{k}` | {_physics(kind.physics, PHYSICS)} | " + ", ".join(f"`{v.name}` ({v.doc})" for v in kind.values)
+            + f" | {kind.help} |" for k, kind in BC_KINDS.items()]
 
     out += ["", "## Material database attributes", "",
             "A database is an .xlsx file: attribute names in row 1, units in row 2, then one row per "
@@ -122,26 +131,27 @@ def generate():
     out += ["", "## Quantities", "",
             "An objective or a constraint is one quantity, e.g. `Mass()` or "
             "`MaterialVolumeFraction(2, tau=0.5)`. A material is its row in the database, counted from 0."
-            + worded + " A constraint is value / bound - 1 <= 0.", "",
-            "| name | shown as | objective | constraint | needs columns | value | meaning |",
-            "|---|---|---|---|---|---|---|"]
+            + worded + " A constraint is value / bound - 1 <= 0. An empty physics column: every physics has it.", "",
+            "| name | shown as | physics | objective | constraint | needs columns | value | meaning |",
+            "|---|---|---|---|---|---|---|---|"]
     for q in QUANTITIES:
-        out.append(f"| `{q.name}` | {q.shown} | {'yes' if q.objective else ''} | {'yes' if q.constraint else ''} | "
-                   f"{', '.join(q.needs)} | {q.doc} | {q.help} |")
+        out.append(f"| `{q.name}` | {q.shown} | {_physics(q.physics, PHYSICS)} | {'yes' if q.objective else ''} | "
+                   f"{'yes' if q.constraint else ''} | {', '.join(q.needs)} | {q.doc} | {q.help} |")
 
     out += ["", "## Settings", "",
             "Every setting a run takes, under its own name. A new project starts from these values "
             "(the settings of the paper's examples); a file missing some is completed from them, and "
             "the run says which. The VAE's own settings start from the database's known values. The "
-            "mesh settings are the file's `mesh` section; the others are `settings.<section>`.", ""]
+            "mesh settings are the file's `mesh` section; the others are `settings.<section>`. An empty "
+            "physics column: every project has it.", ""]
     for section in ("mesh", "common", "advanced", "vae"):
-        out += [f"### {section}", "", "| setting | default | meaning |", "|---|---|---|"]
+        out += [f"### {section}", "", "| setting | physics | default | meaning |", "|---|---|---|---|"]
         for e in (e for e in SETTINGS if e.section == section):
             default = "from the database" if e.default is FROM_DATABASE else _value(e.default)
             if e.choices is not None:
                 default += f" (one of {', '.join(e.choices.__members__)})"
             meaning = e.help + (f" Empty (None): {e.none_means}." if e.none_means else "")
-            out.append(f"| `{e.key}` | {default} | {meaning} |")
+            out.append(f"| `{e.key}` | {_physics(e.physics, PHYSICS)} | {default} | {meaning} |")
         out.append("")
     out += python_section()
     return "\n".join(out)

@@ -47,7 +47,7 @@ def test_one_entry_makes_a_setting():
         assert "my_knob" in settings.RUN_KEYS
         sys.path.insert(0, os.path.join(ROOT, "docs"))
         import make_reference
-        assert "| `my_knob` | 0.25 | What my knob does. |" in make_reference.generate()
+        assert "| `my_knob` |  | 0.25 | What my knob does. |" in make_reference.generate()   # no physics: every project
 
         p = Project.load(os.path.join(ROOT, "projects", "U-bracket.mmto"))
         p.complete_settings()

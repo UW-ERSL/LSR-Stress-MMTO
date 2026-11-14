@@ -1008,7 +1008,8 @@ def test_database_editor_look():
 def test_add_properties_window():
     """A new database for a project starts with Density, the properties the project needs and its physics'
     optional ones. Add property opens the Add properties window: with a project, the properties it needs (its
-    physics' and those its objective and constraints read) and the others, each part alphabetical; those in
+    physics' and those its objective and constraints read) and every other registered property (worked out
+    from the registry, so a new physics' properties are expected too), each part alphabetical; those in
     the table ticked and greyed; those ticked are added, and OK says how many; the search box filters. From
     elsewhere (no project) everything is one list."""
     from lsr_mmto.materials.databases import ATTRIBUTES, SHOWN
@@ -1039,8 +1040,13 @@ def test_add_properties_window():
             e.add_property_button.click()
         finally:
             DE.AddPropertiesDialog.exec_ = real
-        assert seen["groups"] == {"Needed by this project": ["Density", "Yield_Strength", "Youngs_Modulus"],
-                                  "Other properties": ["Cost", "Poissons_Ratio"]}
+        needed = ["Density", "Yield_Strength", "Youngs_Modulus"]
+        others = seen["groups"]["Other properties"]
+        assert list(seen["groups"]) == ["Needed by this project", "Other properties"]
+        assert seen["groups"]["Needed by this project"] == needed
+        assert sorted(others) == sorted(k for k in ATTRIBUTES if k not in needed)     # every other one, once
+        assert others == sorted(others, key=lambda k: SHOWN[k].lower())               # alphabetical as shown
+        assert {"Cost", "Poissons_Ratio"} <= set(others)
         assert sorted(seen["greyed"]) == ["Density", "Poissons_Ratio", "Yield_Strength", "Youngs_Modulus"]
         assert seen["young"] == ["Youngs_Modulus"] and seen["yield"] == ["Yield_Strength"]
         assert e.attributes == ["Density", "Youngs_Modulus", "Yield_Strength", "Poissons_Ratio", "Cost"]

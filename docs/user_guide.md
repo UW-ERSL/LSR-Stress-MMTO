@@ -206,6 +206,8 @@ The attributes a material database can hold:
 | Young's modulus | Young's modulus, the stiffness | Pa, kPa, MPa, GPa, psi, ksi |
 | Poisson's ratio | Poisson's ratio | - |
 | Yield strength | Yield strength, the stress at which the material yields | Pa, kPa, MPa, GPa, psi, ksi |
+| Thermal conductivity | Thermal conductivity, how well heat flows through it | W/(m*K), mW/(mm*K), BTU/(s*in*°R) |
+| Thermal expansion coefficient | Coefficient of thermal expansion, the strain per degree of temperature rise | 1/K, 1/°R |
 
 <!-- end of list -->
 
@@ -371,6 +373,8 @@ Every type of support and load at a glance:
 | Moved support | Support | Moves the selection by a set distance in the ticked directions. | Moved in, Distance |
 | Force | Load | A total force on the selection, shared equally by its nodes. | Total force |
 | Pressure | Load | A pressure on the selection, turned into a force: Pressure times Area, pushing along Direction, shared equally by its nodes. Tick Area from the selection to use the selection's size across the direction (Direction must then be along x, y or z). | Pressure, Direction, Area |
+| Fixed temperature | Support | Holds the selection at a set temperature. | Temperature |
+| Heat source | Load | Puts heat into the selection, shared equally by its nodes. | Total heat |
 
 <!-- end of list -->
 
@@ -403,6 +407,8 @@ What the objective and the constraints can be:
 | Compliance | Objective and constraint | How much the part gives under the loads. Lower is stiffer. |
 | Stress (p-norm) | Objective | One value close to the highest von Mises stress in the part. |
 | Failure factor (p-norm) | Objective and constraint | One value close to the highest stress / yield strength in the part. Above 1 means some element yields. |
+| Thermal compliance | Objective and constraint | How hot the part gets where the heat goes in. Lower carries the heat away better. |
+| Thermoelastic compliance | Objective and constraint | How much the part gives under the loads and the heating. Lower is stiffer. |
 | Mass | Objective and constraint | The mass of the part, from each material's density. |
 | Cost | Constraint | The cost of the part, from each material's density and cost per mass. |
 | Volume fraction | Constraint | The share of the design space filled with material, 0 to 1. |
@@ -474,6 +480,9 @@ Every setting, in the groups of the Settings panel:
 | VAE | KL weight | How strongly training keeps the material map compact and smooth. |
 | VAE | Max epochs | Training stops after this many passes at the latest. |
 | Main | p-norm exponent | How closely the single stress value follows the highest stress in the part. Larger is closer, but harder to optimize. |
+| Material model | Constant Poisson's ratio | One Poisson's ratio for every material, instead of each material's own. |
+| Material model | Poisson's ratio value | The Poisson's ratio used when Constant Poisson's ratio is ticked. |
+| Main | Reference temperature | The temperature at which the part has no thermal strain, in the project's temperature unit. |
 | Material model | Constant Poisson's ratio | One Poisson's ratio for every material, instead of each material's own. |
 | Material model | Poisson's ratio value | The Poisson's ratio used when Constant Poisson's ratio is ticked. |
 

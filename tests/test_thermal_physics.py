@@ -35,7 +35,12 @@ EXAMPLE_VAE = dict(latentDim=2, vae_hiddenDim=50, learningRate=5e-4, klFactor=1e
 def registered(module):
     """The core's lists with module added, as its line in available_physics.MODULES adds it when they are
     made (its quantities, penalties, kinds, settings, material properties and unit kinds), and taken out
-    again afterwards."""
+    again afterwards. A module already in MODULES is left as it is: nothing added, nothing taken out. The
+    kinds of support and load are made again from MODULES each way (boundary_conditions.bc_kinds_of, as at
+    start-up), since a kind may be shared: one tagged with several physics stays when one of them goes."""
+    if module in available_physics.MODULES:
+        yield
+        return
     from lsr_mmto.design import latent_penalties
     from lsr_mmto.formulation import quantities
     from lsr_mmto.materials import databases
@@ -51,7 +56,7 @@ def registered(module):
     available_physics.PHYSICS[module.NAME] = module
     quantities.QUANTITIES.extend(added_q)
     latent_penalties.PENALTIES.extend(added_p)
-    boundary_conditions.BC_KINDS.update(boundary_conditions.kinds_of(module))
+    _remake_kinds()
     settings.SETTINGS.extend(added_s)
     settings._make_views()
     databases.ATTRIBUTES.update(added_a)
@@ -67,8 +72,7 @@ def registered(module):
             quantities.QUANTITIES.remove(q)
         for p in added_p:
             latent_penalties.PENALTIES.remove(p)
-        for k in module.SUPPORT_AND_LOAD_KINDS:
-            del boundary_conditions.BC_KINDS[k]
+        _remake_kinds()
         for s in added_s:
             settings.SETTINGS.remove(s)
         settings._make_views()
@@ -80,6 +84,32 @@ def registered(module):
             del databases.UNITS[k]
             for table in databases.UNIT_SYSTEMS.values():
                 del table[k]
+
+
+def _remake_kinds():
+    """The core's kinds of support and load made again from available_physics.MODULES, in place (the core
+    reads the same dict), as start-up makes them. Made in full before the old ones are cleared, so an error
+    leaves them as they were."""
+    from lsr_mmto.problem import boundary_conditions
+    kinds = boundary_conditions.bc_kinds_of(available_physics.MODULES)
+    boundary_conditions.BC_KINDS.clear()
+    boundary_conditions.BC_KINDS.update(kinds)
+
+
+@contextlib.contextmanager
+def added(entries, *new, then=None):
+    """The core's list entries with new added at its end, in place (the core reads the same list), and taken
+    out again afterwards; then(), when given, is called after each change (settings._make_views)."""
+    entries.extend(new)
+    if then is not None:
+        then()
+    try:
+        yield
+    finally:
+        for e in new:
+            entries.remove(e)
+        if then is not None:
+            then()
 
 
 def _project(name, stl, base_dir, n_dof):
@@ -104,15 +134,16 @@ def _held_and_heated(name, n_dof=3000):
     return p
 
 
-def test_a_project_sees_only_its_own_physics_settings(monkeypatch):
+def test_a_project_sees_only_its_own_physics_settings():
     """The Settings panel shows the settings every project has and those of the project's own physics, each
-    group once. Thermal has none of its own, so one is given to it here."""
+    group once. Thermal has none of its own, so one is given to it here, added to the core's settings as
+    registering adds a front page's."""
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from gui import settings_panel
-    monkeypatch.setattr(THERMAL, "SETTINGS", [dict(section="advanced", key="thermal_test_scale", default=1.0,
-                                                   label="Test scale", help="A setting for the tests only.",
-                                                   group="Material model")])
-    with registered(THERMAL):
+    from lsr_mmto.problem import settings
+    test_setting = settings.Setting(physics="thermal", section="advanced", key="thermal_test_scale", default=1.0,
+                                    label="Test scale", help="A setting for the tests only.", group="Material model")
+    with registered(THERMAL), added(settings.SETTINGS, test_setting, then=settings._make_views):
         structural, thermal = (set(settings_panel.all_setting_keys(name)) for name in ("structural", "thermal"))
         assert ("common", "pnorm_exponent") in structural and ("common", "pnorm_exponent") not in thermal
         assert ("advanced", "thermal_test_scale") in thermal
@@ -174,11 +205,6 @@ def test_thermal_physics_runs_with_no_core_file_changed():
         assert np.all(np.isfinite(r.history["objective"])) and r.history["objective"][0] > 0
         assert len(r.history["max_temperature"]) >= 2
         assert "max_failure_factor" not in r.history                 # structural's keys are structural's
-    from lsr_mmto.formulation import quantities
-    from lsr_mmto.materials import databases
-    assert "ThermalCompliance" not in {q.name for q in quantities.QUANTITIES}
-    assert "thermal" not in available_physics.PHYSICS
-    assert "Conductivity" not in databases.ATTRIBUTES and "temperature" not in databases.UNITS
 
 
 def test_a_thermal_summary_shows_its_own_row_and_units():
@@ -350,14 +376,15 @@ def _test_penalty(weight, scale="first value"):
                 weight=weight, scale=scale, key="thermal_test_penalty")
 
 
-def test_a_physics_penalty_is_added_with_its_gradient(monkeypatch):
-    """A penalty on thermal's front page is added after the two every physics has, divided by its first
+def test_a_physics_penalty_is_added_with_its_gradient():
+    """A penalty of thermal is added after the two every physics has, divided by its first
     value and times its weight, and the gradient of the objective with it agrees with central differences
     (the two every physics has are switched off, so the objective is mass plus this penalty)."""
+    from lsr_mmto.design import latent_penalties
     from lsr_mmto.optimize import optimization_loop as M
     from lsr_mmto.problem.project import _prepared, _run_arguments
-    monkeypatch.setattr(THERMAL, "PENALTIES", [_test_penalty(lambda state, it: 5.0)])
-    with registered(THERMAL), tempfile.TemporaryDirectory() as d:
+    penalty = latent_penalties.Penalty(physics=["thermal"], **_test_penalty(lambda state, it: 5.0))
+    with registered(THERMAL), added(latent_penalties.PENALTIES, penalty), tempfile.TemporaryDirectory() as d:
         p = _held_and_heated("penalty")
         p.objective("Mass()")
         p.settings["advanced"].update(use_penalization=False, use_z_smoothing=False)
@@ -389,14 +416,16 @@ def test_a_physics_penalty_is_added_with_its_gradient(monkeypatch):
             assert share > 0.1, share                     # the penalty's part of the gradient is not lost in it
 
 
-def test_a_physics_penalty_keeps_its_history_and_its_schedule(monkeypatch):
+def test_a_physics_penalty_keeps_its_history_and_its_schedule():
     """A short thermal run with the test penalty on for its first iteration only: the saved run's history has
     its key, 0.5 at the first iteration (its first value, times 0.5) and 0 from then on; the history keys of
     the two every physics has are kept."""
+    from lsr_mmto.design import latent_penalties
     from lsr_mmto.problem.project import run
     from lsr_mmto.results import load_results
-    monkeypatch.setattr(THERMAL, "PENALTIES", [_test_penalty(lambda state, it: 0.5 if state.iteration < 1 else 0)])
-    with registered(THERMAL):
+    penalty = latent_penalties.Penalty(physics=["thermal"],
+                                       **_test_penalty(lambda state, it: 0.5 if state.iteration < 1 else 0))
+    with registered(THERMAL), added(latent_penalties.PENALTIES, penalty):
         p = _held_and_heated("penalty")
         p.settings["common"]["maxIterations"] = 2
         with tempfile.TemporaryDirectory() as d:
@@ -422,23 +451,19 @@ def test_a_quantity_of_another_physics_is_refused():
                           "constraint 2: Compliance is not a thermal quantity"], errors
 
 
-def test_a_penalty_must_state_its_scale(monkeypatch):
+def test_a_penalty_must_state_its_scale():
     """A penalty entry without its scale, or with one that is not "raw" or "first value", is refused when the
-    core's lists are made (at start-up), and nothing of it is added."""
+    core's lists are made (at start-up, where each front page's entry becomes a Penalty), and nothing of it
+    is added."""
     import pytest
     from lsr_mmto.design import latent_penalties
     entry = _test_penalty(lambda state, it: 0.5)
     del entry["scale"]
-    monkeypatch.setattr(THERMAL, "PENALTIES", [entry])
     with pytest.raises(TypeError, match="scale"):
-        with registered(THERMAL):
-            pass
-    monkeypatch.setattr(THERMAL, "PENALTIES", [_test_penalty(lambda state, it: 0.5, scale="normalised")])
+        latent_penalties.Penalty(physics=["thermal"], **entry)
     with pytest.raises(ValueError, match="scale must be one of 'raw', 'first value'"):
-        with registered(THERMAL):
-            pass
+        latent_penalties.Penalty(physics=["thermal"], **_test_penalty(lambda state, it: 0.5, scale="normalised"))
     assert [q.name for q in latent_penalties.PENALTIES] == ["LatentSmoothing", "DistancePenalty"]
-    assert "thermal" not in available_physics.PHYSICS
 
 
 def test_the_mesh_is_sized_by_the_physics_unknowns_per_node():

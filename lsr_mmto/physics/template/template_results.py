@@ -54,13 +54,14 @@ def final_summary(designs: "list[tuple[str, np.ndarray, np.ndarray | torch.Tenso
 #   SUMMARY_ROWS = {"max_temperature": dict(label="Max temperature", unit="{temperature}", format=".4g")}
 
 # OPTIONAL: iteration_diagnostics, what each iteration records
-# def iteration_diagnostics(history: dict[str, list[float | np.ndarray]], iteration: int, solver: Any,
+# def iteration_diagnostics(history: dict[str, list[float | np.ndarray]], iteration: int, m: "MMTOModelAD",
 #                           x_phys: np.ndarray, properties: dict[str, torch.Tensor], elem_volume: float,
 #                           design_domain_volume: float, plot_progress: bool = False,
 #                           plotter: "pyvista.Plotter | None" = None, verbose: bool = True) -> None:
-#     """After each iteration's solve. history is the run's record ({name: list}): add your keys with
-#     history.setdefault(key, []) and append to them, and print a line when verbose. Left out, nothing is
-#     recorded or printed besides what every run has."""
+#     """After each iteration's solve. m is the model after its solve: its solver m.fe and whatever analyse
+#     set on it (m.u, m.T, m.settings); it is live in the torch tree, so read .detach() values only. history
+#     is the run's record ({name: list}): add your keys with history.setdefault(key, []) and append to them,
+#     and print a line when verbose. Left out, nothing is recorded or printed besides what every run has."""
 
 # ----------------------------------------------------------------------------- Helpers
 # Anything final_summary or iteration_diagnostics needs (a stress check, a value per element from one per

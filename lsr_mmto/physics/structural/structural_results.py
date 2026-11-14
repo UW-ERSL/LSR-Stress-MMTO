@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from lsr_mmto.optimize.solid_part_analysis import _Materials
     from lsr_mmto.physics.structural.structural_physics import MultiMaterialHexFEA
     from lsr_mmto.problem.settings import RunSettings
-
+    from lsr_mmto.optimize.design_model import MMTOModelAD
 # the results a run saves, by name: the view that shows it in the Results panel, its title on the colour scale,
 # what it measures (for its unit), where its values live and their shape (a number at each element unless it
 # says otherwise), and its value from the solver after the final check
@@ -404,14 +404,16 @@ HISTORY_KEYS = ("mass_ratio", "max_failure_factor", "num_stress_violating_active
 
 
 # OPTIONAL: iteration_diagnostics, what each iteration records
-def iteration_diagnostics(history: dict[str, list[float | np.ndarray]], iteration: int, solver: "MultiMaterialHexFEA",
+def iteration_diagnostics(history: dict[str, list[float | np.ndarray]], iteration: int, m: "MMTOModelAD",
                           x_phys: np.ndarray, properties: dict[str, torch.Tensor], elem_volume: float,
                           design_domain_volume: float,
                           plot_progress: bool = False, plotter: "pyvista.Plotter | None" = None,
                           verbose: bool = True) -> None:
     """After the iteration's solve: the solver's stresses at x_phys (postprocess), then the mass ratio,
     the max failure factor and the stress-violation counts recorded into history, printed when verbose. Adds
-    those keys (HISTORY_KEYS) to the history, each run's first time, so every structural record has them."""
+    those keys (HISTORY_KEYS) to the history, each run's first time, so every structural record has them.
+    m is the model after its solve; its solver is m.fe."""
+    solver = m.fe
     for key in HISTORY_KEYS:
         history.setdefault(key, [])
     solver.mesh.setPseudoDensity(torch.as_tensor(x_phys))   # PyTO-AD's mesh takes torch

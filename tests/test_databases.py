@@ -480,11 +480,11 @@ def test_unit_kinds_of_a_physics():
                                                                        "mmKS": "N", "IPS": "N"}})
     with pytest.raises(ValueError, match="differ"):
         D._add_unit_kinds(other)
-    odd = types.SimpleNamespace(NAME="odd", UNIT_KINDS={"heat": {"units": {"W": 1.0}, "MKS": "W", "mmKS": "mW",
-                                                                  "IPS": "W"}})
+    odd = types.SimpleNamespace(NAME="odd", UNIT_KINDS={"test_heat": {"units": {"W": 1.0}, "MKS": "W",
+                                                                       "mmKS": "mW", "IPS": "W"}})
     with pytest.raises(ValueError, match="not one of its units"):
         D._add_unit_kinds(odd)
-    assert "heat" not in D.UNITS                                    # nothing of a refused kind is kept
+    assert "test_heat" not in D.UNITS                               # nothing of a refused kind is kept
 
 
 def test_columns_found_by_what_they_measure():
