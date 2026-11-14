@@ -47,7 +47,7 @@ def ubracket_project():
 _RUNS = {}
 
 
-def _run(to_problem, args):
+def _run(project, args):
     """_run_topopt with the history and the run record captured; nothing written to disk."""
     captured = {}
     real_init, real_post = M.init_run_history, M.run_postprocessing
@@ -64,7 +64,7 @@ def _run(to_problem, args):
     saved = run_save.WRITE_FILES
     run_save.WRITE_FILES = False
     try:
-        M._run_topopt(**dict(args, to_problem=to_problem))
+        M._run_topopt(**dict(args, project=project))
     finally:
         M.init_run_history, M.run_postprocessing = real_init, real_post
         run_save.WRITE_FILES = saved

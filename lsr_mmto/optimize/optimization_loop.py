@@ -155,7 +155,7 @@ class RunState:
 
     # what setup was given
     s: "RunSettings"
-    to_problem: "Project"
+    project: "Project"
     save_dir: str
     verbose: bool
     plot_progress: bool
@@ -231,11 +231,11 @@ class Iteration:
         self.zeta = zeta
 
 
-def _run_topopt(*, s: "RunSettings", to_problem: "Project", save_dir: str, verbose: bool, plot_progress: bool,
+def _run_topopt(*, s: "RunSettings", project: "Project", save_dir: str, verbose: bool, plot_progress: bool,
                 plot_bcs: bool, plotter: "pyvista.Plotter | None", progress: Callable[[dict[str, Any]], None] | None,
                 should_stop: Callable[[], bool] | None, on_network_error: Callable[[str], bool] | None) -> None:
     """One run of a project: setup(), then optimize(). Project.run calls it with the project's settings."""
-    state = setup(s=s, to_problem=to_problem, save_dir=save_dir, verbose=verbose, plot_progress=plot_progress,
+    state = setup(s=s, project=project, save_dir=save_dir, verbose=verbose, plot_progress=plot_progress,
                   plot_bcs=plot_bcs, plotter=plotter, progress=progress, should_stop=should_stop,
                   on_network_error=on_network_error)
     if state is None:
@@ -264,7 +264,7 @@ def problem_solver(physics: "ModuleType", mesh: "HexMesher", mat_prop: "Material
     return physics.make_solver(mesh, mat_prop, bcs, linear_solver, dsolver, elem_body_force)
 
 
-def setup(*, s: "RunSettings", to_problem: "Project", save_dir: str, verbose: bool, plot_progress: bool,
+def setup(*, s: "RunSettings", project: "Project", save_dir: str, verbose: bool, plot_progress: bool,
           plot_bcs: bool, plotter: "pyvista.Plotter | None", progress: Callable[[dict[str, Any]], None] | None,
           should_stop: Callable[[], bool] | None, on_network_error: Callable[[str], bool] | None) -> RunState | None:
     """
@@ -282,24 +282,24 @@ def setup(*, s: "RunSettings", to_problem: "Project", save_dir: str, verbose: bo
     physics, in order; e.g. latent smoothing (density-weighted):
       Pz = lambda * sum_ell sum_e x_e * ( z_e^(ell) - ((H z^(ell))/Hs)_e )^2
     """
-    _args_at_start = dict(s.as_dict(), to_problem=to_problem, save_dir=save_dir, verbose=verbose,
+    # the record keeps the project under to_problem, the key the runs already saved have
+    _args_at_start = dict(s.as_dict(), to_problem=project, save_dir=save_dir, verbose=verbose,
                           plot_progress=plot_progress, plot_bcs=plot_bcs, plotter=plotter)   # what the run records
     saveNet = s.saveNet                                     # resolved below: None is the .nt beside the database
     from lsr_mmto.optimize import save_results as _save
     _provenance = _save.provenance()   # the code as it is when the run starts
 
     history = init_run_history()
-    if not hasattr(to_problem, "build"):
-        raise TypeError(f"to_problem must be a Project, e.g. Project.load('projects/L-bracket.mmto'), "
-                        f"not {to_problem!r}; the coded examples are now the project files in projects/")
-    physics = physics_module(to_problem.physics)            # the front page of the project's physics
+    if not hasattr(project, "build"):
+        raise TypeError(f"project must be a Project, e.g. Project.load('projects/L-bracket.mmto'), "
+                        f"not {project!r}; the coded examples are now the project files in projects/")
+    physics = physics_module(project.physics)            # the front page of the project's physics
     penalties = [p for p in PENALTIES if p.applies_to(physics.NAME)]
     for key in (k for p in penalties for k in p.keys()):    # each penalty's history keys, new ones
         if key in history:
             raise ValueError(f"penalty history key {key!r} is used twice")
         history[key] = []
-    problem = to_problem
-    mesh, mat_prop, bcs, elem_body_force, to_params, vae_params = problem.build()
+    mesh, mat_prop, bcs, elem_body_force, to_params, vae_params = project.build()
     print(f"[SWEEP] nDOFDesired={to_params.nDOFDesired}  "
           f"RelativeFilterRadius={to_params.RelativeFilterRadius}  "
           f"MaterialFilterRadius={to_params.MaterialFilterRadius}  "
@@ -440,7 +440,7 @@ def setup(*, s: "RunSettings", to_problem: "Project", save_dir: str, verbose: bo
 
     return RunState(
         # what setup was given
-        s=s, to_problem=to_problem, save_dir=save_dir, verbose=verbose, plot_progress=plot_progress,
+        s=s, project=project, save_dir=save_dir, verbose=verbose, plot_progress=plot_progress,
         plotter=plotter, progress=progress, should_stop=should_stop,
         args_at_start=_args_at_start, provenance=_provenance, save_net=saveNet,
         # what it built
@@ -693,9 +693,9 @@ def optimize(state: RunState) -> None:
                      default=None)
     except Exception:
         pass
-    to_problem = state.to_problem
+    project = state.project
     run_config = _save.build_run_config(
-        example_name=getattr(to_problem, "name", str(to_problem)),
+        example_name=getattr(project, "name", str(project)),
         run_args=_run_args, to_params=to_params, vae_params=state.vae_params,
         beta_schedule=state.beta_schedule, mesh=state.mesh, bcs=state.bcs, fields=state.physics.FIELDS,
         mat_encoder=state.encoder, z_real_points=state.z_real,
@@ -707,7 +707,7 @@ def optimize(state: RunState) -> None:
     run_config["network_errors_percent"] = state.network_errors   # what the run's materials were off by, per property
     run_config["network_reconstruction"] = state.encoder.reconstruction()   # and per material: database vs network
     run_config["provenance"] = state.provenance
-    run_config["units"] = to_problem.unit_record()
+    run_config["units"] = project.unit_record()
     from lsr_mmto.pyto_ad_imports import topopt_material_model
     run_config["fixed_in_code"] = {
         "mma_move_limit": MMA_MOVE_LIMIT, "mma_kkt_tol": MMA_KKT_TOL,
@@ -741,7 +741,7 @@ def optimize(state: RunState) -> None:
         snap_to_real_material=s.snap_to_real_material,
         save_dir=state.save_dir,
         run_config=run_config,
-        example_name=getattr(to_problem, "name", str(to_problem)),
+        example_name=getattr(project, "name", str(project)),
         physics=state.physics,
         properties_of=lambda z: decode(matEncoder, z),
         settings=s,

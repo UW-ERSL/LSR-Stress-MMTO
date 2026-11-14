@@ -45,9 +45,9 @@ def check(project: Project, n_x: int = 3, n_z: int = 3, steps: tuple[float, ...]
     there is one. The project is checked and copied first, as a run does. No results are saved; as in a run,
     a network is trained and saved when the settings ask for a new one or there is none to read."""
     import tempfile
-    from lsr_mmto.problem.project import _prepared, _run_arguments
+    from lsr_mmto.problem.project import _ready_to_run, _run_arguments
     with tempfile.TemporaryDirectory() as scratch:              # the check makes no results
-        run_args = _run_arguments(_prepared(project), save_dir=scratch, verbose=False)
+        run_args = _run_arguments(_ready_to_run(project), save_dir=scratch, verbose=False)
         s = _model_from_setup(run_args)
     model, beta, eta, lb, ub = s["model"], s["beta"], s["eta"], s["lb"], s["ub"]
     heaviside, filtered = model.to_params.HeavisideProjection, model.to_params.APPLY_FILTER_TO_DENSITY

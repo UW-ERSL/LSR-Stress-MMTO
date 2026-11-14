@@ -432,13 +432,13 @@ def test_a_physics_penalty_is_added_with_its_gradient():
     (the two every physics has are switched off, so the objective is mass plus this penalty)."""
     from lsr_mmto.design import latent_penalties
     from lsr_mmto.optimize import optimization_loop as M
-    from lsr_mmto.problem.project import _prepared, _run_arguments
+    from lsr_mmto.problem.project import _ready_to_run, _run_arguments
     penalty = latent_penalties.Penalty(physics=["thermal"], **_test_penalty(lambda state, it: 5.0))
     with added(latent_penalties.PENALTIES, penalty), tempfile.TemporaryDirectory() as d:
         p = _held_and_heated("penalty")
         p.objective("Mass()")
         p.settings["advanced"].update(use_penalization=False, use_z_smoothing=False)
-        state = M.setup(**_run_arguments(_prepared(p), save_dir=d, verbose=False))
+        state = M.setup(**_run_arguments(_ready_to_run(p), save_dir=d, verbose=False))
         assert [q.name for q in state.penalties] == ["LatentSmoothing", "DistancePenalty", "ThermalTestPenalty"]
         n = state.num_elems
         rng = np.random.default_rng(0)

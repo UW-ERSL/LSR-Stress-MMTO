@@ -228,7 +228,7 @@ def _analyse(project: "Project",
     from lsr_mmto.optimize.history import compute_domain_volume
     from lsr_mmto.optimize.optimization_loop import problem_solver
     from lsr_mmto.physics.available_physics import physics_module
-    from lsr_mmto.problem.project import _prepared
+    from lsr_mmto.problem.project import _ready_to_run
     from lsr_mmto.problem.settings import run_settings
     from lsr_mmto.results import load_results
 
@@ -237,7 +237,7 @@ def _analyse(project: "Project",
             raise AnalysisStopped("the analysis was stopped; nothing was saved")
 
     started = time.time()
-    project = _prepared(project)                     # as a run: settings completed, validate's errors refuse
+    project = _ready_to_run(project)                     # as a run: settings completed, validate's errors refuse
     s = run_settings(project)
     physics = physics_module(project.physics)
     mesh, mat_prop, bcs, elem_body_force, to_params, _ = project.build()

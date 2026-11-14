@@ -179,7 +179,7 @@ def test_save_as_brings_in_region_files():
                    for f in files)
 
 
-def test_setup_script_follows_window_saves():
+def test_project_script_follows_window_saves():
     """File > New writes <name>_setup.py in the project folder; every save in the window writes it again
     to match the project; a save from a script leaves it alone."""
     stl = os.path.join(ROOT, "data", "models", "LBracket_BM1", "LBracket_BM1.STL")
@@ -431,7 +431,7 @@ def test_side_marks():
         w.project.formulation["constraints"][0]["bound"] = 0.15
         w.project.settings["vae"]["latentDim"] += 1                            # an error of Settings: no mark
         w.project_changed()
-        assert any(e.step == "settings" for e in w.project.validate())
+        assert any(e.gui_step == "settings" for e in w.project.validate())
         assert all(m in ("check", None) for m in marks(w).values()), marks(w)
         with answers(Box.Discard):
             assert w.open_project(shutil.copy(os.path.join(PROJECTS, "U-bracket.mmto"), d))

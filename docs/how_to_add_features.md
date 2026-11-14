@@ -14,7 +14,7 @@ The first rewrites `docs/reference.md`, the second the lists in `docs/user_guide
 (the settings, quantities, kinds of support and load, selection types and material attributes, as
 the user guide shows them); `tests/test_reference.py` and `tests/test_user_guide.py` fail until
 they are rewritten. The Python section of `docs/reference.md` is read from the docstrings of the calls
-a setup script uses: a new argument needs its line in the docstring (`docs/make_reference.py` says how
+a project script uses: a new argument needs its line in the docstring (`docs/make_reference.py` says how
 a docstring is laid out), and every example there must run. Each section below ends with what else to run.
 
 ## A quantity (an objective or a constraint)
@@ -140,7 +140,7 @@ One entry in `SUPPORT_AND_LOAD_KINDS` on the front page of its physics (the stru
 - `values`: its values, each a dict of `name`, `kind` (`"dofs"`, `"number"`, `"vector"` or
   `"area"`), `label` (its name in the form), `measures` (what the number is, for its unit; None for
   none) and `doc`. The form, the checks that each value is there and is what its kind says, and the
-  setup-script line are made from them.
+  project-script line are made from them.
 - `check(bc)` (optional): errors the value kinds do not catch, as a list.
 - `field` (optional): the field it acts on; left out by a physics of one field, which is then the
   one.
@@ -150,7 +150,7 @@ A project stores it as `{"kind": name, "on": selection, ...values}`, and a scrip
 `p.add_bc(name, on, **values)`, e.g. `p.add_bc("force", "corner", total=[0, -4, 0])`; a wrong value
 is an error there, as in the project's check.
 
-`test_every_kind_round_trips_through_a_setup_script` in `tests/test_project.py` adds every kind,
+`test_every_kind_round_trips_through_a_project_script` in `tests/test_project.py` adds every kind,
 writes it into a script and runs it; add a build test there for what the kind does. What else to
 run: both generators above (the reference page and the user guide list every kind).
 

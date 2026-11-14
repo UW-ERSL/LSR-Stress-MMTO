@@ -182,7 +182,7 @@ Every setting a run takes, under its own name. A new project starts from these v
 
 In the examples, `p` is your project: `p = Project(...)` for a new one, or `p = Project.load('my project.mmto')` for a saved one.
 
-Every call a setup script uses, with its arguments, read from the code's own docstrings; `Python_walkthrough.ipynb` uses them on one whole project. Model units are the project's units (`p.units`). A length is a number in model units, or text in numbers, pi and h, the largest element size, such as `"1.5h"` or `"5.64 + 1h"`. A selection is made with one of the selection types first and then added to a project under a name. The examples follow on from one another, run from the LSR MMTO folder: the selections, then a new project that the next examples build up, save and write as a script, then the shipped U-bracket, run and read back.
+Every call a project script uses, with its arguments, read from the code's own docstrings; `Python_walkthrough.ipynb` uses them on one whole project. Model units are the project's units (`p.units`). A length is a number in model units, or text in numbers, pi and h, the largest element size, such as `"1.5h"` or `"5.64 + 1h"`. A selection is made with one of the selection types first and then added to a project under a name. The examples follow on from one another, run from the LSR MMTO folder: the selections, then a new project that the next examples build up, save and write as a script, then the shipped U-bracket, run and read back.
 
 ### box
 
@@ -676,9 +676,9 @@ Write the project, every setting included, with the other sections it was loaded
 p.save("my bracket/my bracket.mmto")
 ```
 
-### p.to_script
+### p.save_as_script
 
-`p.to_script(path)`
+`p.save_as_script(path)`
 
 Write a Python script that rebuilds this project with the same calls, next to it. Settings that differ from a new project's are written; the rest are the defaults.
 
@@ -687,7 +687,7 @@ Write a Python script that rebuilds this project with the same calls, next to it
 | `path` | the .py file, in the project's folder | required |
 
 ```python
-p.to_script("my bracket/my bracket_setup.py")
+p.save_as_script("my bracket/my bracket_setup.py")
 ```
 
 ### Project.load

@@ -6,7 +6,7 @@ pack copies an example's STL, database and network into a new folder, leaving th
 it was, and the copy checks and builds exactly as the example does; copy_in keeps a different
 file of the same name and never copies the same file twice; runs are listed newest first and
 only a run's folder can be deleted; a save from a script makes the same folder as the window,
-and leaves the setup script alone. A few seconds.
+and leaves the project script alone. A few seconds.
 
     python tests/test_project_folder.py        (or: python -m pytest tests)
 """
@@ -136,7 +136,7 @@ def test_runs_listed_and_deleted():
 
 
 def _files(folder):
-    """The files in a project folder, relative, without the project file and its setup script."""
+    """The files in a project folder, relative, without the project file and its project script."""
     out = []
     for root, _, names in os.walk(folder):
         out += [os.path.relpath(os.path.join(root, n), folder).replace("\\", "/") for n in names
@@ -169,7 +169,7 @@ def test_a_save_brings_in_the_files_regions_name():
 def test_a_script_save_makes_the_same_folder():
     """Saving from a script copies the part and the database with its network into the project's folder,
     exactly as the window does at File > New and when a database is chosen; a second save copies
-    nothing more; a script's save writes no setup script."""
+    nothing more; a script's save writes no project script."""
     d = _scratch()
     try:
         app, _ = F.create(os.path.join(d, "App"), STL)                       # the window's way
@@ -182,7 +182,7 @@ def test_a_script_save_makes_the_same_folder():
         assert _files(os.path.join(d, "Mine")) == _files(os.path.join(d, "App")) == [
             "materials/BM1_3Mats_2Attr.nt", "materials/BM1_3Mats_2Attr.xlsx", "part/LBracket_BM1.STL"]
         assert (mine.stl, mine.database) == (app.stl, app.database) and F.has_own_folder(mine)
-        assert not os.path.exists(F.setup_script(mine))
+        assert not os.path.exists(F.project_script(mine))
         mine.save(path)
         assert _files(os.path.join(d, "Mine")) == _files(os.path.join(d, "App"))
         assert Project.load(path).to_dict() == mine.to_dict()
@@ -190,13 +190,13 @@ def test_a_script_save_makes_the_same_folder():
         shutil.rmtree(d, ignore_errors=True)
 
 
-def test_setup_script_left_alone_by_a_script_save():
-    """The setup script the window wrote is not rewritten by a save from a script (a script must not
+def test_project_script_left_alone_by_a_script_save():
+    """The project script the window wrote is not rewritten by a save from a script (a script must not
     rewrite itself), and it rebuilds the project it was written from."""
     d = _scratch()
     try:
         p, path = F.create(os.path.join(d, "P"), STL)
-        script = F.write_setup_script(p)
+        script = F.write_project_script(p)
         assert script == os.path.join(d, "P", "P_setup.py") and "from lsr_mmto import Project" in open(script).read()
         written = open(script).read()
         p.n_dof = 4321

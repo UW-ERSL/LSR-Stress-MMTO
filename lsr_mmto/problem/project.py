@@ -76,9 +76,10 @@ SCHEMA_VERSION = 1
 # changes: raise SCHEMA_VERSION and add the function here; old files then still load.
 _UPGRADES = {}
 
-# The steps of a project's setup, each with what makes it begun: an error Project.validate finds names its
-# step (Problem.step), so the window can mark the step it is about; a step not begun is never marked wrong.
-STEPS = {"part": lambda p: True,
+# The steps of a project's setup in the GUI, one per sidebar button, each with what makes it begun: an error
+# Project.validate finds names its step (Problem.gui_step), so the window can mark the step it is about; a step
+# not begun is never marked wrong.
+GUI_STEPS = {"part": lambda p: True,
          "units": lambda p: p.units != "none",
          "materials": lambda p: p.database is not None,
          "supports and loads": lambda p: bool(p.bcs),
@@ -87,15 +88,15 @@ STEPS = {"part": lambda p: True,
 
 
 class Problem(str):
-    """An error Project.validate finds: its text, with .step, the step of STEPS it is about."""
+    """An error Project.validate finds: its text, with .gui_step, the step of GUI_STEPS it is about."""
 
-    step: str
+    gui_step: str
 
     def __new__(cls, step: str, text: str) -> "Problem":
-        if step not in STEPS:
-            raise ValueError(f"{step!r} is not a step of the setup ({', '.join(STEPS)})")
+        if step not in GUI_STEPS:
+            raise ValueError(f"{step!r} is not a step of the setup ({', '.join(GUI_STEPS)})")
         problem = super().__new__(cls, text)
-        problem.step = step
+        problem.gui_step = step
         return problem
 
 
@@ -161,7 +162,7 @@ class Project:
     base_dir: the folder relative paths start from; None is the folder Python runs in
     Example: p = Project("my bracket", stl="data/models/UBracket/UBracket.STL", n_dof=8000)
 
-    Set on a project once it is made (its setup script sets them the same way):
+    Set on a project once it is made (its project script sets them the same way):
 
     comment: a description, text
         Example: p.comment = "U-bracket, fixed on the left"
@@ -439,7 +440,7 @@ class Project:
 
     def validate(self) -> list[Problem]:
         """Problems that can be found without building the mesh; an empty list means none. Each is a
-        Problem: its text, and the step of the setup it is about (Problem.step)."""
+        Problem: its text, and the step of the setup it is about (Problem.gui_step)."""
         errors = []
         if not os.path.isfile(self.stl_path()):
             errors.append(Problem("part", f"STL file {self.stl_path()} does not exist"))
@@ -534,9 +535,10 @@ class Project:
                 errors.append(Problem("formulation", f"{where}: {q.shown} is not a {self.physics} quantity"))
         return errors
 
-    def set_up(self, step: str) -> bool:
-        """True once the step of STEPS is begun (units chosen, a database, a support or load, an objective)."""
-        return STEPS[step](self)
+    def gui_step_started(self, step: str) -> bool:
+        """True once the step of GUI_STEPS is begun (units chosen, a database, a support or load, an
+        objective)."""
+        return GUI_STEPS[step](self)
 
     def needed_properties(self) -> list[str]:
         """The material properties (database columns) this project reads: its physics' PROPERTIES, and those
@@ -979,13 +981,13 @@ class Project:
             json.dump(data, fh, indent=2)
         self.base_dir, self.stl = os.path.dirname(path), data["stl_file_path"]
 
-    def to_script(self, path: str) -> str:
+    def save_as_script(self, path: str) -> str:
         """Write a Python script that rebuilds this project with the same calls, next to it.
 
         Settings that differ from a new project's are written; the rest are the defaults.
 
         path: the .py file, in the project's folder
-        Example: p.to_script("my bracket/my bracket_setup.py")
+        Example: p.save_as_script("my bracket/my bracket_setup.py")
         """
         path = os.path.abspath(path)
         if os.path.normcase(os.path.dirname(path)) != os.path.normcase(self.base_dir):
@@ -1005,7 +1007,7 @@ class Project:
         types = sorted({type(s).__name__.lower() for s in self.selections.values()} |
                        {type(t).__name__.lower() for s in self.selections.values()
                         for t in getattr(s, "parts", ())})
-        lines = [f'"""{self.name}: rebuilds the project {self.name!r}. Written by Project.to_script.',
+        lines = [f'"""{self.name}: rebuilds the project {self.name!r}. Written by Project.save_as_script.',
                  "",
                  "Run it with File > Run script in LSR MMTO, which opens the project it saves, or from any folder",
                  f"with: python {os.path.basename(path)}       (saves {self.name}.mmto next to it)",
@@ -1130,13 +1132,13 @@ def _run_arguments(project: Project, save_dir: str | None = None, verbose: bool 
     them: results/<date and time> in the project's folder (project_folder.new_run_folder)."""
     from lsr_mmto.problem.project_folder import new_run_folder
     project.complete_settings()
-    return dict(s=run_settings(project), to_problem=project,
+    return dict(s=run_settings(project), project=project,
                 save_dir=save_dir if save_dir is not None else new_run_folder(project),
                 verbose=verbose, plot_progress=plot_progress, plot_bcs=plot_bcs, plotter=plotter,
                 progress=progress, should_stop=should_stop, on_network_error=on_network_error)
 
 
-def _prepared(project: Project) -> Project:
+def _ready_to_run(project: Project) -> Project:
     """The project as a run gets it: its settings completed (saying which came from the defaults),
     checked, and copied, so that the run records the project as it is now."""
     filled = project.complete_settings()
@@ -1172,6 +1174,6 @@ def run(project: Project, save_dir: str | None = None, **run_options: Any) -> st
     """
     from lsr_mmto.optimize.optimization_loop import _run_topopt
     from lsr_mmto.problem.project_folder import is_run
-    arguments = _run_arguments(_prepared(project), save_dir, **run_options)
+    arguments = _run_arguments(_ready_to_run(project), save_dir, **run_options)
     _run_topopt(**arguments)
     return arguments["save_dir"] if is_run(arguments["save_dir"]) else None

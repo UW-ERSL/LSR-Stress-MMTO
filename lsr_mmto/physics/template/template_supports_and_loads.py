@@ -2,7 +2,7 @@
 template_supports_and_loads.py
 ==============================
 The job of this file: the kinds of support and load of the physics. A user puts one on a selection of the
-part (in the Supports and loads panel, or in a setup script); this file says what that does to the
+part (in the Supports and loads panel, or in a project script); this file says what that does to the
 equations K u = f. Thermal's thermal_supports_and_loads.py is this file filled in.
 
 Who reads it:

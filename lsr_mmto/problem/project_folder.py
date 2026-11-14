@@ -17,7 +17,7 @@ The window and a script keep a project the same way. File > New makes the folder
 project uses: the part into part/, the database and its network into materials/. Every run,
 from the window or from run(p), puts its results in results/<date and time>.
 
-The window also writes the setup script, <name>_setup.py, at File > New and again at every save,
+The window also writes the project script, <name>_setup.py, at File > New and again at every save,
 so it always matches the project: edit it in any editor and run it with File > Run script. Edits
 made in it are replaced at the next save in the window. A save from a script leaves the setup
 script alone, so a script never rewrites itself.
@@ -27,8 +27,8 @@ script alone, so a script never rewrites itself.
     bring_in_database(project)   the project's database and network copied into its folder
     scale_part(project, factor)  the project's own part, in part/, scaled in place
     convert_database_units(project)  the project's own copy of its database in the project's units
-    setup_script(project)        the path of the project's setup script
-    write_setup_script(project)  the setup script written from the project (the window only)
+    project_script(project)        the path of the project's project script
+    write_project_script(project)  the project script written from the project (the window only)
     new_run_folder(project)      the folder for the next run's results
     runs(project)                the project's runs, newest first
     run_name(folder)             the name the user gave a run, or None
@@ -259,15 +259,15 @@ def convert_database_units(project: "Project", limits: bool = True) \
     return columns, bounds
 
 
-def setup_script(project: "Project") -> str:
+def project_script(project: "Project") -> str:
     """<name>_setup.py beside the project file: the project as a Python script."""
     return os.path.join(project.base_dir, f"{project.name}_setup.py")
 
 
-def write_setup_script(project: "Project") -> str:
-    """The setup script written from the project as it is (Project.to_script). The window calls this
+def write_project_script(project: "Project") -> str:
+    """The project script written from the project as it is (Project.save_as_script). The window calls this
     at File > New and at every save; a script's own save does not. Returns its path."""
-    return project.to_script(setup_script(project))
+    return project.save_as_script(project_script(project))
 
 
 # ---------------------------------------------------------------------- results

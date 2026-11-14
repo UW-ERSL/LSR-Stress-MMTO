@@ -4,7 +4,7 @@ boundary_conditions.py
 The kinds of support and load a project can use, BC_KINDS: one BCKind each, from every physics
 module's SUPPORT_AND_LOAD_KINDS (the structural ones are in
 physics/structural/structural_supports_and_loads.py). A project adds one with
-p.add_bc(kind, on, **values), and its setup script is written the same way.
+p.add_bc(kind, on, **values), and its project script is written the same way.
 """
 from typing import TYPE_CHECKING, Any, Callable, Iterable
 
@@ -80,7 +80,7 @@ class BCKind:
     shown    its name in the GUI and the user guide
     help     what it does, in one plain sentence: the GUI's (i), the user guide, the reference page
     values   its values, each the arguments of a Value (name, kind, label, measures, doc); the GUI's
-             form, the checks and the setup-script line are made from them
+             form, the checks and the project-script line are made from them
     field    the field it acts on (one of its physics' FIELDS); a physics of one field leaves it out
     check    optional: check(bc) -> errors its values' kinds do not catch (a list of short texts)
     picks    optional: {type in the picking window: its values from the window's entry}, for a
@@ -125,7 +125,7 @@ class BCKind:
         return out
 
     def script(self, name: str, bc: dict[str, Any], on: str) -> str:
-        """The line of a setup script that adds this support or load. on is written as given: the caller
+        """The line of a project script that adds this support or load. on is written as given: the caller
         passes the selection's name already quoted."""
         values = "".join(f", {v.name}={bc[v.name]!r}" for v in self.values if v.name in bc)
         return f"p.add_bc({name!r}, {on}{values})"

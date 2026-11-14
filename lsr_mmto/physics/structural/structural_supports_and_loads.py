@@ -11,7 +11,7 @@ The structural supports and loads, each acting on a named selection, evaluated o
                    element). "bbox" is approximate; it is there for the airplane bracket.
 Each kind is given as the arguments of a BCKind (problem/boundary_conditions.py), which turns
 them into the kinds a project can use: what it does (apply), its name and help in the GUI, and its
-values, from which the form, the checks and the setup-script line are made. Every kind here acts on
+values, from which the form, the checks and the project-script line are made. Every kind here acts on
 the displacement u, the physics' one field. picks: how a support or a load picked on the part in the
 window (its type there) becomes this kind. A script adds one with p.add_bc, e.g.
 p.add_bc("fixed", "clamp", dofs="xyz") or p.add_bc("force", "corner", total=[0, -4, 0]).

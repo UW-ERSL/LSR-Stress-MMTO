@@ -52,7 +52,7 @@ def test_every_field_says_how_it_is_given():
 
 
 def test_every_selection_type_can_be_imported_from_lsr_mmto():
-    """A setup script (Project.to_script) imports each selection type it uses from lsr_mmto, by its class name
+    """A project script (Project.save_as_script) imports each selection type it uses from lsr_mmto, by its class name
     in lower case, and lsr_mmto/__init__.py lists them by hand: a type missing from that list would break the
     script of every project that uses it."""
     import lsr_mmto

@@ -107,8 +107,8 @@ def test_validate():
 
 
 def test_every_error_names_its_step():
-    """Every error validate can give carries the step of the setup it is about, as data (Problem.step): each
-    place in validate, _missing_columns and vae_check that adds an error makes a Problem with a step of STEPS
+    """Every error validate can give carries the step of the setup it is about, as data (Problem.gui_step): each
+    place in validate, _missing_columns and vae_check that adds an error makes a Problem with a step of GUI_STEPS
     (read from the code, so a new error cannot leave it out), and the errors of broken projects all have one."""
     import ast
     import inspect
@@ -130,7 +130,7 @@ def test_every_error_names_its_step():
             text = ast.unparse(value)
             if isinstance(value, ast.Call) and getattr(value.func, "id", None) == "Problem":
                 step = value.args[0]
-                assert isinstance(step, ast.Constant) and step.value in P.STEPS, text
+                assert isinstance(step, ast.Constant) and step.value in P.GUI_STEPS, text
             else:                                           # the errors of the other two, which make Problems
                 assert text in ("self._missing_columns(database_attributes(xlsx))", "self.vae_check()[0]"), text
     p = coded_ubracket()
@@ -145,8 +145,8 @@ def test_every_error_names_its_step():
     errors = p.validate() + empty.validate()
     assert len(errors) >= 12, errors
     for e in errors:
-        assert isinstance(e, P.Problem) and e.step in P.STEPS, e
-    steps = {e.step for e in errors}
+        assert isinstance(e, P.Problem) and e.gui_step in P.GUI_STEPS, e
+    steps = {e.gui_step for e in errors}
     assert steps >= {"part", "units", "supports and loads", "materials", "formulation", "settings"}, steps
 
 
@@ -235,7 +235,7 @@ def test_script_round_trip():
         p = Project.load(path)
         script = os.path.join(os.path.dirname(path), "_round_trip_test.py")
         try:
-            p.to_script(script)
+            p.save_as_script(script)
             code = open(script).read()
             assert code.rstrip().splitlines()[-1].startswith("p.save(")
             body = "\n".join(code.rstrip().splitlines()[:-1])           # everything but the save
@@ -251,13 +251,13 @@ def test_script_round_trip():
                 os.remove(script)
 
 
-def test_setup_script_says_where_each_block_is_explained():
-    """Above each block of calls in a setup script, a comment names where those calls are explained."""
+def test_project_script_says_where_each_block_is_explained():
+    """Above each block of calls in a project script, a comment names where those calls are explained."""
     p = Project.load(os.path.join(ROOT, "projects", "U-bracket.mmto"))
     p.keep_solid(S.face("ymin"))
     with tempfile.TemporaryDirectory() as d:
         p.save(os.path.join(d, "u.mmto"))
-        lines = open(p.to_script(os.path.join(d, "u_setup.py"))).read().splitlines()
+        lines = open(p.save_as_script(os.path.join(d, "u_setup.py"))).read().splitlines()
     for block in ("Part and mesh", "Selections", "Supports and loads", "Keep solid", "Materials",
                   "Objective and constraints", "Settings"):
         (i,) = [i for i, line in enumerate(lines) if line.startswith(f"# {block}: ")]
@@ -289,10 +289,10 @@ def test_window_picks_become_the_project():
         p.save(os.path.join(d, "u.mmto"))
         q = Project.load(os.path.join(d, "u.mmto"))
         assert q.to_dict() == p.to_dict()
-        text = open(q.to_script(os.path.join(d, "u.py"))).read()
+        text = open(q.save_as_script(os.path.join(d, "u.py"))).read()
         assert "gui_support2" in text and "halfspaces(" in text
     try:
-        p.to_script(os.path.join(ROOT, "elsewhere.py"))
+        p.save_as_script(os.path.join(ROOT, "elsewhere.py"))
     except ValueError as e:
         assert "next to the project" in str(e)
     else:
@@ -380,8 +380,8 @@ def test_bc_kinds():
 _SAMPLE = {"dofs": "xz", "number": 2.5, "vector": [0.0, -1.0, 0.0], "area": 3.0}
 
 
-def test_every_kind_round_trips_through_a_setup_script():
-    """Each kind of support and load, added with add_bc, written into a setup script and the script run:
+def test_every_kind_round_trips_through_a_project_script():
+    """Each kind of support and load, added with add_bc, written into a project script and the script run:
     the same support or load. A wrong value is refused by add_bc as the project's check refuses it."""
     from lsr_mmto.problem.boundary_conditions import BC_KINDS
     for name, kind in BC_KINDS.items():

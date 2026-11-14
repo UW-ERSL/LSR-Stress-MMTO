@@ -3,7 +3,7 @@ make_reference.py
 =================
 Writes docs/reference.md from the code: the project file's sections, the
 selection types, the boundary-condition kinds, the quantities, the settings, and the
-Python calls a setup script uses.
+Python calls a project script uses.
 
     python docs/make_reference.py        (from the repository folder)
 
@@ -44,7 +44,7 @@ SECTIONS = [
 PROJECT_CALLS = ("Project", "units", "comment", "physics", "add_selection", "mesh", "evaluate", "add_bc",
                  "keep_solid", "keep_support_elements", "database", "network_error", "vae_check", "objective",
                  "constraint", "settings",
-                 "save", "to_script", "load")                  # Project's calls, in the order a script uses them
+                 "save", "save_as_script", "load")                  # Project's calls, in the order a script uses them
 ARGUMENT = re.compile(r"^(\w+)((?:\[\w+\]|\(\w+\))*): (.*)$")       # name: text, or settings[section][name]: text
 
 
@@ -292,7 +292,7 @@ def python_section():
     out = ["", "## Python", "",
            "In the examples, `p` is your project: `p = Project(...)` for a new one, or "
            "`p = Project.load('my project.mmto')` for a saved one.", "",
-           "Every call a setup script uses, with its arguments, read from the code's own docstrings; "
+           "Every call a project script uses, with its arguments, read from the code's own docstrings; "
            "`Python_walkthrough.ipynb` uses them on one whole project. Model units "
            "are the project's units (`p.units`). A length is a number in model units, or text in numbers, pi "
            "and h, the largest element size, such as `\"1.5h\"` or `\"5.64 + 1h\"`. A selection is made "

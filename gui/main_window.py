@@ -8,7 +8,7 @@ first save has copied into its folder what it uses).
 
 A project lives in a folder of its own (project_folder.py): File > New makes the folder and
 copies the STL into it, Save As copies everything into a new folder, and a database or an STL
-chosen from elsewhere is copied in. Every save also writes the project's setup script,
+chosen from elsewhere is copied in. Every save also writes the project's project script,
 <name>_setup.py, again, so it always matches the project. The example projects in projects/ open as templates: Save
 asks for a folder of your own, so the examples never change.
 
@@ -64,7 +64,7 @@ STYLE = os.path.join(ASSETS, "app_style.qss")           # the window's colours a
 ICONS = os.path.join(ASSETS, "icons")                    # the buttons' pictures
 SIDEBAR_WORDS = {"Run": "Current run"}                   # a sidebar button's text, where not its name
 SIDEBAR_STEPS = {"Units": "units", "Materials": "materials", "Supports and loads": "supports and loads",
-                 "Formulation": "formulation"}           # the buttons marked by their step's check (Project.STEPS)
+                 "Formulation": "formulation"}           # the buttons marked by their step's check (Project.GUI_STEPS)
 SIDEBAR_ICONS = {"Units": "units", "Materials": "materials", "Supports and loads": "supports",
                  "Formulation": "formulation", "Settings": "settings", "Run": "run", "Results": "results",
                  "Display Options": "display"}
@@ -891,12 +891,12 @@ class MMTOWindow(MainWindow):
         if errors is None and getattr(self, "_marks_later", False):
             return
         p = getattr(self, "project", None)                          # (PyTO-AD may ask before there is one)
-        wrong = {e.step for e in (p.validate() if errors is None else errors)} if p is not None else set()
+        wrong = {e.gui_step for e in (p.validate() if errors is None else errors)} if p is not None else set()
         for name, step in SIDEBAR_STEPS.items():
             btn = getattr(self, "sidebar_buttons", {}).get(name)
             if btn is None:
                 continue
-            mark = "plain" if p is None or not p.set_up(step) else "error" if step in wrong else "check"
+            mark = "plain" if p is None or not p.gui_step_started(step) else "error" if step in wrong else "check"
             btn.setIcon(icon(SIDEBAR_ICONS[name] if mark == "plain" else mark))
             btn.setProperty("mark", mark)
 
@@ -1725,7 +1725,7 @@ class MMTOWindow(MainWindow):
             physics = None
         try:
             p, path = project_folder.create(folder, stl, physics=physics)
-            project_folder.write_setup_script(p)
+            project_folder.write_project_script(p)
         except (OSError, ValueError) as e:
             QtWidgets.QMessageBox.warning(self, "New project", f"The project was not made: {e}")
             return False
@@ -1803,7 +1803,7 @@ class MMTOWindow(MainWindow):
 
     # ------------------------------------------------------------------ the project as a Python script
     def export_script(self):
-        """The project's setup script, <name>_setup.py in its folder (project_folder.setup_script), written
+        """The project's project script, <name>_setup.py in its folder (project_folder.project_script), written
         again from the project after a save, so that it matches the file. Every save writes it too; this
         says where it is. Edited in any editor, it comes back with Run script."""
         from lsr_mmto.problem import project_folder
@@ -1816,7 +1816,7 @@ class MMTOWindow(MainWindow):
             if answer != QtWidgets.QMessageBox.Save or not self.save_project():
                 return None
         try:
-            path = project_folder.write_setup_script(self.project)
+            path = project_folder.write_project_script(self.project)
         except (OSError, ValueError) as e:
             QtWidgets.QMessageBox.warning(self, "Export as script", f"Not written: {e}")
             return None
@@ -1889,8 +1889,8 @@ class MMTOWindow(MainWindow):
             self.message_text.append(f"{name} ran: {newest} opened.")
 
     def _write(self, path):
-        """The project saved to path, and its setup script written again to match (the window's saves only)."""
-        from lsr_mmto.problem.project_folder import write_setup_script
+        """The project saved to path, and its project script written again to match (the window's saves only)."""
+        from lsr_mmto.problem.project_folder import write_project_script
         try:
             self.project.save(path)
         except Exception as e:                                      # noqa: BLE001
@@ -1899,9 +1899,9 @@ class MMTOWindow(MainWindow):
         self.path, self._saved = os.path.abspath(path), self._state()
         self.message_text.append(f"Saved {self.path}")
         try:
-            write_setup_script(self.project)
+            write_project_script(self.project)
         except (OSError, ValueError) as e:
-            self.message_text.append(f"The setup script was not written: {e}")
+            self.message_text.append(f"The project script was not written: {e}")
         self._refresh_title()
         return True
 
