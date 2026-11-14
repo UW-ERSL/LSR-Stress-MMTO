@@ -63,7 +63,7 @@ the code takes from it. `MODULE_ENTRIES` in `physics/available_physics.py` lists
 | `NAME`, `DOC` | the name a project file uses, and what the physics is |
 | `FIELDS` | each field it solves for and its unknowns per node (structural: `{"u": 3}`) |
 | `PROPERTIES` | the database columns every problem of it reads |
-| `make_solver` | its finite element solver, from the mesh and one boundary condition per field |
+| `make_solver` | its finite element solver, from the mesh and one boundary condition per field; the core also reads its `.bc`, `.mesh` and `.plot_mesh` |
 | `analyse` | one iteration's solve, inside the torch tree |
 | `SUPPORT_AND_LOAD_KINDS` | its kinds of support and load, each naming its field |
 | `NEEDS` | what every project of it must have: a support, and a load if a problem without one has no meaning |
@@ -73,7 +73,7 @@ the code takes from it. `MODULE_ENTRIES` in `physics/available_physics.py` lists
 | `PENALTIES` | the terms it adds to the objective besides those every physics has (may be empty) |
 | `SETTINGS` | its own settings |
 | `RESULT_FIELDS` | the results a run saves: their names, views and units, and where each lives (element or node) and its shape (scalar or vector) |
-| `iteration_diagnostics` | what each iteration records and prints |
+| `iteration_diagnostics` | what each iteration records and prints, from the model after its solve (read with `.detach()` only) |
 | `final_summary` | the final check's numbers, printed; it returns the values of `RESULT_FIELDS` for the last design |
 
 The core's lists are made from the modules: `QUANTITIES` (`formulation/quantities.py`),

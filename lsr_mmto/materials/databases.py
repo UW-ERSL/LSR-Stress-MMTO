@@ -81,8 +81,9 @@ UNIT_SYSTEMS = {
 
 def _add_unit_kinds(module: "ModuleType") -> None:
     """A physics' own kinds of quantity (its UNIT_KINDS: {kind: {"units": {unit: value in SI}, and the
-    kind's unit in each unit system}}) added to UNITS and UNIT_SYSTEMS. A kind another physics gives
-    too must be given the same way."""
+    kind's unit in each unit system}}) added to UNITS and UNIT_SYSTEMS. A kind another physics (or the core)
+    gives too must be given the same way: the same units, and the same unit in each unit system, so no physics
+    changes another's units."""
     for kind, spec in module.UNIT_KINDS.items():
         units = dict(spec["units"])
         if kind in UNITS and UNITS[kind] != units:
@@ -91,6 +92,10 @@ def _add_unit_kinds(module: "ModuleType") -> None:
             if spec[system] not in units:
                 raise ValueError(f"physics {module.NAME}: {kind!r} in {system} is {spec[system]!r}, "
                                  f"not one of its units ({', '.join(units)})")
+            given = UNIT_SYSTEMS[system].get(kind)
+            if given is not None and given != spec[system]:
+                raise ValueError(f"physics {module.NAME}: {kind!r} in {system} is {spec[system]!r}, but another "
+                                 f"physics gives it as {given!r}")
         UNITS[kind] = units
         for system, table in UNIT_SYSTEMS.items():
             table[kind] = spec[system]

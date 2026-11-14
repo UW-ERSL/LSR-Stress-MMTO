@@ -6,10 +6,9 @@ one entry each, as physics/available_physics.py lists them (MODULE_ENTRIES). Ste
 with a different material in each element: one temperature per node, each element's conductivity
 from its material.
 
-It is not in the list of physics (physics/available_physics.py), so the GUI does not offer it yet;
-tests/test_thermal_physics.py registers it and runs it, so it keeps working as the code changes. It is
-also the worked example of a physics: physics/template/ is the blank form, and this folder is the same
-form filled in.
+It is in the list of physics (physics/available_physics.py), so the GUI offers it;
+tests/test_thermal_physics.py runs it, so it keeps working as the code changes. It is also the worked
+example of a physics: physics/template/ is the blank form, and this folder is the same form filled in.
 
     thermal_physics.py              the solver, one iteration's solve
     thermal_supports_and_loads.py   fixed temperature, heat source

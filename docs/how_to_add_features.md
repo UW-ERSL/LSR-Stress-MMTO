@@ -5,7 +5,10 @@ code is, and `docs/code_map.md` leads from what you want to add to the section o
 
     python docs/make_reference.py
     python -m gui.user_guide_window --write
-    python -m pytest tests -q
+    python -m pytest tests -q -n 4
+
+`-n 4` spreads the tests over 4 processes at once. Each process needs up to about 2.5 GB of memory: on a
+computer with less than 16 GB, use `-n 2`.
 
 The first rewrites `docs/reference.md`, the second the lists in `docs/user_guide.md`
 (the settings, quantities, kinds of support and load, selection types and material attributes, as
@@ -246,10 +249,9 @@ A physics is a folder in `lsr_mmto/physics/`, e.g. `thermoelastic/`, with five f
 
 plus one line in `MODULES` in `lsr_mmto/physics/available_physics.py`. The entries are described in
 `MODULE_ENTRIES` there; `thermal/thermal_module.py` and `structural/structural_module.py` are complete
-examples, and `tests/test_thermal_physics.py` registers and runs thermal (a physics not yet in
-`MODULES`): copy it for yours. `tests/test_physics_folders.py` checks that every physics keeps the form's
-files and places. A project names its physics with
-`"physics"` in its file (`p.physics` in code); an unknown name is an error before the run. The material
+examples, and `tests/test_thermal_physics.py` tests thermal: copy it for yours (its `registered` tests a
+physics before its line is in `MODULES`). `tests/test_physics_folders.py` checks that every physics keeps
+the form's files and places. A project names its physics with `"physics"` in its file (`p.physics` in code); an unknown name is an error before the run. The material
 attributes it reads that the core does not have (Density and Cost) are its own, in `NEW_PROPERTIES`
 (see "A material attribute"). What else to run: both generators above, since its settings,
 quantities, kinds and attributes join their lists.
@@ -270,6 +272,16 @@ text with `{kind}` for a unit of the run's unit system, e.g. `"{stress}"`, or `"
 Each top-level function in a physics' folder has a marker on the line above it: `# ESSENTIAL:` for a
 required entry or the function one names, `# OPTIONAL:` for an optional entry, `# HELPER:` for one used
 only inside the folder, naming what uses it. The front page lists the helpers behind each entry.
+
+The solver `make_solver` returns is the one the core keeps for the whole run. Besides what `analyse` uses,
+the core reads three things from it: its boundary condition `.bc` (`.bc.num_dofs`, the count of unknowns
+it prints), its `.mesh` (the element size and the number of nodes) and its `.plot_mesh` (the window that
+shows the supports and loads before a run). PyTO-AD's solvers have all three. A physics of more than one
+field gives them for one field: thermoelastic gives the displacement's.
+
+`iteration_diagnostics` gets the model `m` after the iteration's solve: the solver as `m.fe`, what
+`analyse` set on it (`m.u`, `m.T`), and the run's settings as `m.settings`. It reads them with
+`.detach()` only: they are in the torch tree, and a change to one would change the gradient.
 
 The results a run saves are the entries of `RESULT_FIELDS`, each `dict(view, title, measures, where,
 shape)`:
@@ -299,6 +311,29 @@ then `analyse` and the quantities on the whole part solid in one database materi
 way with a run's design as built: each solid element in its nearest database material. Its model has no
 latent points, so a quantity that reads
 `m.z` has no value there, and the Summary and Compare leave it out; everything else a physics reads is as in a run.
+
+### A physics with more than one field
+
+Thermoelastic solves two fields, the temperature `T` and the displacement `u`, and its folder is the
+example. Five things differ from a physics of one field:
+
+- Its solver builds the solvers of its fields in order. Each PyTO-AD solver, when it is made, points the
+  shared mesh's dof table (`mesh.edofMat`) at its own, and the core reads the mesh afterwards, so the field
+  whose `.bc` and `.mesh` the core reads is built last. Thermoelastic builds thermal's solver first, then
+  structural's (`ThermoelasticHexFEA` in `thermoelastic_physics.py`).
+- Every kind of support and load names its field, `field="u"` or `field="T"`. A physics of one field may
+  leave it out; one of two fields may not (`problem/boundary_conditions.py` refuses it). A physics can
+  reuse another's kinds by giving the same entries, so each kind is one, shared by both.
+- `NEEDS` checks roles (a support, a load), not fields: thermoelastic's `("support",)` is met by a fixed
+  temperature alone. A check for each field goes in the physics' own `supports_and_loads_error`;
+  thermoelastic's calls thermal's and structural's, then makes sure the part is held against all six
+  rigid motions.
+- A setting belongs to one physics, and the GUI shows only the settings of the project's physics. A
+  physics that needs a setting another one has gives its own, under its own key: thermoelastic's
+  Poisson's ratio settings start with `te_`.
+- A test can use another physics' parts: `registered` (`tests/test_thermal_physics.py`) adds a physics to
+  the core's lists for one test, as its line in `MODULES` would, and takes it out after; for a physics
+  already in `MODULES` it does nothing.
 
 ## A material database
 

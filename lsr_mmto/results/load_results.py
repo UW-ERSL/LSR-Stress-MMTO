@@ -250,15 +250,6 @@ class Run:
         return quantity_label(spec[0], spec[1] if len(spec) > 1 else None, self.material_labels)
 
     @property
-    def max_ff(self) -> float:
-        """Max failure factor as tracked by the solver, on the relaxed stress.
-
-        Not max(von_mises / Y), which uses the raw stress and gives a different
-        number.
-        """
-        return self.last("max_failure_factor")
-
-    @property
     def grey(self) -> float:
         """The share of grey elements (0.1 < x_phys < 0.9) at the last iteration."""
         return self.last("grey")

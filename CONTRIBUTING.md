@@ -67,7 +67,7 @@ six minutes. Each process needs up to about 2.5 GB of memory: on a computer with
 | `lsr_mmto/problem/` (the project, selections, mesh, supports and loads, settings, the project folder) | `test_project.py`, `test_selections.py`, `test_mesh.py`, `test_project_folder.py` |
 | `lsr_mmto/materials/` (databases, the material network) | `test_databases.py` |
 | `lsr_mmto/formulation/` (quantities, the formula text) | `test_extending.py`, `test_project.py`, `test_ad_quantities.py` |
-| `lsr_mmto/physics/` | `test_thermal_physics.py`, `test_physics_folders.py`, `test_thermal_walk_through.py`, `test_final_check.py`, `test_solid_part_analysis.py` |
+| `lsr_mmto/physics/` | `test_thermal_physics.py`, `test_thermoelastic_physics.py`, `test_physics_folders.py`, `test_thermal_walk_through.py`, `test_final_check.py`, `test_solid_part_analysis.py` |
 | `lsr_mmto/optimize/`, `lsr_mmto/design/`, `lsr_mmto/elements/` (the run itself) | `test_run_project.py`, `test_gradcheck.py`, `test_regression.py`, `test_solid_part_analysis.py` |
 | `lsr_mmto/results/` (reading runs back, tables, figures, STL export) | `test_stl_export.py`, `test_project_folder.py`, `test_solid_part_analysis.py` |
 | `gui/` | `test_gui.py`, `test_gui_look.py`, `test_user_guide.py`, `test_thermal_walk_through.py` |
@@ -94,11 +94,10 @@ Run every test once before committing. To see which lines of the code no test ru
   class lists its fields and their types at the top. Names needed only for hints are imported under
   `if TYPE_CHECKING:`.
 - A test of something every physics has (a run goes through, its gradients, a run saved and read back,
-  the final check) runs for every physics: `@pytest.mark.parametrize` over `available_physics.MODULES`
-  and thermal (`registered` in `tests/test_thermal_physics.py`). A new physics is then tested by
-  the tests already there, and adds tests only for what is its own: its solver against a case with a known
-  answer, its quantities, its supports and loads. A test written for one physics only becomes such a loop
-  the next time it is changed.
+  the final check) runs for every physics: `@pytest.mark.parametrize` over `available_physics.MODULES`.
+  A new physics is then tested by the tests already there, and adds tests only for what is its own: its
+  solver against a case with a known answer, its quantities, its supports and loads. A test written for
+  one physics only becomes such a loop the next time it is changed.
 - A change that moves code or renames things changes no number: the first iterations of the shipped
   projects give the same objective and constraints, to 1 part in a million, before and after
   (`tests/test_regression.py` checks it). Later iterations drift by tiny amounts from one run to the
@@ -106,6 +105,13 @@ Run every test once before committing. To see which lines of the code no test ru
   A change meant to change results (a new formulation, a new PyTO-AD pin) fails that test: store the
   new values on purpose with `python tests/test_regression.py --update`, and say why in the commit
   message.
+- A name a test makes up (a unit kind, a property, a setting, a penalty) starts with `test_`, so it never
+  clashes with a real one a physics adds later: a test's made-up unit kind `heat` clashed with thermal's
+  own once thermal was in the list of physics.
+- Registering a physics (its line in `MODULES`) adds its settings, quantities, kinds of support and load
+  and material properties to every list the app makes: regenerate the reference and the user guide's lists
+  (the two commands in `docs/how_to_add_features.md`), and expect a test that types such a list out by hand
+  to fail. Such a test should work its list out from the physics instead.
 - Text the GUI shows is written for someone who has never seen the code: plain words, the labels
   the form itself shows, and the details behind an (i).
 - After a change to a list (settings, quantities, supports and loads, selection types, material

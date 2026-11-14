@@ -3,8 +3,7 @@ test_thermoelastic_physics.py
 =============================
 The thermoelastic physics (lsr_mmto/physics/thermoelastic/) gives the right answers: a bar heated evenly
 and held only against rigid motion grows freely by its thermal strain. Its solver is checked on its own
-(make_solver, then analyse), so no material database is needed. Registered for each test as its line in
-available_physics.MODULES would register it (registered, from tests/test_thermal_physics.py).
+(make_solver, then analyse), so no material database is needed.
 
     python -m pytest tests/test_thermoelastic_physics.py
 """
@@ -20,7 +19,6 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from lsr_mmto.physics.thermoelastic import thermoelastic_module as THERMOELASTIC  # noqa: E402
-from test_thermal_physics import registered  # noqa: E402
 
 BAR = os.path.join(ROOT, "data", "models", "RectangularBeam")
 
@@ -65,14 +63,13 @@ def test_a_bar_heated_evenly_grows_freely():
     give this linear field exactly. A bar that shrinks has H's sign wrong; one that grows (1 - 2 nu) times
     too little is missing the 1 / (1 - 2 nu)."""
     T_ref, dT, alpha, nu = 293.15, 100.0, 1e-5, 0.3
-    with registered(THERMOELASTIC):
-        p = _bar("free expansion")
-        p.bcs += [{"kind": "fixed_temperature", "on": "xmin", "value": T_ref + dT},
-                  {"kind": "fixed_temperature", "on": "xmax", "value": T_ref + dT}]
-        p.add_bc("fixed", "xmin", dofs="x")
-        p.add_bc("fixed", "ymin", dofs="y")
-        p.add_bc("fixed", "zmin", dofs="z")
-        mesh, m = _solved(p, E=200.0, nu=nu, alpha=alpha, conductivity=3.0, T_ref=T_ref)
+    p = _bar("free expansion")
+    p.bcs += [{"kind": "fixed_temperature", "on": "xmin", "value": T_ref + dT},
+              {"kind": "fixed_temperature", "on": "xmax", "value": T_ref + dT}]
+    p.add_bc("fixed", "xmin", dofs="x")
+    p.add_bc("fixed", "ymin", dofs="y")
+    p.add_bc("fixed", "zmin", dofs="z")
+    mesh, m = _solved(p, E=200.0, nu=nu, alpha=alpha, conductivity=3.0, T_ref=T_ref)
     T = m.T.detach().numpy()
     assert np.max(np.abs(T - (T_ref + dT))) < 1e-8, "the temperature is not even"
     xyz = np.asarray(mesh.node_xyz, dtype=float)
@@ -88,22 +85,21 @@ def test_no_heating_gives_the_structural_compliance():
     from lsr_mmto.physics.structural import structural_module as STRUCTURAL
     from lsr_mmto.pyto_ad_imports import linear_solvers, mat_lib
     T_ref, E, nu = 293.15, 200.0, 0.3
-    with registered(THERMOELASTIC):
-        p = _bar("no heating")
-        p.bcs += [{"kind": "fixed_temperature", "on": "xmin", "value": T_ref},
-                  {"kind": "fixed_temperature", "on": "xmax", "value": T_ref}]
-        p.add_bc("fixed", "xmin", dofs="xyz")
-        p.add_bc("force", "xmax", total=[0.0, -1.0, 0.0])
-        mesh, m = _solved(p, E=E, nu=nu, alpha=1e-5, conductivity=3.0, T_ref=T_ref)
-        bcs, _ = p.supports_and_loads(mesh)                     # its own copy, for the structural solver
-        mat_prop = mat_lib.create_material_with_defaults(
-            "CustomMaterial", youngs_modulus=1.0, poissons_ratio=0.3, mass_density=1.0, yield_strength=1.0)
-        n = mesh.num_elems
-        s = SimpleNamespace(fe=STRUCTURAL.make_solver(mesh, mat_prop, {"u": bcs["u"]}, linear_solvers.Solvers.PARDISO,
-                                                      None, None),
-                            x_phys=m.x_phys, props={"Youngs_Modulus": torch.full((n,), E, dtype=torch.float64)},
-                            settings=SimpleNamespace(use_constant_poissons_ratio=True, constant_poissons_ratio=nu))
-        STRUCTURAL.analyse(s)
+    p = _bar("no heating")
+    p.bcs += [{"kind": "fixed_temperature", "on": "xmin", "value": T_ref},
+              {"kind": "fixed_temperature", "on": "xmax", "value": T_ref}]
+    p.add_bc("fixed", "xmin", dofs="xyz")
+    p.add_bc("force", "xmax", total=[0.0, -1.0, 0.0])
+    mesh, m = _solved(p, E=E, nu=nu, alpha=1e-5, conductivity=3.0, T_ref=T_ref)
+    bcs, _ = p.supports_and_loads(mesh)                     # its own copy, for the structural solver
+    mat_prop = mat_lib.create_material_with_defaults(
+        "CustomMaterial", youngs_modulus=1.0, poissons_ratio=0.3, mass_density=1.0, yield_strength=1.0)
+    n = mesh.num_elems
+    s = SimpleNamespace(fe=STRUCTURAL.make_solver(mesh, mat_prop, {"u": bcs["u"]}, linear_solvers.Solvers.PARDISO,
+                                                  None, None),
+                        x_phys=m.x_phys, props={"Youngs_Modulus": torch.full((n,), E, dtype=torch.float64)},
+                        settings=SimpleNamespace(use_constant_poissons_ratio=True, constant_poissons_ratio=nu))
+    STRUCTURAL.analyse(s)
     f_th = m.f_th.detach().numpy()
     f = s.fe.total_force.detach().numpy()
     assert np.max(np.abs(f_th)) < 1e-10 * np.max(np.abs(f)), "a thermal force with no heating"
@@ -119,40 +115,106 @@ def test_gradients_agree_with_finite_differences():
     gradient is large, agrees with central differences: the whole chain T -> f_th -> u, the thermal solve
     included. The expansion coefficient and the conductivity reach J only through the heating."""
     T_ref, E, nu = 0, 200.0, 0.3
-    with registered(THERMOELASTIC):
-        p = _bar("gradients")
+    p = _bar("gradients")
+    p.bcs += [{"kind": "fixed_temperature", "on": "xmin", "value": T_ref},
+              {"kind": "heat_source", "on": "xmax", "total": 1.0}]
+    p.add_bc("fixed", "xmin", dofs="xyz")
+    _, m = _solved(p, E=E, nu=nu, alpha=1e-5, conductivity=3.0, T_ref=T_ref)
+    n = len(m.x_phys)
+    rng = np.random.default_rng(0)
+    design = {"x_phys": rng.uniform(0.3, 1.0, n), "Thermal_Expansion": 1e-5 * rng.uniform(0.5, 1.5, n),
+              "Conductivity": 3.0 * rng.uniform(0.5, 1.5, n)}
+
+    def J(values):
+        """J at the design values, with the solver of m: a fresh model through analyse."""
+        t = {k: torch.tensor(v, dtype=torch.float64, requires_grad=True) for k, v in values.items()}
+        model = SimpleNamespace(fe=m.fe, x_phys=t["x_phys"], settings=m.settings,
+                                props={"Youngs_Modulus": torch.full((n,), E, dtype=torch.float64),
+                                       "Thermal_Expansion": t["Thermal_Expansion"],
+                                       "Conductivity": t["Conductivity"]})
+        THERMOELASTIC.analyse(model)
+        return torch.dot(model.fe.total_force, model.u), t
+
+    value, leaves = J(design)
+    value.backward()
+    for name, leaf in leaves.items():
+        g = leaf.grad.numpy()
+        assert np.any(g != 0), f"no gradient for {name}"
+        for i in rng.choice(np.argsort(-np.abs(g))[:50], 3, replace=False):
+            best = np.inf
+            for step in (1e-4, 1e-5, 1e-6):                     # relative to the value
+                h = step * design[name][i]
+                plus, minus = {k: v.copy() for k, v in design.items()}, {k: v.copy() for k, v in design.items()}
+                plus[name][i] += h
+                minus[name][i] -= h
+                with torch.no_grad():
+                    fd = (float(J(plus)[0]) - float(J(minus)[0])) / (2 * h)
+                best = min(best, abs(fd - g[i]) / abs(g[i]))
+            assert best < 1e-5, f"{name}[{i}]: relative difference {best:.1e}"
+
+def test_a_large_problem_uses_dpcg_and_gives_the_direct_answer():
+    """Above the direct solver's limit the core uses DPCG for a physics with a deflation space; thermoelastic
+    takes structural's, since its displacement's system is structural's. The temperature's system has one
+    unknown per node, which that space does not fit, so its solve runs plain PCG on the same dsolver. The bar,
+    heated and pulled down, solved this way (the limit passed by asking for more unknowns than it) gives the
+    direct solver's temperature and displacement."""
+    from lsr_mmto.optimize.optimization_loop import problem_solver
+    from lsr_mmto.pyto_ad_imports import DIRECT_SOLVER_DOF_CUTOFF, linear_solvers, mat_lib
+    T_ref, E, nu = 293.15, 200.0, 0.3
+    p = _bar("large")
+    p.bcs += [{"kind": "fixed_temperature", "on": "xmin", "value": T_ref},
+              {"kind": "heat_source", "on": "xmax", "total": 1.0}]
+    p.add_bc("fixed", "xmin", dofs="xyz")
+    p.add_bc("force", "xmax", total=[0.0, -1.0, 0.0])
+    p.complete_settings()
+    mesh = p.mesh()
+    mat_prop = mat_lib.create_material_with_defaults(          # placeholder, as Project.build gives it
+        "CustomMaterial", youngs_modulus=1.0, poissons_ratio=0.3, mass_density=1.0, yield_strength=1.0)
+    n = mesh.num_elems
+    each = lambda v: torch.full((n,), v, dtype=torch.float64)  # noqa: E731
+    answers = {}
+    for name, n_dof in (("PARDISO", 1), ("DPCG", DIRECT_SOLVER_DOF_CUTOFF + 1)):
+        bcs, _ = p.supports_and_loads(mesh)
+        fe = problem_solver(THERMOELASTIC, mesh, mat_prop, bcs, None, SimpleNamespace(nDOFDesired=n_dof))
+        assert fe.solver == getattr(linear_solvers.Solvers, name), (name, fe.solver)
+        m = SimpleNamespace(fe=fe, x_phys=each(1.0),
+                            props={"Youngs_Modulus": each(E), "Conductivity": each(3.0),
+                                   "Thermal_Expansion": each(1e-5)},
+                            settings=SimpleNamespace(reference_temperature=T_ref, te_use_constant_poissons_ratio=True,
+                                                     te_constant_poissons_ratio=nu))
+        THERMOELASTIC.analyse(m)
+        answers[name] = (m.T.detach().numpy(), m.u.detach().numpy())
+    for what, direct, iterative in zip(("temperature", "displacement"), answers["PARDISO"], answers["DPCG"]):
+        error = np.max(np.abs(iterative - direct)) / np.max(np.abs(direct))
+        assert error < 1e-6, f"{what}: largest difference {error:.1e} of its largest value"
+
+
+def test_a_part_left_free_in_a_rigid_motion_is_refused():
+    """The thermal force pushes in every direction, so the part must be held against all six rigid motions,
+    whatever the applied loads: one left free makes the displacement's matrix singular, and the direct solver
+    then gives a displacement with an arbitrary drift in it. Held in x on xmin and y on ymin only, the bar can
+    still move in z; held in all directions along one edge only, it can still rotate about that edge. Each
+    refusal names the motion left free. Held as in the free-expansion test (x, y and z on three faces), it is
+    held against all six, though it can still grow."""
+    from lsr_mmto.problem import selections as S
+    T_ref = 293.15
+    def error(p):
         p.bcs += [{"kind": "fixed_temperature", "on": "xmin", "value": T_ref},
                   {"kind": "heat_source", "on": "xmax", "total": 1.0}]
-        p.add_bc("fixed", "xmin", dofs="xyz")
-        _, m = _solved(p, E=E, nu=nu, alpha=1e-5, conductivity=3.0, T_ref=T_ref)
-        n = len(m.x_phys)
-        rng = np.random.default_rng(0)
-        design = {"x_phys": rng.uniform(0.3, 1.0, n), "Thermal_Expansion": 1e-5 * rng.uniform(0.5, 1.5, n),
-                  "Conductivity": 3.0 * rng.uniform(0.5, 1.5, n)}
-
-        def J(values):
-            """J at the design values, with the solver of m: a fresh model through analyse."""
-            t = {k: torch.tensor(v, dtype=torch.float64, requires_grad=True) for k, v in values.items()}
-            model = SimpleNamespace(fe=m.fe, x_phys=t["x_phys"], settings=m.settings,
-                                    props={"Youngs_Modulus": torch.full((n,), E, dtype=torch.float64),
-                                           "Thermal_Expansion": t["Thermal_Expansion"],
-                                           "Conductivity": t["Conductivity"]})
-            THERMOELASTIC.analyse(model)
-            return torch.dot(model.fe.total_force, model.u), t
-
-        value, leaves = J(design)
-        value.backward()
-        for name, leaf in leaves.items():
-            g = leaf.grad.numpy()
-            assert np.any(g != 0), f"no gradient for {name}"
-            for i in rng.choice(np.argsort(-np.abs(g))[:50], 3, replace=False):
-                best = np.inf
-                for step in (1e-4, 1e-5, 1e-6):                     # relative to the value
-                    h = step * design[name][i]
-                    plus, minus = {k: v.copy() for k, v in design.items()}, {k: v.copy() for k, v in design.items()}
-                    plus[name][i] += h
-                    minus[name][i] -= h
-                    with torch.no_grad():
-                        fd = (float(J(plus)[0]) - float(J(minus)[0])) / (2 * h)
-                    best = min(best, abs(fd - g[i]) / abs(g[i]))
-                assert best < 1e-5, f"{name}[{i}]: relative difference {best:.1e}"
+        p.complete_settings()
+        mesh = p.mesh()
+        bcs, _ = p.supports_and_loads(mesh)
+        return THERMOELASTIC.supports_and_loads_error(mesh, bcs)
+    p = _bar("z left free")
+    p.add_bc("fixed", "xmin", dofs="x")
+    p.add_bc("fixed", "ymin", dofs="y")
+    assert "free to move in z" in (error(p) or ""), error(p)
+    p = _bar("one edge")
+    p.add_selection("edge", S.box([-1, -1, -1], [1001, 1, 1]))   # the nodes along x at y = 0, z = 0
+    p.add_bc("fixed", "edge", dofs="xyz")
+    assert "free to rotate about x" in (error(p) or ""), error(p)
+    p = _bar("three faces")
+    p.add_bc("fixed", "xmin", dofs="x")
+    p.add_bc("fixed", "ymin", dofs="y")
+    p.add_bc("fixed", "zmin", dofs="z")
+    assert error(p) is None

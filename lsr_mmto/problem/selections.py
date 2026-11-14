@@ -598,7 +598,7 @@ class rows(Selection):
     def __init__(self, face: str, axis: str, n: int, end: str = "max") -> None:
         _side(face)
         if axis not in _AXES or end not in ("min", "max"):
-            raise ValueError(f"rows: axis must be x, y or z and end 'min' or 'max'")
+            raise ValueError("rows: axis must be x, y or z and end 'min' or 'max'")
         self.face, self.axis, self.n, self.end = face, axis, int(n), end
 
     def evaluate(self, mesh: "HexMesher", on: str = "nodes", base_dir: str | None = None) -> np.ndarray:

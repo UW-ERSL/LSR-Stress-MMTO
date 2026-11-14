@@ -37,7 +37,7 @@ def _quiet(kind, context, message):
 
 QtCore.qInstallMessageHandler(_quiet)
 
-from test_thermal_physics import THERMAL, _held_and_heated, registered  # noqa: E402
+from test_thermal_physics import _held_and_heated  # noqa: E402
 
 Box = QtWidgets.QMessageBox
 
@@ -77,95 +77,94 @@ def test_a_thermal_project_through_the_window(monkeypatch):
 
     d = tempfile.mkdtemp(prefix="_test_thermal_", dir=ROOT)
     try:
-        with registered(THERMAL):
-            p = _held_and_heated("Heated bracket")
-            p.units = "mmKS"
-            p.settings["common"]["maxIterations"] = 3
-            path = os.path.join(d, "T", "Heated bracket.mmto")
-            p.save(path)                                                 # saved: its part and database copied in
-            q = Project.load(path)
-            assert q.physics == "thermal" and q.bcs == p.bcs and q.units == "mmKS"
-            assert q.validate() == []
+        p = _held_and_heated("Heated bracket")
+        p.units = "mmKS"
+        p.settings["common"]["maxIterations"] = 3
+        path = os.path.join(d, "T", "Heated bracket.mmto")
+        p.save(path)                                                 # saved: its part and database copied in
+        q = Project.load(path)
+        assert q.physics == "thermal" and q.bcs == p.bcs and q.units == "mmKS"
+        assert q.validate() == []
 
-            w = G.MMTOWindow()
-            w.show()
-            assert w.open_project(path) and w.project.physics == "thermal"
+        w = G.MMTOWindow()
+        w.show()
+        assert w.open_project(path) and w.project.physics == "thermal"
 
-            assert w.open_supports_and_loads_panel() is not None          # its own kinds, in its own units
-            for bc in w.project.bcs:
-                assert SP.BCDialog(w, w.project, bc).bc() == bc, bc
-            b = SP.BCDialog(w, w.project)
-            assert [b.kind.itemText(i) for i in range(b.kind.count())] == ["Fixed temperature", "Heat source"]
-            b.kind.setCurrentText("Heat source")
-            b.inputs["total"][1].set_value(2.5)
-            assert b.problems() == [] and b.bc()["total"] == 2.5
-            assert SP.field_unit("heat", "mmKS") == "mW" and SP.field_unit("temperature", "IPS") == "°R"
-            assert "Total heat" in SP.bc_values(w.project.bcs[1]), SP.bc_values(w.project.bcs[1])
-            b.close()
-            for cls in (materials_panel.MaterialsPanel, formulation_panel.FormulationPanel,
-                        settings_panel.SettingsPanel):                    # each panel: OK with no edits
-                assert cls(w, w.project).apply(w.project) == [], cls.__name__
-            assert not w.is_dirty()
+        assert w.open_supports_and_loads_panel() is not None          # its own kinds, in its own units
+        for bc in w.project.bcs:
+            assert SP.BCDialog(w, w.project, bc).bc() == bc, bc
+        b = SP.BCDialog(w, w.project)
+        assert [b.kind.itemText(i) for i in range(b.kind.count())] == ["Fixed temperature", "Heat source"]
+        b.kind.setCurrentText("Heat source")
+        b.inputs["total"][1].set_value(2.5)
+        assert b.problems() == [] and b.bc()["total"] == 2.5
+        assert SP.field_unit("heat", "mmKS") == "mW" and SP.field_unit("temperature", "IPS") == "°R"
+        assert "Total heat" in SP.bc_values(w.project.bcs[1]), SP.bc_values(w.project.bcs[1])
+        b.close()
+        for cls in (materials_panel.MaterialsPanel, formulation_panel.FormulationPanel,
+                    settings_panel.SettingsPanel):                    # each panel: OK with no edits
+            assert cls(w, w.project).apply(w.project) == [], cls.__name__
+        assert not w.is_dirty()
 
-            r = w.open_run_panel()                                        # Run
-            assert r.start_optimization()
-            assert _wait(lambda: not r.optimization_running), "the run did not finish"
-            assert r.status.text().startswith("Run finished after 3 iterations"), r.status.text()
-            run_folder = r.save_dir
-            ran = load(run_folder)
-            assert ran.physics == "thermal" and list(ran.results) == ["temperature"]
+        r = w.open_run_panel()                                        # Run
+        assert r.start_optimization()
+        assert _wait(lambda: not r.optimization_running), "the run did not finish"
+        assert r.status.text().startswith("Run finished after 3 iterations"), r.status.text()
+        run_folder = r.save_dir
+        ran = load(run_folder)
+        assert ran.physics == "thermal" and list(ran.results) == ["temperature"]
 
-            res = w.open_results_panel(run_folder)                        # Results: its views
-            shown = [res.field.itemText(i) for i in range(res.field.count())]
-            assert shown == ["Material", "Density", "Temperature", "Solid", SMOOTH], shown
-            for view in shown[:-1]:
-                res.field.setCurrentText(view)
-                assert "result_design" in w.plotter.actors and w.view == "design", view
-                assert not res.component.isVisible() and not res.deformed.isVisible(), view
-            res.field.setCurrentText("Temperature")                       # at the nodes: smooth over the faces
-            drawn = w.plotter.actors["result_design"].GetMapper().GetInput()
-            assert np.isclose(np.asarray(drawn.point_data["value"]).max(), ran.results["temperature"].max())
-            assert any("Temperature" in t and "K" in t for t in w.design_bars), w.design_bars
+        res = w.open_results_panel(run_folder)                        # Results: its views
+        shown = [res.field.itemText(i) for i in range(res.field.count())]
+        assert shown == ["Material", "Density", "Temperature", "Solid", SMOOTH], shown
+        for view in shown[:-1]:
+            res.field.setCurrentText(view)
+            assert "result_design" in w.plotter.actors and w.view == "design", view
+            assert not res.component.isVisible() and not res.deformed.isVisible(), view
+        res.field.setCurrentText("Temperature")                       # at the nodes: smooth over the faces
+        drawn = w.plotter.actors["result_design"].GetMapper().GetInput()
+        assert np.isclose(np.asarray(drawn.point_data["value"]).max(), ran.results["temperature"].max())
+        assert any("Temperature" in t and "K" in t for t in w.design_bars), w.design_bars
 
-            summary = _summary_text(res.tabs)                             # Summary: its own row and units
-            assert "Max temperature" in summary and "mmKS: mm, K, mW, mW/(mm*K), t" in summary, summary
-            assert "failure" not in summary.lower() and "MPa" not in summary
+        summary = _summary_text(res.tabs)                             # Summary: its own row and units
+        assert "Max temperature" in summary and "mmKS: mm, K, mW, mW/(mm*K), t" in summary, summary
+        assert "failure" not in summary.lower() and "MPa" not in summary
 
-            assert w.analyse()                                            # Analyse: the solid part, saved
-            assert _wait(lambda: not w.run_going_now()), "the analysis did not finish"
-            assert r.status.text().startswith("Analysis of the solid part in"), r.status.text()
-            solid = r.save_dir
-            assert load(solid).results["temperature"].shape == ran.results["temperature"].shape
+        assert w.analyse()                                            # Analyse: the solid part, saved
+        assert _wait(lambda: not w.run_going_now()), "the analysis did not finish"
+        assert r.status.text().startswith("Analysis of the solid part in"), r.status.text()
+        solid = r.save_dir
+        assert load(solid).results["temperature"].shape == ran.results["temperature"].shape
 
-            res = w.open_results_panel(run_folder)                        # Analyse this design
-            assert res.select(run_folder) and res.analyse_design()
-            assert _wait(lambda: not w.run_going_now()), "the design analysis did not finish"
-            design = w.run_window.save_dir
-            assert load(design).config["analysis"]["design_of"] == os.path.basename(run_folder)
+        res = w.open_results_panel(run_folder)                        # Analyse this design
+        assert res.select(run_folder) and res.analyse_design()
+        assert _wait(lambda: not w.run_going_now()), "the design analysis did not finish"
+        design = w.run_window.save_dir
+        assert load(design).config["analysis"]["design_of"] == os.path.basename(run_folder)
 
-            res = w.results_window                                        # Compare: the run and its analysis
-            assert res.compare(), res.status.text()
-            cw = res.compare_window
-            text = _summary_text(cw.tabs)
-            assert "Thermal compliance (mW*K)" in text and "failure" not in text.lower(), text
-            cw.close()
+        res = w.results_window                                        # Compare: the run and its analysis
+        assert res.compare(), res.status.text()
+        cw = res.compare_window
+        text = _summary_text(cw.tabs)
+        assert "Thermal compliance (mW*K)" in text and "failure" not in text.lower(), text
+        cw.close()
 
-            assert res.select(run_folder)                                 # Export STL
-            w.update_top_row()
-            assert w.export_stl()
-            assert _wait(lambda: not w.exporting, 300)
-            folder, report = w.exported_last
-            assert folder == run_folder and os.path.isfile(os.path.join(folder, "design.stl"))
+        assert res.select(run_folder)                                 # Export STL
+        w.update_top_row()
+        assert w.export_stl()
+        assert _wait(lambda: not w.exporting, 300)
+        folder, report = w.exported_last
+        assert folder == run_folder and os.path.isfile(os.path.join(folder, "design.stl"))
 
-            e = database_editor.DatabaseEditor(w, d, unit_system=w.project.units, project=w.project)
-            assert e.attributes == ["Density", "Conductivity"]            # a new database: what thermal reads
-            assert [e.table.horizontalHeaderItem(c).text() for c in range(e.table.columnCount())][-2:] == \
-                ["Density", "Thermal conductivity"]
-            e.close()
+        e = database_editor.DatabaseEditor(w, d, unit_system=w.project.units, project=w.project)
+        assert e.attributes == ["Density", "Conductivity"]            # a new database: what thermal reads
+        assert [e.table.horizontalHeaderItem(c).text() for c in range(e.table.columnCount())][-2:] == \
+            ["Density", "Thermal conductivity"]
+        e.close()
 
-            assert w.save_project()                                       # saved and opened again
-            assert w.open_project(path) and w.project.physics == "thermal" and w.project.bcs == p.bcs
-            w.close()
+        assert w.save_project()                                       # saved and opened again
+        assert w.open_project(path) and w.project.physics == "thermal" and w.project.bcs == p.bcs
+        w.close()
     finally:
         shutil.rmtree(d, ignore_errors=True)
 

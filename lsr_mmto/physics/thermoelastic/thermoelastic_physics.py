@@ -1,8 +1,17 @@
 """
-template_physics.py
-===================
-The job of this file: the solver of the physics, and one iteration's solve inside the torch tree.
-Thermal's thermal_physics.py is this file filled in.
+thermoelastic_physics.py
+========================
+The thermoelastic solvers, and one iteration's solve inside the torch tree. Linear isotropic
+thermoelasticity coupled one way: a steady temperature T from conduction, then the displacement u under
+the applied loads plus the thermal force the temperature gives:
+
+    K_T T = f_T          K_u u = f + f_th(T)
+
+f_th,e = s(x_phys_e) * E_e * alpha_e / (1 - 2 nu_e) * H (T_e - T_ref), where s is the stiffness's SIMP
+scaling, H the element's coupling matrix (24 x 8) and T_e the element's 8 temperatures. Thermal's solver
+(ConductionHexFEA) solves the temperature and structural's (MultiMaterialHexFEA) the displacement; both
+solves are differentiable, so autograd gives the gradient of anything computed from T and u back to x_phys
+and to the latent points. Nothing is differentiated by hand.
 
 Who reads it:
     make_solver       optimize/optimization_loop.py, once per run, after the mesh and the supports and
@@ -10,24 +19,13 @@ Who reads it:
     analyse           optimize/design_model.py (MMTOModelAD.evaluate), once per iteration, after the
                       density filter and projection (m.x_phys) and the decode of the latent points (m.props)
     deflation_space   optimize/optimization_loop.py, for a problem above the direct solver's limit
-
-How the gradient comes: analyse solves with torch operations only, and PyTO-AD's solvers are
-differentiable, so autograd follows anything a quantity computes from the solution back through the
-solve to the densities and the latent points. Nothing is differentiated by hand. numpy, .item(),
-.detach() or float() inside analyse cut the tree, and the gradient of whatever comes after is
-silently zero.
-
-Glossary:
-    node      a corner point of the voxel mesh
-    dof       one unknown of the solve; a field of 3 unknowns per node has 3 dofs per node
-    field     what is solved for, by name (FIELDS on the front page)
-    element   one voxel of the mesh, 8 nodes; x_phys has one density per element
 """
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
 import lsr_mmto.pyto_ad_imports  # noqa: F401  puts PyTO-AD on sys.path, float64 default
+from lsr_mmto.physics.structural import structural_physics
 from lsr_mmto.physics.structural.structural_physics import MultiMaterialHexFEA
 from lsr_mmto.physics.thermal.thermal_physics import ConductionHexFEA
 from lsr_mmto.pyto_ad_imports import topopt_material_model as ad_mm
@@ -92,10 +90,12 @@ def elastic_constants(props: dict[str, torch.Tensor], settings: "RunSettings") -
     return E, nu
 # ----------------------------------------------------------------------------- OPTIONAL entries of this file
 # OPTIONAL: deflation_space, for the deflation linear solver
-# def deflation_space(dsolver: "DeflationSolver", mesh: "HexMesher") -> None:
-#     """Builds the deflation space of this physics' system on dsolver, so problems above the direct
-#     solver's limit (DIRECT_SOLVER_DOF_CUTOFF in PyTO-AD) use DPCG. Structural's are the rigid-body
-#     motions of groups of nodes. Left out, the direct solver runs at every size."""
+def deflation_space(dsolver: "DeflationSolver", mesh: "HexMesher") -> None:
+    """Structural's: the displacement's system is structural's, so its deflation space (the rigid-body motions
+    of groups of nodes) is the same. Both solves share dsolver; the temperature's system has one unknown per
+    node, which the space does not fit, so PyTO-AD's solve runs plain PCG there (autodiff/sparse_solve.py)."""
+    structural_physics.deflation_space(dsolver, mesh)
+
 
 # HELPER: the solver class make_solver builds
 class ThermoelasticHexFEA(MultiMaterialHexFEA):
@@ -104,7 +104,7 @@ class ThermoelasticHexFEA(MultiMaterialHexFEA):
     self.thermal, then the displacement with the thermal force added to its load."""
 
     thermal: ConductionHexFEA            # the temperature's solver, on the supports and loads of T
-    H: torch.Tensor                      # the element's coupling matrix, (24, 8), from B, Phi and N only  # new
+    H: torch.Tensor                      # the element's coupling matrix, (24, 8), from B, Phi and N only
 
     def __init__(self, mesh: "HexMesher", bcs: "dict[str, BC]", solver: "Solvers",
                  dsolver: "DeflationSolver | None", elem_body_force: np.ndarray | None,
@@ -116,4 +116,4 @@ class ThermoelasticHexFEA(MultiMaterialHexFEA):
                          rtol=1e-8, elem_body_force=elem_body_force)
         # PyTO-AD's matrix carries 1/(1 - 2 nu); at nu = 0 it is the same for every element and material,
         # and the thermal force applies each element's 1/(1 - 2 nu) itself
-        self.H = torch.tensor(self.thermal.getHMatrix(*mesh.elem_size, 0.0), dtype=torch.float64)  # new
+        self.H = torch.tensor(self.thermal.getHMatrix(*mesh.elem_size, 0.0), dtype=torch.float64)

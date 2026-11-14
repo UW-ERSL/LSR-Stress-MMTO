@@ -6,7 +6,7 @@ keep-solid regions, material database, objective and constraints, and settings.
 A project is saved as an LSR MMTO project file (.mmto): the layout of a PyTO-AD project
 file, with the problem in its own "mmto" section. Project.load reads .mmto files only.
 
-    from lsr_mmto.problem.project import Project
+    from lsr_mmto.problem.project import Project, run
     from lsr_mmto.problem.selections import face, box
     p = Project("bracket", stl="bracket.stl", n_dof=30000)
     p.add_selection("left", face("xmin"))
@@ -17,12 +17,11 @@ file, with the problem in its own "mmto" section. Project.load reads .mmto files
     p.constraint("Mass()", "<=", 3.5e-3)
     p.save("bracket.mmto")
     q = Project.load("bracket.mmto")
-    mesh, mat_prop, bc, body_force, to_params, vae_params = q.build()
-    run(q)                                  # optimizes; results and a copy of q in results/bracket
-    q.to_script("bracket_setup.py")         # the same project as Python calls, to read or edit
+    folder = run(q)          # optimizes; the results and a copy of q go in a new folder, named after the
+                             # date and time, in results in the project's folder; folder is that folder
 
-build() returns the mesh, the material, the boundary conditions, the body force and the
-optimization and VAE parameters that _run_topopt starts from.
+run builds the project itself (Project.build): the mesh, the material, the supports and loads of each
+field, the body force and the optimization and VAE parameters the run starts from.
 
 Settings: every setting is one entry of SETTINGS in problem/settings.py, stored in
 settings.common, settings.advanced and settings.vae. A new project starts from the

@@ -240,13 +240,9 @@ def update_paper_history(
     history["max_failure_factor"]; z_phys_elemmajor is not used.
     """
     density_vals = None
-    yield_vals = None
 
     if "Density" in material_properties:
         density_vals = material_properties["Density"].detach().cpu().numpy().astype(float)
-
-    if "Yield_Strength" in material_properties:
-        yield_vals = material_properties["Yield_Strength"].detach().cpu().numpy().astype(float)
 
     # Mass ratio
     if density_vals is not None:

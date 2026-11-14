@@ -470,8 +470,8 @@ if __name__ == "__main__":
 
 def test_unit_kinds_of_a_physics():
     """A physics' own kinds of quantity (UNIT_KINDS on its front page) are in the unit tables; a kind
-    given differently by two physics, or a unit system's unit that is not one of the kind's units, is
-    refused."""
+    given differently by two physics (other units, or the same units but another unit in a unit system), or a
+    unit system's unit that is not one of the kind's units, is refused."""
     import types
     import pytest
     from lsr_mmto.materials import databases as D
@@ -480,6 +480,12 @@ def test_unit_kinds_of_a_physics():
                                                                        "mmKS": "N", "IPS": "N"}})
     with pytest.raises(ValueError, match="differ"):
         D._add_unit_kinds(other)
+    stress = dict(D.UNITS["stress"])
+    other_unit = types.SimpleNamespace(NAME="other", UNIT_KINDS={"stress": dict(units=stress, MKS="Pa", mmKS="kPa",
+                                                                                IPS="psi")})
+    with pytest.raises(ValueError, match="another physics gives it as 'MPa'"):
+        D._add_unit_kinds(other_unit)
+    assert D.UNIT_SYSTEMS["mmKS"]["stress"] == "MPa"                 # left as it was
     odd = types.SimpleNamespace(NAME="odd", UNIT_KINDS={"test_heat": {"units": {"W": 1.0}, "MKS": "W",
                                                                        "mmKS": "mW", "IPS": "W"}})
     with pytest.raises(ValueError, match="not one of its units"):

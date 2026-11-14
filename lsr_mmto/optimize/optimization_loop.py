@@ -598,7 +598,8 @@ def record(state: RunState, it: Iteration) -> None:
     Reads it.obj, it.J_phys, it.Jn, it.penalties, it.cons, it.zeta, it.x_phys, it.z, state.iteration.
     Sets state.last_zeta (a copy of the design)."""
     log_objective_and_constraints(state.history, it.obj, it.J_phys, it.Jn, it.penalties, it.cons,
-                                  state.to_params, verbose=state.verbose, material_labels=state.material_labels)
+                                  state.to_params, verbose=state.verbose, material_labels=state.material_labels,
+                                  summary_rows=state.physics.SUMMARY_ROWS)
     state.last_zeta = it.zeta.copy()
     if state.progress is not None:
         state.progress({"iteration": int(state.iteration), "objective": float(it.J_phys),

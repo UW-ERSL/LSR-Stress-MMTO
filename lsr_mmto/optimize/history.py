@@ -157,11 +157,13 @@ def constraints_over_limit(history: dict[str, list[float | np.ndarray]], to_para
 
 def log_objective_and_constraints(history: dict[str, list[float | np.ndarray]], obj: float, J_phys: float, Jn: float,
                                   penalties: dict[str, float], cons: np.ndarray, to_params: "MMTOParams",
-                                  verbose: bool = True, material_labels: list[str] | None = None) -> None:
+                                  verbose: bool = True, material_labels: list[str] | None = None,
+                                  summary_rows: dict[str, dict] | None = None) -> None:
     """Record objective/constraint history (appends to objective, constraints, J_phys and each penalty key);
     penalties is {history key: value} of the penalties (add_penalties in the loop). In verbose mode print the
-    full Obj line + per-constraint lines; in simple mode print one compact per-iteration line. Each constraint
-    is named as the app names it."""
+    full Obj line + per-constraint lines; in simple mode print one compact per-iteration line, with the
+    physics' own numbers (summary_rows, its SUMMARY_ROWS) that this iteration recorded. Each constraint is
+    named as the app names it."""
     from lsr_mmto.formulation.quantities import quantity_label
     cons_flat = np.asarray(cons).flatten()
     constraint_names = [quantity_label(c[0], c[1], material_labels) for c in to_params.Constraints]
@@ -189,8 +191,7 @@ def log_objective_and_constraints(history: dict[str, list[float | np.ndarray]], 
             f"{constraint_names[idx]}={(val + 1) * to_params.Constraints[idx][2]:.3g}"
             for idx, val in enumerate(cons_flat)
         )
-        own = "".join(f"{label}={history[key][-1] if history.get(key) else float('nan'):.3g} "  # the physics'
-                      for key, label in (("mass_ratio", "mass/V"), ("max_failure_factor", "maxFF"))
-                      if key in history)
+        own = "".join(f"{row['label']}={history[key][-1]:{row['format']}} "
+                      for key, row in (summary_rows or {}).items() if history.get(key))
         print(f"[iter] f={float(obj):.4g} J={J_phys:.4g} {own}| {cons_str}")
 

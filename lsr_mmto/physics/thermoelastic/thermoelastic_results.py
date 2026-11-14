@@ -1,19 +1,13 @@
 """
-template_results.py
-===================
-The job of this file: what the physics records and saves. The results a run saves (RESULT_FIELDS) and the
-final check of the final designs (final_summary); optionally what each iteration records
-(iteration_diagnostics) and the physics' own rows in a run's Summary (SUMMARY_ROWS). Thermal's
-thermal_results.py is this file filled in.
-
-Who reads it:
-    RESULT_FIELDS          optimize/final_design_analysis.py saves each one; the Results panel shows it
-    final_summary          optimize/final_design_analysis.py, once, on the final designs (and Analyse, on
-                           the design analysed); it returns the RESULT_FIELDS values that are saved
-    iteration_diagnostics  optimize/optimization_loop.py, after each iteration's solve
-    SUMMARY_ROWS           results/tables.py, the Summary and Compare of a run
+thermoelastic_results.py
+========================
+What the thermoelastic module records and reports: the temperature and displacement a run saves
+(RESULT_FIELDS) and its Summary rows (SUMMARY_ROWS); each iteration's highest temperature, largest thermal
+strain, largest displacement and the thermal force's share of the compliance, recorded into the history
+(iteration_diagnostics); and the final designs' compliance, printed by the final check (final_summary),
+with a warning when the thermal strain is too large for small strain.
 """
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Callable
 
 import numpy as np
 import torch
@@ -34,24 +28,11 @@ if TYPE_CHECKING:
 #   shape     "scalar" (one number, the default) or "vector" (x, y and z)
 # final_summary returns one array for each name: (elements,) or (nodes,), with a last axis of 3 for a vector;
 # a name it does not return, or values of another length or shape, stop the save with a message saying so.
-# Thermal's: {"temperature": dict(view="Temperature", title="Temperature", measures="temperature", where="node")}
 _STRAIN_WARNING = 0.01          # the final check warns when the largest thermal strain is above this (small strain)
 RESULT_FIELDS = {
     "temperature": dict(view="Temperature", title="Temperature", measures="temperature", where="node"),
     "displacement": dict(view="Displacement", title="Displacement", measures="length", where="node", shape="vector"),
 }
-
-
-# ESSENTIAL: final_summary, the final check and the results a run saves
-def final_summary(designs: "list[tuple[str, np.ndarray, np.ndarray | torch.Tensor]]", solver: Any,
-                  properties_of: Callable[[torch.Tensor], dict[str, torch.Tensor]], settings: "RunSettings",
-                  encoder: "MaterialEncoder | _Materials", latent_dim: int, elem_volume: float,
-                  design_domain_volume: float) -> dict[str, np.ndarray]:
-    """Once, at the end. designs is [(label, x, z)] for the final designs (x per element, z per element and
-    latent dimension); properties_of(z) decodes latent points to properties. Solve each design with the
-    solver, print its numbers, and return the results a run saves, {name: numpy array}, one for each
-    RESULT_FIELDS entry, of the last design."""
-    raise NotImplementedError("FILL: final_summary, the final check of this physics")
 
 
 # the numbers of its own a run's Summary shows: the last value of each history key, when the run recorded it

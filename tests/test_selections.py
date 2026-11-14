@@ -51,6 +51,14 @@ def test_every_field_says_how_it_is_given():
                 (name, field, how.kind)
 
 
+def test_every_selection_type_can_be_imported_from_lsr_mmto():
+    """A setup script (Project.to_script) imports each selection type it uses from lsr_mmto, by its class name
+    in lower case, and lsr_mmto/__init__.py lists them by hand: a type missing from that list would break the
+    script of every project that uses it."""
+    import lsr_mmto
+    missing = [cls.__name__.lower() for cls in S._TYPES.values() if not hasattr(lsr_mmto, cls.__name__.lower())]
+    assert not missing, f"add {missing} to the selections imported in lsr_mmto/__init__.py"
+
 def test_box():
     assert count(S.box([0, 0, 0], [2, 2, 2])) == 27              # coordinates 0, 1, 2 in each direction
     assert count(S.box([0, 0, 0], [2, 2, 2]), "elements") == 8   # centers 0.5, 1.5; no pad on centers

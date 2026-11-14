@@ -6,8 +6,6 @@ physics, one entry each, as physics/available_physics.py lists them (MODULE_ENTR
 thermoelasticity with a different material in each element, coupled one way: a steady temperature, solved
 by conduction, drives the displacement through each element's thermal expansion.
 
-It is not in the list of physics (physics/available_physics.py) yet.
-
     thermoelastic_physics.py              the solvers, one iteration's solve
     thermoelastic_supports_and_loads.py   its kinds of support and load
     thermoelastic_quantities.py           its objectives and constraints (QUANTITIES)
@@ -23,7 +21,7 @@ Each top-level function in the folder has a marker on the line above it:
 It reads thermal's material property and units (Conductivity, temperature) and structural's (Young's
 modulus, Poisson's ratio); the property it brings is the thermal expansion coefficient.
 """
-from lsr_mmto.physics.thermoelastic.thermoelastic_physics import analyse, make_solver  # noqa: F401
+from lsr_mmto.physics.thermoelastic.thermoelastic_physics import analyse, deflation_space, make_solver  # noqa: F401
 from lsr_mmto.physics.thermoelastic.thermoelastic_quantities import QUANTITIES  # noqa: F401
 from lsr_mmto.physics.thermoelastic.thermoelastic_results import (RESULT_FIELDS, SUMMARY_ROWS,  # noqa: F401
                                                                   final_summary, iteration_diagnostics)

@@ -49,8 +49,9 @@ OPTIONAL_PROPERTIES = ["Poissons_Ratio"]            # each material's own when t
 NEW_PROPERTIES = [
     dict(name="Youngs_Modulus", measures="stress", doc="Young's modulus, the stiffness", shown="Young's modulus",
          low=0, aliases=("Youngs Modulus", "Young_Modulus", "E"),
-         wrong_unit_effect="Displacement and compliance come out {times} times too small; stress and failure "
-                           "factor are unaffected.",
+         wrong_unit_effect="Under forces alone, displacement and compliance come out {times} times too small, "
+                           "and stress and failure factor are unaffected. Under a Moved support, stress and "
+                           "failure factor come out up to {times} times too large.",
          legend_symbol="E", legend_rank=2),
     dict(name="Poissons_Ratio", measures="ratio", doc="Poisson's ratio", shown="Poisson's ratio", low=-1, high=0.5,
          aliases=("Poisson_Ratio", "Poissons Ratio", "nu")),

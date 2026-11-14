@@ -44,7 +44,8 @@ MODULE_ENTRIES = {
                       "Cost), each as the arguments of an Attribute (materials/databases.py); a property another "
                       "physics brings too is one entry, shared, when both give it the same way; may be empty",
     "make_solver": "make_solver(mesh, mat_prop, bcs, linear_solver, dsolver, elem_body_force): its finite "
-                   "element solver; bcs holds one boundary condition per field",
+                   "element solver; bcs holds one boundary condition per field. The core also reads its .bc "
+                   "(.bc.num_dofs), .mesh and .plot_mesh; a physics of several fields gives one field's",
     "analyse": "analyse(model): one iteration's solve inside the torch tree, from model.x_phys and model.props, "
                "leaving on the model what its quantities read",
     "SUPPORT_AND_LOAD_KINDS": "its kinds of support and load, {name: the arguments of a BCKind}, each naming "

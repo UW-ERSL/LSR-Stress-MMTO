@@ -1,10 +1,10 @@
 """
 test_thermal_physics.py
 =======================
-The thermal physics (lsr_mmto/physics/thermal/) keeps working: it is registered as its line in
-available_physics.MODULES would register it, its solver gives the right answer on a bar, and short
-U-bracket runs go through with it and its example database, with no core file changed. Copy this file
-for a physics of your own.
+The thermal physics (lsr_mmto/physics/thermal/) keeps working: its solver gives the right answer on a bar,
+and short U-bracket runs go through with it and its example database, with no core file changed. Copy this
+file for a physics of your own. A physics not yet in available_physics.MODULES can be tested before it is:
+wrap each test in registered(module), which adds it to the core's lists as its line in MODULES would.
 
     python tests/test_thermal_physics.py        (or: python -m pytest tests)
 """
@@ -44,7 +44,7 @@ def registered(module):
     from lsr_mmto.design import latent_penalties
     from lsr_mmto.formulation import quantities
     from lsr_mmto.materials import databases
-    from lsr_mmto.problem import boundary_conditions, settings
+    from lsr_mmto.problem import settings
     available_physics._checked(module)
     added_q = [quantities.Quantity(physics=[module.NAME], **q) for q in module.QUANTITIES]
     added_p = [latent_penalties.Penalty(physics=[module.NAME], **p) for p in module.PENALTIES]
@@ -143,7 +143,7 @@ def test_a_project_sees_only_its_own_physics_settings():
     from lsr_mmto.problem import settings
     test_setting = settings.Setting(physics="thermal", section="advanced", key="thermal_test_scale", default=1.0,
                                     label="Test scale", help="A setting for the tests only.", group="Material model")
-    with registered(THERMAL), added(settings.SETTINGS, test_setting, then=settings._make_views):
+    with added(settings.SETTINGS, test_setting, then=settings._make_views):
         structural, thermal = (set(settings_panel.all_setting_keys(name)) for name in ("structural", "thermal"))
         assert ("common", "pnorm_exponent") in structural and ("common", "pnorm_exponent") not in thermal
         assert ("advanced", "thermal_test_scale") in thermal
@@ -159,52 +159,96 @@ def test_thermal_solver_gives_a_straight_line_along_a_bar():
     straight line from end to end, at every node. Trilinear elements give this exactly."""
     from lsr_mmto.problem import selections as S
     from lsr_mmto.pyto_ad_imports import linear_solvers
-    with registered(THERMAL):
-        p = _project("bar", "RectangularBeam.STL", BAR, 2000)
-        p.add_selection("left", S.face("xmin"))
-        p.add_selection("right", S.face("xmax"))
-        p.bcs += [{"kind": "fixed_temperature", "on": "left", "value": 0.0},
-                  {"kind": "fixed_temperature", "on": "right", "value": 1.0}]    # held only: no source needed
-        p.complete_settings()
-        assert p.validate() == []
-        mesh, mat_prop, bcs, _, _, _ = p.build(verbose=False)
-        fe = THERMAL.make_solver(mesh, mat_prop, bcs, linear_solvers.Solvers.PARDISO, None, None)
-        fe.set_conductivity(torch.full((mesh.num_elems,), 3.0, dtype=torch.float64))
-        T = fe.solve(torch.ones(mesh.num_elems, dtype=torch.float64), None).detach().numpy()
-        x = np.asarray(mesh.node_xyz, dtype=float)[:, 0]
-        expected = (x - x.min()) / (x.max() - x.min())
-        assert np.max(np.abs(T - expected)) < 1e-8
+    p = _project("bar", "RectangularBeam.STL", BAR, 2000)
+    p.add_selection("left", S.face("xmin"))
+    p.add_selection("right", S.face("xmax"))
+    p.bcs += [{"kind": "fixed_temperature", "on": "left", "value": 0.0},
+              {"kind": "fixed_temperature", "on": "right", "value": 1.0}]    # held only: no source needed
+    p.complete_settings()
+    assert p.validate() == []
+    mesh, mat_prop, bcs, _, _, _ = p.build(verbose=False)
+    fe = THERMAL.make_solver(mesh, mat_prop, bcs, linear_solvers.Solvers.PARDISO, None, None)
+    fe.set_conductivity(torch.full((mesh.num_elems,), 3.0, dtype=torch.float64))
+    T = fe.solve(torch.ones(mesh.num_elems, dtype=torch.float64), None).detach().numpy()
+    x = np.asarray(mesh.node_xyz, dtype=float)[:, 0]
+    expected = (x - x.min()) / (x.max() - x.min())
+    assert np.max(np.abs(T - expected)) < 1e-8
 
+
+
+def test_thermal_gradients_agree_with_finite_differences():
+    """ThermalCompliance, f . T, on the bar held at 0 on one end with 1 of heat put in at the other, at an uneven
+    design (densities and conductivities differ by element). Its autograd gradient for the density and the
+    conductivity of a few elements, each where the gradient is large, agrees with central differences: the
+    quantity's own function after the physics' analyse, the thermal solve included."""
+    from types import SimpleNamespace
+    from lsr_mmto.problem import selections as S
+    from lsr_mmto.pyto_ad_imports import linear_solvers
+    compliance = next(q["fn"] for q in THERMAL.QUANTITIES if q["name"] == "ThermalCompliance")
+    p = _project("gradients", "RectangularBeam.STL", BAR, 2000)
+    p.add_selection("left", S.face("xmin"))
+    p.add_selection("right", S.face("xmax"))
+    p.bcs += [{"kind": "fixed_temperature", "on": "left", "value": 0.0},
+              {"kind": "heat_source", "on": "right", "total": 1.0}]
+    p.complete_settings()
+    mesh, mat_prop, bcs, _, _, _ = p.build(verbose=False)
+    fe = THERMAL.make_solver(mesh, mat_prop, bcs, linear_solvers.Solvers.PARDISO, None, None)
+    n = mesh.num_elems
+    rng = np.random.default_rng(0)
+    design = {"x_phys": rng.uniform(0.3, 1.0, n), "Conductivity": 3.0 * rng.uniform(0.5, 1.5, n)}
+
+    def J(values):
+        """J at the design values: a fresh model through analyse, then the quantity's function."""
+        t = {k: torch.tensor(v, dtype=torch.float64, requires_grad=True) for k, v in values.items()}
+        model = SimpleNamespace(fe=fe, x_phys=t["x_phys"], props={"Conductivity": t["Conductivity"]})
+        THERMAL.analyse(model)
+        return compliance(model, None), t
+
+    value, leaves = J(design)
+    value.backward()
+    for name, leaf in leaves.items():
+        g = leaf.grad.numpy()
+        assert np.any(g != 0), f"no gradient for {name}"
+        for i in rng.choice(np.argsort(-np.abs(g))[:50], 3, replace=False):
+            best = np.inf
+            for step in (1e-4, 1e-5, 1e-6):                     # relative to the value
+                h = step * design[name][i]
+                plus, minus = {k: v.copy() for k, v in design.items()}, {k: v.copy() for k, v in design.items()}
+                plus[name][i] += h
+                minus[name][i] -= h
+                with torch.no_grad():
+                    fd = (float(J(plus)[0]) - float(J(minus)[0])) / (2 * h)
+                best = min(best, abs(fd - g[i]) / abs(g[i]))
+            assert best < 1e-5, f"{name}[{i}]: relative difference {best:.1e}"
 
 def test_thermal_physics_runs_with_no_core_file_changed():
     from lsr_mmto.problem import selections as S
     from lsr_mmto.problem.project import run
     from lsr_mmto.results import load_results
-    with registered(THERMAL):
-        p = _held_and_heated("thermal")
-        p.settings["common"]["maxIterations"] = 2
-        p.complete_settings()
-        assert p.validate() == []
+    p = _held_and_heated("thermal")
+    p.settings["common"]["maxIterations"] = 2
+    p.complete_settings()
+    assert p.validate() == []
 
-        q = _project("thermal", "UBracket.STL", UBRACKET, 3000)
-        q.add_selection("bottom", S.face("ymin"))
-        q.add_bc("fixed", "bottom", dofs="xyz")                         # a structural kind: not thermal's
-        assert any("not a kind of thermal support or load" in e for e in q.validate())
+    q = _project("thermal", "UBracket.STL", UBRACKET, 3000)
+    q.add_selection("bottom", S.face("ymin"))
+    q.add_bc("fixed", "bottom", dofs="xyz")                         # a structural kind: not thermal's
+    assert any("not a kind of thermal support or load" in e for e in q.validate())
 
-        mesh, _, bcs, _, _, _ = p.build(verbose=False)
-        assert list(bcs) == ["T"] and len(bcs["T"].fixed_dofs) > 0
-        assert np.isclose(bcs["T"].force.sum(), 1.0)                 # the source, shared by its nodes
+    mesh, _, bcs, _, _, _ = p.build(verbose=False)
+    assert list(bcs) == ["T"] and len(bcs["T"].fixed_dofs) > 0
+    assert np.isclose(bcs["T"].force.sum(), 1.0)                 # the source, shared by its nodes
 
-        with tempfile.TemporaryDirectory() as d:
-            run(p, save_dir=d, verbose=False)
-            r = load_results.load(os.path.join(d, "run_data.npz"))
-        assert list(r.results) == ["temperature"] and r.results["temperature"].shape == (len(mesh.node_xyz),)
-        assert r.result_info["temperature"]["view"] == "Temperature"
-        assert r.result_info["temperature"]["where"] == "node"
-        assert len(r.history["objective"]) >= 2                     # MMA evaluates the start too
-        assert np.all(np.isfinite(r.history["objective"])) and r.history["objective"][0] > 0
-        assert len(r.history["max_temperature"]) >= 2
-        assert "max_failure_factor" not in r.history                 # structural's keys are structural's
+    with tempfile.TemporaryDirectory() as d:
+        run(p, save_dir=d, verbose=False)
+        r = load_results.load(os.path.join(d, "run_data.npz"))
+    assert list(r.results) == ["temperature"] and r.results["temperature"].shape == (len(mesh.node_xyz),)
+    assert r.result_info["temperature"]["view"] == "Temperature"
+    assert r.result_info["temperature"]["where"] == "node"
+    assert len(r.history["objective"]) >= 2                     # MMA evaluates the start too
+    assert np.all(np.isfinite(r.history["objective"])) and r.history["objective"][0] > 0
+    assert len(r.history["max_temperature"]) >= 2
+    assert "max_failure_factor" not in r.history                 # structural's keys are structural's
 
 
 def test_a_thermal_summary_shows_its_own_row_and_units():
@@ -212,15 +256,14 @@ def test_a_thermal_summary_shows_its_own_row_and_units():
     of the thermal kinds; nothing of structural's (no failure factor, no force or stress)."""
     from lsr_mmto.problem.project import run
     from lsr_mmto.results import load_results, tables
-    with registered(THERMAL):
-        p = _held_and_heated("units")
-        p.units = "mmKS"
-        p.settings["common"]["maxIterations"] = 2
-        with tempfile.TemporaryDirectory() as d:
-            run(p, save_dir=d, verbose=False)
-            r = load_results.load(os.path.join(d, "run_data.npz"))
-            rows = tables.physics_rows(r)
-            summary = {row[0]: row[1:] for t in tables.summary(r) if isinstance(t, tables.Table) for row in t.rows}
+    p = _held_and_heated("units")
+    p.units = "mmKS"
+    p.settings["common"]["maxIterations"] = 2
+    with tempfile.TemporaryDirectory() as d:
+        run(p, save_dir=d, verbose=False)
+        r = load_results.load(os.path.join(d, "run_data.npz"))
+        rows = tables.physics_rows(r)
+        summary = {row[0]: row[1:] for t in tables.summary(r) if isinstance(t, tables.Table) for row in t.rows}
     assert [(label, unit) for label, _, unit in rows] == [("Max temperature", "K")]
     assert float(rows[0][1]) == float(f"{r.history['max_temperature'][-1]:.4g}")
     assert summary["Max temperature"] == [rows[0][1], "K"] and "Max failure factor" not in summary
@@ -235,24 +278,23 @@ def test_a_thermal_run_with_held_temperatures_only():
     from lsr_mmto.problem import selections as S
     from lsr_mmto.problem.project import Project, run
     from lsr_mmto.results import load_results
-    with registered(THERMAL):
-        p = _project("held", "UBracket.STL", UBRACKET, 3000)
-        p.add_selection("bottom", S.face("ymin"))
-        p.add_selection("top_right", S.box([0.75, 0.9, -1], [1.0, 1.0, 1]))
-        p.bcs += [{"kind": "fixed_temperature", "on": "bottom", "value": 0.0},
-                  {"kind": "fixed_temperature", "on": "top_right", "value": 1.0}]
-        p.objective("Mass()")                                       # f . T is zero with no source
-        p.settings["common"]["maxIterations"] = 2
-        assert p.validate() == []
-        with tempfile.TemporaryDirectory() as d, warnings.catch_warnings(record=True) as heard:
-            warnings.simplefilter("always")
-            run(p, save_dir=d, verbose=False)
-            r = load_results.load(os.path.join(d, "run_data.npz"))
-        assert np.all(np.isfinite(r.history["objective"]))
-        runtime = [f"{w.filename}:{w.lineno} {w.message}" for w in heard if issubclass(w.category, RuntimeWarning)]
-        assert runtime == [], runtime
-        summary = r.config["fea"]["loading_and_bc"]["T"]
-        assert summary["load_node_count"] == 0 and "load_centroid_xyz" not in summary
+    p = _project("held", "UBracket.STL", UBRACKET, 3000)
+    p.add_selection("bottom", S.face("ymin"))
+    p.add_selection("top_right", S.box([0.75, 0.9, -1], [1.0, 1.0, 1]))
+    p.bcs += [{"kind": "fixed_temperature", "on": "bottom", "value": 0.0},
+              {"kind": "fixed_temperature", "on": "top_right", "value": 1.0}]
+    p.objective("Mass()")                                       # f . T is zero with no source
+    p.settings["common"]["maxIterations"] = 2
+    assert p.validate() == []
+    with tempfile.TemporaryDirectory() as d, warnings.catch_warnings(record=True) as heard:
+        warnings.simplefilter("always")
+        run(p, save_dir=d, verbose=False)
+        r = load_results.load(os.path.join(d, "run_data.npz"))
+    assert np.all(np.isfinite(r.history["objective"]))
+    runtime = [f"{w.filename}:{w.lineno} {w.message}" for w in heard if issubclass(w.category, RuntimeWarning)]
+    assert runtime == [], runtime
+    summary = r.config["fea"]["loading_and_bc"]["T"]
+    assert summary["load_node_count"] == 0 and "load_centroid_xyz" not in summary
     s = Project("structural", stl="UBracket.STL", n_dof=3000, single_layer=True, base_dir=UBRACKET)
     s.add_selection("bottom", S.face("ymin"))
     s.add_bc("fixed", "bottom", dofs="xyz")
@@ -271,11 +313,10 @@ def test_the_saved_run_keeps_the_properties_the_physics_reads(monkeypatch):
         saved.update(kw["fields"])
         return real(**kw)
     monkeypatch.setattr(save_results, "save_run_data", keep)
-    with registered(THERMAL):
-        p = _held_and_heated("properties")
-        p.settings["common"]["maxIterations"] = 2
-        with tempfile.TemporaryDirectory() as d:
-            run(p, save_dir=d, verbose=False)
+    p = _held_and_heated("properties")
+    p.settings["common"]["maxIterations"] = 2
+    with tempfile.TemporaryDirectory() as d:
+        run(p, save_dir=d, verbose=False)
     assert "property_Conductivity" in saved and "property_Youngs_Modulus" not in saved
     assert not any(k.lower().startswith("youngs") for k in saved)
 
@@ -284,8 +325,7 @@ def test_thermal_is_analysed_with_no_file_of_it_changed():
     """Analyse (optimize/solid_part_analysis.py) on a thermal project: its analyse and final_summary run on
     the solid part in one material, and the analysis gives its objective and its RESULT_FIELDS."""
     from lsr_mmto.optimize.solid_part_analysis import analyse_solid_part
-    with registered(THERMAL):
-        r = analyse_solid_part(_held_and_heated("analysed"), 2)
+    r = analyse_solid_part(_held_and_heated("analysed"), 2)
     assert r.analysed_material and list(r.results) == list(THERMAL.RESULT_FIELDS) == ["temperature"]
     assert r.results["temperature"].ndim == 1 and np.all(np.isfinite(r.results["temperature"]))
     assert r.result_info["temperature"]["view"] == "Temperature"
@@ -326,11 +366,10 @@ def test_a_result_the_physics_does_not_return_stops_the_save_with_a_message(monk
     from lsr_mmto.problem.project import run
     real = thermal_results.final_summary
     monkeypatch.setattr(THERMAL, "final_summary", lambda *a, **k: (real(*a, **k), {})[1])
-    with registered(THERMAL):
-        p = _held_and_heated("missing result")
-        p.settings["common"]["maxIterations"] = 2
-        with tempfile.TemporaryDirectory() as d, pytest.raises(ValueError, match="returned no temperature"):
-            run(p, save_dir=d, verbose=False)
+    p = _held_and_heated("missing result")
+    p.settings["common"]["maxIterations"] = 2
+    with tempfile.TemporaryDirectory() as d, pytest.raises(ValueError, match="returned no temperature"):
+        run(p, save_dir=d, verbose=False)
 
 
 def test_a_large_thermal_problem_keeps_the_direct_solver(monkeypatch, capsys):
@@ -339,11 +378,10 @@ def test_a_large_thermal_problem_keeps_the_direct_solver(monkeypatch, capsys):
     import lsr_mmto.pyto_ad_imports as imports
     from lsr_mmto.problem.project import run
     monkeypatch.setattr(imports, "DIRECT_SOLVER_DOF_CUTOFF", 100)
-    with registered(THERMAL):
-        p = _held_and_heated("large")
-        p.settings["common"]["maxIterations"] = 2
-        with tempfile.TemporaryDirectory() as d:
-            run(p, save_dir=d, verbose=True)
+    p = _held_and_heated("large")
+    p.settings["common"]["maxIterations"] = 2
+    with tempfile.TemporaryDirectory() as d:
+        run(p, save_dir=d, verbose=True)
     out = capsys.readouterr().out
     assert "Solver: PARDISO" in out and "Solver: DPCG" not in out
 
@@ -384,7 +422,7 @@ def test_a_physics_penalty_is_added_with_its_gradient():
     from lsr_mmto.optimize import optimization_loop as M
     from lsr_mmto.problem.project import _prepared, _run_arguments
     penalty = latent_penalties.Penalty(physics=["thermal"], **_test_penalty(lambda state, it: 5.0))
-    with registered(THERMAL), added(latent_penalties.PENALTIES, penalty), tempfile.TemporaryDirectory() as d:
+    with added(latent_penalties.PENALTIES, penalty), tempfile.TemporaryDirectory() as d:
         p = _held_and_heated("penalty")
         p.objective("Mass()")
         p.settings["advanced"].update(use_penalization=False, use_z_smoothing=False)
@@ -425,7 +463,7 @@ def test_a_physics_penalty_keeps_its_history_and_its_schedule():
     from lsr_mmto.results import load_results
     penalty = latent_penalties.Penalty(physics=["thermal"],
                                        **_test_penalty(lambda state, it: 0.5 if state.iteration < 1 else 0))
-    with registered(THERMAL), added(latent_penalties.PENALTIES, penalty):
+    with added(latent_penalties.PENALTIES, penalty):
         p = _held_and_heated("penalty")
         p.settings["common"]["maxIterations"] = 2
         with tempfile.TemporaryDirectory() as d:
@@ -440,15 +478,14 @@ def test_a_quantity_of_another_physics_is_refused():
     """The project's check refuses a quantity of another physics, as the objective or as a constraint (the
     structural Compliance in a thermal project), and keeps the quantities every physics has and thermal's
     own; a structural project may still name Compliance."""
-    with registered(THERMAL):
-        p = _held_and_heated("other physics")
-        p.complete_settings()
-        assert p.validate() == []                           # ThermalCompliance and VolumeFraction
-        p.objective("Compliance()")
-        p.constraint("Compliance()", "<=", 2.0)
-        errors = [e for e in p.validate() if "quantity" in e]
-        assert errors == ["objective: Compliance is not a thermal quantity",
-                          "constraint 2: Compliance is not a thermal quantity"], errors
+    p = _held_and_heated("other physics")
+    p.complete_settings()
+    assert p.validate() == []                           # ThermalCompliance and VolumeFraction
+    p.objective("Compliance()")
+    p.constraint("Compliance()", "<=", 2.0)
+    errors = [e for e in p.validate() if "quantity" in e]
+    assert errors == ["objective: Compliance is not a thermal quantity",
+                      "constraint 2: Compliance is not a thermal quantity"], errors
 
 
 def test_a_penalty_must_state_its_scale():
@@ -470,11 +507,10 @@ def test_the_mesh_is_sized_by_the_physics_unknowns_per_node():
     """Mesh dofs counts every unknown at every node: thermal (one unknown per node) gets about three times
     the elements the structural physics (three per node) gets for the same number."""
     from lsr_mmto.problem.mesh import make_mesh
-    with registered(THERMAL):
-        p = _project("mesh size", "UBracket.STL", UBRACKET, 3000)
-        assert p.unknowns_per_node() == 1
-        one = make_mesh(p.stl_path(), p.n_dof, p.single_layer, p.unknowns_per_node())
-        three = make_mesh(p.stl_path(), p.n_dof, p.single_layer, 3)
+    p = _project("mesh size", "UBracket.STL", UBRACKET, 3000)
+    assert p.unknowns_per_node() == 1
+    one = make_mesh(p.stl_path(), p.n_dof, p.single_layer, p.unknowns_per_node())
+    three = make_mesh(p.stl_path(), p.n_dof, p.single_layer, 3)
     assert 2.0 < one.num_elems / three.num_elems < 4.5, (one.num_elems, three.num_elems)
 
 
@@ -523,7 +559,6 @@ def test_one_name_one_meaning_across_physics():
     with pytest.raises(ValueError, match="the quantity Heat names the material property 'Conductivity'"):
         quantities_of([STRUCTURAL, _another_physics(QUANTITIES=[dict(compliance, name="Heat",
                                                                      needs=["Conductivity"])])])
-    with registered(THERMAL):
-        assert len(quantities_of([STRUCTURAL, THERMAL])) == len(quantities_of([STRUCTURAL])) + len(THERMAL.QUANTITIES)
-        assert list(attributes_of([STRUCTURAL, THERMAL])) == list(attributes_of([STRUCTURAL])) + ["Conductivity"]
-        assert attributes_of([STRUCTURAL, THERMAL])["Conductivity"].physics == ("thermal",)
+    assert len(quantities_of([STRUCTURAL, THERMAL])) == len(quantities_of([STRUCTURAL])) + len(THERMAL.QUANTITIES)
+    assert list(attributes_of([STRUCTURAL, THERMAL])) == list(attributes_of([STRUCTURAL])) + ["Conductivity"]
+    assert attributes_of([STRUCTURAL, THERMAL])["Conductivity"].physics == ("thermal",)

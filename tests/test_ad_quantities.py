@@ -53,8 +53,8 @@ QUANTITIES = [
 DATABASE = {"objective Cost": "CustomAlloys20_3D", "constraint Cost": "CustomAlloys20_3D"}
 # the quantities not checked here, each with the reason (tests/test_extending.py makes sure every other one is)
 NOT_CHECKED = {
-    "ThermalCompliance": "not checked yet: the model here is a structural U-bracket, and a thermal project's "
-                         "check is still to be written in tests/test_thermal_physics.py",
+    "ThermalCompliance": "a thermal project's: its gradient for the density and the conductivity is checked in "
+                         "tests/test_thermal_physics.py (test_thermal_gradients_agree_with_finite_differences)",
     "ThermoelasticCompliance": "a thermoelastic project's: its gradient for the density, the expansion "
                                "coefficient and the conductivity is checked in tests/test_thermoelastic_physics.py "
                                "(test_gradients_agree_with_finite_differences)",

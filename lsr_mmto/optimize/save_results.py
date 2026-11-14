@@ -129,7 +129,7 @@ def _read_pnorm_exponent() -> float | None:
     return None
 
 
-def _loading_bc_summary(mesh: "HexMesher", bc: "BC", ndof_per_node: int = 3) -> dict[str, Any]:
+def _loading_bc_summary(mesh: "HexMesher", bc: "BC", ndof_per_node: int) -> dict[str, Any]:
     """For the manifest: how many nodes are loaded and their centroid, the net load, and how many dofs and nodes
     are held. An error in the loads or the held dofs is kept as its text; a centroid that fails is left out."""
     out = {}

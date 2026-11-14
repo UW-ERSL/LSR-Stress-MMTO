@@ -24,6 +24,7 @@ import tempfile
 import threading
 
 import numpy as np
+import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 if sys.platform.startswith("win"):                         # off-screen Qt on Windows finds no fonts itself
