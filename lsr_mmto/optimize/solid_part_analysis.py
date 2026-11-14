@@ -248,9 +248,14 @@ def _analyse(project: "Project",
 
     solver = problem_solver(physics, mesh, mat_prop, bcs, elem_body_force, to_params)
     elem_volume = float(np.prod(solver.mesh.elem_size))
+    domain_volume = compute_domain_volume(solver)
     m = _Analysed(solver, physics, materials, s, elem_volume, x)
-    with torch.no_grad():
+    own: dict[str, list[float]] = {}                 # the physics' own numbers (its Summary rows), recorded as
+    with torch.no_grad():                            # one iteration of a run records them
         physics.analyse(m)
+        physics.iteration_diagnostics(own, 0, m, np.asarray(x, dtype=float),
+                                      {k: v.detach() for k, v in m.props.items()}, elem_volume, domain_volume,
+                                      verbose=False)
     values = _quantities(m, to_params, labels)
     _print_quantities(title, values)
     stop_if_asked()
@@ -258,12 +263,12 @@ def _analyse(project: "Project",
     z = np.zeros((m.N, 1))                           # one latent coordinate for final_summary to reshape; the
     results = physics.final_summary(                 # properties ignore it: each element is its own material
         [(title, x, z)], solver, lambda z: materials.properties(len(z)), s, materials, 1, elem_volume,
-        compute_domain_volume(solver))
+        domain_volume)
     checked_results(physics, results, m.N, int(mesh.num_nodes))
     stop_if_asked()
 
     nan = float("nan")
-    history = {"J_phys": [nan if values[0][1] is None else values[0][1]],
+    history = {**own, "J_phys": [nan if values[0][1] is None else values[0][1]],
                "constraints": [[nan if v is None else v / limit - 1.0 for _, v, limit in values[1:]]]}
     config = {
         "run": {"example": project.name, "comment": project.comment or project.name,

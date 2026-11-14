@@ -323,9 +323,21 @@ def test_the_saved_run_keeps_the_properties_the_physics_reads(monkeypatch):
 
 def test_thermal_is_analysed_with_no_file_of_it_changed():
     """Analyse (optimize/solid_part_analysis.py) on a thermal project: its analyse and final_summary run on
-    the solid part in one material, and the analysis gives its objective and its RESULT_FIELDS."""
+    the solid part in one material, and the analysis gives its objective and its RESULT_FIELDS. Its
+    iteration_diagnostics runs once too, so the analysis has thermal's Summary row, and Compare shows it beside
+    a run's."""
     from lsr_mmto.optimize.solid_part_analysis import analyse_solid_part
+    from lsr_mmto.problem.project import run
+    from lsr_mmto.results import compare, load_results, tables
     r = analyse_solid_part(_held_and_heated("analysed"), 2)
+    rows = tables.physics_rows(r)
+    assert [label for label, _, _ in rows] == ["Max temperature"]
+    assert np.isclose(float(rows[0][1]), np.max(r.results["temperature"]), rtol=1e-3)
+    p = _held_and_heated("run")
+    p.settings["common"]["maxIterations"] = 2
+    with tempfile.TemporaryDirectory() as d:
+        optimized = load_results.load(os.path.join(run(p, save_dir=d, verbose=False), "run_data"))
+    assert "Max temperature" in str(compare.table({"run": optimized, "analysis": r}))
     assert r.analysed_material and list(r.results) == list(THERMAL.RESULT_FIELDS) == ["temperature"]
     assert r.results["temperature"].ndim == 1 and np.all(np.isfinite(r.results["temperature"]))
     assert r.result_info["temperature"]["view"] == "Temperature"
