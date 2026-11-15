@@ -264,15 +264,25 @@ def problem_solver(physics: "ModuleType", mesh: "HexMesher", mat_prop: "Material
     return physics.make_solver(mesh, mat_prop, bcs, linear_solver, dsolver, elem_body_force)
 
 
-def material_source(s: "RunSettings", vae_params: "VAEParams", xlsx: str, saveNet: str | None,
-                    should_stop: Callable[[], bool] | None, on_network_error: Callable[[str], bool] | None) \
+def material_source(project: "Project", s: "RunSettings", vae_params: "VAEParams", xlsx: str,
+                    saveNet: str | None, should_stop: Callable[[], bool] | None,
+                    on_network_error: Callable[[str], bool] | None) \
         -> "tuple[MaterialSource, torch.Tensor, dict[str, float], str]":
-    """The run's material source (materials/material_source.py), the one place a run's materials come from, and
-    what the run reads with it: the database's materials as latent points (materials, latent dimension), the
-    network's largest error per property in % ({} with no network), and saveNet resolved (None is the .nt
-    beside the database). The material network of the database xlsx: read when there is one and
+    """The run's material source (materials/material_source.py), the one place a run's materials come from, as
+    the project says (project.material_source, project.pinned_material), and what the run reads with it: the
+    database's materials as latent points (materials, latent dimension), the network's largest error per
+    property in % ({} with no network), and saveNet resolved (None is the .nt beside the database).
+
+    One database material: DatabaseMaterials, the database's one material for every element; no network is read
+    or trained. Otherwise the material network of the database xlsx: read when there is one and
     s.use_pretrained_vae, else trained and saved; a network further off than s.network_error_warning asks
-    on_network_error whether to go on (NetworkRunCancelled when it says no)."""
+    on_network_error whether to go on (NetworkRunCancelled when it says no). With a pinned material, the
+    network pinned to it (PinnedMaterial); else the network itself."""
+    from lsr_mmto.materials.material_source import DatabaseMaterials, PinnedMaterial
+    if project.material_source == "one_database_material":
+        materials = DatabaseMaterials(xlsx, 0)
+        print(f"Materials: {materials.materialNames[0]}, at its database values in every element; no network")
+        return materials, torch.zeros((len(materials.materialNames), 0)), {}, saveNet
     matEncoder = MaterialEncoder(vae_params)
     matEncoder.readExcel(xlsx)
 
@@ -319,6 +329,11 @@ def material_source(s: "RunSettings", vae_params: "VAEParams", xlsx: str, saveNe
         ).cpu()
     matEncoder.printEncodingErrors()
 
+    if project.pinned_material is not None:
+        row = [str(n) for n in matEncoder.materialNames].index(str(project.pinned_material))
+        print(f"Materials: {project.pinned_material} in every element, as the network gives it")
+        return (PinnedMaterial(matEncoder, row), torch.zeros((len(matEncoder.materialNames), 0)), network_errors,
+                saveNet)
     return matEncoder, matEncoder.training_latents, network_errors, saveNet
 
 
@@ -364,7 +379,7 @@ def setup(*, s: "RunSettings", project: "Project", save_dir: str, verbose: bool,
 
     material_colors, material_labels = material_display(to_params.MaterialsExcelFile)
     matEncoder, zRealPoints, network_errors, saveNet = material_source(
-        s, vae_params, to_params.MaterialsExcelFile, saveNet, should_stop, on_network_error)
+        project, s, vae_params, to_params.MaterialsExcelFile, saveNet, should_stop, on_network_error)
     zRealPoints_np = zRealPoints.detach().cpu().numpy().astype(float)
 
     solver = problem_solver(physics, mesh, mat_prop, bcs, elem_body_force, to_params)

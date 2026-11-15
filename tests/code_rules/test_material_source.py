@@ -54,10 +54,12 @@ def test_nothing_but_the_material_source_reaches_into_the_network():
 
 
 def test_every_source_gives_what_the_run_reads():
-    """The network and the database's own values each give every member of MaterialSource."""
+    """The network, the network pinned to one material and the database's own values each give every member of
+    MaterialSource."""
     from lsr_mmto.materials.encoder import MaterialEncoder
+    from lsr_mmto.materials.material_source import PinnedMaterial
     members = [n for n in vars(MaterialSource) if not n.startswith("_")] + list(MaterialSource.__annotations__)
-    for source in (MaterialEncoder, DatabaseMaterials):
+    for source in (MaterialEncoder, PinnedMaterial, DatabaseMaterials):
         missing = [n for n in members if not hasattr(source, n) and n not in getattr(source, "__annotations__", {})]
         assert not missing, (source.__name__, missing)
 
@@ -84,3 +86,15 @@ def test_the_database_decodes_to_each_elements_own_material():
     for name, c in source.materialAttributes.items():
         assert np.allclose(props[name].numpy(), source.rawData[rows, c["idx"]]), name
     assert source.network_weights() is None
+
+
+def test_every_quantity_and_penalty_says_truly_whether_it_reads_the_latent_points():
+    """A quantity or a penalty whose own function reads the model's latent points (m.z, m.z_real) says so
+    (reads_latent_points), and one that does not says it does not: a single-material project refuses the first
+    kind of quantity, and a run with no latent points leaves out the first kind of penalty, so a wrong word would
+    let a value of no meaning into a run. Read from the names the function's own code uses."""
+    from lsr_mmto.design.latent_penalties import PENALTIES
+    from lsr_mmto.formulation.quantities import QUANTITIES
+    wrong = [f"{q.name}: says {q.reads_latent_points}" for q in list(QUANTITIES) + list(PENALTIES)
+             if bool({"z", "z_real"} & set(q.fn.__code__.co_names)) != q.reads_latent_points]
+    assert not wrong, wrong

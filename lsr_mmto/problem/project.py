@@ -71,6 +71,9 @@ if TYPE_CHECKING:
 
 DEFAULT_PHYSICS = next(iter(PHYSICS))          # a project that names no physics: the first one listed
 
+# where a run's material properties come from (Project.material_source; optimization_loop.material_source)
+MATERIAL_SOURCES = ("network", "one_database_material")
+
 SCHEMA_VERSION = 1
 # _UPGRADES[n] turns an mmto section of version n into version n + 1. When the format
 # changes: raise SCHEMA_VERSION and add the function here; old files then still load.
@@ -170,6 +173,13 @@ class Project:
         Example: p.physics = "structural"
     keep_support_elements: True also keeps solid every element touching a fixed node
         Example: p.keep_support_elements = True
+    material_source: where each element's material properties come from: "network" (the material
+        network, from the database) or "one_database_material" (one material, the database's only one, at
+        its database values, with no network)
+        Example: p.material_source = "network"
+    pinned_material: with "network", one database material's name: every element is that material,
+        through the network; None lets the optimization choose each element's material
+        Example: p.pinned_material = None
     settings[section][name]: one setting: section is "common", "advanced" or "vae", name a setting of
         that section; every setting, its default and what it does are under Settings
         Default: the values under Settings
@@ -188,6 +198,8 @@ class Project:
     keep_solid_names: list[str]
     keep_support_elements: bool
     _database: str | None                       # a shipped database's name or a path, behind the database property
+    material_source: str                        # one of MATERIAL_SOURCES
+    pinned_material: str | None                 # with "network": a material's name, or None
     formulation: dict[str, Any]                 # {"objective": {"expression", "sense"} or None, "constraints": [...]}
     settings: dict[str, dict[str, Any]]         # {section: {key: value}}
     _gui: dict[str, Any]                        # everything else in the file, kept for the GUI
@@ -206,6 +218,8 @@ class Project:
         self.keep_solid_names = []
         self.keep_support_elements = False
         self._database = None
+        self.material_source = "network"        # or "one_database_material": see the docstring
+        self.pinned_material = None             # with "network": None, or a material's name to pin every element to
         self.formulation = {"objective": None, "constraints": []}
         self.settings = {k: dict(v) for k, v in DEFAULT_SETTINGS.items()}
         self._gui = {}                          # everything else in the file, kept for the GUI
@@ -479,7 +493,9 @@ class Project:
             errors += [Problem("materials", f"material database {os.path.basename(xlsx)}: {e}") for e in db_errors]
             if not db_errors:
                 errors += self._missing_columns(database_attributes(xlsx))
-                errors += self.vae_check()[0]
+                errors += self._material_source_errors(xlsx)
+                if self.material_source == "network":
+                    errors += self.vae_check()[0]
         for section, values in self.settings.items():
             if section not in DEFAULT_SETTINGS:
                 errors.append(Problem("settings", f"settings: unknown section {section!r}"))
@@ -533,7 +549,40 @@ class Project:
                 continue
             if self.physics in PHYSICS and not q.applies_to(self.physics):
                 errors.append(Problem("formulation", f"{where}: {q.shown} is not a {self.physics} quantity"))
+            if q.reads_latent_points and self.single_material():
+                errors.append(Problem("formulation", f"{where}: {q.shown} reads each element's point in the latent "
+                                                     f"space, and a single material has none"))
         return errors
+
+    def single_material(self) -> bool:
+        """True when every element is one material: one database material, or the network pinned to one."""
+        return self.material_source != "network" or self.pinned_material is not None
+
+    def _material_source_errors(self, xlsx: str) -> list[Problem]:
+        """What is wrong with the material source for the database xlsx (which passes its check): a source not in
+        MATERIAL_SOURCES; with one database material, a database of more than one or a pin; with the network,
+        a database of one material, or a pin that names no material of the database."""
+        from lsr_mmto.materials.databases import database_table
+        names = [str(n) for n in database_table(xlsx)[0]]
+        db = os.path.basename(xlsx)
+        out = []
+        if self.material_source not in MATERIAL_SOURCES:
+            out.append(Problem("materials", f"material source {self.material_source!r}: one of "
+                                            f"{', '.join(MATERIAL_SOURCES)}"))
+        elif self.material_source == "one_database_material":
+            if len(names) != 1:
+                out.append(Problem("materials", f"one database material: {db} has {len(names)} materials; make a "
+                                                f"database of the one material, or use the network pinned to it"))
+            if self.pinned_material is not None:
+                out.append(Problem("materials", "one database material takes no pinned material: the database's "
+                                                "one material is used"))
+        elif len(names) < 2:
+            out.append(Problem("materials", f"{db} has one material, and a network needs at least two to learn "
+                                            f"from; use one database material"))
+        elif self.pinned_material is not None and str(self.pinned_material) not in names:
+            out.append(Problem("materials", f"pinned material {self.pinned_material!r} is not in {db}: one of "
+                                            f"{', '.join(names)}"))
+        return out
 
     def gui_step_started(self, step: str) -> bool:
         """True once the step of GUI_STEPS is begun (units chosen, a database, a support or load, an
@@ -699,7 +748,8 @@ class Project:
             return out
         out += [f"material database {os.path.basename(xlsx)}: {w}" for w in db_warnings]
         out += self._unit_warnings(xlsx)
-        out += self.vae_check()[1]
+        if self.material_source == "network":
+            out += self.vae_check()[1]
         out += self._bound_warnings()
         return out
 
@@ -813,7 +863,8 @@ class Project:
             xlsx, known = self.database_paths()
             if known:                                       # a shipped database: what its network was trained with
                 vae_defaults.update(known)
-            elif "latentDim" not in self.settings["vae"] and not check_database(xlsx)[0]:
+            elif ("latentDim" not in self.settings["vae"] and self.material_source == "network"
+                  and not check_database(xlsx)[0]):
                 vae_defaults["latentDim"] = recommended_latent_dim(xlsx)[1]
         for k in VAE_PARAMS:
             if k not in self.settings["vae"]:
@@ -945,6 +996,8 @@ class Project:
                 "keep_solid": list(self.keep_solid_names),
                 "keep_support_elements": self.keep_support_elements,
                 "database": self.database,
+                "material_source": self.material_source,
+                "pinned_material": self.pinned_material,
                 "formulation": {"objective": self.formulation.get("objective"),
                                 "constraints": [dict(c) for c in self.formulation.get("constraints", [])]},
                 "settings": {k: dict(v) for k, v in self.settings.items()}}
@@ -1043,6 +1096,10 @@ class Project:
             lines.append("p.keep_support_elements = True")
         lines += [""] + explained("Materials", "p.database and the columns of a database")
         lines.append(f"p.database = {self.database!r}")
+        if self.material_source != "network":
+            lines.append(f"p.material_source = {self.material_source!r}")
+        if self.pinned_material is not None:
+            lines.append(f"p.pinned_material = {self.pinned_material!r}")
         obj = self.formulation.get("objective")
         if obj or self.formulation.get("constraints"):
             lines += [""] + explained("Objective and constraints", "p.objective, p.constraint and every quantity")
@@ -1111,6 +1168,8 @@ class Project:
         p.keep_solid_names = list(m.get("keep_solid", []))
         p.keep_support_elements = bool(m.get("keep_support_elements", False))
         p._database = m.get("database")                    # as saved: its settings stay as they are
+        p.material_source = m.get("material_source", "network")    # older files: the network, not pinned
+        p.pinned_material = m.get("pinned_material")
         f = m.get("formulation") or {}
         p.formulation = {"objective": f.get("objective"), "constraints": list(f.get("constraints", []))}
         stored = m.get("settings") or {}

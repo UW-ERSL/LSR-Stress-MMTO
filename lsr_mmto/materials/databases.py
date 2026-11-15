@@ -367,9 +367,10 @@ def check_database(path: str) -> tuple[list[str], list[str]]:
     def blank(v: Any) -> bool:
         return v is None or (isinstance(v, float) and math.isnan(v)) or str(v).strip() == ""
 
-    if df.shape[1] < 2 or df.shape[0] < 4:
-        return [f"the first sheet needs attribute names in row 1, units in row 2 and at least two "
-                f"materials below, with the material names in column A; it has {df.shape[0]} rows "
+    # one material is a database (a project's one database material); a network needs two (Project.validate)
+    if df.shape[1] < 2 or df.shape[0] < 3:
+        return [f"the first sheet needs attribute names in row 1, units in row 2 and at least one "
+                f"material below, with the material names in column A; it has {df.shape[0]} rows "
                 f"and {df.shape[1]} columns"], []
 
     blank_row1 = [c for c in range(1, df.shape[1]) if blank(df.iat[0, c])]
@@ -429,7 +430,7 @@ def check_database(path: str) -> tuple[list[str], list[str]]:
             if not a.in_range(x):
                 errors.append(f"{where}: {x:g} is outside the allowed range, {a.range_text()}")
             column.append(x)
-        if len(column) == df.shape[0] - 2 and len(set(column)) == 1:
+        if len(column) == df.shape[0] - 2 and len(column) > 1 and len(set(column)) == 1:
             warnings_.append(f"{name} is {column[0]:g} for every material, so it tells the VAE nothing "
                              f"about the materials")
 

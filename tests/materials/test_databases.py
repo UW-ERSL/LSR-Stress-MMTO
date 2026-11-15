@@ -109,8 +109,9 @@ def test_errors_name_the_cell():
     rows = [list(r) for r in GOOD]
     rows[1][1] = "MPa"                                       # not a unit of density
     assert any("B2: 'MPa' is not a unit of Density" in e for e in errors_of(rows)[0])
-    errors, _ = errors_of(GOOD[:3])
-    assert "at least two materials" in errors[0]
+    errors, _ = errors_of(GOOD[:2])
+    assert "at least one material" in errors[0]
+    assert errors_of(GOOD[:3]) == ([], [])                   # one material: a database, with nothing to warn of
     rows = [list(r) for r in GOOD]
     rows[4][1:] = rows[2][1:]                                # C has A's numbers
     assert errors_of(rows)[0] == ["A3, A5: A, C have the same value in every attribute, so the VAE cannot "

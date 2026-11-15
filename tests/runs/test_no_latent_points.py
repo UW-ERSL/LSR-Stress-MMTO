@@ -29,7 +29,7 @@ def _one_material(monkeypatch, made):
     from lsr_mmto.materials.material_source import DatabaseMaterials
     from lsr_mmto.optimize import design_model, optimization_loop as M
 
-    def source(s, vae_params, xlsx, saveNet, should_stop, on_network_error):
+    def source(project, s, vae_params, xlsx, saveNet, should_stop, on_network_error):
         made["source"] = DatabaseMaterials(xlsx, MATERIAL)
         return made["source"], torch.zeros((len(made["source"].materialNames), 0)), {}, saveNet
     monkeypatch.setattr(M, "material_source", source)

@@ -9,8 +9,11 @@ into the material network itself (tests/code_rules/test_material_source.py check
 The sources:
     MaterialEncoder     materials/encoder.py: the material network. z through its decoder, then back to each
                         column's numbers, inside the torch tree, so the gradient reaches z
+    PinnedMaterial      this file: the network pinned to one database material: every element that material's
+                        properties as the network gives them, at its own latent point; no latent points
     DatabaseMaterials   this file: each element one material of the database, at its database values, with
-                        no network. Analyse uses it (optimize/solid_part_analysis.py)
+                        no network. Analyse uses it (optimize/solid_part_analysis.py), and so does a project of
+                        one database material (Project.material_source)
 
 What every source gives (MaterialSource): latent_dim, the numbers in each element's latent point (0 with no
 latent points: the design is then the densities only); decode(z); the database material nearest each latent
@@ -64,6 +67,58 @@ class MaterialSource(Protocol):
     def reconstruction(self) -> list[dict[str, Any]]:
         """Each material's every property as the database gives it and as the network gives it back; [] for a
         source with no network."""
+
+
+class PinnedMaterial:
+    """The network pinned to one database material, row: every element gets that material's properties as the
+    network gives them, at the material's own latent point (the network's training_latents). It has no latent
+    points (latent_dim 0), so the design is the densities only; what a run saves of its network is the
+    network's."""
+
+    latent_dim = 0
+    network: Any                         # the MaterialEncoder, read or trained
+    row: int                             # the material's row in the database
+    materialNames: list[str]
+    rawData: np.ndarray
+    materialAttributes: dict[str, dict[str, Any]]
+
+    def __init__(self, network: Any, row: int) -> None:
+        self.network, self.row = network, int(row)
+        self.materialNames, self.rawData = network.materialNames, network.rawData
+        self.materialAttributes = network.materialAttributes
+        z = torch.as_tensor(network.training_latents[self.row:self.row + 1], dtype=_DTYPE)
+        with torch.no_grad():
+            self._pinned = {k: v.detach() for k, v in network.decode(z).items()}     # each column, (1,)
+
+    def decode(self, z: torch.Tensor) -> dict[str, torch.Tensor]:
+        """The pinned material's properties for each of len(z) elements; z's values are not read."""
+        return {k: v.repeat(len(z)) for k, v in self._pinned.items()}
+
+    def getClosestRealMaterialIndex(self, zDesign: torch.Tensor) -> torch.Tensor:
+        """The pinned material's row, for every point."""
+        return torch.full((len(zDesign),), self.row, dtype=torch.long)
+
+    def getClosestRealMaterialZValues(self, zDesign: torch.Tensor) -> np.ndarray:
+        """(points, 0): there are no latent points."""
+        return np.zeros((len(zDesign), 0))
+
+    def getLightestMaterial(self) -> np.ndarray:
+        """(0,): there are no latent points."""
+        return np.zeros(0)
+
+    getHeaviestMaterial = getLightestMaterial
+
+    def material_properties(self) -> dict[str, torch.Tensor]:
+        """Each database material's properties as the network gives them."""
+        return self.network.material_properties()
+
+    def network_weights(self) -> dict[str, torch.Tensor]:
+        """The network's weights."""
+        return self.network.network_weights()
+
+    def reconstruction(self) -> list[dict[str, Any]]:
+        """The network's record of each material, the database's values against its own."""
+        return self.network.reconstruction()
 
 
 class DatabaseMaterials:

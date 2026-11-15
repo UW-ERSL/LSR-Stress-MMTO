@@ -69,13 +69,15 @@ def material_volume_fraction(xb: torch.Tensor, z: torch.Tensor, z_real: torch.Te
 #   start_note   how that starting limit is worked out, in plain words, for the row's (i) and the limit's tip;
 #                {reference} in it is filled with start_reference(project), in the quantity's unit
 #   start_reference  start_reference(project): the number start_note's {reference} names, or None
+#   reads_latent_points  True when fn reads the latent points (m.z, m.z_real); a single-material project
+#                (every element one material: Project.single_material) refuses it. Default False
 
 
 class Quantity:
     """One objective or constraint a formula can name, as the comment above describes its arguments."""
     __slots__ = ("name", "objective", "constraint", "physics", "needs", "fn", "doc", "shown", "help", "unit",
                  "arguments", "scales_with", "sets_start_density", "bound_warning", "start_bound", "start_note",
-                 "start_reference")
+                 "start_reference", "reads_latent_points")
 
     name: str
     objective: bool
@@ -94,6 +96,7 @@ class Quantity:
     start_bound: "float | Callable[[Project], float | None] | None"
     start_note: str
     start_reference: "Callable[[Project], float | None] | None"
+    reads_latent_points: bool
 
     def __init__(self, name: str, objective: bool, constraint: bool, physics: Iterable[str], needs: Iterable[str],
                  fn: "Callable[[MMTOModelAD | _Analysed, dict[str, int | float | str] | None], torch.Tensor]",
@@ -102,7 +105,8 @@ class Quantity:
                  sets_start_density: bool = False,
                  bound_warning: "Callable[[Project, float], str | None] | None" = None,
                  start_bound: "float | Callable[[Project], float | None] | None" = None, start_note: str = "",
-                 start_reference: "Callable[[Project], float | None] | None" = None) -> None:
+                 start_reference: "Callable[[Project], float | None] | None" = None,
+                 reads_latent_points: bool = False) -> None:
         self.name, self.objective, self.constraint = name, objective, constraint
         self.physics, self.needs, self.fn, self.doc = frozenset(physics), tuple(needs), fn, doc
         self.shown, self.help, self.unit = shown, help, unit
@@ -110,6 +114,7 @@ class Quantity:
         self.scales_with, self.sets_start_density = dict(scales_with or {}), bool(sets_start_density)
         self.bound_warning, self.start_bound = bound_warning, start_bound
         self.start_note, self.start_reference = start_note, start_reference
+        self.reads_latent_points = bool(reads_latent_points)
 
     def takes(self, argument: str) -> bool:
         """True when the formula takes the argument of that name or type ("material", "tau")."""
@@ -279,7 +284,7 @@ CORE_QUANTITIES = [
              _material_volume_fraction, "volume fraction of one database material, softmax weights",
              "Material volume fraction", "The share of the design space filled with one chosen material, 0 to 1.",
              "fraction of the design domain", (("material_id", "material", None), ("tau", "number", DEFAULT_TAU)),
-             start_bound=0.4, start_note="40% of the design space filled with that material"),
+             start_bound=0.4, start_note="40% of the design space filled with that material", reads_latent_points=True),
     Quantity("MassFraction", False, True, [], ["Density"],
              _mass_fraction, "mass / (reference density * design domain volume), reference from the database",
              "Mass fraction",

@@ -1,6 +1,6 @@
 # Testing the codebase
 
-Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 291 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
+Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 296 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
 
 Run them all from the repository folder with `python -m pytest tests -q -n 4` (`-n 2` on a computer with less than 16 GB of memory), one folder with `python -m pytest tests/<folder> -q`, or one file with `python -m pytest tests/<folder>/<file> -q`.
 
@@ -91,7 +91,7 @@ The Project: saving and loading, the checks made before a run, the translation o
 - `test_round_trip`: Round trip.
 - `test_expressions`: Expressions.
 - `test_validate`: Validate.
-- `test_every_error_names_its_step`: Every error validate can give carries the step of the setup it is about, as data (Problem.gui_step): each place in validate, _missing_columns and vae_check that adds an error makes a Problem with a step of GUI_STEPS (read from the code, so a new error cannot leave it out), and the errors of broken projects all have one.
+- `test_every_error_names_its_step`: Every error validate can give carries the step of the setup it is about, as data (Problem.gui_step): each place in validate, _missing_columns, vae_check and _material_source_errors that adds an error makes a Problem with a step of GUI_STEPS (read from the code, so a new error cannot leave it out), and the errors of broken projects all have one.
 - `test_build_coded`: Build coded.
 - `test_conflicting_values_are_refused`: A dof given 0 by one support and 0.001 by another is an error, not a silent pick.
 - `test_a_load_is_split_evenly_over_its_nodes`: A force on a face of a uniform mesh: the nodal forces add up to the total, and every node of the face carries the same share; nodes off the face carry none. A pressure likewise adds up to pressure times area.
@@ -227,6 +227,15 @@ Running a Project: its settings cover every setting of _run_topopt; the run reco
 - `test_network_check_leaves_the_encoder_as_it_was`: Checking a network read from its file leaves its encoder giving each material's own latent point (not a random sample around it): the same points every time, each nearest its own material.
 - `test_shipped_networks_are_usable`: Every shipped network reproduces its database well within the default warning limit.
 - `test_training_stop`: The material network's training: unchanged when nothing asks it to stop (the same seed gives the same network, to the last bit, with or without a should_stop that says no); asked to stop, it raises TrainingStopped and saves no network.
+
+### `tests/runs/test_single_material.py`
+
+A project of a single material, every element the same material, the design the densities only: one database material (material_source "one_database_material", the database's one material at its database values, no network read or trained), or the network pinned to one database material (pinned_material, that material's properties as the network gives them). Each runs through to the save; the project saves and reads back its choice, an older file reads as the network with no pin, and the project's check refuses what cannot run.
+
+- `test_one_database_material_runs_with_no_network`: A database of one material and material_source "one_database_material": the project passes its check, the run reads and trains no network (no .nt is written beside the database), leaves out the penalties of the latent points, and every element has the material's database values; the saved run has latent dimension 0.
+- `test_the_network_pinned_to_one_material`: pinned_material names a material of the 6-material database: every element has that material's properties as the shipped network gives them at the material's own latent point, the design is the densities only, and every element's material is that one.
+- `test_the_choice_is_saved_and_an_older_file_reads_as_the_network`: material_source and pinned_material are saved and read back; a file saved before them reads as the network with no pin; the project script sets them only when they are not a new project's.
+- `test_what_cannot_run_is_refused`: The project's check refuses: a material source it does not know; a pin that names no material of the database; one database material with a database of several, or with a pin; the network with a database of one material; and, for a single material, a quantity that reads the latent points (material volume fraction).
 
 ### `tests/runs/test_solid_part_analysis.py`
 
@@ -487,9 +496,10 @@ Every module of the package lsr_mmto and of the app (gui) imports, so a file mov
 A run gets each element's material properties from its material source (lsr_mmto/materials/material_source.py) and from nothing else: outside the material network's own file and the material source's, no code reaches into the network's decoder. Every source gives what the run reads (MaterialSource), and each decodes as it says: the network inside the torch tree, the database at each element's material's own values.
 
 - `test_nothing_but_the_material_source_reaches_into_the_network`: No file of lsr_mmto or gui, other than the network's own (encoder.py) and the material source's, calls the network's decoder or turns its output into properties itself: each asks its material source's decode.
-- `test_every_source_gives_what_the_run_reads`: The network and the database's own values each give every member of MaterialSource.
+- `test_every_source_gives_what_the_run_reads`: The network, the network pinned to one material and the database's own values each give every member of MaterialSource.
 - `test_the_network_decodes_inside_the_tree`: The network's decode gives every column of the database, one value per point, and the gradient of a property reaches the latent points.
 - `test_the_database_decodes_to_each_elements_own_material`: The database's own values: each element gets its material's row, whatever its latent point, and there is no network to save.
+- `test_every_quantity_and_penalty_says_truly_whether_it_reads_the_latent_points`: A quantity or a penalty whose own function reads the model's latent points (m.z, m.z_real) says so (reads_latent_points), and one that does not says it does not: a single-material project refuses the first kind of quantity, and a run with no latent points leaves out the first kind of penalty, so a wrong word would let a value of no meaning into a run. Read from the names the function's own code uses.
 
 ### `tests/code_rules/test_physics_folders.py`
 
