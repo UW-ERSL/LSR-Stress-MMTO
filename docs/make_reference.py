@@ -46,7 +46,7 @@ SECTIONS = [
 
 PROJECT_CALLS = ("Project", "units", "comment", "physics", "add_selection", "mesh", "evaluate", "add_bc",
                  "keep_solid", "keep_support_elements", "database", "material_source", "pinned_material",
-                 "network_error", "vae_check", "objective",
+                 "network_error", "vae_check", "network_check", "confirm_network", "objective",
                  "constraint", "settings",
                  "save", "save_as_script", "load")                  # Project's calls, in the order a script uses them
 ARGUMENT = re.compile(r"^(\w+)((?:\[\w+\]|\(\w+\))*): (.*)$")       # name: text, or settings[section][name]: text

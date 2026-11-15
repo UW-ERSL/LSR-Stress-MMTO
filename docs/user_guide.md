@@ -164,13 +164,13 @@ The buttons next to the list:
 
 - **New database...** opens the database editor (section 6.3) on an empty database, to type or paste your materials in.
 - **Edit...** opens the database in the editor. One of your own is changed in place. One that comes with LSR MMTO is saved as a copy in your project's folder, and the project then uses the copy. A column that is not a property LSR MMTO knows is left out, and a note over the table names it; Save writes the database without it.
-- **Open in Excel** opens the database file in Excel, or whatever opens .xlsx files on your computer. When you come back to the Materials window after saving it there, the window reads the database again by itself. A change made in Excel keeps no older version (section 6.5).
+- **Open in Excel** opens the database file in Excel, or whatever opens .xlsx files on your computer. When you come back to the Materials window after saving it there, the window reads the database again by itself. A change made in Excel keeps no older version (section 6.5). A database that comes with LSR MMTO is not opened: a change there would change it for every project, so make your own copy with **Edit...** first.
 - **Versions...** lists the older versions kept of one of your own databases (section 6.5).
 - **Import...**, at the right, brings in a table of materials you already have, in Excel (.xlsx or .xls) or CSV. A database made by LSR MMTO (one whose check finds nothing wrong) is used where it is, with its trained network if it has one next to it. Any other table becomes a new database: the first column holds the material names and the first row the properties. A property can be written under any of the names LSR MMTO knows it by (for example Young's modulus as Youngs_Modulus, Youngs Modulus or E), and a unit may follow in brackets, as in *Density [kg/m^3]*. A second row of units, as in an LSR MMTO database, is read too. Columns that are not a property LSR MMTO knows are left out, and one message lists them. The database editor then opens with what was read, for you to check and save.
 
 New database and Import (of a table that is not yet a database) save into the project's folder, so the project must be saved first; LSR MMTO says so if it is not.
 
-When some columns of the database are in other units than the project's (section 4), a button **Convert to mmKS units...** (with the project's unit system) shows under the report. It opens a window that lists each of those columns with what its numbers are multiplied by, for example *Young's modulus: Pa -> MPa, x 1e-06*, and the limits of the formulation written for the old numbers with what they become, for example *Mass <= 4e+07 -> 4e-05 t*. **Convert these limits too** is ticked, so each limit keeps its meaning. **OK** writes the converted database as the project's own copy, in its materials folder (one that comes with LSR MMTO is never changed), keeps its trained network, which still fits, converts the ticked limits, saves the project and says in the messages what was converted.
+When some columns of the database are in other units than the project's (section 4), a button **Convert to mmKS units...** (with the project's unit system) shows under the report. It opens a window that lists each of those columns with what its numbers are multiplied by, for example *Young's modulus: Pa -> MPa, x 1e-06*, and the limits of the formulation written for the old numbers with what they become, for example *Mass <= 4e+07 -> 4e-05 t*. **Convert these limits too** is ticked, so each limit keeps its meaning. **OK** writes the converted database as the project's own copy, in its materials folder (one that comes with LSR MMTO is never changed), keeps its trained network, which still fits up to rounding in the last digit (the next run asks once before using it, section 6.4), converts the ticked limits, saves the project and says in the messages what was converted.
 
 ### 6.2 Values and Network error
 
@@ -196,13 +196,20 @@ You can paste a block copied from Excel into the table. Problems show in red onc
 
 While there are changes not saved, the editor's title says *(modified)*. Saving changes to a database that already has its first version kept (section 6.5) asks *Keep the older version?*: **Yes** keeps the database as it was before your changes, **No** saves without keeping it, **Cancel** goes back to editing. Closing the editor with changes not saved asks first: **Save...** saves them, **Discard changes** closes without them, **Cancel** goes back to editing. A database with columns LSR MMTO does not know shows *(modified)* from the start, since Save writes it without them.
 
-If you change the numbers of a database that already has a trained network, the network no longer fits it: LSR MMTO sets the old network aside, and the next run trains a new one.
+If you change the materials (a name, or a material added or taken away) or the numbers of a database that already has a trained network, the network no longer fits it: LSR MMTO sets the old network aside, and the next run trains a new one.
 
 ### 6.4 The database file
 
 A database is an Excel file (.xlsx): row 1 holds the property names, row 2 their units, and then one row per material, its name in the first column. An optional second sheet, **Display**, holds the colour (#rrggbb) and the shorter label each material is drawn with; the editor writes it for you.
 
 The trained network is a file next to the database with the same name and the ending .nt (my_materials.xlsx and my_materials.nt). A database that comes with LSR MMTO has its network already, and the one in LSR MMTO's own folder is never trained again. Its copy in your project's folder can be: see Use the trained network, in Settings.
+
+A trained network keeps a record of the database it learned from: every name, unit and number, and each material's colour and label. Before every run, LSR MMTO compares the database with that record:
+
+- A number, a unit, a name, or a material added or taken away, however small the change: the run doesn't start until a new network is trained (untick **Use the trained network** in Settings) or the version the network was trained on is brought back with **Versions...** (section 6.5). The report under the table names the cells that changed.
+- Only colours or labels changed, the units converted (section 6.1), or a network trained before networks kept this record: the next run asks once, *Use it for my_materials.xlsx as it is now?* **Yes** uses the network and records the database as it is now, so you aren't asked again; **No** starts nothing. The report under the table says when the next run will ask.
+
+LSR MMTO writes a number into the file with up to 16 significant digits, so a difference beyond that is not kept.
 
 The attributes a material database can hold:
 
@@ -654,6 +661,8 @@ These appear in the messages as **Error:** lines, and under *Cannot start:* in t
 
 - **my_materials.nt takes 3 attributes, but my_materials.xlsx has 4: it was trained on another database**: the trained network does not fit the database. In Settings, on the VAE tab, untick **Use the trained network**; the next run trains a new one.
 - **latentDim is 3, but my_materials.nt was trained with 2: set it to 2, or switch off use_pretrained_vae to train a new network**: a network setting differs from the trained network's. latentDim is **Latent dimension**, and use_pretrained_vae is **Use the trained network**, both in Settings on the VAE tab.
+- **my_materials.xlsx: the database has changed since its network was trained: cell B4 is 210000.0, was 200000.0**: the network learned from other numbers. Train a new one (untick **Use the trained network** in Settings), or bring back the version it was trained on with **Versions...** in Materials (section 6.4).
+- **... which comes with the app, does not match ...**: a database that comes with LSR MMTO was changed outside LSR MMTO. Put the file back as it came, or make your own copy with **Edit...** and let its first run train a network.
 - **a run would train a new VAE and save it over the shipped ...**: a database that comes with LSR MMTO would have its network replaced. Copy the database into your project with Edit... (section 6.1) and use the copy.
 - Warning **my_materials.nt exists: the next run trains a new network and replaces it**: Use the trained network is off, so the next run trains again. The old network is kept beside it, ending in .previous.nt.
 - Warning **latentDim is 3; the database's effective dimension is ... so 2 is recommended**: the latent dimension is larger than the materials need, which has made runs fail to settle. Set Latent dimension to the recommended value, unless you have a reason not to.

@@ -398,6 +398,7 @@ def test_training_stop():
     import torch
     from lsr_mmto.materials.databases import DATABASE_DIR, DATABASE_VAE, VAEParams
     from lsr_mmto.materials.encoder import MaterialEncoder, TrainingStopped
+    from lsr_mmto.materials.network_stamp import read_network
     with tempfile.TemporaryDirectory() as d:
         xlsx = shutil.copy(os.path.join(ROOT, DATABASE_DIR, "BM1_3Mats_2Attr.xlsx"), d)
 
@@ -411,7 +412,7 @@ def test_training_stop():
             enc.readExcel(xlsx)
             path = os.path.join(d, name)
             enc.trainAutoencoder(400, vae.klFactor, path, vae.learningRate, 1e-9, should_stop=should_stop)
-            return torch.load(path)
+            return read_network(path)[0]
 
         plain, asked = trained(None, "plain.nt"), trained(lambda: False, "asked.nt")
         assert plain.keys() == asked.keys()

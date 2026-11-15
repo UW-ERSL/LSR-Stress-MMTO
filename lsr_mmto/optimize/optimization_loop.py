@@ -174,6 +174,7 @@ class RunState:
     solver: Any                                   # the physics' solver, whatever its make_solver returns
     encoder: "MaterialSource"                     # the run's material source (materials/material_source.py)
     network_errors: dict[str, float]              # {attribute: % of its range}
+    database_record: dict[str, Any]               # network_stamp.database_stamp: the database as the run read it
     model: MMTOModelAD
     history: dict[str, list[float | np.ndarray]]
     material_colors: list[str]
@@ -297,6 +298,11 @@ def material_source(project: "Project", s: "RunSettings", vae_params: "VAEParams
 
     if s.use_pretrained_vae and vae_file_exists:
         print(f"Loading pre-trained autoencoder from file: {saveNet}")
+        from lsr_mmto.materials.network_stamp import read_network
+        trained_on = read_network(saveNet)[1]                   # the project's check compared it; again here, with
+        if trained_on is None or trained_on.get("main") != matEncoder.database_record["main"]:   # what was read
+            raise ValueError(f"{os.path.basename(xlsx)} is not the database {os.path.basename(saveNet)} was trained "
+                             f"on: it changed since, or the network has no record of it; check the project again")
         matEncoder.loadAutoencoderFromFile(saveNet)
     else:
         if in_shipped_folder(saveNet):
@@ -383,6 +389,9 @@ def setup(*, s: "RunSettings", project: "Project", save_dir: str, verbose: bool,
     material_colors, material_labels = material_display(to_params.MaterialsExcelFile)
     matEncoder, zRealPoints, network_errors, saveNet = material_source(
         project, s, vae_params, to_params.MaterialsExcelFile, saveNet, should_stop, on_network_error)
+    from lsr_mmto.materials.network_stamp import database_stamp
+    database_record = getattr(getattr(matEncoder, "network", matEncoder), "database_record", None) or \
+        database_stamp(to_params.MaterialsExcelFile)        # every cell, as the network read them, for the record
     zRealPoints_np = zRealPoints.detach().cpu().numpy().astype(float)
 
     solver = problem_solver(physics, mesh, mat_prop, bcs, elem_body_force, to_params)
@@ -480,7 +489,7 @@ def setup(*, s: "RunSettings", project: "Project", save_dir: str, verbose: bool,
         args_at_start=_args_at_start, provenance=_provenance, save_net=saveNet,
         # what it built
         physics=physics, mesh=mesh, bcs=bcs, to_params=to_params, vae_params=vae_params, solver=solver,
-        encoder=matEncoder, network_errors=network_errors, model=ad_model, history=history,
+        encoder=matEncoder, network_errors=network_errors, database_record=database_record, model=ad_model, history=history,
         material_colors=material_colors, material_labels=material_labels,
         z_real=zRealPoints, num_elems=num_elems, latent_dim=latentDim, num_design_var=num_design_var,
         elem_volume=elem_volume, design_domain_volume=design_domain_volume,
@@ -745,6 +754,7 @@ def optimize(state: RunState) -> None:
     run_config["network_errors_percent"] = state.network_errors   # what the run's materials were off by, per property
     run_config["network_reconstruction"] = state.encoder.reconstruction()   # and per material: database vs network
     run_config["provenance"] = state.provenance
+    run_config["database"] = state.database_record                # every cell of the database the run used
     run_config["units"] = project.unit_record()
     from lsr_mmto.pyto_ad_imports import topopt_material_model
     run_config["fixed_in_code"] = {

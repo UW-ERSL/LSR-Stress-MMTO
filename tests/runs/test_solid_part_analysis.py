@@ -249,7 +249,7 @@ def test_analyse_in_the_window(monkeypatch):
         assert w.run_going_now() and w.run_window.status.text().startswith("Analysing the solid part in")
         w.update_top_row()
         assert w.run_button.text() == "Stop" and not w.analyse_button.isVisible()   # the same Stop as a run
-        assert w.progress_text.text().startswith("Analysing the solid part in")
+        assert w.run_window.status.isVisible() and w.progress_text.text() == ""   # the run's status shows it
         assert wait(lambda: not w.run_going_now()), "the analysis did not finish"
         w.update_top_row()
         assert w.run_button.text() == "Run" and w.analyse_button.isVisible()

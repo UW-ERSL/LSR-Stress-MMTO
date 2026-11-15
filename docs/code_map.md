@@ -31,6 +31,8 @@ LSR MMTO
 │   │   ├── material_source.py    where a run gets each element's properties: the network, the
 │   │   │                         network fixed to one material, or the database's own values
 │   │   │                         (a single material, Analyse)
+│   │   ├── network_stamp.py      the record a trained network keeps of the database it learned
+│   │   │                         from, checked before every run
 │   │   ├── networks.py           the network
 │   │   └── pca.py                principal component analysis: the database's effective dimension,
 │   │                             the 2D latent views

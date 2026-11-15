@@ -44,6 +44,13 @@ def ask(parent, title, text, buttons, default, words=None):
     return box.exec_()
 
 
+def exact(v):
+    """A number as text that reads back as exactly the same number: the shortest such, with no .0 at the end
+    (200000, 0.3, 2.2126999999999996e-09), so a value the user does not touch is saved as it was."""
+    text = repr(float(v))
+    return text[:-2] if text.endswith(".0") else text
+
+
 def shown(key):
     """A property's name as the user reads it (databases.SHOWN), else its own name."""
     from lsr_mmto.materials.databases import SHOWN
@@ -363,7 +370,7 @@ class DatabaseEditor(QtWidgets.QDialog):
             self.left_out_note.setText(f"Left out, as LSR MMTO has no property of that name: "
                                        f"{', '.join(self.left_out)}. Save writes the database without them.")
             self.left_out_note.setVisible(True)
-        self.loaded = (list(attributes), list(units), values.tolist())
+        self.loaded = (list(names), list(attributes), list(units), values.tolist())
         stem = os.path.splitext(os.path.basename(path))[0]
         self.name.setText(self._free_name(f"{stem} copy") if self.copy else stem)
         self.table.blockSignals(True)
@@ -373,7 +380,7 @@ class DatabaseEditor(QtWidgets.QDialog):
             self.table.item(r, 0).setText(name)
             self.table.item(r, 1).setText("" if label == name else label)
             for j, v in enumerate(row):
-                self.table.item(r, 3 + j).setText(format(v, ".12g"))
+                self.table.item(r, 3 + j).setText(exact(v))
         self.table.blockSignals(False)
 
     def _fill(self, imported):
@@ -632,24 +639,32 @@ class DatabaseEditor(QtWidgets.QDialog):
         item.setBackground(BAD if bad else QtGui.QBrush())
         item.setToolTip(reason)
 
-    def numbers_changed(self, units, rows):
-        """True when what a network learns from (the properties, their units, the numbers in order) changed."""
+    def trained_on_changed(self, names, units, rows):
+        """True when what a network learns from changed: the materials (their names, in order), the properties,
+        their units, the numbers."""
         if self.loaded is None:
             return False
-        attributes, old_units, old_values = self.loaded
+        old_names, attributes, old_units, old_values = self.loaded
         new_values = [[float(v) for v in row] for row in rows]
-        return attributes != self.attributes or old_units != units or old_values != new_values
+        return old_names != names or attributes != self.attributes or old_units != units or old_values != new_values
 
     def save(self):
-        """Write the database; when its numbers changed, set its trained network aside. The path written."""
+        """Write the database; when what its network learns from changed (trained_on_changed, or the database
+        no longer matches the network's record of it, network_stamp), set its trained network aside. The path
+        written."""
         from lsr_mmto.materials.databases import write_database
+        from lsr_mmto.materials.network_stamp import CHANGED, compare
         names, labels, colours, units, rows = self.contents()
         path = self.target()
         os.makedirs(os.path.dirname(path), exist_ok=True)
         write_database(path, self.attributes, units, names, [lb or None for lb in labels], colours,
                        [[float(v) for v in row] for row in rows])
         network = os.path.splitext(path)[0] + ".nt"
-        if not self.copy and self.numbers_changed(units, rows) and os.path.isfile(network):
+        try:
+            mismatched = compare(path, network).state == CHANGED if os.path.isfile(network) else False
+        except Exception:                                           # noqa: BLE001  (not a network: its run says so)
+            mismatched = False
+        if not self.copy and os.path.isfile(network) and (self.trained_on_changed(names, units, rows) or mismatched):
             previous = os.path.splitext(path)[0] + ".previous.nt"
             os.replace(network, previous)
             self.network_set_aside = previous

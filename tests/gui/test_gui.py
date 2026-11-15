@@ -2158,6 +2158,7 @@ def test_network_warning_continue_or_cancel():
     import torch
     from lsr_mmto.materials.databases import DATABASE_DIR, DATABASE_VAE, VAEParams
     from lsr_mmto.materials.encoder import MaterialEncoder
+    from lsr_mmto.materials.network_stamp import write_network
     asked, saved = [], Box.exec_
 
     def click(choice):
@@ -2177,7 +2178,7 @@ def test_network_warning_continue_or_cancel():
         np.random.seed(0)
         enc = MaterialEncoder(vae)
         enc.readExcel(xlsx)
-        torch.save(enc.vaeNet.state_dict(), xlsx[:-5] + ".nt")             # untrained
+        write_network(xlsx[:-5] + ".nt", enc.vaeNet.state_dict(), enc.database_record)   # untrained
         w.project.database = os.path.basename(xlsx)
         w.project.n_dof = 3000
         w.project.settings["vae"].update(use_pretrained_vae=True, latentDim=2, vae_hiddenDim=50)
@@ -2330,11 +2331,13 @@ def test_convert_units():
     kg/m^3, Pa and USD/kg): the button shows only while the units differ; the window lists each column with its
     factor and the limits; OK writes the project's own copy with the values times the factors exactly and the
     limits converted, saves the project, and leaves no unit warning, the copy as it was before kept as its first
-    version; the network file is byte-identical and still gives the materials back as closely; the shipped
-    database is untouched. Unticked, the limits stay."""
+    version; the network keeps its weights, still gives the materials back as closely, and is asked about once
+    before the next run, the conversion named; the shipped database is untouched. Unticked, the limits stay."""
     from lsr_mmto.materials import database_versions
     from lsr_mmto.materials.databases import DATABASE_DIR, database_table
     from lsr_mmto.materials.encoder import network_reconstruction
+    import torch
+    from lsr_mmto.materials.network_stamp import TO_CONFIRM, read_network
     shipped = os.path.join(DATABASE_DIR, "CustomAlloys20_3D")
     before = {ext: open(shipped + ext, "rb").read() for ext in (".xlsx", ".nt")}
     _, attributes, _, old = database_table(shipped + ".xlsx")
@@ -2372,7 +2375,13 @@ def test_convert_units():
             assert units == ["t/mm^3", "MPa", "USD/t", "MPa"] and np.array_equal(new, stored)
             assert [c["bound"] for c in p.formulation["constraints"]] == expected and (expected[0] == 4e7 / 1e12) == tick
             assert not any("the database gives" in x for x in p.warnings()) and m.convert_button.isHidden()
-            assert open(os.path.join(folder, "CustomAlloys20_3D.nt"), "rb").read() == before[".nt"]
+            nt = os.path.join(folder, "CustomAlloys20_3D.nt")
+            weights, shipped_weights = read_network(nt)[0], read_network(shipped + ".nt")[0]
+            assert all(torch.equal(weights[k], shipped_weights[k]) for k in shipped_weights)
+            check = p.network_check()
+            assert check.state == TO_CONFIRM and check.text.startswith(
+                "the units were converted (Density kg/m^3 to t/mm^3, Young's modulus Pa to MPa, Cost USD/kg to USD/t)"), \
+                check.text
             assert not w.is_dirty() and Project.load(w.path).formulation == p.formulation
             assert lines[0].startswith("Database converted to mmKS units") and \
                 any(line.startswith("Limits converted: Mass <= 4e+07 -> 4e-05 t") for line in lines) == tick

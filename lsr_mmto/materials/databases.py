@@ -23,10 +23,17 @@ DATABASE_DIR = os.path.join(REPO, "data", "databases")
 
 
 def in_shipped_folder(path: str) -> bool:
-    """True when path is in DATABASE_DIR, the folder of the shipped databases and their networks,
-    which a run never writes into."""
+    """True when path is in DATABASE_DIR, the folder of the shipped databases and their networks, or in the
+    lsr_mmto package (a physics' example database, such as physics/thermal/example_materials): files that come
+    with LSR MMTO, which a run never writes into."""
     norm = lambda p: os.path.normcase(os.path.realpath(p))                   # noqa: E731
-    return norm(os.path.dirname(os.path.abspath(path))) == norm(DATABASE_DIR)
+    folder, package = norm(os.path.dirname(os.path.abspath(path))), norm(os.path.dirname(os.path.dirname(__file__)))
+    if folder == norm(DATABASE_DIR):
+        return True
+    try:
+        return os.path.commonpath([folder, package]) == package
+    except ValueError:                                                          # on another drive
+        return False
 
 
 @dataclass(slots=True)

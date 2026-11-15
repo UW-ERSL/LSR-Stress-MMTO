@@ -412,7 +412,7 @@ def boundary_conditions(problem: Project, out: str | None = None, *, size: tuple
     from lsr_mmto.pyto_ad_imports import linear_solvers, deflation
     import pyvista as pv
 
-    mesh, mat_prop, bcs, body_force, to_params, _ = problem.build()
+    mesh, mat_prop, bcs, body_force, to_params, _ = problem.build(network=False)   # no network drawn
 
     # plot_mesh never solves, so the solver choice does not matter here
     fe = physics_module(problem.physics).make_solver(mesh, mat_prop, bcs, linear_solvers.Solvers.PARDISO,

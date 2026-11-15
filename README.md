@@ -165,6 +165,7 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad_imp
 | `database_versions.py` | the older versions kept of a material database, so that a change can be undone |
 | `encoder.py` | reads a material database, trains or loads the VAE; its `decode` gives each element's properties from its latent point |
 | `material_source.py` | where a run gets each element's material properties from: what every material source gives, the network fixed to one material, and the database's own values with no network (a single material, Analyse) |
+| `network_stamp.py` | the record a trained network keeps of the database it learned from: a run does not use a network whose database has changed since |
 | `networks.py` | the VAE network |
 
 #### `lsr_mmto/elements/`

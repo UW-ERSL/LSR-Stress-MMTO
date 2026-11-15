@@ -90,6 +90,8 @@ def latent_help(d_eff, n_z, ratios):
 
 
 INCLUDED = " (included)"                     # after the name of a database that comes with LSR MMTO
+INCLUDED_IN_EXCEL = ("This database comes with LSR MMTO, so it isn't opened in Excel: a change there would change it "
+                     "for every project. To change it, make your own copy with Edit... first.")
 NO_DATABASE = "No database yet. Make one with New database, or bring one in with Import."
 SOURCE_HELP = ("**Single material:** every element is the one material you choose from the database, with its "
                "values from the database. No network is trained.\n\n"
@@ -494,8 +496,8 @@ class MaterialsPanel(QtWidgets.QDialog):
         note = (f"Saved as {os.path.basename(path)} in the project's folder." if shipped else
                 f"{os.path.basename(path)} saved.")
         if editor.network_set_aside:
-            note += (f" Its numbers changed, so the network trained on the old ones was set aside as "
-                     f"{os.path.basename(editor.network_set_aside)}; the next run trains a new one.")
+            note += (f" Its materials or numbers changed, so the network trained on the old ones was set aside "
+                     f"as {os.path.basename(editor.network_set_aside)}; the next run trains a new one.")
         self.report.setText(note + "\n" + self.report.toPlainText())
         return path
 
@@ -534,9 +536,14 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.choose(name)
 
     def _open_in_excel(self):
+        """The database in Excel; one that comes with the app is not opened: it is changed only as a copy."""
+        from lsr_mmto.materials.databases import in_shipped_folder
         xlsx, error = database_choice(self.project)
         if error:
             self.report.setText(error)
+            return
+        if in_shipped_folder(xlsx):
+            self.report.setText(INCLUDED_IN_EXCEL + "\n" + self.report.toPlainText())
             return
         if sys.platform.startswith("win"):
             os.startfile(os.path.abspath(xlsx))                     # noqa: S606
@@ -598,6 +605,9 @@ class MaterialsPanel(QtWidgets.QDialog):
                     network = self._network_line()
                     if network:
                         lines.insert(1, network)
+                    stamp = self._stamp_line()
+                    if stamp:
+                        lines.insert(1, stamp)
         if self._network_rows is None and self.tabs.currentIndex() == 1:
             self.tabs.setCurrentIndex(0)                            # fills the table
         else:
@@ -643,6 +653,22 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.table.setColumnHidden(1, list(labels) == list(names))      # Material: only when the labels differ
         fit_columns(self.table)
         spread_columns(self.table, 2)                                   # the values fill the table's width
+
+    def _stamp_line(self):
+        """The database against the record its trained network keeps of it (Project.network_check), in one
+        line; None when they match or a run uses no trained network."""
+        from lsr_mmto.materials.databases import in_shipped_folder
+        from lsr_mmto.materials.network_stamp import CHANGED, SAME
+        check = self.project.network_check()
+        if check is None or check.state == SAME:
+            return None
+        if in_shipped_folder(self.project.network_path()):
+            return (f"Error: this database comes with LSR MMTO and does not match its network: {check.text}. Put "
+                    f"the file back as it came, or make your own copy with Edit...")
+        if check.state == CHANGED:
+            return (f"Error: {check.text}. Train a new network (untick Use the trained network in Settings), "
+                    f"or bring back the version it was trained on with Versions...")
+        return f"The next run asks once about the network: {check.text}."
 
     def _network_line(self):
         """How closely the trained network gives back the database's materials, in one line (every value

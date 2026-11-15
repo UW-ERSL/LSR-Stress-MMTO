@@ -109,8 +109,8 @@ def test_validate():
 def test_every_error_names_its_step():
     """Every error validate can give carries the step of the setup it is about, as data (Problem.gui_step): each
     place in validate, _missing_columns, vae_check and material_source_errors that adds an error makes a Problem
-    with a step of GUI_STEPS (read from the code, so a new error cannot leave it out), and the errors of broken
-    projects all have one."""
+    with a step of GUI_STEPS, as does every Problem _stamp_errors makes (read from the code, so a new error cannot
+    leave it out), and the errors of broken projects all have one."""
     import ast
     import inspect
     import textwrap
@@ -135,7 +135,10 @@ def test_every_error_names_its_step():
                 assert isinstance(step, ast.Constant) and step.value in P.GUI_STEPS, text
             else:                                           # the errors of the other two, which make Problems
                 assert text in ("self._missing_columns(database_attributes(xlsx))", "self.vae_check()[0]",
-                                "self.material_source_errors(xlsx)"), text
+                                "self.material_source_errors(xlsx)", "self._stamp_errors(xlsx, nt, shipped)"), text
+    made = [node for node in ast.walk(ast.parse(textwrap.dedent(inspect.getsource(P.Project._stamp_errors))))
+            if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "Problem"]
+    assert made and all(isinstance(n.args[0], ast.Constant) and n.args[0].value in P.GUI_STEPS for n in made)
     p = coded_ubracket()
     p.bcs.append({"kind": "fixed", "on": "nowhere", "dofs": "xyz"})
     p.bcs.append({"kind": "nonsense", "on": "bottom"})

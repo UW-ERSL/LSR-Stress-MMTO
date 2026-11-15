@@ -1,6 +1,6 @@
 # Testing the codebase
 
-Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 320 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
+Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 331 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
 
 Run them all from the repository folder with `python -m pytest tests -q -n 4` (`-n 2` on a computer with less than 16 GB of memory), one folder with `python -m pytest tests/<folder> -q`, or one file with `python -m pytest tests/<folder>/<file> -q`.
 
@@ -92,7 +92,7 @@ The Project: saving and loading, the checks made before a run, the translation o
 - `test_round_trip`: Round trip.
 - `test_expressions`: Expressions.
 - `test_validate`: Validate.
-- `test_every_error_names_its_step`: Every error validate can give carries the step of the setup it is about, as data (Problem.gui_step): each place in validate, _missing_columns, vae_check and material_source_errors that adds an error makes a Problem with a step of GUI_STEPS (read from the code, so a new error cannot leave it out), and the errors of broken projects all have one.
+- `test_every_error_names_its_step`: Every error validate can give carries the step of the setup it is about, as data (Problem.gui_step): each place in validate, _missing_columns, vae_check and material_source_errors that adds an error makes a Problem with a step of GUI_STEPS, as does every Problem _stamp_errors makes (read from the code, so a new error cannot leave it out), and the errors of broken projects all have one.
 - `test_build_coded`: Build coded.
 - `test_conflicting_values_are_refused`: A dof given 0 by one support and 0.001 by another is an error, not a silent pick.
 - `test_a_load_is_split_evenly_over_its_nodes`: A force on a face of a uniform mesh: the nodal forces add up to the total, and every node of the face carries the same share; nodes off the face carry none. A pressure likewise adds up to pressure times area.
@@ -177,6 +177,18 @@ Material databases: the attribute registry, the check of a database file, the la
 - `test_unit_kinds_of_a_physics`: A physics' own kinds of quantity (UNIT_KINDS on its front page) are in the unit tables; a kind given differently by two physics (other units, or the same units but another unit in a unit system), or a unit system's unit that is not one of the kind's units, is refused.
 - `test_columns_found_by_what_they_measure`: The mass of a design is made from the column that measures density, and the per-iteration materials line prints the columns whose attribute has a label there, in their order, whatever the columns are named.
 - `test_a_blank_unit_is_no_unit_for_the_network_too`: A blank unit cell (BM1_3Mats_2Attr's Poisson's ratio, a ratio) is no unit, None, for the material network as for the database's own reader, so the network's error table shows nothing there, not "nan".
+
+### `tests/materials/test_network_stamp.py`
+
+The record a trained network keeps of the database it learned from (materials/network_stamp.py): written when a network is trained, and checked before a run. Any change to a cell of the first sheet, the 15th significant digit of a number too, stops the run until a new network is trained, and so does a record that can't be read; a change of colours or labels only, a conversion of units, and a network saved before networks kept a record are used after one yes (Project.confirm_network), and a script's run refuses until then; the networks that come with LSR MMTO match their databases and are never stamped again.
+
+- `test_every_network_that_comes_with_lsr_mmto_matches_its_database`: The four included databases' networks and the thermal example's carry a record that matches their database.
+- `test_a_trained_network_keeps_the_database_it_learned_from`: Training writes the database as it was read into the network's file; loading reads the weights back.
+- `test_the_smallest_change_of_a_number_stops_the_run`: Saved again unchanged: the same. The 15th significant digit of one number, or spaces around a name: no run, the cell named, and nothing to confirm.
+- `test_colours_or_labels_and_a_network_with_no_record_are_used_after_one_yes`: No error in the project's check, but a script's run refuses until confirm_network, which stamps the network (its weights unchanged); confirming a network that matches does nothing.
+- `test_a_changed_database_that_comes_with_lsr_mmto_is_not_confirmed`: Its network is never stamped again: the file is put back, or copied and trained as the user's own.
+- `test_converted_units_are_asked_about_once_and_a_changed_database_stays_changed`: Convert to ... units on the Airplane bracket (mmKS, its database in kg/m^3, Pa and USD/kg) in a folder of its own: the network keeps its weights and asks once, naming the conversion. Converted after a number changed, the network still refuses.
+- `test_single_material_and_a_network_to_train_are_not_checked`: No trained network in use (single material, or Use the trained network unticked): nothing to check.
 
 ### `tests/materials/test_pca.py`
 
@@ -370,7 +382,7 @@ The LSR MMTO window, off-screen: the names it takes from PyTO-AD exist; each pro
 - `test_export_and_run_script`: File > Export as script writes the project as Python in its folder, after a save when there are changes; the script edited and run with File > Run script opens the project it saved; a script that fails, or saves nothing, says so and leaves the project as it was; the script runs from any folder.
 - `test_latent_views`: The latent space in 1, 2, 3 and 4 dimensions: the run's tab, Compare's and the live one draw it; 1D as counts along the line with every name readable, 4D through a fixed projection whose title says for how many elements it shows the right nearest material; the live axes only widen.
 - `test_snap_copy_outline_colour_new_database`: Snap rounds Measure and a copied point; a click on the part with a form open copies the point; outlines are magenta whatever the place.
-- `test_convert_units`: Convert to <units> units (Materials), on a copy of the Airplane bracket project (mmKS, its database in kg/m^3, Pa and USD/kg): the button shows only while the units differ; the window lists each column with its factor and the limits; OK writes the project's own copy with the values times the factors exactly and the limits converted, saves the project, and leaves no unit warning, the copy as it was before kept as its first version; the network file is byte-identical and still gives the materials back as closely; the shipped database is untouched. Unticked, the limits stay.
+- `test_convert_units`: Convert to <units> units (Materials), on a copy of the Airplane bracket project (mmKS, its database in kg/m^3, Pa and USD/kg): the button shows only while the units differ; the window lists each column with its factor and the limits; OK writes the project's own copy with the values times the factors exactly and the limits converted, saves the project, and leaves no unit warning, the copy as it was before kept as its first version; the network keeps its weights, still gives the materials back as closely, and is asked about once before the next run, the conversion named; the shipped database is untouched. Unticked, the limits stay.
 - `test_examples_open_as_templates`: An example opens as a template: Save asks for a project folder of one's own and copies everything into it, and the example's file never changes. In a project folder, a database chosen (a shipped one too) is copied into materials/, and New database writes there.
 - `test_part_facts_pca_live_colours_training`: The part's facts behind the (i), not over the 3D view; the PCA breakdown behind the Materials panel's (i), and its Values | Network error switch; the live design by density; the training's epochs in the Run status line.
 - `test_results_compare_delete`: Results: the project's runs, newest first; a run shown as each of Material, Density, Stress, Displacement (smooth over the faces, its magnitude or x, y, z, and the deformed shape at a scale that moves it 5 % of the part at most) and Solid; two runs compared side by side; another place's run opened for looking only; Delete, in Results and in the Run strip, removes a run's folder.
@@ -435,6 +447,15 @@ The desktop start: the icon loads at every size Windows asks for, the start-up p
 - `test_uninstall_removes_exactly_what_it_lists`: Answered no, nothing goes. Answered yes: the two shortcuts, the kernel, the GUI's settings, the environment (conda env remove) and, last, the entry go; everything else stays, the code folder untouched, and the folders kept are named.
 - `test_uninstall_refuses_to_run_inside_the_environment`: Uninstall refuses to run inside the environment.
 - `test_no_other_way_to_remove`: Uninstall in Settings > Apps is the one way: no remove option in the setup or the shortcut maker.
+
+### `tests/gui/test_network_stamp_gui.py`
+
+The record a trained network keeps of its database (materials/network_stamp.py) in the window, off-screen: a run on a network whose database changed only in colours or labels asks once (No: nothing starts; Yes: the network is stamped and not asked about again); Materials says when the database has changed since its network was trained, and when the next run will ask (for an included database: to put it back or copy it); an analysis, which uses no network, is not asked; the editor keeps every digit of a value it is not asked to change, and sets the network aside after a rename; Open in Excel does not open a database that comes with LSR MMTO. The questions are answered by the test (database_editor.ask), never shown.
+
+- `test_a_run_asks_once_about_a_network_whose_database_changed_only_in_colour`: No: nothing starts, and the status says why. Yes: stamped, and not asked again. An analysis is not asked.
+- `test_materials_says_what_the_network_needs`: Nothing when the network matches; the question to come for a label changed; an error naming the cell for a number changed; for an included database, to put it back or make a copy.
+- `test_the_editor_keeps_every_digit_and_sets_the_network_aside_after_a_rename`: A value with 16 significant digits shows and saves as it is: a label changed keeps the network (the next run asks once). A material renamed sets the network aside, as a number changed does.
+- `test_open_in_excel_leaves_an_included_database_alone`: Nothing is opened; the report says to make a copy with Edit... first.
 
 ### `tests/gui/test_single_material_gui.py`
 

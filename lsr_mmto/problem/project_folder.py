@@ -232,10 +232,17 @@ def convert_database_units(project: "Project", limits: bool = True) \
     """The project's database in the project's units (Project.unit_conversion): each column in other units
     multiplied by its factor, written over the project's own copy in its folder. A database from elsewhere
     (a shipped one too) is first copied in with its network (bring_in_database), and only the copy is
-    written; a database with no first version kept (database_versions) keeps it first, as it was. The trained network is kept as it is: it learns each column scaled to 0 to 1, which a change
-    of unit leaves as it was. With limits, the limits that meant something for the old numbers are
+    written; a database with no first version kept (database_versions) keeps it first, as it was. The trained
+    network is kept: it learns each column scaled to 0 to 1, which a change of unit leaves as it was, up to
+    rounding in the last digit. A network that matched the database, or differed from it only in what a yes
+    settles (colours or labels, an earlier conversion), is stamped with the converted one and a note of the
+    conversion and of that difference (network_stamp.TO_CONFIRM), so the next run asks once before using it; any
+    other network stays as it was (one changed around, one with no record, one that comes with LSR MMTO). With
+    limits, the limits that meant something for the old numbers are
     converted too. Returns (columns, limits) converted, as Project.unit_conversion gives them."""
-    from lsr_mmto.materials.databases import database_table, material_display, write_database
+    from lsr_mmto.materials.databases import SHOWN, database_table, in_shipped_folder, material_display, \
+        write_database
+    from lsr_mmto.materials.network_stamp import DISPLAY, SAME, TO_CONFIRM, compare, stamp
     if not has_own_folder(project):
         raise ValueError("only a project in a folder of its own has a database of its own; save the project first")
     columns, bounds = project.unit_conversion()
@@ -248,6 +255,12 @@ def convert_database_units(project: "Project", limits: bool = True) \
     from lsr_mmto.materials import database_versions
     if not database_versions.has_first(xlsx):                   # the database before its first change, kept
         database_versions.keep(xlsx, first=True)
+    nt = project.network_path()
+    try:
+        before = compare(xlsx, nt) if os.path.isfile(nt) and os.path.getsize(nt) > 0 and not in_shipped_folder(nt) \
+            else None
+    except Exception:                                           # noqa: BLE001  (not a network: its run says so)
+        before = None
     names, attributes, units, values = database_table(xlsx)
     colours, labels = material_display(xlsx)
     to = {name: (unit, factor) for name, _, unit, factor in columns}
@@ -257,6 +270,12 @@ def convert_database_units(project: "Project", limits: bool = True) \
             values[:, j] = values[:, j] * to[name][1]
     write_database(xlsx, attributes, units, names, [None if label == name else label
                                                      for label, name in zip(labels, names)], colours, values)
+    if before is not None and before.state in (SAME, DISPLAY, TO_CONFIRM):
+        note = "the units were converted (" + ", ".join(f"{SHOWN.get(name, name)} {old or 'no unit'} to {new}"
+                                                         for name, old, new, _ in columns) + \
+               "); the network learns each column scaled to 0 to 1, so it still fits them up to rounding in the " \
+               "last digit"
+        stamp(nt, xlsx, note + ("" if before.state == SAME else f"; before that, {before.text}"))
     if not limits:
         return columns, []
     for i, _, _, bound in bounds:

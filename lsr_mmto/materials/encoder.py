@@ -130,12 +130,16 @@ class MaterialEncoder:
 
     def preprocessData(self) -> None:
         """Read excel_file: row 1 the column names (aliases made registry names), row 2 their units (None when
-        blank, as databases.database_table reads them), then one row per material, its name first. Sets rawData, materialNames, scaledMaterialData, materialAttributes,
-        attribute_means, attribute_stds, and the database's PCA (computeParticipationRatio)."""
+        blank, as databases.database_table reads them), then one row per material, its name first. Sets
+        database_record (network_stamp.database_stamp of the sheet read: what a network trained here learns from),
+        rawData, materialNames, scaledMaterialData, materialAttributes, attribute_means, attribute_stds, and the
+        database's PCA (computeParticipationRatio)."""
         with warnings.catch_warnings():
             # the databases carry Excel data validation, which openpyxl drops
             warnings.filterwarnings("ignore", message="Data Validation extension")
             df = pd.read_excel(self.excel_file, header=None)
+        from lsr_mmto.materials.network_stamp import database_stamp
+        self.database_record = database_stamp(self.excel_file, df)     # what a network trained here learns from
         attribute_names = [attribute_name(n) for n in df.iloc[0, 1:].tolist()]   # aliases -> registry names
         units = [None if (u is None or str(u).strip() in ("", "nan")) else str(u).strip() for u in df.iloc[1, 1:]]
         material_names = [str(m).strip() for m in df.iloc[2:, 0].tolist()]   # as database_table reads them
@@ -238,7 +242,8 @@ class MaterialEncoder:
         return total_sq ** 0.5
     def loadAutoencoderFromFile(self, fileName: str) -> None:
         """The network's weights read from fileName (a .nt file); sets training_latents."""
-        self.vaeNet.load_state_dict(torch.load(fileName))
+        from lsr_mmto.materials.network_stamp import read_network
+        self.vaeNet.load_state_dict(read_network(fileName)[0])
         self.vaeNet.eval()
         self.training_latents = self.vaeNet.encoder(self.scaledMaterialData).cpu()
     def _compute_vae_loss(self, klFactor: float) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -361,7 +366,8 @@ class MaterialEncoder:
         error = self.largestEncodingErrorPercent()
         if error >= maxAttributeErrorPercent:
             print(f"The network's largest error is {error:.2f}% (asked {maxAttributeErrorPercent:g}%).")
-        torch.save(self.vaeNet.state_dict(), savedNet)
+        from lsr_mmto.materials.network_stamp import write_network
+        write_network(savedNet, self.vaeNet.state_dict(), self.database_record)   # with the database it learned
         self.training_latents = self.vaeNet.encoder(self.scaledMaterialData).cpu()
         return convgHistory
 

@@ -140,12 +140,14 @@ def test_a_material_name_with_spaces_around_it():
     import shutil
     from openpyxl import load_workbook
     from lsr_mmto.materials.databases import database_table
+    from lsr_mmto.materials.network_stamp import stamp
     name = str(database_table(DATABASE + ".xlsx")[0][ROW])
     with tempfile.TemporaryDirectory() as d:
         book = load_workbook(DATABASE + ".xlsx")
         book.worksheets[0].cell(row=3 + ROW, column=1).value = f" {name} "
         book.save(os.path.join(d, "spaced.xlsx"))
         shutil.copy(DATABASE + ".nt", os.path.join(d, "spaced.nt"))
+        stamp(os.path.join(d, "spaced.nt"), os.path.join(d, "spaced.xlsx"))   # as if trained on it as it is
         p = _ubracket()
         p.database = os.path.join(d, "spaced.xlsx")
         p.pinned_material = name

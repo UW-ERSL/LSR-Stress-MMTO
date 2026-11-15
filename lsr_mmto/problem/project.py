@@ -67,6 +67,7 @@ if TYPE_CHECKING:
     from pyto.core.hex_mesher import HexMesher
     from pyto.core.mat_lib import Material
     from lsr_mmto.formulation.quantities import Quantity
+    from lsr_mmto.materials.network_stamp import Comparison
     from lsr_mmto.optimize.mmto_to_params import MMTOParams
 
 DEFAULT_PHYSICS = next(iter(PHYSICS))          # a project that names no physics: the first one listed
@@ -106,9 +107,9 @@ class Problem(str):
 def network_shape(path: str) -> tuple[int, int, int] | None:
     """(inputs, hidden width, latent dimension) of the VAE saved in path, read from its weights;
     None when the file is not such a network."""
-    import torch
+    from lsr_mmto.materials.network_stamp import read_network
     try:
-        sd = torch.load(path, map_location="cpu", weights_only=True)
+        sd = read_network(path)[0]
         hidden, n_in = sd["encoder.linear1.weight"].shape
         return int(n_in), int(hidden), int(sd["encoder.linear2.weight"].shape[0])
     except Exception:                                                                  # noqa: BLE001
@@ -454,9 +455,10 @@ class Project:
         path = self.database if os.path.isabs(self.database) else os.path.join(self.base_dir, self.database)
         return path, None
 
-    def validate(self) -> list[Problem]:
+    def validate(self, network: bool = True) -> list[Problem]:
         """Problems that can be found without building the mesh; an empty list means none. Each is a
-        Problem: its text, and the step of the setup it is about (Problem.gui_step)."""
+        Problem: its text, and the step of the setup it is about (Problem.gui_step). network False leaves out
+        the checks of the trained network (vae_check), for an analysis, which uses the database's own values."""
         errors = []
         if not os.path.isfile(self.stl_path()):
             errors.append(Problem("part", f"STL file {self.stl_path()} does not exist"))
@@ -496,7 +498,7 @@ class Project:
             if not db_errors:
                 errors += self._missing_columns(database_attributes(xlsx))
                 errors += self.material_source_errors(xlsx)
-                if self.material_source == "network":
+                if self.material_source == "network" and network:
                     errors += self.vae_check()[0]
         for section, values in self.settings.items():
             if section not in DEFAULT_SETTINGS:
@@ -816,6 +818,8 @@ class Project:
                         errors.append(Problem("settings", f"{key} is {vae[key]}, but {name} was trained with {have}: "
                                                           f"set it to {have}, or switch off use_pretrained_vae to "
                                                           f"train a new network"))
+                if n_in == n_columns:
+                    errors += self._stamp_errors(xlsx, nt, shipped)
         d_eff, n_z = recommended_latent_dim(xlsx)
         latent = vae.get("latentDim")
         if latent is not None and int(latent) > n_z:
@@ -830,6 +834,66 @@ class Project:
         status = f"Network: {name}, " + ("shipped." if shipped and exists else "found." if exists else
                                          f"none yet. The first run trains {name}.")
         return errors, warnings_, status
+
+    def _stamp_errors(self, xlsx: str, nt: str, shipped: bool) -> list[Problem]:
+        """The database against the record its trained network keeps of it (network_check), as errors: a
+        database changed since its network was trained, and any change to one that comes with LSR MMTO. A change
+        a yes settles (CONFIRMABLE) is no error here: the window asks before a run, and a script's run refuses
+        until confirm_network (_ready_to_run)."""
+        from lsr_mmto.materials.network_stamp import CHANGED, SAME
+        check = self.network_check()
+        if check is None or check.state == SAME:
+            return []
+        db = os.path.basename(xlsx)
+        if shipped:
+            return [Problem("materials", f"{db}, which comes with LSR MMTO, does not match its network: "
+                                         f"{check.text}. Put the file back as it came, or make your own copy with "
+                                         f"Edit... in Materials")]
+        if check.state == CHANGED:
+            return [Problem("materials", f"{db}: {check.text}. Train a new network (untick Use the trained network "
+                                         f"in Settings), or bring back the version it was trained on (Versions... "
+                                         f"in Materials)")]
+        return []
+
+    def network_check(self) -> "Comparison | None":
+        """The database as it is now against the record its trained network keeps of the database it was trained
+        on (materials/network_stamp.py): a Comparison, its state SAME, CHANGED (no run until a new network is
+        trained), DISPLAY, TO_CONFIRM or NO_STAMP (a run asks once, confirm_network) and a line saying what
+        changed. None when a run uses no trained network: single material, a network to be trained, none to read.
+        A network whose record can't be read is CHANGED: a run never goes ahead unchecked.
+
+        Example: check = p.network_check()
+        """
+        from lsr_mmto.materials.network_stamp import CHANGED, Comparison, compare
+        vae = self.settings.get("vae", {})
+        if self.material_source != "network" or self._database is None or not vae.get("use_pretrained_vae", True):
+            return None
+        nt = self.network_path()
+        if not (os.path.isfile(nt) and os.path.getsize(nt) > 0):
+            return None
+        try:
+            return compare(self.database_paths()[0], nt)
+        except Exception as e:                                                         # noqa: BLE001
+            return Comparison(CHANGED, f"its network's record of the database could not be read ({e})")
+
+    def confirm_network(self) -> None:
+        """A yes to using the trained network on the database as it is now, when network_check asks for one
+        (only colours or labels changed, units converted, or a network from before networks kept a record): the
+        network is stamped with the database as it is now, so it is not asked about again. Nothing to do when
+        the network matches its database or a run uses none. ValueError when the database has changed since the
+        network was trained, or the network is one that comes with the app.
+
+        Example: p.confirm_network()
+        """
+        from lsr_mmto.materials.network_stamp import CONFIRMABLE, SAME, stamp
+        check, nt = self.network_check(), self.network_path()
+        if check is None or check.state == SAME:
+            return
+        if check.state not in CONFIRMABLE:
+            raise ValueError(f"{os.path.basename(nt)}: {check.text}; a new network has to be trained")
+        if in_shipped_folder(nt):
+            raise ValueError(f"{os.path.basename(nt)} comes with LSR MMTO and is never changed")
+        stamp(nt, self.database_paths()[0])
 
     def network_error(self) -> tuple[list[dict[str, Any]], str] | tuple[None, None]:
         """How closely the database's trained network gives back its materials: (rows, line). rows: one for
@@ -884,13 +948,14 @@ class Project:
         from lsr_mmto.problem.mesh import make_mesh
         return make_mesh(self.stl_path(), self.n_dof, self.single_layer, self.unknowns_per_node())
 
-    def build(self, verbose: bool = True) \
+    def build(self, verbose: bool = True, network: bool = True) \
             -> "tuple[HexMesher, Material, dict[str, BC], None, MMTOParams, VAEParams]":
-        """mesh, mat_prop, bc, elem_body_force, to_params, vae_params."""
+        """mesh, mat_prop, bc, elem_body_force, to_params, vae_params, after the project's check (validate; with
+        network False, for an analysis or a picture of the mesh, without the trained network's checks)."""
         filled = self.complete_settings()
         if filled and verbose:
             print(f"[{self.name}] settings not in the project, taken from the defaults: {', '.join(filled)}")
-        errors = self.validate()
+        errors = self.validate(network)
         if errors:
             raise ValueError(f"project {self.name!r}:\n  " + "\n  ".join(errors))
         if verbose:
@@ -1200,15 +1265,22 @@ def _run_arguments(project: Project, save_dir: str | None = None, verbose: bool 
                 progress=progress, should_stop=should_stop, on_network_error=on_network_error)
 
 
-def _ready_to_run(project: Project) -> Project:
+def _ready_to_run(project: Project, network: bool = True) -> Project:
     """The project as a run gets it: its settings completed (saying which came from the defaults),
-    checked, and copied, so that the run records the project as it is now."""
+    checked (validate, with network: False for an analysis, which uses no network), and copied, so that the
+    run records the project as it is now."""
     filled = project.complete_settings()
     if filled:
         print(f"[{project.name}] settings not in the project, taken from the defaults: {', '.join(filled)}")
-    errors = project.validate()
+    errors = project.validate(network)
     if errors:
         raise ValueError(f"project {project.name!r}:\n  " + "\n  ".join(errors))
+    from lsr_mmto.materials.network_stamp import CONFIRMABLE
+    check = project.network_check() if network else None
+    if check is not None and check.state in CONFIRMABLE:
+        raise ValueError(f"project {project.name!r}: {os.path.basename(project.network_path())}: {check.text}. If "
+                         f"it is the network for the database as it is now, call confirm_network() on the project "
+                         f"once, then run again")
     return project.copy()
 
 

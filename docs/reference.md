@@ -645,6 +645,26 @@ rows, line = p.network_error()
 errors, warnings, status = p.vae_check()
 ```
 
+### p.network_check
+
+`p.network_check()`
+
+The database as it is now against the record its trained network keeps of the database it was trained on (materials/network_stamp.py): a Comparison, its state SAME, CHANGED (no run until a new network is trained), DISPLAY, TO_CONFIRM or NO_STAMP (a run asks once, confirm_network) and a line saying what changed. None when a run uses no trained network: single material, a network to be trained, none to read. A network whose record can't be read is CHANGED: a run never goes ahead unchecked.
+
+```python
+check = p.network_check()
+```
+
+### p.confirm_network
+
+`p.confirm_network()`
+
+A yes to using the trained network on the database as it is now, when network_check asks for one (only colours or labels changed, units converted, or a network from before networks kept a record): the network is stamped with the database as it is now, so it is not asked about again. Nothing to do when the network matches its database or a run uses none. ValueError when the database has changed since the network was trained, or the network is one that comes with the app.
+
+```python
+p.confirm_network()
+```
+
 ### p.objective
 
 `p.objective(expression, sense='minimize')`

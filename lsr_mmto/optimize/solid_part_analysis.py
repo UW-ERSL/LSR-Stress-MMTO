@@ -208,10 +208,10 @@ def _analyse(project: "Project",
             raise AnalysisStopped("the analysis was stopped; nothing was saved")
 
     started = time.time()
-    project = _ready_to_run(project)                     # as a run: settings completed, validate's errors refuse
+    project = _ready_to_run(project, network=False)      # as a run, but no network: it uses the database's values
     s = run_settings(project)
     physics = physics_module(project.physics)
-    mesh, mat_prop, bcs, elem_body_force, to_params, _ = project.build()
+    mesh, mat_prop, bcs, elem_body_force, to_params, _ = project.build(network=False)
     x, rows, xlsx, title, analysis = design(mesh, to_params.MaterialsExcelFile)
     materials = DatabaseMaterials(xlsx, rows)
     colours, labels = material_display(xlsx)

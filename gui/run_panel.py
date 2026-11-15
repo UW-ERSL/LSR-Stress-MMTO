@@ -265,11 +265,37 @@ class RunWindow(StructuralTopOptWindow):
         return list(self.window.project.selections)
 
     # ------------------------------------------------------------------ start, run, stop
-    def _checked(self):
-        """The project's checks (Project.validate): False, with its errors listed, when one stops a run."""
-        errors = self.window.project.validate()
+    def _checked(self, network=True):
+        """The project's checks (Project.validate): False, with its errors listed, when one stops a run. Then a
+        trained network the database has changed around in a way it still fits (colours or labels, units
+        converted), or one with no record of its database, is used only after a yes (Project.confirm_network).
+        network False (an analysis, which uses the database's own values) leaves the network out."""
+        errors = self.window.project.validate(network)
         if errors:
             self.status.setText("<span style='color:#b00000'>Cannot start:<br>" + "<br>".join(errors) + "</span>")
+            return False
+        return not network or self._network_confirmed()
+
+    def _network_confirmed(self):
+        """True unless the project's trained network needs a yes before it is used and the answer is no, or the
+        network can't be stamped (the reason in the status line)."""
+        from lsr_mmto.materials.network_stamp import CONFIRMABLE
+        from . import database_editor
+        p = self.window.project
+        check = p.network_check()
+        if check is None or check.state not in CONFIRMABLE:
+            return True
+        Box = QtWidgets.QMessageBox
+        db = os.path.basename(p.database_paths()[0])
+        text = (f"The network of {db}: {check.text}.\n\nUse it for {db} as it is now? You won't be asked "
+                f"again unless the database changes.")
+        if database_editor.ask(self, "Check the network", text, Box.Yes | Box.No, Box.No) != Box.Yes:
+            self.status.setText(f"Not started: the network of {db} was not confirmed.")
+            return False
+        try:
+            p.confirm_network()
+        except (ValueError, OSError) as e:
+            self.status.setText(f"<span style='color:#b00000'>Cannot start: {e}</span>")
             return False
         return True
 
@@ -324,7 +350,7 @@ class RunWindow(StructuralTopOptWindow):
     def analyse(self):
         """Analyse (top row): the project's checks as for a run, the Analyse window, then start_analysis."""
         from lsr_mmto.materials.databases import material_display
-        if not self._checked():
+        if not self._checked(network=False):
             return False
         from lsr_mmto.materials.databases import database_table
         xlsx = self.window.project.database_paths()[0]
@@ -341,7 +367,7 @@ class RunWindow(StructuralTopOptWindow):
         nothing is written, not even the project."""
         from lsr_mmto.materials.databases import material_display
         w = self.window
-        if not self._checked() or (save and not self._saved("Analyse")):
+        if not self._checked(network=False) or (save and not self._saved("Analyse")):
             return False
         from lsr_mmto.optimize.solid_part_analysis import analyse_solid_part
         label = material_display(w.project.database_paths()[0])[1][material]
@@ -354,7 +380,7 @@ class RunWindow(StructuralTopOptWindow):
         project's results, after the save a run asks for."""
         from lsr_mmto.optimize.solid_part_analysis import analyse_design
         from lsr_mmto.problem.project_folder import run_facts, run_name
-        if not self._checked() or not self._saved("Analyse this design"):
+        if not self._checked(network=False) or not self._saved("Analyse this design"):
             return False
         self.design_of = run_folder
         return self._start_analysis(f"the design of {run_name(run_folder) or run_facts(run_folder)[0]}", True,
