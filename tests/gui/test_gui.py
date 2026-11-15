@@ -1183,12 +1183,12 @@ def test_error_in_the_app_keeps_it_running():
 
 def test_vae_tab():
     """With a trained network in use the VAE settings are its own and greyed out; the tab says which
-    network the database has and shows the VAE checks as you edit. No "?" button on our panels."""
+    network the database has and shows the VAE checks as you edit. (No window has the "?" button: see
+    test_gui_look.test_no_window_has_the_help_button, which turns it off as the app does.)"""
     from lsr_mmto.materials.databases import DATABASE_DIR
     with scratch() as d:
         w = opened("L-bracket", d)
         s = settings_panel.SettingsPanel(w, w.project)
-        assert not (s.windowFlags() & QtCore.Qt.WindowContextHelpButtonHint)
         assert s.vae_status.text() == "Network: BM1_3Mats_2Attr.nt, shipped." and s.vae_checks.text() == ""
         latent = s.rows[("vae", "latentDim")][0]
         assert not latent.widget.isEnabled() and not s.rows[("vae", "saveNet")][0].widget.isEnabled()
