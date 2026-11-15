@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from types import ModuleType
 
     from pyto.autodiff.material_model import MaterialModel
-    from lsr_mmto.materials.encoder import MaterialEncoder
+    from lsr_mmto.materials.material_source import MaterialSource
     from lsr_mmto.problem.settings import RunSettings
 
 
@@ -37,7 +37,7 @@ def checked_results(physics: "ModuleType", results: dict[str, np.ndarray] | None
 
 
 def run_postprocessing(history: dict[str, list[float | np.ndarray]], zetaOptimal: np.ndarray, fe_solver: Any,
-                       matEncoder: "MaterialEncoder", mat_lib: "ModuleType",
+                       matEncoder: "MaterialSource", mat_lib: "ModuleType",
                        MaterialModel: "type[MaterialModel]", physical_density: Callable[[np.ndarray], np.ndarray],
                        zRealPoints: torch.Tensor | np.ndarray, material_colors: list[str], num_elems: int,
                        latentDim: int, elem_volume: float, design_domain_volume: float,
@@ -65,7 +65,7 @@ def run_postprocessing(history: dict[str, list[float | np.ndarray]], zetaOptimal
 
     # Reconstruct physical fields
     xOptimal_raw = zetaOptimal[0:num_elems].copy()
-    zOptimal = zetaOptimal[num_elems:].reshape(latentDim, -1).T   # numpy, element-major
+    zOptimal = zetaOptimal[num_elems:].reshape(latentDim, num_elems).T   # numpy, element-major
 
     xOptimal_cont = physical_density(xOptimal_raw)   # the optimization's own filter and projection
 

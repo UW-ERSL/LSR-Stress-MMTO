@@ -398,12 +398,23 @@ class MaterialEncoder:
                 material_properties = self.getMaterialProperties(decoded)
             return material_properties
 
+    @property
+    def latent_dim(self) -> int:
+        """The latent dimension: each element's latent point has this many numbers."""
+        return int(self.vae_params.latentDim)
+
     def decode(self, z: torch.Tensor) -> dict[str, torch.Tensor]:
         """Each point's properties, {column: (points,)}, from latent points z (points, latentDim): the network's
         decoder, then each column's numbers (getMaterialProperties); inside the torch tree when z is in one. A
         material source's decode (materials/material_source.py): what the run, the final check, the history
         and the save use."""
         return self.getMaterialProperties(self.vaeNet.decoder(z))
+
+    def material_properties(self) -> dict[str, torch.Tensor]:
+        """Each database material's properties as the network gives them, {column: (materials,)}: decoded at the
+        materials' own latent points (training_latents)."""
+        with torch.no_grad():
+            return self.decode(torch.as_tensor(self.training_latents, dtype=torch.get_default_dtype()))
 
     def network_weights(self) -> dict[str, torch.Tensor]:
         """The network's weights, as a run saves them (a material source's network_weights)."""

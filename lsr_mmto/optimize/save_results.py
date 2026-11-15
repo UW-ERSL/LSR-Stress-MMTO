@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from pyto.core.bc import BC
     from pyto.core.hex_mesher import HexMesher
     from lsr_mmto.materials.databases import VAEParams
-    from lsr_mmto.materials.encoder import MaterialEncoder
+    from lsr_mmto.materials.material_source import MaterialSource
     from lsr_mmto.optimize.mmto_to_params import MMTOParams
 
 
@@ -180,10 +180,11 @@ def _mesh_summary(mesh: "HexMesher") -> dict[str, Any]:
     return out
 
 
-def _material_summary(mat_encoder: "MaterialEncoder", z_real_points: "torch.Tensor | np.ndarray",
+def _material_summary(mat_encoder: "MaterialSource", z_real_points: "torch.Tensor | np.ndarray",
                       material_colors: list[str], material_labels: list[str] | None = None) -> dict[str, Any]:
-    """For the manifest: the materials' names, latent points, colours and labels, and the properties the network
-    gives at their latent points; what fails is left out (the properties' error is kept as text)."""
+    """For the manifest: the materials' names, latent points, colours and labels, and the properties the material
+    source gives them (the network: at their latent points); what fails is left out (the properties' error is
+    kept as text)."""
     out = {}
     try:
         out["material_names"] = list(mat_encoder.materialNames)
@@ -201,9 +202,7 @@ def _material_summary(mat_encoder: "MaterialEncoder", z_real_points: "torch.Tens
     except Exception:
         pass
     try:
-        import torch
-        zr = torch.as_tensor(np.asarray(z_real_points), dtype=torch.get_default_dtype())
-        props = mat_encoder.decode(zr)
+        props = mat_encoder.material_properties()
         out["real_material_properties"] = {
             k: np.asarray(v.detach().cpu()).astype(float).ravel().tolist()
             for k, v in props.items()
@@ -285,7 +284,7 @@ def _physics_settings(run_args: dict[str, Any]) -> dict[str, Any]:
 
 def build_run_config(example_name: str, run_args: dict[str, Any], to_params: "MMTOParams", vae_params: "VAEParams",
                      beta_schedule: dict[str, float], mesh: "HexMesher", bcs: "dict[str, BC]", fields: dict[str, int],
-                     mat_encoder: "MaterialEncoder", z_real_points: "torch.Tensor | np.ndarray",
+                     mat_encoder: "MaterialSource", z_real_points: "torch.Tensor | np.ndarray",
                      material_colors: list[str], mma_settings: dict[str, Any] | None = None,
                      runtime_sec: float | None = None, iterations: int | None = None, comment: str = "",
                      pnorm_exponent: float | None = None, material_labels: list[str] | None = None) -> dict[str, Any]:

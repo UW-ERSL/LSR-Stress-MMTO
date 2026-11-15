@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from scipy.sparse import spmatrix
 
     from lsr_mmto.formulation.quantities import Quantity
-    from lsr_mmto.materials.encoder import MaterialEncoder
+    from lsr_mmto.materials.material_source import MaterialSource
     from lsr_mmto.optimize.mmto_to_params import MMTOParams
     from lsr_mmto.problem.settings import RunSettings
 
@@ -64,7 +64,7 @@ class MMTOModelAD:
 
     fe: Any                                  # the physics' solver, whatever its make_solver returns
     physics: "ModuleType"                    # the physics' front page (physics_module)
-    enc: "MaterialEncoder"
+    enc: "MaterialSource"
     to_params: "MMTOParams"
     settings: "RunSettings"
     N: int                                   # number of elements
@@ -83,12 +83,12 @@ class MMTOModelAD:
     J: torch.Tensor                          # objective, a scalar
     cons: list[torch.Tensor]                 # constraints g_k = value / limit - 1, scalars
 
-    def __init__(self, fe: Any, physics: "ModuleType", enc: "MaterialEncoder", H_density: "spmatrix",
+    def __init__(self, fe: Any, physics: "ModuleType", enc: "MaterialSource", H_density: "spmatrix",
                  Hs_density: np.ndarray, H_material: "spmatrix", Hs_material: np.ndarray, z_real: np.ndarray,
                  to_params: "MMTOParams", settings: "RunSettings", elem_volume: float) -> None:
         self.fe, self.physics, self.enc, self.to_params, self.settings = fe, physics, enc, to_params, settings
         self.N = fe.mesh.num_elems
-        self.latentDim = enc.vae_params.latentDim
+        self.latentDim = enc.latent_dim
         self.H = SparseOperator(H_density)
         self.Hs = torch.as_tensor(np.asarray(Hs_density, dtype=float).ravel(), dtype=_DTYPE)
         self.Hm = SparseOperator(H_material)

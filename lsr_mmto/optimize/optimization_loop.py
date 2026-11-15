@@ -88,6 +88,7 @@ if TYPE_CHECKING:
     from pyto.core.mat_lib import Material
     from lsr_mmto.design.latent_penalties import Penalty
     from lsr_mmto.materials.databases import VAEParams
+    from lsr_mmto.materials.material_source import MaterialSource
     from lsr_mmto.optimize.mmto_to_params import MMTOParams
     from lsr_mmto.problem.project import Project
     from lsr_mmto.problem.settings import RunSettings
@@ -171,7 +172,7 @@ class RunState:
     to_params: "MMTOParams"
     vae_params: "VAEParams"
     solver: Any                                   # the physics' solver, whatever its make_solver returns
-    encoder: MaterialEncoder
+    encoder: "MaterialSource"                     # the run's material source (materials/material_source.py)
     network_errors: dict[str, float]              # {attribute: % of its range}
     model: MMTOModelAD
     history: dict[str, list[float | np.ndarray]]
@@ -263,6 +264,64 @@ def problem_solver(physics: "ModuleType", mesh: "HexMesher", mat_prop: "Material
     return physics.make_solver(mesh, mat_prop, bcs, linear_solver, dsolver, elem_body_force)
 
 
+def material_source(s: "RunSettings", vae_params: "VAEParams", xlsx: str, saveNet: str | None,
+                    should_stop: Callable[[], bool] | None, on_network_error: Callable[[str], bool] | None) \
+        -> "tuple[MaterialSource, torch.Tensor, dict[str, float], str]":
+    """The run's material source (materials/material_source.py), the one place a run's materials come from, and
+    what the run reads with it: the database's materials as latent points (materials, latent dimension), the
+    network's largest error per property in % ({} with no network), and saveNet resolved (None is the .nt
+    beside the database). The material network of the database xlsx: read when there is one and
+    s.use_pretrained_vae, else trained and saved; a network further off than s.network_error_warning asks
+    on_network_error whether to go on (NetworkRunCancelled when it says no)."""
+    matEncoder = MaterialEncoder(vae_params)
+    matEncoder.readExcel(xlsx)
+
+    if saveNet is None:
+        base, _ = os.path.splitext(xlsx)
+        saveNet = base + ".nt"
+
+    vae_file_exists = os.path.exists(saveNet) and os.path.getsize(saveNet) > 0
+
+    if s.use_pretrained_vae and vae_file_exists:
+        print(f"Loading pre-trained autoencoder from file: {saveNet}")
+        matEncoder.loadAutoencoderFromFile(saveNet)
+    else:
+        if in_shipped_folder(saveNet):
+            raise ValueError(f"training a new VAE would overwrite the shipped {os.path.basename(saveNet)}; to train "
+                             f"a different network, copy the database to a folder of your own and use the copy")
+        if vae_file_exists:                                 # one step of undo: the network being replaced
+            previous = os.path.splitext(saveNet)[0] + ".previous.nt"
+            shutil.copy2(saveNet, previous)
+            print(f"Keeping the network being replaced as {previous}")
+        print(f"Training autoencoder and saving to: {saveNet}")
+        time_start = time.time()
+        matEncoder.trainAutoencoder(
+            vae_params.numEpochs,
+            vae_params.klFactor,
+            saveNet,
+            vae_params.learningRate,
+            vae_params.maxAttributeErrorPercent,
+            should_stop=should_stop,            # a stop while training: TrainingStopped, no network saved
+        )
+        time_end = time.time()
+        print(f"Autoencoder training time: {time_end - time_start:.2f} seconds")
+
+    network_errors = matEncoder.encodingErrorsPercent()     # read or just trained, the network is kept either way
+    warning = network_warning(network_errors, s.network_error_warning)
+    if warning is not None:
+        print(f"[WARNING] {warning[0].upper() + warning[1:]}.")
+        if on_network_error is not None and not on_network_error(warning):
+            raise NetworkRunCancelled(warning)
+
+    with torch.no_grad():
+        matEncoder.training_latents = matEncoder.vaeNet.encoder(
+            matEncoder.scaledMaterialData
+        ).cpu()
+    matEncoder.printEncodingErrors()
+
+    return matEncoder, matEncoder.training_latents, network_errors, saveNet
+
+
 def setup(*, s: "RunSettings", project: "Project", save_dir: str, verbose: bool, plot_progress: bool,
           plot_bcs: bool, plotter: "pyvista.Plotter | None", progress: Callable[[dict[str, Any]], None] | None,
           should_stop: Callable[[], bool] | None, on_network_error: Callable[[str], bool] | None) -> RunState | None:
@@ -308,54 +367,9 @@ def setup(*, s: "RunSettings", project: "Project", save_dir: str, verbose: bool,
         print("Please provide a valid MaterialsExcelFile in to_params.")
         return None
 
-    matEncoder = MaterialEncoder(vae_params)
-    matEncoder.readExcel(to_params.MaterialsExcelFile)
     material_colors, material_labels = material_display(to_params.MaterialsExcelFile)
-
-    if saveNet is None:
-        base, _ = os.path.splitext(to_params.MaterialsExcelFile)
-        saveNet = base + ".nt"
-
-    vae_file_exists = os.path.exists(saveNet) and os.path.getsize(saveNet) > 0
-
-    if s.use_pretrained_vae and vae_file_exists:
-        print(f"Loading pre-trained autoencoder from file: {saveNet}")
-        matEncoder.loadAutoencoderFromFile(saveNet)
-    else:
-        if in_shipped_folder(saveNet):
-            raise ValueError(f"training a new VAE would overwrite the shipped {os.path.basename(saveNet)}; to train "
-                             f"a different network, copy the database to a folder of your own and use the copy")
-        if vae_file_exists:                                 # one step of undo: the network being replaced
-            previous = os.path.splitext(saveNet)[0] + ".previous.nt"
-            shutil.copy2(saveNet, previous)
-            print(f"Keeping the network being replaced as {previous}")
-        print(f"Training autoencoder and saving to: {saveNet}")
-        time_start = time.time()
-        matEncoder.trainAutoencoder(
-            vae_params.numEpochs,
-            vae_params.klFactor,
-            saveNet,
-            vae_params.learningRate,
-            vae_params.maxAttributeErrorPercent,
-            should_stop=should_stop,            # a stop while training: TrainingStopped, no network saved
-        )
-        time_end = time.time()
-        print(f"Autoencoder training time: {time_end - time_start:.2f} seconds")
-
-    network_errors = matEncoder.encodingErrorsPercent()     # read or just trained, the network is kept either way
-    warning = network_warning(network_errors, s.network_error_warning)
-    if warning is not None:
-        print(f"[WARNING] {warning[0].upper() + warning[1:]}.")
-        if on_network_error is not None and not on_network_error(warning):
-            raise NetworkRunCancelled(warning)
-
-    with torch.no_grad():
-        matEncoder.training_latents = matEncoder.vaeNet.encoder(
-            matEncoder.scaledMaterialData
-        ).cpu()
-    matEncoder.printEncodingErrors()
-
-    zRealPoints = matEncoder.training_latents
+    matEncoder, zRealPoints, network_errors, saveNet = material_source(
+        s, vae_params, to_params.MaterialsExcelFile, saveNet, should_stop, on_network_error)
     zRealPoints_np = zRealPoints.detach().cpu().numpy().astype(float)
 
     solver = problem_solver(physics, mesh, mat_prop, bcs, elem_body_force, to_params)
@@ -364,7 +378,7 @@ def setup(*, s: "RunSettings", project: "Project", save_dir: str, verbose: bool,
     print(f"Number of DOF: {num_dof}")
 
     num_elems = mesh.num_elems
-    latentDim = matEncoder.vae_params.latentDim
+    latentDim = matEncoder.latent_dim
     num_design_var = num_elems + num_elems * latentDim
     print(f"Using latent dimension: {latentDim}")
     elem_volume = float(np.prod(solver.mesh.elem_size))
@@ -434,8 +448,8 @@ def setup(*, s: "RunSettings", project: "Project", save_dir: str, verbose: bool,
     lowerBound = np.zeros(num_design_var, dtype=float).reshape(-1, 1)
     upperBound = np.ones(num_design_var, dtype=float).reshape(-1, 1)
 
-    lowerBound[num_elems:num_design_var] = np.min(zRealPoints.detach().cpu().numpy())
-    upperBound[num_elems:num_design_var] = np.max(zRealPoints.detach().cpu().numpy())
+    lowerBound[num_elems:num_design_var] = np.min(zRealPoints_np, initial=np.inf)    # with no latent points
+    upperBound[num_elems:num_design_var] = np.max(zRealPoints_np, initial=-np.inf)   # the slices are empty
 
     return RunState(
         # what setup was given
@@ -487,7 +501,7 @@ def analyse_design(state: RunState, it: Iteration) -> None:
     it.x_phys; the model's tree (MMTOModelAD.evaluate)."""
     s, to_params, model = state.s, state.to_params, state.model
     it.zeta = np.asarray(it.zeta).flatten()
-    it.z = it.zeta[state.num_elems:].reshape(state.latent_dim, -1).T   # numpy, element-major (N, latentDim)
+    it.z = it.zeta[state.num_elems:].reshape(state.latent_dim, state.num_elems).T   # element-major (N, latentDim)
     it.J_t, it.cons_t = model.evaluate(it.zeta, state.beta, s.eta_proj,
                                        use_heaviside=to_params.HeavisideProjection,
                                        apply_density_filter=to_params.APPLY_FILTER_TO_DENSITY)

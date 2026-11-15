@@ -231,10 +231,9 @@ def _analyse(project: "Project",
     _print_quantities(title, values)
     stop_if_asked()
 
-    z = np.zeros((m.N, 1))                           # one latent coordinate for final_summary to reshape; the
-    results = physics.final_summary(                 # properties ignore it: each element is its own material
-        [(title, x, z)], solver, lambda z: materials.properties(len(z)), s, materials, 1, elem_volume,
-        domain_volume)
+    z = np.zeros((m.N, materials.latent_dim))        # no latent points: each element is its own material
+    results = physics.final_summary(
+        [(title, x, z)], solver, materials.decode, s, materials, materials.latent_dim, elem_volume, domain_volume)
     checked_results(physics, results, m.N, int(mesh.num_nodes))
     stop_if_asked()
 

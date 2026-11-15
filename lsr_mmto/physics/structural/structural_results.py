@@ -326,7 +326,7 @@ def eval_stress_compliance_metrics(
     x_vec = np.asarray(x_vec, dtype=float).flatten()
     z_vec = np.asarray(z_vec, dtype=float).flatten()
 
-    zPts = torch.tensor(np.asarray(z_vec, dtype=float).reshape(latentDim, -1).T, dtype=torch.get_default_dtype())
+    zPts = torch.tensor(np.asarray(z_vec, dtype=float).reshape(latentDim, len(x_vec)).T, dtype=torch.get_default_dtype())
 
     # E and nu exactly as the optimization had them: the same decode, the same constant-nu setting
     with torch.no_grad():

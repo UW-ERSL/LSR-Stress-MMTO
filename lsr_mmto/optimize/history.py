@@ -18,7 +18,6 @@ import torch
 import matplotlib.pyplot as plt
 
 if TYPE_CHECKING:
-    from lsr_mmto.materials.encoder import MaterialEncoder
     from lsr_mmto.optimize.mmto_to_params import MMTOParams
     from lsr_mmto.materials.material_source import MaterialSource
 
@@ -61,7 +60,7 @@ def compute_mass_from_x_and_z(
     x_density = np.asarray(x_density, dtype=float).reshape(-1)
 
     zPts = torch.tensor(
-        np.asarray(z_flat, dtype=float).reshape(latentDim, -1).T,
+        np.asarray(z_flat, dtype=float).reshape(latentDim, len(x_density)).T,
         dtype=torch.get_default_dtype(),   # the decoder's dtype (float64 under PyTO-AD)
     )
 
@@ -97,7 +96,7 @@ def init_run_history() -> dict[str, list[float | np.ndarray]]:
 
 def log_design_state(history: dict[str, list[float | np.ndarray]], iteration: int, x_phys: np.ndarray, z: np.ndarray,
                      material_properties: dict[str, torch.Tensor], zTorch: torch.Tensor,
-                     matEncoder: "MaterialEncoder", num_elems: int, beta_proj: float, eta_proj: float,
+                     matEncoder: "MaterialSource", num_elems: int, beta_proj: float, eta_proj: float,
                      verbose: bool = True) -> None:
     """Record the grey fraction (appends to history["grey"]); in verbose mode also print the iteration header,
     grey %, and the [MAT] active-material statistics. x_phys is (N,); z and zTorch are element-major
