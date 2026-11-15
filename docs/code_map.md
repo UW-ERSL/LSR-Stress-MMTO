@@ -77,8 +77,9 @@ LSR MMTO
 │   └── pyto_ad_imports.py
 │
 ├── docs/                         this map, how the code works, how to add features, the reference
-│                                 page (generated), the user guide
-└── tests/                        one file per part; the thermal physics' test is the one to copy
+│                                 page (generated), the user guide, the list of tests (generated)
+└── tests/                        a folder for each kind of check (testing_the_codebase.md lists every
+                                  test); the thermal physics' test is the one to copy
 ```
 
 ## 2. Where does my feature go?
@@ -89,62 +90,62 @@ Is it about one physics only?
 │   ├── a new physics altogether?
 │   │     copy physics/template/ and fill its FILL lines (physics/thermal/ is one done); one line in
 │   │     available_physics.py
-│   │     test: a copy of tests/test_thermal_physics.py, tests/test_physics_folders.py · docs: "A physics"
+│   │     test: a copy of tests/physics/test_thermal_physics.py, tests/code_rules/test_physics_folders.py · docs: "A physics"
 │   ├── something to solve for, or a different solver?
 │   │     <name>_physics.py (make_solver, analyse), FIELDS on the front page
 │   │     test: a case whose answer is known, as thermal's bar test · docs: "A physics"
 │   ├── something that holds or pushes the part?
 │   │     <name>_supports_and_loads.py, one entry of SUPPORT_AND_LOAD_KINDS
-│   │     test: tests/test_project.py · docs: "A kind of support or load"
+│   │     test: tests/problem/test_project.py · docs: "A kind of support or load"
 │   ├── something to minimize or limit?
 │   │     <name>_quantities.py, one entry of QUANTITIES
-│   │     test: tests/test_ad_quantities.py · docs: "A quantity"
+│   │     test: tests/gradients/test_ad_quantities.py · docs: "A quantity"
 │   ├── a result to show after a run?
 │   │     RESULT_FIELDS, its values returned by final_summary (<name>_results.py)
-│   │     test: tests/test_thermal_physics.py · docs: "A physics"
+│   │     test: tests/physics/test_thermal_physics.py · docs: "A physics"
 │   ├── a number of its own in a run's Summary and Compare?
 │   │     SUMMARY_ROWS, one entry naming a history key (<name>_results.py)
-│   │     test: tests/test_extending.py · docs: "A physics"
+│   │     test: tests/code_rules/test_extending.py · docs: "A physics"
 │   ├── a term added to the objective (a penalty) of this physics only?
 │   │     PENALTIES on the front page, one entry
-│   │     test: tests/test_thermal_physics.py · docs: "A penalty"
+│   │     test: tests/physics/test_thermal_physics.py · docs: "A penalty"
 │   ├── a setting of this physics only?
 │   │     SETTINGS on the front page
-│   │     test: tests/test_run_project.py · docs: "A setting"
+│   │     test: tests/runs/test_run_project.py · docs: "A setting"
 │   └── a unit its values or quantities are measured in?
 │         UNIT_KINDS on the front page
-│         test: tests/test_databases.py · docs: "A material attribute"
+│         test: tests/materials/test_databases.py · docs: "A material attribute"
 └── no → would every physics use it?
     ├── a material property?
     │     one entry of ATTRIBUTES, lsr_mmto/materials/databases.py
-    │     test: tests/test_databases.py · docs: "A material attribute"
+    │     test: tests/materials/test_databases.py · docs: "A material attribute"
     ├── a material database?
     │     an .xlsx in data/databases/, or made in the GUI
-    │     test: tests/test_databases.py · docs: "A material database"
+    │     test: tests/materials/test_databases.py · docs: "A material database"
     ├── a way to pick part of the mesh?
     │     one class in lsr_mmto/problem/selections.py
-    │     test: tests/test_selections.py · docs: "A selection type"
+    │     test: tests/problem/test_selections.py · docs: "A selection type"
     ├── a quantity for every physics (made from the design and the materials alone)?
     │     one entry of QUANTITIES, lsr_mmto/formulation/quantities.py
-    │     test: tests/test_ad_quantities.py · docs: "A quantity"
+    │     test: tests/gradients/test_ad_quantities.py · docs: "A quantity"
     ├── a setting for every physics?
     │     one entry of SETTINGS, lsr_mmto/problem/settings.py
-    │     test: tests/test_run_project.py · docs: "A setting"
+    │     test: tests/runs/test_run_project.py · docs: "A setting"
     ├── a new way to treat the constraints?
     │     one entry of CONSTRAINT_METHODS, lsr_mmto/optimize/optimization_loop.py
-    │     test: tests/test_regression.py · docs: "A constraint method"
+    │     test: tests/runs/test_regression.py · docs: "A constraint method"
     ├── a term added to the objective (a penalty) every physics has?
     │     one entry of PENALTIES, lsr_mmto/design/latent_penalties.py
-    │     test: tests/test_thermal_physics.py, tests/test_regression.py · docs: "A penalty"
+    │     test: tests/physics/test_thermal_physics.py, tests/runs/test_regression.py · docs: "A penalty"
     ├── another step of each iteration (a continuation)?
     │     one step of ITERATION_STEPS, lsr_mmto/optimize/optimization_loop.py
-    │     test: tests/test_regression.py · docs: CONTRIBUTING, "Where a change goes"
+    │     test: tests/runs/test_regression.py · docs: CONTRIBUTING, "Where a change goes"
     ├── something in the project file itself?
     │     lsr_mmto/problem/project.py, with an upgrade for older files
-    │     test: tests/test_project.py · docs: "A change to the project file format"
+    │     test: tests/problem/test_project.py · docs: "A change to the project file format"
     └── none of these: it changes what the core assumes
           a widening of the core: CONTRIBUTING, "Where a change goes", its four rules
-          test: tests/test_regression.py, and a test of its own
+          test: tests/runs/test_regression.py, and a test of its own
 ```
 
 A nonlinear solve, or a property that depends on the field, stays in the physics' folder: analyse

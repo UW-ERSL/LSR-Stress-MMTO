@@ -7,7 +7,7 @@ with a different material in each element: one temperature per node, each elemen
 from its material.
 
 It is in the list of physics (physics/available_physics.py), so the GUI offers it;
-tests/test_thermal_physics.py runs it, so it keeps working as the code changes. It is also the worked
+tests/physics/test_thermal_physics.py runs it, so it keeps working as the code changes. It is also the worked
 example of a physics: physics/template/ is the blank form, and this folder is the same form filled in.
 
     thermal_physics.py              the solver, one iteration's solve

@@ -39,7 +39,7 @@ def material_volume_fraction(xb: torch.Tensor, z: torch.Tensor, z_real: torch.Te
 # here; one of a physics is written in its module (QUANTITIES on its front page, as the arguments
 # below without physics). Write its function of the model's current state (m.x_phys, m.z, m.props,
 # and what the physics' analyse leaves, e.g. m.u, m.svm) in torch, add the entry, and add it to
-# tests/test_ad_quantities.py. Nothing else changes: the gradient comes from autograd.
+# tests/gradients/test_ad_quantities.py. Nothing else changes: the gradient comes from autograd.
 #
 #   name         the name a project file uses (P1); PyTO-AD's name where the meaning is the same
 #   objective    True if it can be the objective

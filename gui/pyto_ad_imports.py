@@ -2,7 +2,7 @@
 pyto_ad_imports.py
 ==================
 Every name the LSR MMTO GUI takes from the PyTO-AD GUI, in one place. A new PyTO-AD pin that
-renames or removes one of them fails here, and in tests/test_gui.py, rather than deep inside
+renames or removes one of them fails here, and in tests/gui/test_gui.py, rather than deep inside
 the GUI.
 
     MainWindow         the window: viewer, sidebar (BUTTON_CONFIG), message panel

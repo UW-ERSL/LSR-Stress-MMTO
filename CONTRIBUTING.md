@@ -24,7 +24,7 @@ is the same form filled in. A physics keeps to four bounds:
 4. Needing to change a file outside the folder means the core lacks something: propose the change to the
    core as a widening (below), never patch it in from the physics.
 
-`tests/test_physics_folders.py` checks that each physics has the form's five files, puts each front-page
+`tests/code_rules/test_physics_folders.py` checks that each physics has the form's five files, puts each front-page
 entry where the form does, marks each function (`# ESSENTIAL:`, `# OPTIONAL:`, `# HELPER:`), and that the
 first bound holds.
 
@@ -60,22 +60,27 @@ Run the checks in a Miniforge Prompt, from inside this folder, with the environm
 
 That is every test, spread over 4 processes at once; one after another, without `-n 4`, they take about
 six minutes. Each process needs up to about 2.5 GB of memory: on a computer with less than 16 GB, use
-`-n 2`. While working, run only the files of the part you changed:
+`-n 2`. The tests are in folders by what they check (physics, gradients, problem, materials, runs, gui,
+docs, code_rules); `docs/testing_the_codebase.md` lists every test, folder by folder, with what it checks.
+It is generated from the tests' docstrings: after adding, renaming or moving a test, run
+`python docs/make_testing_doc.py` (`tests/docs/test_testing_doc.py` fails until you do). A new folder of
+tests needs its line in `FOLDERS` there. While working, run only the files of the part you changed:
 
 | What you changed | The tests that cover it |
 |---|---|
-| `lsr_mmto/problem/` (the project, selections, mesh, supports and loads, settings, the project folder) | `test_project.py`, `test_selections.py`, `test_mesh.py`, `test_project_folder.py` |
-| `lsr_mmto/materials/` (databases, the material network) | `test_databases.py` |
-| `lsr_mmto/formulation/` (quantities, the formula text) | `test_extending.py`, `test_project.py`, `test_ad_quantities.py` |
-| `lsr_mmto/physics/` | `test_thermal_physics.py`, `test_thermoelastic_physics.py`, `test_physics_folders.py`, `test_thermal_walk_through.py`, `test_final_check.py`, `test_solid_part_analysis.py` |
-| `lsr_mmto/optimize/`, `lsr_mmto/design/`, `lsr_mmto/elements/` (the run itself) | `test_run_project.py`, `test_gradcheck.py`, `test_regression.py`, `test_solid_part_analysis.py` |
-| `lsr_mmto/results/` (reading runs back, tables, figures, STL export) | `test_stl_export.py`, `test_project_folder.py`, `test_solid_part_analysis.py` |
-| `gui/` | `test_gui.py`, `test_gui_look.py`, `test_user_guide.py`, `test_thermal_walk_through.py` |
-| a docstring, or anything under `docs/` | `test_reference.py`, `test_user_guide.py`, `test_code_map.py`, `test_docstring_reads_and_sets.py` |
-| `setup_environment.py`, `make_shortcut.py`, `uninstall_lsr_mmto.py` | `test_launcher.py` |
-| `Python_walkthrough.ipynb` | `test_python_walkthrough.py` |
+| `lsr_mmto/problem/` (the project, selections, mesh, supports and loads, settings, the project folder) | `problem/test_project.py`, `problem/test_selections.py`, `problem/test_mesh.py`, `problem/test_project_folder.py` |
+| `lsr_mmto/materials/` (databases, the material network) | `materials/test_databases.py` |
+| `lsr_mmto/formulation/` (quantities, the formula text) | `code_rules/test_extending.py`, `problem/test_project.py`, `gradients/test_ad_quantities.py` |
+| `lsr_mmto/physics/` | `physics/test_thermal_physics.py`, `physics/test_thermoelastic_physics.py`, `code_rules/test_physics_folders.py`, `gui/test_thermal_walk_through.py`, `runs/test_final_check.py`, `runs/test_solid_part_analysis.py` |
+| `lsr_mmto/optimize/`, `lsr_mmto/design/`, `lsr_mmto/elements/` (the run itself) | `runs/test_run_project.py`, `gradients/test_gradcheck.py`, `runs/test_regression.py`, `runs/test_solid_part_analysis.py` |
+| `lsr_mmto/results/` (reading runs back, tables, figures, STL export) | `runs/test_stl_export.py`, `problem/test_project_folder.py`, `runs/test_solid_part_analysis.py` |
+| `gui/` | `gui/test_gui.py`, `gui/test_gui_look.py`, `docs/test_user_guide.py`, `gui/test_thermal_walk_through.py` |
+| a docstring, or anything under `docs/` | `docs/test_reference.py`, `docs/test_user_guide.py`, `docs/test_code_map.py`, `docs/test_testing_doc.py`, `code_rules/test_docstring_reads_and_sets.py` |
+| a test | `docs/test_testing_doc.py` |
+| `setup_environment.py`, `make_shortcut.py`, `uninstall_lsr_mmto.py` | `gui/test_launcher.py` |
+| `Python_walkthrough.ipynb` | `docs/test_python_walkthrough.py` |
 
-For example `python -m pytest tests/test_solid_part_analysis.py -q`. The slow gradient checks can be
+For example `python -m pytest tests/runs/test_solid_part_analysis.py -q`. The slow gradient checks can be
 left out while working, and the tests that failed run again on their own:
 
     python -m pytest tests -q -m "not slow"
@@ -90,7 +95,7 @@ Run every test once before committing. To see which lines of the code no test ru
 - New or changed code has type hints on every function, written from what its callers actually pass, and a
   short docstring saying what it does and its limits. A function that changes an object it is given (the
   run state, an iteration, the model) says what it reads and what it sets, in one line of code names:
-  `Reads it.x. Sets it.y.` (`tests/test_docstring_reads_and_sets.py` checks that line against the code). A
+  `Reads it.x. Sets it.y.` (`tests/code_rules/test_docstring_reads_and_sets.py` checks that line against the code). A
   class lists its fields and their types at the top. Names needed only for hints are imported under
   `if TYPE_CHECKING:`.
 - A test of something every physics has (a run goes through, its gradients, a run saved and read back,
@@ -100,10 +105,10 @@ Run every test once before committing. To see which lines of the code no test ru
   one physics only becomes such a loop the next time it is changed.
 - A change that moves code or renames things changes no number: the first iterations of the shipped
   projects give the same objective and constraints, to 1 part in a million, before and after
-  (`tests/test_regression.py` checks it). Later iterations drift by tiny amounts from one run to the
+  (`tests/runs/test_regression.py` checks it). Later iterations drift by tiny amounts from one run to the
   next even with no change, because the solver adds numbers in a different order on several threads.
   A change meant to change results (a new formulation, a new PyTO-AD pin) fails that test: store the
-  new values on purpose with `python tests/test_regression.py --update`, and say why in the commit
+  new values on purpose with `python tests/runs/test_regression.py --update`, and say why in the commit
   message.
 - A name a test makes up (a unit kind, a property, a setting, a penalty) starts with `test_`, so it never
   clashes with a real one a physics adds later: a test's made-up unit kind `heat` clashed with thermal's

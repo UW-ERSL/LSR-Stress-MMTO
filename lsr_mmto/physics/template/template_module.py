@@ -38,13 +38,13 @@ How to start
     3. Give it names of its own: NAME, each kind of support and load, each quantity, each penalty and each
        setting key must not be used by another physics.
     4. Add one line to physics/available_physics.py: import your front page and put it in MODULES. Until
-       then a test can register it, as tests/test_thermal_physics.py does with thermal.
-    5. Copy tests/test_thermal_physics.py for your physics: a case whose answer is known, and a short run.
+       then a test can register it, as tests/physics/test_thermal_physics.py does with thermal.
+    5. Copy tests/physics/test_thermal_physics.py for your physics: a case whose answer is known, and a short run.
 
 The bounds of a physics
 -----------------------
     1. The core reaches a physics only through its front page; nothing outside the folder imports its
-       other files (tests/test_physics_folders.py checks it).
+       other files (tests/code_rules/test_physics_folders.py checks it).
     2. More files inside the folder are fine, when the name says the job (heat_radiation.py).
     3. A physics may import and reuse another physics' code: a thermoelastic physics can build on
        thermal's solver and structural's.

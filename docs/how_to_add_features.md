@@ -5,6 +5,7 @@ code is, and `docs/code_map.md` leads from what you want to add to the section o
 
     python docs/make_reference.py
     python -m gui.user_guide_window --write
+    python docs/make_testing_doc.py
     python -m pytest tests -q -n 4
 
 `-n 4` spreads the tests over 4 processes at once. Each process needs up to about 2.5 GB of memory: on a
@@ -12,8 +13,9 @@ computer with less than 16 GB, use `-n 2`.
 
 The first rewrites `docs/reference.md`, the second the lists in `docs/user_guide.md`
 (the settings, quantities, kinds of support and load, selection types and material attributes, as
-the user guide shows them); `tests/test_reference.py` and `tests/test_user_guide.py` fail until
-they are rewritten. The Python section of `docs/reference.md` is read from the docstrings of the calls
+the user guide shows them), the third `docs/testing_the_codebase.md`, the list of every test;
+`tests/docs/test_reference.py`, `tests/docs/test_user_guide.py` and `tests/docs/test_testing_doc.py` fail
+until they are rewritten. The Python section of `docs/reference.md` is read from the docstrings of the calls
 a project script uses: a new argument needs its line in the docstring (`docs/make_reference.py` says how
 a docstring is laid out), and every example there must run. Each section below ends with what else to run.
 
@@ -60,7 +62,7 @@ as torch from the model's state; autograd gives the gradient.
   part made solid in its lightest material ({reference})").
 - A project names it by its name; the objective and the constraints are kept by that name. A
   quantity of one physics is refused by the project's check in a project of another physics.
-- Add it to `QUANTITIES` in `tests/test_ad_quantities.py`, which checks the gradient against
+- Add it to `QUANTITIES` in `tests/gradients/test_ad_quantities.py`, which checks the gradient against
   finite differences. What else to run: both generators above (the reference page and the user
   guide list every quantity).
 
@@ -93,10 +95,10 @@ model's state; autograd gives the gradient.
 - Its settings are entries of `SETTINGS` (see "A setting"), on the physics' front page for a penalty
   of one physics.
 
-`tests/test_thermal_physics.py` registers a penalty on thermal, checks the gradient against
+`tests/physics/test_thermal_physics.py` registers a penalty on thermal, checks the gradient against
 finite differences and reads its history key; copy those tests for a penalty of your own. A new
 penalty every physics has changes every run unless its weight is 0 by default:
-`tests/test_regression.py` shows it.
+`tests/runs/test_regression.py` shows it.
 
 ## A selection type
 
@@ -119,7 +121,7 @@ The code line in the GUI picks it up by itself. For the selection form, add it t
 `gui/supports_and_loads_panel.py`: the name the form shows, a plain description, and a label for each field
 (the form never shows the code names).
 
-Add it to `tests/test_selections.py`, including the round trip through `to_dict`. What else to run:
+Add it to `tests/problem/test_selections.py`, including the round trip through `to_dict`. What else to run:
 both generators above (the user guide lists every selection type).
 
 ## A kind of support or load
@@ -150,7 +152,7 @@ A project stores it as `{"kind": name, "on": selection, ...values}`, and a scrip
 `p.add_bc(name, on, **values)`, e.g. `p.add_bc("force", "corner", total=[0, -4, 0])`; a wrong value
 is an error there, as in the project's check.
 
-`test_every_kind_round_trips_through_a_project_script` in `tests/test_project.py` adds every kind,
+`test_every_kind_round_trips_through_a_project_script` in `tests/problem/test_project.py` adds every kind,
 writes it into a script and runs it; add a build test there for what the kind does. What else to
 run: both generators above (the reference page and the user guide list every kind).
 
@@ -170,8 +172,8 @@ Settings panel it sits in; `none_means`, `integer` and `choices` when it needs t
 `pyto_ad_field` when PyTO-AD's parameters have a field for it, `at_build` when PyTO-AD keeps it
 somewhere else (the p-norm exponent). The defaults, the Settings panel, the reference page and the
 settings a run gets are made from it. `test_settings_cover_run_topopt` in
-`tests/test_run_project.py` fails when the loop reads a name that is not a setting;
-`tests/test_extending.py` shows one entry reaching every place. What else to run: both generators
+`tests/runs/test_run_project.py` fails when the loop reads a name that is not a setting;
+`tests/code_rules/test_extending.py` shows one entry reaching every place. What else to run: both generators
 above (the reference page and the user guide list every setting).
 
 ## A constraint method
@@ -195,7 +197,7 @@ subproblem as constraints (g <= 0). A method is one entry of `CONSTRAINT_METHODS
 Its settings are entries of `SETTINGS` (see "A setting"), read as `state.s.<name>`. With a second
 method comes the setting that chooses between them; `CONSTRAINT_METHOD` names the one used today.
 
-What else to run: `tests/test_regression.py` compares the first iterations of every shipped project
+What else to run: `tests/runs/test_regression.py` compares the first iterations of every shipped project
 with stored values; with MMA chosen they must not change.
 
 ## A material attribute
@@ -226,7 +228,7 @@ density, mass, cost per mass) is an entry in `UNITS` and `UNIT_SYSTEMS` in
 
 A database column not in `ATTRIBUTES` is an error, so a new attribute is added before it is
 used. The check, the template and the database editor follow. Add a case to
-`tests/test_databases.py`. What else to run: both generators above (the reference page lists the
+`tests/materials/test_databases.py`. What else to run: both generators above (the reference page lists the
 units, the user guide the attributes).
 
 ## A physics
@@ -249,8 +251,8 @@ A physics is a folder in `lsr_mmto/physics/`, e.g. `thermoelastic/`, with five f
 
 plus one line in `MODULES` in `lsr_mmto/physics/available_physics.py`. The entries are described in
 `MODULE_ENTRIES` there; `thermal/thermal_module.py` and `structural/structural_module.py` are complete
-examples, and `tests/test_thermal_physics.py` tests thermal: copy it for yours (its `registered` tests a
-physics before its line is in `MODULES`). `tests/test_physics_folders.py` checks that every physics keeps
+examples, and `tests/physics/test_thermal_physics.py` tests thermal: copy it for yours (its `registered` tests a
+physics before its line is in `MODULES`). `tests/code_rules/test_physics_folders.py` checks that every physics keeps
 the form's files and places. A project names its physics with `"physics"` in its file (`p.physics` in code); an unknown name is an error before the run. The material
 attributes it reads that the core does not have (Density and Cost) are its own, in `NEW_PROPERTIES`
 (see "A material attribute"). What else to run: both generators above, since its settings,
@@ -332,7 +334,7 @@ example. Five things differ from a physics of one field:
 - A setting belongs to one physics, and the GUI shows only the settings of the project's physics. A
   physics that needs a setting another one has gives its own, under its own key: thermoelastic's
   Poisson's ratio settings start with `te_`.
-- A test can use another physics' parts: `registered` (`tests/test_thermal_physics.py`) adds a physics to
+- A test can use another physics' parts: `registered` (`tests/physics/test_thermal_physics.py`) adds a physics to
   the core's lists for one test, as its line in `MODULES` would, and takes it out after; for a physics
   already in `MODULES` it does nothing.
 
@@ -357,4 +359,4 @@ one runs with a warning.
 
 Raise `SCHEMA_VERSION` in `lsr_mmto/problem/project.py` and add to `_UPGRADES` the function that
 turns the previous version into the new one. Older files then load as before. See
-`test_schema_upgrades` in `tests/test_project.py`.
+`test_schema_upgrades` in `tests/problem/test_project.py`.

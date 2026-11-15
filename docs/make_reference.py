@@ -7,7 +7,7 @@ Python calls a project script uses.
 
     python docs/make_reference.py        (from the repository folder)
 
-The page is generated, not edited by hand; tests/test_reference.py fails when the
+The page is generated, not edited by hand; tests/docs/test_reference.py fails when the
 page in the repository differs from what the code generates.
 
 The Python section is read from the docstrings of the calls (python_entries lists them):

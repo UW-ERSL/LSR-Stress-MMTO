@@ -56,7 +56,7 @@ is kept as it is and worked out on each mesh; arithmetic without h is a number a
 
 To add a type: subclass Selection, give it a TYPE, a fields tuple and, for each field, how
 it is given (field_kinds: a Field each, which the GUI's form is made from), write _mask or
-evaluate, and add it to tests/test_selections.py. from_dict finds it by TYPE. Its docstring
+evaluate, and add it to tests/problem/test_selections.py. from_dict finds it by TYPE. Its docstring
 is its entry in docs/reference.md: what it selects, then one line per argument (name: what it is
 and its format) and an Example: line (docs/make_reference.py says how it is read).
 """
