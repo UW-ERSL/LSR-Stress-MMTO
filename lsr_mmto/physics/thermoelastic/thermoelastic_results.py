@@ -14,8 +14,7 @@ import torch
 from lsr_mmto.pyto_ad_imports import topopt_material_model as ad_mm
 from lsr_mmto.physics.thermoelastic.thermoelastic_physics import elastic_constants, thermal_force
 if TYPE_CHECKING:
-    from lsr_mmto.materials.encoder import MaterialEncoder
-    from lsr_mmto.optimize.solid_part_analysis import _Materials
+    from lsr_mmto.materials.material_source import MaterialSource
     from lsr_mmto.problem.settings import RunSettings
     import pyvista
     from lsr_mmto.optimize.design_model import MMTOModelAD
@@ -69,7 +68,7 @@ def iteration_diagnostics(history: dict[str, list[float | np.ndarray]], iteratio
 # ESSENTIAL: final_summary, the final check and the results a run saves
 def final_summary(designs: "list[tuple[str, np.ndarray, np.ndarray | torch.Tensor]]", solver: "ThermoelasticHexFEA",
                   properties_of: Callable[[torch.Tensor], dict[str, torch.Tensor]], settings: "RunSettings",
-                  encoder: "MaterialEncoder | _Materials", latent_dim: int, elem_volume: float,
+                  encoder: "MaterialSource", latent_dim: int, elem_volume: float,
                   design_domain_volume: float) -> dict[str, np.ndarray]:
     """The final check's numbers: each design (label, x, z element-major) solved as analyse does (temperature,
     thermal force, displacement), its thermoelastic compliance, thermal share and highest temperature printed,

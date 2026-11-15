@@ -18,8 +18,7 @@ from lsr_mmto.physics.thermal.thermal_physics import CONDUCTIVITY
 if TYPE_CHECKING:
     import pyvista
 
-    from lsr_mmto.materials.encoder import MaterialEncoder
-    from lsr_mmto.optimize.solid_part_analysis import _Materials
+    from lsr_mmto.materials.material_source import MaterialSource
     from lsr_mmto.physics.thermal.thermal_physics import ConductionHexFEA
     from lsr_mmto.problem.settings import RunSettings
     from lsr_mmto.optimize.design_model import MMTOModelAD
@@ -56,7 +55,7 @@ def iteration_diagnostics(history: dict[str, list[float | np.ndarray]], iteratio
 # ESSENTIAL: final_summary, the final check and the temperature a run saves
 def final_summary(designs: "list[tuple[str, np.ndarray, np.ndarray | torch.Tensor]]", solver: "ConductionHexFEA",
                   properties_of: Callable[[torch.Tensor], dict[str, torch.Tensor]], settings: "RunSettings",
-                  encoder: "MaterialEncoder | _Materials", latent_dim: int, elem_volume: float,
+                  encoder: "MaterialSource", latent_dim: int, elem_volume: float,
                   design_domain_volume: float) -> dict[str, np.ndarray]:
     """The final check's numbers: each design (label, x, z element-major) solved, its thermal compliance and
     highest temperature printed. properties_of(z) gives the decoded properties of latent points z. Returns

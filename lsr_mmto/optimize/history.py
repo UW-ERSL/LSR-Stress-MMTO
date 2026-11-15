@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 if TYPE_CHECKING:
     from lsr_mmto.materials.encoder import MaterialEncoder
     from lsr_mmto.optimize.mmto_to_params import MMTOParams
-    from lsr_mmto.optimize.solid_part_analysis import _Materials
+    from lsr_mmto.materials.material_source import MaterialSource
 
 
 def compute_domain_volume(fe_solver_structural: Any) -> float:
@@ -45,7 +45,7 @@ def _property_to_numpy(material_properties: Mapping[str, torch.Tensor | np.ndarr
 def compute_mass_from_x_and_z(
     x_density: np.ndarray,
     z_flat: np.ndarray,
-    matEncoder: "MaterialEncoder | _Materials",
+    matEncoder: "MaterialSource",
     latentDim: int,
     elem_volume: float,
 ) -> float | None:
@@ -66,8 +66,7 @@ def compute_mass_from_x_and_z(
     )
 
     with torch.no_grad():
-        decoded = matEncoder.vaeNet.decoder(zPts)
-        material_properties = matEncoder.getMaterialProperties(decoded)
+        material_properties = matEncoder.decode(zPts)
 
     from lsr_mmto.materials.databases import density_column
     column = density_column(material_properties)

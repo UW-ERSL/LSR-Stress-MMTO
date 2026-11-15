@@ -53,7 +53,7 @@ def final_checks(name):
         z = torch.tensor(np.asarray(kw["z_vec"], float).reshape(kw["latentDim"], -1).T,
                          dtype=torch.get_default_dtype())
         with torch.no_grad():
-            props = enc.getMaterialProperties(enc.vaeNet.decoder(z))
+            props = enc.decode(z)
         E = props["Youngs_Modulus"].numpy()
         nu = np.full_like(E, nu_constant) if constant else props["Poissons_Ratio"].numpy()
         seen.append({"label": kw["label"], "E_used": E_used, "nu_used": nu_used, "E": E, "nu": nu,

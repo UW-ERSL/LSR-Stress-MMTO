@@ -161,7 +161,8 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad_imp
 | File | Purpose |
 |---|---|
 | `databases.py` | the attributes a material database may hold, the check of a database, the colour and label of each material, the VAE settings of each shipped database |
-| `encoder.py` | reads a material database, trains or loads the VAE |
+| `encoder.py` | reads a material database, trains or loads the VAE; its `decode` gives each element's properties from its latent point |
+| `material_source.py` | where a run gets each element's material properties from: what every material source gives, and the database's own values with no network (Analyse) |
 | `networks.py` | the VAE network |
 
 #### `lsr_mmto/elements/`
@@ -175,7 +176,6 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad_imp
 | File | Purpose |
 |---|---|
 | `density_filter_and_projection.py` | the density filter and the Heaviside projection |
-| `latent_to_properties.py` | each element's material properties from its point in the latent space |
 | `latent_penalties.py` | the terms added to the objective: latent smoothing, the distance penalty, and those of a physics |
 
 #### `lsr_mmto/formulation/`

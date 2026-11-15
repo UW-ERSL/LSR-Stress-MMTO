@@ -87,8 +87,7 @@ def run_postprocessing(history: dict[str, list[float | np.ndarray]], zetaOptimal
         fe_solver, properties_of, settings, matEncoder, latentDim, elem_volume, design_domain_volume)
     checked_results(physics, results, num_elems, int(fe_solver.mesh.num_nodes))
 
-    decoded = matEncoder.vaeNet.decoder(zOptimalPts)
-    material_properties = matEncoder.getMaterialProperties(decoded)
+    material_properties = matEncoder.decode(zOptimalPts)
     # each element's value of every property the physics reads (its PROPERTIES), as property_<name>
     element_properties = {f"property_{name}": material_properties[name].detach().cpu().numpy()
                           for name in physics.PROPERTIES}
@@ -116,7 +115,7 @@ def run_postprocessing(history: dict[str, list[float | np.ndarray]], zetaOptimal
                 "material_indices": np.asarray(material_indices),
             },
             results={name: dict(r, value=np.asarray(results[name])) for name, r in physics.RESULT_FIELDS.items()},
-            vae_state_dict=matEncoder.vaeNet.state_dict(),
+            vae_state_dict=matEncoder.network_weights(),
             history=history,
             example_name=example_name,
             z_real_points=_zreal,

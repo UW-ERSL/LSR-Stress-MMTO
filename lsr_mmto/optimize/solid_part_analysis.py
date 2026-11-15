@@ -27,7 +27,6 @@ import datetime
 import json
 import os
 import time
-import types
 from typing import TYPE_CHECKING, Any, Callable
 
 import numpy as np
@@ -35,6 +34,8 @@ import torch
 
 if TYPE_CHECKING:
     from types import ModuleType
+
+    from lsr_mmto.materials.material_source import DatabaseMaterials
 
     from pyto.core.hex_mesher import HexMesher
     from lsr_mmto.optimize.mmto_to_params import MMTOParams
@@ -54,37 +55,6 @@ class NoLatentPoints(Exception):
     """A quantity read the latent points (z, z_real), which an analysis does not have: it uses no network."""
 
 
-class _Materials:
-    """The database's materials as the quantities and the physics' final_summary read them from the material
-    encoder (materialNames, rawData, materialAttributes), each element given one of them: rows, its row in the
-    database, one per element. decoder and getMaterialProperties give every element its material's database
-    values. So a quantity of a database material (Mass fraction) reads the database, and the final check's mass
-    is the materials' own."""
-
-    materialNames: list[str]
-    rawData: np.ndarray                  # the database's numbers, (materials, attributes)
-    rows: np.ndarray                     # each element's material, its row in the database
-    materialAttributes: dict[str, dict[str, Any]]   # {column: {"idx", "unit"}}
-    vaeNet: types.SimpleNamespace        # decoder(z) gives z back; getMaterialProperties reads only its row count
-
-    def __init__(self, xlsx: str, rows: np.ndarray) -> None:
-        from lsr_mmto.materials.databases import database_table
-        names, attributes, units, values = database_table(xlsx)
-        self.materialNames, self.rawData, self.rows = names, values, np.asarray(rows, dtype=int)
-        self.materialAttributes = {a: {"idx": j, "unit": units[j]} for j, a in enumerate(attributes)}
-        self.vaeNet = types.SimpleNamespace(decoder=lambda z: z)
-
-    def properties(self, n: int) -> dict[str, torch.Tensor]:
-        """{column: each of the n elements' material's value}, as torch, the way a run's decode gives them."""
-        return {a: torch.as_tensor(self.rawData[self.rows[:int(n)], c["idx"]], dtype=_DTYPE)
-                for a, c in self.materialAttributes.items()}
-
-    def getMaterialProperties(self, decoded: torch.Tensor) -> dict[str, torch.Tensor]:
-        """properties(len(decoded)): each of the first len(decoded) elements' materials' values; decoded's
-        values are not read."""
-        return self.properties(len(decoded))
-
-
 class _Analysed:
     """What the physics' analyse and the quantities read of an iteration's model (optimize/design_model.py),
     for the design analysed: x_phys its densities (1 solid, 0 empty), props each element's material's database
@@ -92,14 +62,14 @@ class _Analysed:
 
     fe: Any                              # the physics' solver
     physics: "ModuleType"
-    enc: _Materials
+    enc: "DatabaseMaterials"
     settings: "RunSettings"
     N: int
     x_phys: torch.Tensor                 # (N,), 1 solid and 0 empty
     props: dict[str, torch.Tensor]
     elem_volume: float
 
-    def __init__(self, solver: Any, physics: "ModuleType", materials: _Materials, settings: "RunSettings",
+    def __init__(self, solver: Any, physics: "ModuleType", materials: "DatabaseMaterials", settings: "RunSettings",
                  elem_volume: float, x: np.ndarray) -> None:
         self.fe, self.physics, self.enc, self.settings = solver, physics, materials, settings
         self.N = int(solver.mesh.num_elems)
@@ -223,6 +193,7 @@ def _analyse(project: "Project",
     density (1 or 0), its material's row in the database, that database, the design's title, and the record's
     "analysis" entry. See analyse_solid_part."""
     from lsr_mmto.materials.databases import material_display
+    from lsr_mmto.materials.material_source import DatabaseMaterials
     from lsr_mmto.optimize import save_results
     from lsr_mmto.optimize.final_design_analysis import checked_results
     from lsr_mmto.optimize.history import compute_domain_volume
@@ -242,7 +213,7 @@ def _analyse(project: "Project",
     physics = physics_module(project.physics)
     mesh, mat_prop, bcs, elem_body_force, to_params, _ = project.build()
     x, rows, xlsx, title, analysis = design(mesh, to_params.MaterialsExcelFile)
-    materials = _Materials(xlsx, rows)
+    materials = DatabaseMaterials(xlsx, rows)
     colours, labels = material_display(xlsx)
     stop_if_asked()
 

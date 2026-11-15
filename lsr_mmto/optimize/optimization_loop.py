@@ -64,7 +64,6 @@ from lsr_mmto.materials.encoder import MaterialEncoder, NetworkRunCancelled, net
 from lsr_mmto.physics.available_physics import physics_module
 from lsr_mmto.design.latent_penalties import (PENALTIES, smooth_latent_constraint_gradient_inplace,
                                               smooth_latent_gradient_inplace)
-from lsr_mmto.design.latent_to_properties import decode
 from lsr_mmto.optimize.design_model import MMTOModelAD
 from lsr_mmto.problem.settings import BetaScheduleScheme, Z0InitMethod
 from lsr_mmto.optimize.filters import create_density_and_material_filters
@@ -743,7 +742,7 @@ def optimize(state: RunState) -> None:
         run_config=run_config,
         example_name=getattr(project, "name", str(project)),
         physics=state.physics,
-        properties_of=lambda z: decode(matEncoder, z),
+        properties_of=matEncoder.decode,
         settings=s,
     )
 

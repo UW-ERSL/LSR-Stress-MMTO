@@ -28,7 +28,6 @@ import torch
 import lsr_mmto.pyto_ad_imports  # noqa: F401  puts PyTO-AD on sys.path (and its float64 default)
 
 from lsr_mmto.design.density_filter_and_projection import SparseOperator, density_filter, heaviside
-from lsr_mmto.design.latent_to_properties import decode
 from lsr_mmto.formulation.quantities import find_quantity
 
 if TYPE_CHECKING:
@@ -109,7 +108,7 @@ class MMTOModelAD:
         x_filt = density_filter(self.x, self.H, self.Hs) if apply_density_filter else self.x
         self.x_phys = heaviside(x_filt, beta, eta) if use_heaviside else x_filt
 
-        self.props = decode(self.enc, self.z)
+        self.props = self.enc.decode(self.z)      # the material source (materials/material_source.py)
         self.physics.analyse(self)              # the solve, and what the physics' quantities read
 
         self.J = self._objective()

@@ -40,7 +40,7 @@ different material in each element, a subclass does that (`MultiMaterialHexFEA` 
 3. For each design, `MMTOModelAD` (`optimize/design_model.py`) builds one torch tree:
 
         x (density)  -> density filter -> Heaviside projection -> x_phys
-        z (latents)  -> network decoder -> props (every column of the database)
+        z (latents)  -> material source (enc.decode) -> props (every column of the database)
         x_phys, props -> physics.analyse   (structural: E, nu -> solve -> u -> von Mises)
         -> objective and constraints (QUANTITIES), by name
 

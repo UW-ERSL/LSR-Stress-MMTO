@@ -21,8 +21,7 @@ if TYPE_CHECKING:
     from pyto.autodiff.material_model import MaterialModel
     from pyto.core.bc import BC
     from pyto.core.hex_mesher import HexMesher
-    from lsr_mmto.materials.encoder import MaterialEncoder
-    from lsr_mmto.optimize.solid_part_analysis import _Materials
+    from lsr_mmto.materials.material_source import MaterialSource
     from lsr_mmto.physics.structural.structural_physics import MultiMaterialHexFEA
     from lsr_mmto.problem.settings import RunSettings
     from lsr_mmto.optimize.design_model import MMTOModelAD
@@ -313,7 +312,7 @@ def eval_stress_compliance_metrics(
     label: str,
     active_thresh: float,
     latentDim: int,
-    matEncoder: "MaterialEncoder | _Materials",
+    matEncoder: "MaterialSource",
     fe_solver_structural: "MultiMaterialHexFEA",
     MaterialModel: "type[MaterialModel]",
     elem_volume: float,
@@ -421,7 +420,7 @@ def iteration_diagnostics(history: dict[str, list[float | np.ndarray]], iteratio
 # ESSENTIAL: final_summary, the final check and the results a run saves
 def final_summary(designs: "list[tuple[str, np.ndarray, np.ndarray | torch.Tensor]]", solver: "MultiMaterialHexFEA",
                   properties_of: Callable[[torch.Tensor], dict[str, torch.Tensor]], settings: "RunSettings",
-                  encoder: "MaterialEncoder | _Materials", latent_dim: int, elem_volume: float,
+                  encoder: "MaterialSource", latent_dim: int, elem_volume: float,
                   design_domain_volume: float) -> dict[str, np.ndarray]:
     """The final check's numbers: each design (label, x, z element-major) analysed and printed, then the
     stress violations of the last one. properties_of(z) gives the decoded properties of latent points z.

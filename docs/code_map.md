@@ -26,14 +26,15 @@ LSR MMTO
 │   ├── materials/                material databases and the material network
 │   │   ├── databases.py          slot: a material attribute (ATTRIBUTES), a kind of quantity every
 │   │   │                         problem has (UNITS); the database check
-│   │   ├── encoder.py            reads a database, trains or loads the network
+│   │   ├── encoder.py            reads a database, trains or loads the network; decode(z)
+│   │   ├── material_source.py    where a run gets each element's properties: the network, or the
+│   │   │                         database's own values (Analyse)
 │   │   ├── networks.py           the network
 │   │   └── pca.py                principal component analysis: the database's effective dimension,
 │   │                             the 2D latent views
 │   ├── elements/hex_element.py   the hexahedral element: strain matrix, Lame parameters
 │   ├── design/                   how the optimizer's numbers become what the physics uses
 │   │   ├── density_filter_and_projection.py   densities to physical densities
-│   │   ├── latent_to_properties.py            each element's latent point to its material properties
 │   │   └── latent_penalties.py                slot: a penalty every physics has (PENALTIES):
 │   │                                          latent smoothing, the distance penalty
 │   ├── formulation/              what is minimized and limited

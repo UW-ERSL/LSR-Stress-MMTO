@@ -398,6 +398,17 @@ class MaterialEncoder:
                 material_properties = self.getMaterialProperties(decoded)
             return material_properties
 
+    def decode(self, z: torch.Tensor) -> dict[str, torch.Tensor]:
+        """Each point's properties, {column: (points,)}, from latent points z (points, latentDim): the network's
+        decoder, then each column's numbers (getMaterialProperties); inside the torch tree when z is in one. A
+        material source's decode (materials/material_source.py): what the run, the final check, the history
+        and the save use."""
+        return self.getMaterialProperties(self.vaeNet.decoder(z))
+
+    def network_weights(self) -> dict[str, torch.Tensor]:
+        """The network's weights, as a run saves them (a material source's network_weights)."""
+        return self.vaeNet.state_dict()
+
     def getMaterialProperties(self, decoded: torch.Tensor) -> dict[str, torch.Tensor]:
         """Decoder outputs (points, attributes) in [0, 1] back to each column's numbers, {column: (points,)}:
         normalize undone (and log10 undone for a log-scaled column); the autograd graph is kept when decoded has one."""

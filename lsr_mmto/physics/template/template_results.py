@@ -19,8 +19,7 @@ import numpy as np
 import torch
 
 if TYPE_CHECKING:
-    from lsr_mmto.materials.encoder import MaterialEncoder
-    from lsr_mmto.optimize.solid_part_analysis import _Materials
+    from lsr_mmto.materials.material_source import MaterialSource
     from lsr_mmto.problem.settings import RunSettings
 
 # RESULT_FIELDS: the results a run saves, {name: dict(view, title, measures, where, shape)}:
@@ -38,7 +37,7 @@ RESULT_FIELDS = ...                                                 # FILL
 # ESSENTIAL: final_summary, the final check and the results a run saves
 def final_summary(designs: "list[tuple[str, np.ndarray, np.ndarray | torch.Tensor]]", solver: Any,
                   properties_of: Callable[[torch.Tensor], dict[str, torch.Tensor]], settings: "RunSettings",
-                  encoder: "MaterialEncoder | _Materials", latent_dim: int, elem_volume: float,
+                  encoder: "MaterialSource", latent_dim: int, elem_volume: float,
                   design_domain_volume: float) -> dict[str, np.ndarray]:
     """Once, at the end. designs is [(label, x, z)] for the final designs (x per element, z per element and
     latent dimension); properties_of(z) decodes latent points to properties. Solve each design with the
