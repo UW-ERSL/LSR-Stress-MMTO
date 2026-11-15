@@ -580,8 +580,6 @@ class DatabaseEditor(QtWidgets.QDialog):
         if any(not n or names.count(n) > 1 for n in names):
             out.insert(0, "Every material needs a name of its own")
         whole = []                                                  # about the whole database: always said
-        if len(names) < 2:
-            whole.append("At least two materials")
         if not self.attributes:
             whole.append("Add at least one property")
         file_name = self.name.text().strip()

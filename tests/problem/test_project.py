@@ -108,7 +108,7 @@ def test_validate():
 
 def test_every_error_names_its_step():
     """Every error validate can give carries the step of the setup it is about, as data (Problem.gui_step): each
-    place in validate, _missing_columns, vae_check and _material_source_errors that adds an error makes a Problem
+    place in validate, _missing_columns, vae_check and material_source_errors that adds an error makes a Problem
     with a step of GUI_STEPS (read from the code, so a new error cannot leave it out), and the errors of broken
     projects all have one."""
     import ast
@@ -116,7 +116,7 @@ def test_every_error_names_its_step():
     import textwrap
     from lsr_mmto.problem import project as P
     for method in (P.Project.validate, P.Project._missing_columns, P.Project.vae_check,
-                   P.Project._material_source_errors):
+                   P.Project.material_source_errors):
         tree = ast.parse(textwrap.dedent(inspect.getsource(method)))
         lists = {"errors", "out"} if method is not P.Project.vae_check else {"errors"}
         added = []
@@ -135,7 +135,7 @@ def test_every_error_names_its_step():
                 assert isinstance(step, ast.Constant) and step.value in P.GUI_STEPS, text
             else:                                           # the errors of the other two, which make Problems
                 assert text in ("self._missing_columns(database_attributes(xlsx))", "self.vae_check()[0]",
-                                "self._material_source_errors(xlsx)"), text
+                                "self.material_source_errors(xlsx)"), text
     p = coded_ubracket()
     p.bcs.append({"kind": "fixed", "on": "nowhere", "dofs": "xyz"})
     p.bcs.append({"kind": "nonsense", "on": "bottom"})

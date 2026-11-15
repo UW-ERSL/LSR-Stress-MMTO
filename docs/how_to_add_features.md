@@ -62,6 +62,10 @@ as torch from the model's state; autograd gives the gradient.
   part made solid in its lightest material ({reference})").
 - A project names it by its name; the objective and the constraints are kept by that name. A
   quantity of one physics is refused by the project's check in a project of another physics.
+- `reads_latent_points` (optional, `False` by default): `True` when its function reads the latent
+  points (`m.z`, `m.z_real`), as `MaterialVolumeFraction` does. With one material in the design there
+  are none, so the project's check refuses it and the Formulation panel greys it out.
+  `tests/code_rules/test_material_source.py` checks the flag against the function.
 - Add it to `QUANTITIES` in `tests/gradients/test_ad_quantities.py`, which checks the gradient against
   finite differences. What else to run: both generators above (the reference page and the user
   guide list every quantity).
@@ -174,6 +178,8 @@ the same `s`):
 The entry holds its section (`common`, `advanced` or `vae`), the value a new project starts from
 (files without it are completed from it), its label and help in the app, and the group of the
 Settings panel it sits in; `none_means`, `integer` and `choices` when it needs them;
+`reads_latent_points=True` when it acts only on the latent points (the Settings panel greys it out
+with one material in the design);
 `pyto_ad_field` when PyTO-AD's parameters have a field for it, `at_build` when PyTO-AD keeps it
 somewhere else (the p-norm exponent). The defaults, the Settings panel, the reference page and the
 settings a run gets are made from it. `test_settings_cover_run_topopt` in
@@ -359,6 +365,10 @@ the `.nt` beside it with the same name; a run never trains into the shipped fold
 that replaces a network keeps the old one as `<name>.previous.nt`. A database not listed there
 starts from `VAEParams`, with the recommended latent dimension; a project that sets another
 one runs with a warning.
+
+A database of one material is for a project of a single material (`material_source =
+"one_database_material"`, Single material in the app): every element gets its database values and no
+network is read or trained. A network needs at least two materials to learn from.
 
 ## A change to the project file format
 

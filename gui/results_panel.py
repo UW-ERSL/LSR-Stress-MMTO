@@ -62,6 +62,7 @@ SMOOTH = "Smooth (exported)"                             # the Show choice of a 
 UNSAVED = "analysis not saved"                           # the list's key of the analysis shown but not saved
 KEEP_RUNS = 2                                                   # runs kept loaded (Compare shows two)
 NO_HISTORY = "An analysis is one solve of the solid part, not an optimization: it has no {}."
+NO_LATENT_SPACE = "{} used one material, so there is no latent space to compare."
 RUN_COLOURS = ("#2b3a67", "#b2452e")                     # the left run, the right run
 
 
@@ -180,10 +181,14 @@ class CompareWindow(QtWidgets.QDialog):
         self.tabs = QtWidgets.QTabWidget()
         layout.addWidget(self.tabs, stretch=1)
         analysis = any(run.analysed_material is not None for run in runs.values())
+        one_material = [name for name, run in runs.items() if run.analysed_material is None and not run.n_latent]
         for title, make, what in (("Convergence", lambda: convergence_overlaid(runs), "convergence"),
                                   ("Latent space", lambda: latent_side_by_side(runs), "latent space")):
             if analysis:
                 self.tabs.addTab(QtWidgets.QLabel(NO_HISTORY.format(what)), title)
+                continue
+            if what == "latent space" and one_material:
+                self.tabs.addTab(QtWidgets.QLabel(NO_LATENT_SPACE.format(" and ".join(one_material))), title)
                 continue
             try:
                 self.tabs.addTab(plot_canvas(make()), title)

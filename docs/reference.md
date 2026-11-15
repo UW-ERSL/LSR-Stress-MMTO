@@ -17,6 +17,8 @@ A project is an LSR MMTO project file (.mmto): the layout of a PyTO-AD project f
 | `keep_solid` | names of element selections kept solid |
 | `keep_support_elements` | also keep solid the elements touching fixed dofs |
 | `database` | a database name in data/databases, or a path to an .xlsx |
+| `material_source` | "network" (Multi material) or "one_database_material" (Single material); missing in older files, which read as "network" |
+| `pinned_material` | with "network", the name of the material every element is fixed to, or null |
 | `formulation` | objective and constraints, see Quantities |
 | `settings` | common, advanced and vae, see Settings |
 
@@ -599,6 +601,30 @@ The material database. When the database chosen has a trained network, and the t
 p.database = "6Materials_AF_3Attr"
 ```
 
+### p.material_source
+
+`p.material_source = value`
+
+| argument | format | default |
+|---|---|---|
+| `value` | where each element's material properties come from: "network" (the material network, from the database; Multi material in the Materials window) or "one_database_material" (one material, the database's only one, at its database values, with no network; Single material) | `'network'` |
+
+```python
+p.material_source = "network"
+```
+
+### p.pinned_material
+
+`p.pinned_material = value`
+
+| argument | format | default |
+|---|---|---|
+| `value` | with "network", one database material's name: every element is that material, through the network (Fix every element to, in the Materials window); None lets the optimization choose each element's material | `None` |
+
+```python
+p.pinned_material = None
+```
+
 ### p.network_error
 
 `p.network_error()`
@@ -719,7 +745,7 @@ Optimizes the project. The run's record keeps the project as it was run (Project
 | `plot_progress` | True draws the design in a window as it changes | `False` |
 | `plot_bcs` | True opens a window with the supports and loads before the optimization starts | `False` |
 | `plotter` | a PyVista plotter the design is drawn into instead of a new window, or None | `None` |
-| `progress` | a function called after each iteration with a dict of its numbers (iteration, objective, constraints, x_phys, z, z_real), or None | `None` |
+| `progress` | a function called after each iteration with a dict of its numbers (iteration, objective, constraints, x_phys, z, z_real, and material: each element's material, its database row), or None | `None` |
 | `should_stop` | a function the run asks as it goes; when it returns True the run stops and saves the design reached so far; or None | `None` |
 | `on_network_error` | a function called with the warning when the trained network is further from the database than the vae setting network_error_warning; when it returns False nothing is optimized; or None | `None` |
 

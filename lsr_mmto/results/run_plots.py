@@ -321,6 +321,8 @@ def latent_scatter(run: Run, out: str | None = None, *, max_points: int = 20000,
     zr = np.asarray(run.z_real, float)
     if zr.ndim == 1:
         zr = zr[:, None]
+    if not zr.shape[1]:
+        raise ValueError("this run is of one material, so it has no latent space to plot")
     z = np.asarray(z, float).reshape(len(z), zr.shape[1])
 
     shown = run.material_labels if labels == "display" else run.material_names

@@ -44,7 +44,8 @@ RUN_HELP = ("Run, at the top, optimizes the project as it is now: it is saved fi
             "The Latent space tab shows where the solid elements' materials are heading: red points for "
             "the elements, black stars for the real materials. With one latent dimension it counts the "
             "elements along the line; with more than three it shows a flat view, and its title says for "
-            "how many of the elements that view shows the right nearest material.")
+            "how many of the elements that view shows the right nearest material. A design of one material has "
+            "no Latent space tab.")
 ANALYSE_HELP = ("Analyse solves the project once with every element of the part solid, in the material you "
                 "choose, using that material's values from the database.\n\nNothing is optimized: it is for "
                 "checking the supports, the loads and the materials before a run.")
@@ -109,12 +110,13 @@ def plot_canvas(figure):
 
 def result_tabs(tabs, run, keep=0):
     """Convergence, Latent space and Summary tabs of a saved run, after the first keep tabs; an analysis
-    has neither convergence nor latent points, so only its Summary."""
+    has neither convergence nor latent points, so only its Summary, and a run of a single material no Latent
+    space."""
     from lsr_mmto.results import run_plots, tables
     while tabs.count() > keep:
         tabs.removeTab(keep)
-    plots = (("Convergence", lambda: run_plots.convergence(run)),
-             ("Latent space", lambda: run_plots.latent_scatter(run)))
+    plots = (("Convergence", lambda: run_plots.convergence(run)),) + \
+        ((("Latent space", lambda: run_plots.latent_scatter(run)),) if run.n_latent else ())
     for title, make in plots if run.analysed_material is None else ():
         try:
             tabs.addTab(plot_canvas(make()), title)
@@ -164,12 +166,6 @@ def latent_frame(state, order):
     z = np.asarray(state["z"], dtype=float)
     return {"z": z.reshape(len(z), -1)[pick], "z_real": np.asarray(state["z_real"], dtype=float),
             "iteration": int(state["iteration"])}
-
-
-def nearest_material(z, z_real):
-    """Index of the real material whose latent point is nearest each element's."""
-    d = ((np.asarray(z)[:, None, :] - np.asarray(z_real)[None, :, :]) ** 2).sum(axis=2)
-    return d.argmin(axis=1)
 
 
 class AnalyseDialog(QtWidgets.QDialog):
@@ -315,7 +311,8 @@ class RunWindow(StructuralTopOptWindow):
             widget.setVisible(False)
         self.formulation.log_view.clear()
         self._start_live_latent()
-        self.status.setText("Starting: building the mesh and the material network...")
+        self.status.setText("Starting: building the mesh..." if self.project.material_source == "one_database_material"
+                            else "Starting: building the mesh and the material network...")
         w.message_text.append(f"Run started: results in {self.save_dir}")
         run_in_background(self.run_optimization, None, None, None)
         return True
@@ -426,9 +423,7 @@ class RunWindow(StructuralTopOptWindow):
         now = time.time()
         if self.show_each_iteration and now - self.last_draw >= DRAW_EVERY:
             self.last_draw = now
-            self.optimization_update.emit(
-                {"x": state["x_phys"], "material": nearest_material(state["z"], state["z_real"])},
-                state["iteration"])
+            self.optimization_update.emit({"x": state["x_phys"], "material": state["material"]}, state["iteration"])
         if self.latent_shown and now - self.last_latent >= DRAW_EVERY:
             self.last_latent = now
             if self.latent_order is None:
@@ -492,15 +487,19 @@ class RunWindow(StructuralTopOptWindow):
 
     # ------------------------------------------------------------------ the live latent space
     def _start_live_latent(self):
-        """A run starts: the last run's result tabs go, and the live latent space comes in beside Progress."""
+        """A run starts: the last run's result tabs go, and the live latent space comes in beside Progress
+        (not with a single material, which has no latent points)."""
         from lsr_mmto.materials.databases import material_display
         while self.tabs.count() > 2:
             self.tabs.removeTab(2)
         self.latent_order, self.latent_pca, self.latent_limits, self.latent_pending = None, None, None, None
-        try:
+        try:                                                        # the live design's legend reads them too
             self.latent_names = list(material_display(self.project.database_paths()[0])[1])
         except Exception:                                           # noqa: BLE001
             self.latent_names = []
+        if self.project.single_material():
+            self._end_live_latent()                                 # one left from an earlier run goes
+            return
         self.latent_figure.clear()
         self.latent_figure.text(0.5, 0.5, "The latent space appears with the first iteration.", ha="center",
                                 va="center", color="#555555")

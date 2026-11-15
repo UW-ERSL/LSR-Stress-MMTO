@@ -145,10 +145,14 @@ The materials the optimization chooses from come from a **material database**: a
 
 Open **Materials** from the buttons on the right. The window shows:
 
+- **Materials in the design:** **Single material** or **Multi material**. With single material, every element is the database's one material, with its values from the database: the database holds exactly one material, no network is trained, and the optimization only chooses where the part is solid. With multi material, the database holds two or more materials and the network learns them.
 - **Database:** the database the project uses. The list holds the project's own databases: every database in its materials folder, and the one it uses when that one is kept elsewhere. **Included databases** beside it lists the databases that come with LSR MMTO; choosing one makes it the project's database, shown in the list as *its name (included)*.
 - With no database chosen yet, the report says so; make one with **New database...**, or bring one in with **Import...**.
+- With multi material, **Fix every element to:** *None (the optimizer chooses)*, or one of the database's materials. Fixed, every element is that material, with its values as the network gives them, and the optimization only chooses where the part is solid. Use it to compare a design of one material with a design of several, both through the same network.
 - A table of the database's materials, each in the colour and with the label it is drawn with, and its properties with their units.
-- Under the table, a short report: how many materials there are, the latent dimension recommended for them, how closely the trained network gives them back, and any errors or warnings. The (i) next to it explains the recommended latent dimension.
+- Under the table, a short report: how many materials there are, the latent dimension recommended for them, how closely the trained network gives them back, and any errors or warnings. The (i) next to it explains the recommended latent dimension. With single material, the report says the one material is used at its database values. A database that does not fit the choice is an error there, for example *Single material: steels.xlsx has 3 materials, and a single material takes a database of exactly one*.
+
+With one material, there are no points on the material map, so a few things are greyed out elsewhere: **Material volume fraction** in Formulation, and the settings that act on the material map (the Distance penalty and Latent smoothing groups, Latent smoothing radius, Starting latent point and Snap to real materials). With single material, the VAE settings are greyed out too. A run of one material has no **Latent space** tab.
 
 Choose a database and press **OK**. When you change the database, the network settings of the new one come with it (see Settings, section 9), and the messages say what changed. A database with a trained network sets the network's shape (its latent dimension and hidden layer width) from the network itself, so they always match. In a project folder of its own, the database you choose is copied into the project's materials folder, with its trained network, so the project keeps everything it uses.
 
@@ -172,7 +176,7 @@ Two tabs on the table choose what it shows:
 - **Values**: each material's properties, as the database gives them.
 - **Network error**: for each value, how far the trained network is from it when it turns the material into its point on the material map and back, in % of that property's range over the database's materials. Rest the mouse on a cell to see both values and the difference in the property's unit.
 
-Network error is greyed until the database has a trained network. The first run with a new database trains one.
+Network error is greyed until the database has a trained network. The first run with a new database trains one. With single material there is no network, and no Network error tab.
 
 A small error (well under 1 %) means the run works with properties very close to the database's. If an error is large, the run's materials differ from the real ones by that much; see the network warning in section 14.
 
@@ -387,7 +391,7 @@ Every type of support and load at a glance:
 - A **Material volume fraction** constraint also names its material, chosen from the database's materials in their colours: *Material volume fraction of Mat1_Red <= 0.15* keeps that material to at most 15 % of the design space. With one or more of these, **Material sharpness (tau)** appears above the rows: how sharply an element counts as its nearest material when the volumes are measured. One value is used for all of them; the usual value is right in most cases.
 - A **Mass fraction** constraint compares the part's mass with the mass of the whole part made solid in one material: *Mass fraction of the lightest <= 0.4 of a solid part in that material* allows 40 % of what the part would weigh solid in the lightest material of the database. The material is one of the database's, or **the heaviest** or **the lightest** of them. The limit has no unit, so it stays right when the units or the part's size change.
 
-A quantity the database cannot give is greyed out in the list, and resting the mouse on it says why, for example *needs a Yield_Strength column in the database*. Choose another database, or add that property to yours (section 6.3).
+A quantity the database cannot give is greyed out in the list, and resting the mouse on it says why, for example *needs a Yield_Strength column in the database*. Choose another database, or add that property to yours (section 6.3). With one material in the design (section 6), Material volume fraction is greyed out: *one material fills the design*. A row that already has a greyed-out quantity keeps it, with the reason beside it in red, and a run is refused until you remove it.
 
 A constraint keeps its quantity at or below its limit. To ask for at least some amount, constrain the opposite: instead of a minimum stiffness, minimize compliance with a limit on mass, or minimize mass with a limit on compliance.
 
@@ -424,7 +428,9 @@ What the objective and the constraints can be:
 The window has two tabs:
 
 - **Optimization**: how fine the mesh is, how long the run is, and how the design is pushed towards clear solid and empty. The **Main** settings are at the top. The others are under **Advanced**, closed at first; click it to open them, in their groups.
-- **VAE**: the material network. At the top, a line says which network the project uses and whether it fits the database, with its errors and warnings under it. With **Use the trained network** ticked and a trained network there, the network's own settings are greyed: they are the ones it was trained with. Untick it to train a new network on the next run; the settings can then be changed.
+- **VAE**: the material network. At the top, a line says which network the project uses and whether it fits the database, with its errors and warnings under it. With **Use the trained network** ticked and a trained network there, the network's own settings are greyed: they are the ones it was trained with. Untick it to train a new network on the next run; the settings can then be changed. With single material (section 6) there is no network, and every VAE setting is greyed out.
+
+With one material in the design, the settings that act only on the material map are greyed out, and resting the mouse on one says *Not used with one material.* Their values are kept for when you go back to several materials.
 
 Every setting has an (i) that says what it does. A setting with a value other than the usual one shows **↺** next to it: click it to put the usual value back.
 
@@ -510,7 +516,7 @@ The 3D view shows the design as it grows: each element in its material's colour,
 The panel's tabs:
 
 - **Progress**: the objective, as a solid line, and each constraint, as a dotted line named as in Formulation with its limit, for example *Mass <= 0.4 t*. A constraint is met at or below the grey line at 0.
-- **Latent space**: where the elements' materials are heading on the material map. Red points are the elements, black stars the database's materials. As the run goes on, the points usually gather on the stars.
+- **Latent space**: where the elements' materials are heading on the material map. Red points are the elements, black stars the database's materials. As the run goes on, the points usually gather on the stars. A design of one material has no Latent space tab.
 - **Log**: everything the run writes, line by line.
 
 ### 10.2 Stopping
@@ -521,7 +527,7 @@ You cannot open another project, or close LSR MMTO, while a run goes. Stop it fi
 
 ### 10.3 When it ends
 
-The run stops after Max iterations, or earlier once the design has settled. The line then says, for example, *Run finished after 40 iterations, 0:47*. The final design shows on the part, and three more tabs appear: **Convergence**, **Latent space** and **Summary**, the same as in Results (section 11).
+The run stops after Max iterations, or earlier once the design has settled. The line then says, for example, *Run finished after 40 iterations, 0:47*. The final design shows on the part, and three more tabs appear: **Convergence**, **Latent space** and **Summary**, the same as in Results (section 11); a design of one material has no Latent space.
 
 Under the tabs:
 
@@ -552,7 +558,7 @@ When it is done, Results shows it the way it shows a run, titled **Analysis:** a
 
 - its design on the part, in the 3D view;
 - **Convergence**: the objective and the constraints, iteration by iteration;
-- **Latent space**: where the final design's materials sit on the material map;
+- **Latent space**: where the final design's materials sit on the material map (not for a run of one material, which has none);
 - **Summary**: the run's numbers (below).
 
 **Show** chooses what the part shows:
@@ -581,7 +587,7 @@ The (i) at the top of the Summary says what each word means, and gives each cons
 
 ### 11.2 Comparing two runs
 
-Tick two runs and press **Compare**. A Compare window opens with their convergence on one plot (each constraint by its name in the legend), their latent spaces side by side, and their summaries in two columns. With an analysis, the summaries show only the rows both have. The 3D view shows both designs side by side, the first on the left. Close the Compare window, or click a run, to stop comparing.
+Tick two runs and press **Compare**. A Compare window opens with their convergence on one plot (each constraint by its name in the legend), their latent spaces side by side (unless one of them is a run of one material), and their summaries in two columns. With an analysis, the summaries show only the rows both have. The 3D view shows both designs side by side, the first on the left. Close the Compare window, or click a run, to stop comparing.
 
 ### 11.3 Results from elsewhere
 

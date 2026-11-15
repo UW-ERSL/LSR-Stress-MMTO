@@ -628,15 +628,18 @@ def record(state: RunState, it: Iteration) -> None:
     """The iteration's line in the history and the log, and what the window's progress hears.
 
     Reads it.obj, it.J_phys, it.Jn, it.penalties, it.cons, it.zeta, it.x_phys, it.z, state.iteration.
-    Sets state.last_zeta (a copy of the design)."""
+    Sets state.last_zeta (a copy of the design). The window hears each element's material as the run's material
+    source finds it."""
     log_objective_and_constraints(state.history, it.obj, it.J_phys, it.Jn, it.penalties, it.cons,
                                   state.to_params, verbose=state.verbose, material_labels=state.material_labels,
                                   summary_rows=state.physics.SUMMARY_ROWS)
     state.last_zeta = it.zeta.copy()
     if state.progress is not None:
+        material = state.encoder.getClosestRealMaterialIndex(torch.as_tensor(it.z, dtype=state.z_real.dtype))
         state.progress({"iteration": int(state.iteration), "objective": float(it.J_phys),
                         "constraints": [float(c) for c in np.ravel(it.cons)], "x_phys": np.array(it.x_phys),
-                        "z": np.array(it.z), "z_real": state.z_real.detach().cpu().numpy()})
+                        "z": np.array(it.z), "z_real": state.z_real.detach().cpu().numpy(),
+                        "material": np.asarray(material.cpu())})
 
 
 def continuation(state: RunState, it: Iteration) -> None:

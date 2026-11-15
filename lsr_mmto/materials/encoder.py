@@ -91,7 +91,7 @@ class MaterialEncoder:
     vaeSettings: dict[str, dict[str, int]]
     vaeNet: VariationalAutoencoder
     rawData: np.ndarray                      # the database's numbers, (materials, attributes)
-    materialNames: list[Any]                 # as pandas reads the first column: text, or a number
+    materialNames: list[str]                 # the first column, as text, without spaces around
     scaledMaterialData: torch.Tensor         # rawData scaled to [0, 1] (normalize), (materials, attributes)
     materialAttributes: dict[str, dict[str, Any]]   # {column: {"idx", "unit", "scaleMin", "scaleMax"}}
                                                     # (unit None when its cell is blank)
@@ -138,7 +138,7 @@ class MaterialEncoder:
             df = pd.read_excel(self.excel_file, header=None)
         attribute_names = [attribute_name(n) for n in df.iloc[0, 1:].tolist()]   # aliases -> registry names
         units = [None if (u is None or str(u).strip() in ("", "nan")) else str(u).strip() for u in df.iloc[1, 1:]]
-        material_names = df.iloc[2:, 0].tolist()
+        material_names = [str(m).strip() for m in df.iloc[2:, 0].tolist()]   # as database_table reads them
         values = df.iloc[2:, 1:].to_numpy(dtype=float)
 
         self.rawData = values

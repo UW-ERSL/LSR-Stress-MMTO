@@ -356,6 +356,22 @@ def given(run: "Run", i: int) -> bool:
     return run.analysed_material is None or bool(np.isfinite(run.utilisation(i)))
 
 
+def latent_dimension_text(run: "Run") -> str:
+    """The run's latent dimension, or that a design of one material has none."""
+    return str(run.n_latent) if run.n_latent else "None (one material)"
+
+
+def one_material_text(run: "Run") -> str | None:
+    """For a run of one material, that material and where its values came from (Single material: the database;
+    a material fixed with Multi material: the network); None for a run of several."""
+    if run.n_latent or not len(run.material_indices):
+        return None
+    project = ((((run.config or {}).get("arguments_resolved") or {}).get("to_problem") or {}).get("project") or {})
+    label = run.material_labels[int(run.material_indices[0])]
+    return f"{label}, at its database values" if project.get("material_source") == "one_database_material" else \
+        f"{label}, as the network gives it"
+
+
 def met(run: "Run", i: int) -> bool:
     """True when constraint i is met at the last iteration, within MET_TOLERANCE."""
     return run.constraint(i) <= MET_TOLERANCE
@@ -401,7 +417,9 @@ def summary(run: "Run") -> Tables:
     if analysis is None:
         design.append(["Grey (in between)", f"{100 * run.grey:.1f} %", ""])
     used = ["Used", f"{int(run.materials_used().size)} of {len(run.material_names)}"]
-    materials = ([used, ["Latent dimension", str(run.n_latent)]] if analysis is None else
+    one = one_material_text(run) if analysis is None else None
+    materials = ([used] + ([["Every element", one]] if one else []) +
+                 [["Latent dimension", latent_dimension_text(run)]] if analysis is None else
                  [used] if run.analysed_design is not None else [["Material", analysis]])
     return Tables(
         Heading(run_title(run)),
@@ -433,7 +451,8 @@ def summary_details(run: "Run") -> str:
     lines.append("Solid: elements with a density of 0.5 or more.")
     if analysis is None:
         lines.append("Grey (in between): how much of the design is neither solid nor empty; 0 % is a clean design.")
-        lines.append("Latent dimension: the number of coordinates of the learned material space.")
+        lines.append("Latent dimension: the number of coordinates of the learned material space; None when every "
+                     "element is one material, which needs no material space.")
     return "\n".join(lines)
 
 

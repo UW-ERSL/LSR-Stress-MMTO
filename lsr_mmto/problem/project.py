@@ -174,11 +174,12 @@ class Project:
     keep_support_elements: True also keeps solid every element touching a fixed node
         Example: p.keep_support_elements = True
     material_source: where each element's material properties come from: "network" (the material
-        network, from the database) or "one_database_material" (one material, the database's only one, at
-        its database values, with no network)
+        network, from the database; Multi material in the Materials window) or "one_database_material" (one
+        material, the database's only one, at its database values, with no network; Single material)
         Example: p.material_source = "network"
     pinned_material: with "network", one database material's name: every element is that material,
-        through the network; None lets the optimization choose each element's material
+        through the network (Fix every element to, in the Materials window); None lets the optimization
+        choose each element's material
         Example: p.pinned_material = None
     settings[section][name]: one setting: section is "common", "advanced" or "vae", name a setting of
         that section; every setting, its default and what it does are under Settings
@@ -493,7 +494,7 @@ class Project:
             errors += [Problem("materials", f"material database {os.path.basename(xlsx)}: {e}") for e in db_errors]
             if not db_errors:
                 errors += self._missing_columns(database_attributes(xlsx))
-                errors += self._material_source_errors(xlsx)
+                errors += self.material_source_errors(xlsx)
                 if self.material_source == "network":
                     errors += self.vae_check()[0]
         for section, values in self.settings.items():
@@ -550,15 +551,15 @@ class Project:
             if self.physics in PHYSICS and not q.applies_to(self.physics):
                 errors.append(Problem("formulation", f"{where}: {q.shown} is not a {self.physics} quantity"))
             if q.reads_latent_points and self.single_material():
-                errors.append(Problem("formulation", f"{where}: {q.shown} reads each element's point in the latent "
-                                                     f"space, and a single material has none"))
+                errors.append(Problem("formulation", f"{where}: {q.shown} needs a mix of materials, and this design "
+                                                     f"has one material"))
         return errors
 
     def single_material(self) -> bool:
         """True when every element is one material: one database material, or the network pinned to one."""
         return self.material_source != "network" or self.pinned_material is not None
 
-    def _material_source_errors(self, xlsx: str) -> list[Problem]:
+    def material_source_errors(self, xlsx: str) -> list[Problem]:
         """What is wrong with the material source for the database xlsx (which passes its check): a source not in
         MATERIAL_SOURCES; with one database material, a database of more than one or a pin; with the network,
         a database of one material, or a pin that names no material of the database."""
@@ -567,21 +568,24 @@ class Project:
         db = os.path.basename(xlsx)
         out = []
         if self.material_source not in MATERIAL_SOURCES:
-            out.append(Problem("materials", f"material source {self.material_source!r}: one of "
-                                            f"{', '.join(MATERIAL_SOURCES)}"))
+            out.append(Problem("materials", f"Materials in the design: {self.material_source!r} is not a choice "
+                                            f"LSR MMTO knows; choose Single material or Multi material (in a "
+                                            f"script, material_source is {' or '.join(map(repr, MATERIAL_SOURCES))})"))
         elif self.material_source == "one_database_material":
             if len(names) != 1:
-                out.append(Problem("materials", f"one database material: {db} has {len(names)} materials; make a "
-                                                f"database of the one material, or use the network pinned to it"))
+                out.append(Problem("materials", f"Single material: {db} has {len(names)} materials, and a single "
+                                                f"material takes a database of exactly one; make a database of the "
+                                                f"one material, or choose Multi material and fix every element "
+                                                f"to it"))
             if self.pinned_material is not None:
-                out.append(Problem("materials", "one database material takes no pinned material: the database's "
-                                                "one material is used"))
+                out.append(Problem("materials", "Single material takes no fixed material: the database's one "
+                                                "material is used"))
         elif len(names) < 2:
-            out.append(Problem("materials", f"{db} has one material, and a network needs at least two to learn "
-                                            f"from; use one database material"))
+            out.append(Problem("materials", f"Multi material: {db} has one material, and the network needs at "
+                                            f"least two to learn from; choose Single material"))
         elif self.pinned_material is not None and str(self.pinned_material) not in names:
-            out.append(Problem("materials", f"pinned material {self.pinned_material!r} is not in {db}: one of "
-                                            f"{', '.join(names)}"))
+            out.append(Problem("materials", f"Fix every element to: {self.pinned_material!r} is not in {db}; one "
+                                            f"of {', '.join(names)}"))
         return out
 
     def gui_step_started(self, step: str) -> bool:
@@ -1223,7 +1227,7 @@ def run(project: Project, save_dir: str | None = None, **run_options: Any) -> st
     plot_bcs: True opens a window with the supports and loads before the optimization starts
     plotter: a PyVista plotter the design is drawn into instead of a new window, or None
     progress: a function called after each iteration with a dict of its numbers (iteration, objective,
-        constraints, x_phys, z, z_real), or None
+        constraints, x_phys, z, z_real, and material: each element's material, its database row), or None
     should_stop: a function the run asks as it goes; when it returns True the run stops and saves the
         design reached so far; or None
     on_network_error: a function called with the warning when the trained network is further from the

@@ -288,10 +288,17 @@ def build_run_config(example_name: str, run_args: dict[str, Any], to_params: "MM
                      material_colors: list[str], mma_settings: dict[str, Any] | None = None,
                      runtime_sec: float | None = None, iterations: int | None = None, comment: str = "",
                      pnorm_exponent: float | None = None, material_labels: list[str] | None = None) -> dict[str, Any]:
-    """Assemble the complete sectioned parameter manifest. Never raises."""
+    """Assemble the complete sectioned parameter manifest. Never raises. A run with no latent points records
+    the distance penalty and latent smoothing as not used (the run left them out), and a run with no network
+    records no network settings (vae_params None)."""
     if pnorm_exponent is None:
         pnorm_exponent = _read_pnorm_exponent()
     ra = run_args if isinstance(run_args, dict) else {}
+    try:
+        latent_points = bool(mat_encoder.latent_dim)
+        network = mat_encoder.network_weights() is not None
+    except Exception:
+        latent_points = network = True
     cfg = {}
     cfg["run"] = {
         "example": str(example_name),
@@ -302,7 +309,7 @@ def build_run_config(example_name: str, run_args: dict[str, Any], to_params: "MM
     }
     cfg["arguments_resolved"] = _to_plain(ra)
     cfg["penalization_distance"] = {
-        "use_penalization": ra.get("use_penalization"),
+        "use_penalization": ra.get("use_penalization") if latent_points else False,
         "gamma_init": ra.get("gamma_init"),
         "gamma_max": ra.get("gamma_max"),
         "gamma_factor": ra.get("gamma_factor"),
@@ -310,7 +317,7 @@ def build_run_config(example_name: str, run_args: dict[str, Any], to_params: "MM
         "distance_penalty_disable_after_iter": ra.get("distance_penalty_disable_after_iter"),
     }
     cfg["penalization_zsmoothing"] = {
-        "use_z_smoothing": ra.get("use_z_smoothing"),
+        "use_z_smoothing": ra.get("use_z_smoothing") if latent_points else False,
         "z_smoothing_weight": ra.get("z_smoothing_weight"),
         "z_smoothing_disable_after_iter": ra.get("z_smoothing_disable_after_iter"),
     }
@@ -323,7 +330,7 @@ def build_run_config(example_name: str, run_args: dict[str, Any], to_params: "MM
     topopt = _params_dict(to_params)
     topopt["pnorm_exponent"] = pnorm_exponent
     cfg["topopt_params"] = topopt
-    cfg["vae_params"] = _params_dict(vae_params)
+    cfg["vae_params"] = _params_dict(vae_params) if network else None
     cfg["materials"] = _material_summary(mat_encoder, z_real_points, material_colors, material_labels)
     cfg["fea"] = {
         "mesh": _mesh_summary(mesh),
@@ -520,7 +527,7 @@ def record_arrays(save_dir: str, data: dict[str, Any]) -> tuple[dict[str, np.nda
         "descriptor":  os.path.basename(os.path.normpath(save_dir)),
         "iterations":  (cfg.get("run") or {}).get("iterations"),
         "constraints": tp.get("Constraints"),
-        "vae_net":     os.path.basename(
+        "vae_net":     None if cfg.get("vae_params", {}) is None else os.path.basename(
                            str(tp.get("MaterialsExcelFile", ""))).replace(".xlsx", ".nt"),
         "results":     data["result_info"],
     }, default=str))

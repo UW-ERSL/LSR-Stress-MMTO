@@ -33,8 +33,9 @@ different material in each element, a subclass does that (`MultiMaterialHexFEA` 
 
 1. `Project.build()` (`problem/project.py`) makes the mesh from the STL, one boundary condition per
    field of the project's physics from its supports and loads, and the optimization parameters.
-2. The loop's `setup` (`optimize/optimization_loop.py`) reads the material database, loads or trains
-   the network, asks the physics' front page for its solver (`make_solver`), and makes the start design
+2. The loop's `setup` (`optimize/optimization_loop.py`) reads the material database and, through
+   `material_source`, loads or trains the network (none for a single material, whose database values
+   are used), asks the physics' front page for its solver (`make_solver`), and makes the start design
    and the bounds. `optimize` then runs the constraint method (MMA), which asks `evaluate` about each
    design; `evaluate` is the list `ITERATION_STEPS`, in order.
 3. For each design, `MMTOModelAD` (`optimize/design_model.py`) builds one torch tree:

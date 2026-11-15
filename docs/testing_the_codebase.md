@@ -1,6 +1,6 @@
 # Testing the codebase
 
-Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 296 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
+Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 305 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
 
 Run them all from the repository folder with `python -m pytest tests -q -n 4` (`-n 2` on a computer with less than 16 GB of memory), one folder with `python -m pytest tests/<folder> -q`, or one file with `python -m pytest tests/<folder>/<file> -q`.
 
@@ -18,6 +18,7 @@ The thermal physics (lsr_mmto/physics/thermal/) keeps working: its solver gives 
 - `test_thermal_physics_runs_with_no_core_file_changed`: Thermal physics runs with no core file changed.
 - `test_a_thermal_summary_shows_its_own_row_and_units`: A run in mmKS: its Summary has thermal's own row, the max temperature in K, and its Units row the units of the thermal kinds; nothing of structural's (no failure factor, no force or stress).
 - `test_a_thermal_run_with_held_temperatures_only`: The physics says what a project must have (NEEDS): thermal needs a support and no load, so a run with two held temperatures and no source goes through, and its save gives no RuntimeWarning (no load nodes, so no load centroid in the record); the structural physics still needs a load.
+- `test_a_thermal_run_of_one_material`: Thermal with one material in the design: the network fixed to one of the example database's materials, and a database of that one material at its database values. Each runs through to the save, every element is that material, with the conductivity the network or the database gives, and the objective is finite.
 - `test_the_saved_run_keeps_the_properties_the_physics_reads`: A run saves each element's value of every property its physics reads (PROPERTIES): the conductivity, and nothing of the structural physics, which its database does not have.
 - `test_thermal_is_analysed_with_no_file_of_it_changed`: Analyse (optimize/solid_part_analysis.py) on a thermal project: its analyse and final_summary run on the solid part in one material, and the analysis gives its objective and its RESULT_FIELDS. Its iteration_diagnostics runs once too, so the analysis has thermal's Summary row, and Compare shows it beside a run's.
 - `test_result_fields_say_where_and_shape`: A RESULT_FIELDS entry may say where its values live and their shape; one that does not is a number at each element. The final check refuses values of another length or shape than declared.
@@ -91,7 +92,7 @@ The Project: saving and loading, the checks made before a run, the translation o
 - `test_round_trip`: Round trip.
 - `test_expressions`: Expressions.
 - `test_validate`: Validate.
-- `test_every_error_names_its_step`: Every error validate can give carries the step of the setup it is about, as data (Problem.gui_step): each place in validate, _missing_columns, vae_check and _material_source_errors that adds an error makes a Problem with a step of GUI_STEPS (read from the code, so a new error cannot leave it out), and the errors of broken projects all have one.
+- `test_every_error_names_its_step`: Every error validate can give carries the step of the setup it is about, as data (Problem.gui_step): each place in validate, _missing_columns, vae_check and material_source_errors that adds an error makes a Problem with a step of GUI_STEPS (read from the code, so a new error cannot leave it out), and the errors of broken projects all have one.
 - `test_build_coded`: Build coded.
 - `test_conflicting_values_are_refused`: A dof given 0 by one support and 0.001 by another is an error, not a silent pick.
 - `test_a_load_is_split_evenly_over_its_nodes`: A force on a face of a uniform mesh: the nodal forces add up to the total, and every node of the face carries the same share; nodes off the face carry none. A pressure likewise adds up to pressure times area.
@@ -233,7 +234,9 @@ Running a Project: its settings cover every setting of _run_topopt; the run reco
 A project of a single material, every element the same material, the design the densities only: one database material (material_source "one_database_material", the database's one material at its database values, no network read or trained), or the network pinned to one database material (pinned_material, that material's properties as the network gives them). Each runs through to the save; the project saves and reads back its choice, an older file reads as the network with no pin, and the project's check refuses what cannot run.
 
 - `test_one_database_material_runs_with_no_network`: A database of one material and material_source "one_database_material": the project passes its check, the run reads and trains no network (no .nt is written beside the database), leaves out the penalties of the latent points, and every element has the material's database values; the saved run has latent dimension 0.
-- `test_the_network_pinned_to_one_material`: pinned_material names a material of the 6-material database: every element has that material's properties as the shipped network gives them at the material's own latent point, the design is the densities only, and every element's material is that one.
+- `test_the_settings_of_the_latent_points_change_nothing_with_one_material`: Every setting that says it reads the latent points (Setting.reads_latent_points, which the Settings panel greys out with one material) changed from its default: a run of one database material, and a run of the network fixed to one material, are the same, to the last digit.
+- `test_a_material_name_with_spaces_around_it`: A database whose material's name has spaces around it (a cell typed "C "): the network reads the name as the project's check does, without them, so the network fixed to "C" runs and gives that row; and the record of a run of one material says it left out the penalties and, with no network, has no network settings.
+- `test_the_network_pinned_to_one_material`: pinned_material names a material of the 6-material database: every element has that material's properties as the shipped network gives them at the material's own latent point, the design is the densities only, and every element's material is that one, in the saved run and in what each iteration tells the window.
 - `test_the_choice_is_saved_and_an_older_file_reads_as_the_network`: material_source and pinned_material are saved and read back; a file saved before them reads as the network with no pin; the project script sets them only when they are not a new project's.
 - `test_what_cannot_run_is_refused`: The project's check refuses: a material source it does not know; a pin that names no material of the database; one database material with a database of several, or with a pin; the network with a database of one material; and, for a single material, a quantity that reads the latent points (material volume fraction).
 
@@ -409,6 +412,17 @@ The desktop start: the icon loads at every size Windows asks for, the start-up p
 - `test_uninstall_removes_exactly_what_it_lists`: Answered no, nothing goes. Answered yes: the two shortcuts, the kernel, the GUI's settings, the environment (conda env remove) and, last, the entry go; everything else stays, the code folder untouched, and the folders kept are named.
 - `test_uninstall_refuses_to_run_inside_the_environment`: Uninstall refuses to run inside the environment.
 - `test_no_other_way_to_remove`: Uninstall in Settings > Apps is the one way: no remove option in the setup or the shortcut maker.
+
+### `tests/gui/test_single_material_gui.py`
+
+The window with one material in the design, off-screen. Materials: Single material or Multi material, the database that fits each (a misfit is an error in the report), Fix every element to with multi material, and OK handing back exactly what was chosen. Settings: every setting of the latent points greyed out with one material, the VAE settings too with single material, their values kept. Formulation: Material volume fraction greyed out, with the reason beside a row that has it. The database editor saves a database of one material. A run of one material: no Latent space tab, None for its latent dimension, and Compare says why it has no latent space to compare.
+
+- `test_materials_window_single_or_multi_material`: Multi material, as every project before this choice: Fix every element to lists None and the database's materials, and the material chosen is the project's pinned material after OK. Single material with that 6-material database: an error in the report, no Fix every element to and no Network error tab. With a database of one material: the report says it is used at its database values, and OK hands back the single material and the database. Multi material with a database of one material is an error; a fixed material that a newly chosen database does not have is no longer fixed, and the report says so.
+- `test_settings_greyed_with_one_material`: With a fixed material, every setting that reads the latent points is greyed out with the reason, the others and the VAE settings are not; with single material, the VAE settings are greyed out too and the VAE line says there is no network. OK changes nothing.
+- `test_formulation_greys_material_volume_fraction_with_one_material`: With one material, Material volume fraction is greyed out in the list, resting the mouse on it says why, and a row that already has it shows the reason beside it.
+- `test_database_editor_saves_one_material`: A database of one material is a database the editor saves, and its one row cannot be removed.
+- `test_the_live_design_of_a_run_of_one_material`: A run of one material started in the window: no live Latent space tab, and the live design draws with this run's material labels, whether it is the session's first run or follows a run of another database (the labels were once set only for a run of several materials).
+- `test_a_run_of_one_material_has_no_latent_space`: Its tabs are Convergence and Summary, its latent dimension reads None (one material), its summary names the material every element is, the latent plot says in words that there is none, and Compare puts in the Latent space tab why there is none.
 
 ### `tests/gui/test_thermal_walk_through.py`
 

@@ -27,8 +27,9 @@ LSR MMTO
 │   │   ├── databases.py          slot: a material attribute (ATTRIBUTES), a kind of quantity every
 │   │   │                         problem has (UNITS); the database check
 │   │   ├── encoder.py            reads a database, trains or loads the network; decode(z)
-│   │   ├── material_source.py    where a run gets each element's properties: the network, or the
-│   │   │                         database's own values (Analyse)
+│   │   ├── material_source.py    where a run gets each element's properties: the network, the
+│   │   │                         network fixed to one material, or the database's own values
+│   │   │                         (a single material, Analyse)
 │   │   ├── networks.py           the network
 │   │   └── pca.py                principal component analysis: the database's effective dimension,
 │   │                             the 2D latent views

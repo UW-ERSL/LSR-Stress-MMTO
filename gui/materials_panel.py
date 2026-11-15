@@ -1,7 +1,8 @@
 """
 materials_panel.py
 ==================
-The Materials panel of the LSR MMTO window: the material database and its network.
+The Materials panel of the LSR MMTO window: single or multi material, the material database and its network,
+and with multi material, the material every element may be fixed to.
 Like every panel, a dialog with OK and Cancel working on a copy of the project: OK hands back
 the edited parts (apply), Cancel leaves the project as it was. A value left as it was is handed
 back exactly as it was, so a panel closed with OK and no edits changes nothing in the file.
@@ -90,6 +91,24 @@ def latent_help(d_eff, n_z, ratios):
 
 INCLUDED = " (included)"                     # after the name of a database that comes with LSR MMTO
 NO_DATABASE = "No database yet. Make one with New database, or bring one in with Import."
+SOURCE_HELP = ("**Single material:** every element is the database's one material, with its values from the "
+               "database. The database holds exactly one material, and no network is trained.\n\n"
+               "**Multi material:** the database holds two or more materials, and a network learns them. The "
+               "optimization chooses each element's material, unless you fix every element to one of them.")
+FIX_HELP = ("Fixes every element to one material of the database, with its values as the network gives them. "
+            "The optimization then only chooses where the part is solid.\n\n"
+            "Use it to compare a design of one material with a design of several, both through the same network.")
+NOTHING_FIXED = "None (the optimizer chooses)"
+
+
+def source_text(project, shown=str):
+    """The project's choice of materials in the design, in the window's words; shown(name) is the fixed
+    material as the window shows it (its label)."""
+    if project.material_source == "one_database_material":
+        return "Single material"
+    if project.pinned_material is not None:
+        return f"Multi material, every element fixed to {shown(project.pinned_material)}"
+    return "Multi material"
 
 
 def import_help():
@@ -167,6 +186,19 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.original = project.database
         layout = QtWidgets.QVBoxLayout(self)
 
+        source = QtWidgets.QHBoxLayout()
+        source.addWidget(QtWidgets.QLabel("Materials in the design:"))
+        self.single_button = QtWidgets.QRadioButton("Single material")
+        self.multi_button = QtWidgets.QRadioButton("Multi material")
+        (self.single_button if project.material_source == "one_database_material" else
+         self.multi_button).setChecked(True)
+        for button in (self.single_button, self.multi_button):
+            source.addWidget(button)
+        self.single_button.toggled.connect(lambda _: self._choose_source())
+        source.addWidget(Info(SOURCE_HELP))
+        source.addStretch()
+        layout.addLayout(source)
+
         row = QtWidgets.QHBoxLayout()
         row.addWidget(QtWidgets.QLabel("Database:"))
         self.combo = FittedCombo()
@@ -183,6 +215,17 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.included.setMenu(menu)
         row.addWidget(self.included)
         layout.addLayout(row)
+
+        self.fix_row = QtWidgets.QWidget()                          # with multi material only
+        fix = QtWidgets.QHBoxLayout(self.fix_row)
+        fix.setContentsMargins(0, 0, 0, 0)
+        fix.addWidget(QtWidgets.QLabel("Fix every element to:"))
+        self.fix_combo = QtWidgets.QComboBox()
+        self.fix_combo.currentIndexChanged.connect(lambda _: self._choose_fixed())
+        fix.addWidget(self.fix_combo)
+        fix.addWidget(Info(FIX_HELP))
+        fix.addStretch()
+        layout.addWidget(self.fix_row)
 
         actions = QtWidgets.QHBoxLayout()
         self.new_button = QtWidgets.QPushButton("New database...")
@@ -252,6 +295,40 @@ class MaterialsPanel(QtWidgets.QDialog):
         if value and value != self.project.database:
             self.project.database = value
             self._refresh()
+
+    def _choose_source(self):
+        """Single or multi material chosen; single material fixes no material."""
+        single = self.single_button.isChecked()
+        self.project.material_source = "one_database_material" if single else "network"
+        if single:
+            self.project.pinned_material = None
+        self._refresh()
+
+    def _choose_fixed(self):
+        if self.fix_combo.isEnabled():                              # not while the list is filled
+            self.project.pinned_material = self.fix_combo.currentData()
+
+    def _label(self, name):
+        """A material's label, as Fix every element to shows it; its name when the list does not have it."""
+        i = self.fix_combo.findData(str(name))
+        return self.fix_combo.itemText(i) if i >= 0 else str(name)
+
+    def _fill_fixed(self, names, labels):
+        """The Fix every element to list for the database's materials, keeping the material fixed when the
+        database has it; returns a line saying a fixed material the database does not have is no longer fixed,
+        or None."""
+        self.fix_combo.setEnabled(False)
+        self.fix_combo.clear()
+        self.fix_combo.addItem(NOTHING_FIXED, None)
+        for name, label in zip(names, labels):
+            self.fix_combo.addItem(label, str(name))
+        pinned, said = self.project.pinned_material, None
+        if pinned is not None and self.fix_combo.findData(str(pinned)) < 0:
+            said = f"{pinned} is not in this database, so no material is fixed now."
+            self.project.pinned_material = pinned = None
+        self.fix_combo.setCurrentIndex(0 if pinned is None else self.fix_combo.findData(str(pinned)))
+        self.fix_combo.setEnabled(True)
+        return said
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -431,7 +508,10 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.table.setColumnCount(0)
         self._shown_table, self._network_rows = None, None
         self.latent_info.setVisible(False)
+        single = self.project.material_source == "one_database_material"
         self.tabs.setTabEnabled(1, False)
+        self.tabs.setTabVisible(1, not single)                      # no network with a single material
+        self.fix_row.setVisible(False)
         self._read = self._file_times()
         self.convert_button.setText(f"Convert to {self.project.units} units...")
         self.convert_button.setVisible(self.project.database == self.original and
@@ -456,14 +536,23 @@ class MaterialsPanel(QtWidgets.QDialog):
             return
         self._shown_table = (names, attributes, units, values, colours, labels)
         if not errors:
-            d_eff, n_z, ratios = latent_dim_breakdown(xlsx)
-            lines.insert(0, f"{len(names)} materials; latent dimension {n_z} recommended (effective dimension "
-                            f"{effective_text(d_eff, n_z)}).")
-            self.latent_info.setToolTip(latent_help(d_eff, n_z, ratios))
-            self.latent_info.setVisible(True)
-            network = self._network_line()
-            if network:
-                lines.insert(1, network)
+            unfixed = None if single else self._fill_fixed(names, labels)   # the fixed material, before the check
+            fit = [f"Error: {e}" for e in self.project.material_source_errors(xlsx)]
+            if single:
+                lines[:0] = ["1 material, at its database values; no network."] if not fit else fit
+            else:
+                self.fix_row.setVisible(True)
+                if fit:
+                    lines[:0] = fit
+                else:
+                    d_eff, n_z, ratios = latent_dim_breakdown(xlsx)
+                    lines[:0] = [f"{len(names)} materials; latent dimension {n_z} recommended (effective "
+                                 f"dimension {effective_text(d_eff, n_z)})."] + ([unfixed] if unfixed else [])
+                    self.latent_info.setToolTip(latent_help(d_eff, n_z, ratios))
+                    self.latent_info.setVisible(True)
+                    network = self._network_line()
+                    if network:
+                        lines.insert(1, network)
         if self._network_rows is None and self.tabs.currentIndex() == 1:
             self.tabs.setCurrentIndex(0)                            # fills the table
         else:
@@ -517,9 +606,19 @@ class MaterialsPanel(QtWidgets.QDialog):
         return line
 
     def apply(self, project):
-        """The database, and on a change the VAE settings of the new one. Returns lines saying what changed."""
+        """Single or multi material and the material fixed, the database, and on a change of database the VAE
+        settings of the new one. Returns lines saying what changed."""
+        chosen = []
+        if (self.project.material_source, self.project.pinned_material) != \
+                (project.material_source, project.pinned_material):
+            project.material_source, project.pinned_material = self.project.material_source, \
+                self.project.pinned_material
+            chosen = [f"Materials in the design: {source_text(project, self._label)}"]
         if self.project.database == self.original:
-            return []
+            return chosen
+        if self.project.material_source == "one_database_material":    # no network: its settings stay as they are
+            project.database = self.project.database
+            return [f"Database: {project.database}"] + chosen
         q = self.project.copy()
         q.settings["vae"] = {"use_pretrained_vae": project.settings["vae"].get("use_pretrained_vae", True)}
         q.complete_settings()
@@ -531,4 +630,4 @@ class MaterialsPanel(QtWidgets.QDialog):
         changed = [f"{BY_KEY[k].label} {before[k]} -> {q.settings['vae'][k]}" for k in before
                    if not same(before[k], q.settings["vae"][k])]
         return [f"Database: {q.database}"] + ([f"VAE settings for it: {', '.join(changed)}"] if changed else []) + \
-            [line for line in (cleared, matched) if line]
+            [line for line in (cleared, matched) if line] + chosen

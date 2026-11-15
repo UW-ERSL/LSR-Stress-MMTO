@@ -162,7 +162,7 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad_imp
 |---|---|
 | `databases.py` | the attributes a material database may hold, the check of a database, the colour and label of each material, the VAE settings of each shipped database |
 | `encoder.py` | reads a material database, trains or loads the VAE; its `decode` gives each element's properties from its latent point |
-| `material_source.py` | where a run gets each element's material properties from: what every material source gives, and the database's own values with no network (Analyse) |
+| `material_source.py` | where a run gets each element's material properties from: what every material source gives, the network fixed to one material, and the database's own values with no network (a single material, Analyse) |
 | `networks.py` | the VAE network |
 
 #### `lsr_mmto/elements/`

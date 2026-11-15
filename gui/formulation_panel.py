@@ -37,7 +37,8 @@ def database_columns(project):
 
 class FormulationPanel(QtWidgets.QDialog):
     """The objective (minimized) and the constraints (quantity <= bound). A quantity the database
-    cannot give is greyed out with the reason."""
+    cannot give, or one that reads the latent points with a single material, is greyed out with the reason;
+    a row that already has one keeps it, with the reason beside it in red."""
 
     def __init__(self, parent, project):
         from lsr_mmto.formulation.quantities import QUANTITIES
@@ -104,7 +105,9 @@ class FormulationPanel(QtWidgets.QDialog):
         return name in self.quantities and self.quantities[name].takes(argument)
 
     def reason(self, name):
-        """Why the quantity cannot be used with this database, or None."""
+        """Why the quantity cannot be used with this database, or with a single material, or None."""
+        if self.quantities[name].reads_latent_points and self.project.single_material():
+            return "one material fills the design"
         if self.columns is None:
             return None
         missing = [c for c in self.quantities[name].needs if c not in self.columns]

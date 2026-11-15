@@ -2,7 +2,9 @@
 settings_panel.py
 =================
 The Settings panel of the LSR MMTO window: every setting, in groups.
-OK and Cancel work as in every panel (see materials_panel.py).
+OK and Cancel work as in every panel (see materials_panel.py). With a single material, the settings that act
+only on the elements' points in the latent space (Setting.reads_latent_points) are greyed out, and with a single
+material at its database values, which trains no network, the VAE settings too; their values are kept.
 """
 import os
 
@@ -27,6 +29,8 @@ def setting_groups(physics=None):
 VAE_NOTE = ("A database's network is the .nt file next to its .xlsx, with the same name (my_db.xlsx and "
             "my_db.nt). If there is none, the first run trains one. A database that comes with LSR MMTO can't be "
             "retrained: copy its .xlsx to a folder of your own first.")
+ONE_MATERIAL = "Not used with one material."
+NO_NETWORK = "Network: none. A single material is used at its database values, so no network is trained."
 
 
 def shown_setting(key, value):
@@ -212,7 +216,25 @@ class SettingsPanel(QtWidgets.QDialog):
         for key in VAE_KEYS:
             self.rows[("vae", key)][0].changed_signal(self._vae_refresh)
         self._vae_sync(None)
+        if project.single_material():
+            self._grey_without_latent_points()
         ok_cancel(self, layout)
+
+    def _grey_without_latent_points(self):
+        """A single material has no latent points: each setting that acts only on them is greyed out, its value
+        kept as it is."""
+        for (section, key), entry in self.rows.items():
+            if section != "group" and BY_KEY[key].reads_latent_points:
+                self._grey(*entry, ONE_MATERIAL)
+
+    @staticmethod
+    def _grey(row, label, reset, why):
+        for widget in (row.widget, row.none, label):
+            if widget is not None:
+                widget.setEnabled(False)
+                widget.setToolTip(why)
+        reset.setEnabled(False)
+        reset.setVisible(False)
 
     # ------------------------------------------------------------------ the VAE tab
     def _vae_values(self):
@@ -233,6 +255,12 @@ class SettingsPanel(QtWidgets.QDialog):
         from lsr_mmto.materials.databases import DATABASE_VAE
         from lsr_mmto.problem.project import network_shape
         use = self.rows[("vae", "use_pretrained_vae")][0]
+        if self.project.material_source == "one_database_material":   # no network: nothing to set
+            for (section, _), entry in self.rows.items():
+                if section == "vae":
+                    self._grey(*entry, ONE_MATERIAL)
+            self._vae_refresh()
+            return
         if not self.database_ok:
             self._vae_refresh()
             return
@@ -266,6 +294,10 @@ class SettingsPanel(QtWidgets.QDialog):
 
     def _vae_refresh(self):
         """The network line and the live errors and warnings under the note."""
+        if self.project.material_source == "one_database_material":
+            self.vae_status.setText(NO_NETWORK)
+            self.vae_checks.setText("")
+            return
         if not self.database_ok:
             self.vae_status.setText("Network: the database cannot be read, so the network is not checked.")
             self.vae_checks.setText("")

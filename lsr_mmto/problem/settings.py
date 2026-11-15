@@ -12,6 +12,9 @@ module's front page), plus the line in optimize/optimization_loop.py that reads 
 PyTO-AD's TOParams already has a field for names it (pyto_ad_field): build() copies it there, and
 the run reads it from there (to_params.MaxIterations), so the two never disagree.
 
+A setting that acts only on the elements' points in the latent space says so (reads_latent_points): with
+a single material there are none, so the Settings panel greys it out.
+
 Sections: "mesh" is Project.n_dof and Project.single_layer; "common", "advanced" and "vae" are
 project.settings[section]. A VAE setting whose default is FROM_DATABASE starts from the database's
 known values (databases.DATABASE_VAE), or VAEParams for another database.
@@ -47,9 +50,10 @@ class Setting:
     the field of the optimization parameters (TOParams) that holds it during a run; at_build(value):
     for a setting PyTO-AD keeps elsewhere, puts it there when the project is built. physics: the
     physics it belongs to (set for the settings on a module's front page), None for a setting every
-    project has; the Settings panel shows a project only its own physics' settings."""
+    project has; the Settings panel shows a project only its own physics' settings. reads_latent_points: it
+    acts only on the elements' points in the latent space, so it does nothing with a single material."""
     __slots__ = ("section", "key", "default", "label", "help", "group", "none_means", "integer", "choices",
-                 "pyto_ad_field", "at_build", "physics")
+                 "pyto_ad_field", "at_build", "physics", "reads_latent_points")
 
     section: str                         # "common", "advanced", "vae" or "mesh"
     key: str
@@ -63,15 +67,17 @@ class Setting:
     pyto_ad_field: str | None
     at_build: Callable[[Any], None] | None
     physics: str | None
+    reads_latent_points: bool
 
     def __init__(self, section: str, key: str, default: float | int | bool | str | None, label: str, help: str,
                  group: str, none_means: str | None = None, integer: bool = False,
                  choices: type[Enum] | None = None,
                  pyto_ad_field: str | None = None, at_build: Callable[[Any], None] | None = None,
-                 physics: str | None = None) -> None:
+                 physics: str | None = None, reads_latent_points: bool = False) -> None:
         self.section, self.key, self.default, self.label, self.help = section, key, default, label, help
         self.group, self.none_means, self.integer, self.choices = group, none_means, integer, choices
         self.pyto_ad_field, self.at_build, self.physics = pyto_ad_field, at_build, physics
+        self.reads_latent_points = reads_latent_points
 
     def applies_to(self, physics: str) -> bool:
         """True for a setting of that physics, or one every project has."""
@@ -104,7 +110,7 @@ SETTINGS = [
     Setting("common", "material_filter_radius", None, "Latent smoothing radius",
             "How far material choices are smoothed between neighbouring elements, in element sizes. Ticked: "
             "the same as the density filter radius.", "Main", none_means="same as density filter",
-            pyto_ad_field="MaterialFilterRadius"),
+            pyto_ad_field="MaterialFilterRadius", reads_latent_points=True),
     Setting("common", "beta_schedule_scheme", "PAPER", "Projection sharpness schedule",
             "How fast the design is pushed to clear solid and empty: the sharpness starts at 1 and grows 1.5 "
             "times every 5 iterations after iteration 50, up to 32 (PAPER) or 16 (PAPER_BM1).", "Main",
@@ -124,44 +130,53 @@ SETTINGS = [
     # ---- Distance penalty
     Setting("advanced", "use_penalization", True, "Distance penalty",
             "Pushes each element's material towards one of the real materials in the database.",
-            "Distance penalty"),
+            "Distance penalty", reads_latent_points=True),
     Setting("advanced", "gamma_init", 1e-3, "Starting weight", "How strong that push is at the start.",
-            "Distance penalty"),
-    Setting("advanced", "gamma_max", 10.0, "Largest weight", "How strong it can get.", "Distance penalty"),
+            "Distance penalty", reads_latent_points=True),
+    Setting("advanced", "gamma_max", 10.0, "Largest weight", "How strong it can get.", "Distance penalty",
+            reads_latent_points=True),
     Setting("advanced", "gamma_factor", 1.1, "Weight growth per iteration",
-            "How much stronger it gets each iteration while it ramps up.", "Distance penalty"),
+            "How much stronger it gets each iteration while it ramps up.", "Distance penalty",
+            reads_latent_points=True),
     Setting("advanced", "penalty_start_iter", 0, "First iteration",
-            f"The iteration it starts at, when {_PLATEAU} is off.", "Distance penalty", integer=True),
+            f"The iteration it starts at, when {_PLATEAU} is off.", "Distance penalty", integer=True,
+            reads_latent_points=True),
     Setting("advanced", "distance_penalty_disable_after_iter", 250, "Off after iteration",
-            f"The iteration it stops at, when {_PLATEAU} is off.", "Distance penalty", integer=True),
+            f"The iteration it stops at, when {_PLATEAU} is off.", "Distance penalty", integer=True,
+            reads_latent_points=True),
     Setting("advanced", "use_dynamic_gamma_scheduling", True, _PLATEAU,
-            "Start the push when the design stops improving, instead of at a set iteration.", "Distance penalty"),
+            "Start the push when the design stops improving, instead of at a set iteration.", "Distance penalty",
+            reads_latent_points=True),
     Setting("advanced", "gamma_plateau_window", 10, "Plateau window",
             "The objective has plateaued when it changed by less than the plateau tolerance over this many "
-            "iterations.", "Distance penalty", integer=True),
+            "iterations.", "Distance penalty", integer=True, reads_latent_points=True),
     Setting("advanced", "gamma_plateau_tolerance", 1e-3, "Plateau tolerance",
             "How little the objective may change over the plateau window, relatively, to count as plateaued.",
-            "Distance penalty"),
+            "Distance penalty", reads_latent_points=True),
     Setting("advanced", "gamma_plateau_earliest_iter", 20, "Earliest start",
-            "The push never starts before this iteration.", "Distance penalty", integer=True),
+            "The push never starts before this iteration.", "Distance penalty", integer=True, reads_latent_points=True),
     Setting("advanced", "gamma_ramp_end_margin", 30, "Iterations left at full weight",
             "If the objective never plateaus, the push starts in time to reach its largest weight this many "
-            "iterations before Max iterations.", "Distance penalty", integer=True),
+            "iterations before Max iterations.", "Distance penalty", integer=True, reads_latent_points=True),
     # ---- Latent smoothing
     Setting("advanced", "use_z_smoothing", True, "Latent smoothing",
-            "Discourages neighbouring elements from flickering between materials.", "Latent smoothing"),
-    Setting("advanced", "z_smoothing_weight", 1e-4, "Weight", "How strong that smoothing is.", "Latent smoothing"),
+            "Discourages neighbouring elements from flickering between materials.", "Latent smoothing",
+            reads_latent_points=True),
+    Setting("advanced", "z_smoothing_weight", 1e-4, "Weight", "How strong that smoothing is.", "Latent smoothing",
+            reads_latent_points=True),
     Setting("advanced", "z_smoothing_disable_after_iter", 250, "Off after iteration",
-            "The iteration it stops at.", "Latent smoothing", integer=True),
+            "The iteration it stops at.", "Latent smoothing", integer=True, reads_latent_points=True),
     # ---- Material model
     Setting("advanced", "use_continuation", False, "SIMP continuation",
             "Raises the SIMP penalty by 0.25 every 10 iterations during the run.", "Material model"),
     # ---- Start and reported design
     Setting("advanced", "z0_init_method", "ORIGIN", "Starting latent point",
             "The material every element starts with: ORIGIN (the middle of the material map), the LIGHTEST or "
-            "HEAVIEST material, or UNIFORM (random).", "Start and reported design", choices=Z0InitMethod),
+            "HEAVIEST material, or UNIFORM (random).", "Start and reported design", choices=Z0InitMethod,
+            reads_latent_points=True),
     Setting("advanced", "snap_to_real_material", False, "Snap to real materials",
-            "In the final design, give each element the nearest real material.", "Start and reported design"),
+            "In the final design, give each element the nearest real material.", "Start and reported design",
+            reads_latent_points=True),
     Setting("advanced", "binarize_topology", True, "Binarize the topology",
             "In the final design, make each element fully solid or empty, keeping the volume.",
             "Start and reported design"),

@@ -301,6 +301,56 @@ def test_a_thermal_run_with_held_temperatures_only():
     assert "no loads" in s.validate()
 
 
+def test_a_thermal_run_of_one_material():
+    """Thermal with one material in the design: the network fixed to one of the example database's materials,
+    and a database of that one material at its database values. Each runs through to the save, every element is
+    that material, with the conductivity the network or the database gives, and the objective is finite."""
+    import torch
+    from openpyxl import Workbook
+    from lsr_mmto.materials.databases import VAEParams, database_table
+    from lsr_mmto.materials.encoder import MaterialEncoder
+    from lsr_mmto.optimize import save_results
+    from lsr_mmto.problem.project import run
+    from lsr_mmto.results import load_results
+    names, attributes, units, values = database_table(EXAMPLE_DATABASE)
+    row = 1
+    params = VAEParams()
+    for k, v in EXAMPLE_VAE.items():
+        setattr(params, k, v)
+    enc = MaterialEncoder(params)
+    enc.readExcel(EXAMPLE_DATABASE)
+    enc.loadAutoencoderFromFile(EXAMPLE_DATABASE[:-5] + ".nt")
+    with torch.no_grad():
+        k_network = float(enc.decode(torch.as_tensor(enc.training_latents[row:row + 1], dtype=torch.float64))
+                          ["Conductivity"][0])
+    k_database = values[row, attributes.index("Conductivity")]
+    real = save_results.save_run_data
+    with tempfile.TemporaryDirectory() as d:
+        wb = Workbook()
+        wb.active.append(["Attributes"] + list(attributes))
+        wb.active.append(["Material/Units"] + list(units))
+        wb.active.append([names[row]] + [float(v) for v in values[row]])
+        wb.save(os.path.join(d, "one.xlsx"))
+        for single, k_expected in ((False, k_network), (True, k_database)):
+            p = _held_and_heated("one material")
+            p.settings["common"]["maxIterations"] = 2
+            if single:
+                p.database, p.material_source = os.path.join(d, "one.xlsx"), "one_database_material"
+            else:
+                p.pinned_material = names[row]
+            assert p.validate() == [], p.validate()
+            saved = {}
+            save_results.save_run_data = lambda **kw: (saved.update(kw["fields"]), real(**kw))[1]
+            try:
+                folder = run(p, save_dir=os.path.join(d, str(single)), verbose=False)
+            finally:
+                save_results.save_run_data = real
+            r = load_results.load(os.path.join(folder, "run_data"))
+            assert r.n_latent == 0 and np.all(r.material_indices == (0 if single else row))
+            assert np.allclose(saved["property_Conductivity"], k_expected), single
+            assert np.all(np.isfinite(r.history["objective"]))
+
+
 def test_the_saved_run_keeps_the_properties_the_physics_reads(monkeypatch):
     """A run saves each element's value of every property its physics reads (PROPERTIES): the conductivity,
     and nothing of the structural physics, which its database does not have."""

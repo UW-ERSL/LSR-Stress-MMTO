@@ -11,7 +11,8 @@ TREE (arrow = "depends on")
                                              (every quantity: docs/reference.md)
     Pz     -> x_phys, z                      latent smoothing penalty
     Dp     -> x_phys (frozen), z             distance to the nearest real material
-    E, nu, Y, rho -> z                       VAE decoder (whichever attributes the database has)
+    E, nu, Y, rho -> z                       the material source: the VAE decoder (whichever attributes the
+                                             database has); none with one material, whose properties are fixed
     u      -> K -> x_phys, E, nu             K_e = SIMP(x_phys) * (lam_e K_lam + mu_e K_mu)
     x_phys -> x_filt -> x                    Heaviside(density filter(x))
 Each objective and constraint is one entry of QUANTITIES (formulation/quantities.py).
@@ -47,9 +48,11 @@ class MMTOModelAD:
     """The optimization callback's differentiable model, one torch tree per MMA iteration.
 
         x (raw MMA density) -> density filter -> Heaviside -> x_phys
-        z (latents)         -> VAE decoder    -> props (every property the database has)
+        z (latents)         -> material source -> props (every property the database has; the VAE decoder,
+                                                or with one material, z empty and props fixed)
         x_phys, props       -> physics.analyse (structural: E, nu -> solve -> u -> von Mises)
-        -> objective J, constraints, and the two penalties Pz (latent smoothing), Dp (distance)
+        -> objective J, constraints, and the penalties (Pz latent smoothing and Dp distance, left out with
+           no latent points)
 
     grad_phys(q) returns dq/d(x_phys, z) in the driver's layout [x (N) ; z latent-major (N*latentDim)],
     the same layout the manual sensitivities returned, so the driver can normalize, override

@@ -67,7 +67,8 @@ def table(runs: dict[str, Run]) -> Tables:
     the result with each constraint met or not, the design, the materials and the run. Only the rows every
     run has: with an analysis among them (one solve, no optimization), a constraint it cannot give and what
     only an optimization has (grey elements, the latent dimension, iterations) are left out."""
-    from .tables import Heading, Table, Tables, _unit, constraint_name, given, met, met_cell, physics_rows
+    from .tables import (Heading, Table, Tables, _unit, constraint_name, given, latent_dimension_text, met, met_cell,
+                         physics_rows)
     names = list(runs)
     rs = [runs[n] for n in names]
     r0 = rs[0]
@@ -91,7 +92,7 @@ def table(runs: dict[str, Run]) -> Tables:
         design.append(["Grey (in between)"] + [f"{100 * r.grey:.1f} %" if np.isfinite(r.grey) else "" for r in rs])
     materials = [["Used"] + [f"{int(r.materials_used().size)} of {len(r.material_names)}" for r in rs]]
     if optimized:
-        materials.append(["Latent dimension"] + [str(r.n_latent) for r in rs])
+        materials.append(["Latent dimension"] + [latent_dimension_text(r) for r in rs])
     run_rows = [["Run time"] + [f"{_runtime(r) / 60:.1f} min" for r in rs]]
     if optimized:
         run_rows = [["Iterations"] + [f"{_iterations(r)}" for r in rs]] + run_rows + \
