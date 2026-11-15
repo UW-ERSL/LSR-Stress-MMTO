@@ -68,9 +68,10 @@ SETTINGS = [
 # OPTIONAL: PENALTIES, terms added to the objective besides the two every physics has (latent smoothing and
 # the distance penalty), each the arguments of a Penalty (design/latent_penalties.py, which says what each
 # piece is): its name, its name in the GUI and its help, its value fn(m) in torch, its weight(state, it) this
-# iteration (0 is off: its schedule goes there), its scale ("raw" or "first value") and its history key. Its
-# settings go in SETTINGS. A push towards fully solid or fully empty elements, off from iteration 100 on:
+# iteration (0 is off: its schedule goes there), its scale ("raw" or "first value"), its history key, and
+# whether it reads the latent points (a run with none leaves it out). Its settings go in SETTINGS. A push
+# towards fully solid or fully empty elements, off from iteration 100 on:
 #   PENALTIES = [dict(name="HeatGreyness", shown="Greyness", help="Pushes each element towards solid or empty.",
 #                     fn=lambda m: torch.mean(m.x_phys * (1 - m.x_phys)),
 #                     weight=lambda state, it: 0.0 if state.iteration >= 100 else state.s.heat_greyness_weight,
-#                     scale="first value", key="heat_greyness")]
+#                     scale="first value", key="heat_greyness", reads_latent_points=False)]

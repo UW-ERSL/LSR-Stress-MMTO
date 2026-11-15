@@ -423,7 +423,7 @@ def _test_penalty(weight, scale="first value"):
     0.1, so its gradient has an x block and a z block."""
     return dict(name="ThermalTestPenalty", shown="Test penalty", help="A penalty for the tests only.",
                 fn=lambda m: torch.mean(m.x_phys * (1 - m.x_phys)) + torch.mean((m.z - 0.1) ** 2),
-                weight=weight, scale=scale, key="thermal_test_penalty")
+                weight=weight, scale=scale, key="thermal_test_penalty", reads_latent_points=True)
 
 
 def test_a_physics_penalty_is_added_with_its_gradient():
@@ -513,6 +513,20 @@ def test_a_penalty_must_state_its_scale():
     with pytest.raises(ValueError, match="scale must be one of 'raw', 'first value'"):
         latent_penalties.Penalty(physics=["thermal"], **_test_penalty(lambda state, it: 0.5, scale="normalised"))
     assert [q.name for q in latent_penalties.PENALTIES] == ["LatentSmoothing", "DistancePenalty"]
+
+
+def test_a_penalty_must_say_whether_it_reads_the_latent_points():
+    """A penalty entry without reads_latent_points, or with one that is not True or False, is refused when the
+    core's lists are made; the two every physics has both read the latent points."""
+    import pytest
+    from lsr_mmto.design import latent_penalties
+    entry = _test_penalty(lambda state, it: 0.5)
+    del entry["reads_latent_points"]
+    with pytest.raises(TypeError, match="reads_latent_points"):
+        latent_penalties.Penalty(physics=["thermal"], **entry)
+    with pytest.raises(TypeError, match="reads_latent_points must be True or False"):
+        latent_penalties.Penalty(physics=["thermal"], **dict(entry, reads_latent_points="yes"))
+    assert all(p.reads_latent_points for p in latent_penalties.PENALTIES)
 
 
 def test_the_mesh_is_sized_by_the_physics_unknowns_per_node():

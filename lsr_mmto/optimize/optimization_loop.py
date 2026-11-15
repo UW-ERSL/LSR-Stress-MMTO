@@ -352,11 +352,6 @@ def setup(*, s: "RunSettings", project: "Project", save_dir: str, verbose: bool,
         raise TypeError(f"project must be a Project, e.g. Project.load('projects/L-bracket.mmto'), "
                         f"not {project!r}; the coded examples are now the project files in projects/")
     physics = physics_module(project.physics)            # the front page of the project's physics
-    penalties = [p for p in PENALTIES if p.applies_to(physics.NAME)]
-    for key in (k for p in penalties for k in p.keys()):    # each penalty's history keys, new ones
-        if key in history:
-            raise ValueError(f"penalty history key {key!r} is used twice")
-        history[key] = []
     mesh, mat_prop, bcs, elem_body_force, to_params, vae_params = project.build()
     print(f"[SWEEP] nDOFDesired={to_params.nDOFDesired}  "
           f"RelativeFilterRadius={to_params.RelativeFilterRadius}  "
@@ -381,6 +376,15 @@ def setup(*, s: "RunSettings", project: "Project", save_dir: str, verbose: bool,
     latentDim = matEncoder.latent_dim
     num_design_var = num_elems + num_elems * latentDim
     print(f"Using latent dimension: {latentDim}")
+    # the penalties of the run's physics; with no latent points, those that read them are left out
+    penalties = [p for p in PENALTIES if p.applies_to(physics.NAME) and (latentDim or not p.reads_latent_points)]
+    left_out = [p.shown for p in PENALTIES if p.applies_to(physics.NAME) and p not in penalties]
+    if left_out:
+        print(f"[INFO] No latent points: left out {', '.join(left_out)}")
+    for key in (k for p in penalties for k in p.keys()):    # each penalty's history keys, new ones
+        if key in history:
+            raise ValueError(f"penalty history key {key!r} is used twice")
+        history[key] = []
     elem_volume = float(np.prod(solver.mesh.elem_size))
     design_domain_volume = compute_domain_volume(solver)
     print("Creating filter...")

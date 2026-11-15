@@ -79,7 +79,8 @@ model's state; autograd gives the gradient.
 
     Penalty("LatentSmoothing", "Latent smoothing",
             "Discourages neighbouring elements from flickering between materials.",
-            lambda m: latent_smoothing(m.x_phys, m.z, m.Hm, m.Hsm), _latent_smoothing_weight, "raw", "Pz_n"),
+            lambda m: latent_smoothing(m.x_phys, m.z, m.Hm, m.Hsm), _latent_smoothing_weight, "raw", "Pz_n",
+            reads_latent_points=True),
 
 - `fn(m)`: its value, from `m` as for a quantity. `m.x_phys.detach()` keeps the density out of its
   gradient, as the distance penalty does.
@@ -92,6 +93,10 @@ model's state; autograd gives the gradient.
   when the app starts.
 - `key`, and `raw_key` if wanted: the history keys of what it adds to the objective and of its value
   before weight and scale. The run saves them; both are 0 at an iteration it is off.
+- `reads_latent_points`: stated in every entry, `True` when its function reads the latent points
+  (`m.z`, `m.z_real`), else `False`. A run with no latent points (a material source of latent
+  dimension 0, `lsr_mmto/materials/material_source.py`) leaves out every penalty that reads them, and
+  says so. An entry without it is refused when the app starts.
 - Its settings are entries of `SETTINGS` (see "A setting"), on the physics' front page for a penalty
   of one physics.
 

@@ -1,6 +1,6 @@
 # Testing the codebase
 
-Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 285 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
+Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 291 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
 
 Run them all from the repository folder with `python -m pytest tests -q -n 4` (`-n 2` on a computer with less than 16 GB of memory), one folder with `python -m pytest tests/<folder> -q`, or one file with `python -m pytest tests/<folder>/<file> -q`.
 
@@ -28,6 +28,7 @@ The thermal physics (lsr_mmto/physics/thermal/) keeps working: its solver gives 
 - `test_a_physics_penalty_keeps_its_history_and_its_schedule`: A short thermal run with the test penalty on for its first iteration only: the saved run's history has its key, 0.5 at the first iteration (its first value, times 0.5) and 0 from then on; the history keys of the two every physics has are kept.
 - `test_a_quantity_of_another_physics_is_refused`: The project's check refuses a quantity of another physics, as the objective or as a constraint (the structural Compliance in a thermal project), and keeps the quantities every physics has and thermal's own; a structural project may still name Compliance.
 - `test_a_penalty_must_state_its_scale`: A penalty entry without its scale, or with one that is not "raw" or "first value", is refused when the core's lists are made (at start-up, where each front page's entry becomes a Penalty), and nothing of it is added.
+- `test_a_penalty_must_say_whether_it_reads_the_latent_points`: A penalty entry without reads_latent_points, or with one that is not True or False, is refused when the core's lists are made; the two every physics has both read the latent points.
 - `test_the_mesh_is_sized_by_the_physics_unknowns_per_node`: Mesh dofs counts every unknown at every node: thermal (one unknown per node) gets about three times the elements the structural physics (three per node) gets for the same number.
 - `test_one_name_one_meaning_across_physics`: The core's lists (material properties, quantities, kinds of support and load) join the core's entries and every physics': an entry a second physics gives exactly as the structural one does is one entry, tagged with both; a different entry under the same name, or a property no one defines, stops LSR MMTO with a message naming the places. Thermal, which brings its own conductivity, joins with its own entries.
 
@@ -194,6 +195,12 @@ The final check at the end of a run (compliance, stresses, failure factor of the
 
 - `test_constant_poissons_ratio_is_used`: Constant poissons ratio is used.
 - `test_poissons_ratio_from_the_network_is_used`: Poissons ratio from the network is used.
+
+### `tests/runs/test_no_latent_points.py`
+
+A run whose material source has no latent points (latent dimension 0): the design is the densities only, and every step of the run takes it, from the start design and its bounds through the iterations, the final check and the save. The source here is the database's own values with one material for every element (materials/material_source.py, DatabaseMaterials), put in where the run makes its source (optimization_loop.material_source).
+
+- `test_a_run_with_no_latent_points_goes_through`: The U-bracket on a coarse mesh, its distance penalty and latent smoothing switched on as usual: the run asks about designs of the densities only (one number per element), leaves out both penalties (they read the latent points) and says so, goes through and saves; each element has MATERIAL's database values, the saved run has latent dimension 0 and no history of either penalty, and every element's material is MATERIAL.
 
 ### `tests/runs/test_regression.py`
 
@@ -474,6 +481,15 @@ Every module of the package lsr_mmto and of the app (gui) imports, so a file mov
 - `test_every_module_imports`: Every module imports.
 - `test_old_folders_gone`: Old folders gone.
 - `test_script_imports_from_another_folder`: A script anywhere imports lsr_mmto: installed (pip install -e .), or with the repository on PYTHONPATH.
+
+### `tests/code_rules/test_material_source.py`
+
+A run gets each element's material properties from its material source (lsr_mmto/materials/material_source.py) and from nothing else: outside the material network's own file and the material source's, no code reaches into the network's decoder. Every source gives what the run reads (MaterialSource), and each decodes as it says: the network inside the torch tree, the database at each element's material's own values.
+
+- `test_nothing_but_the_material_source_reaches_into_the_network`: No file of lsr_mmto or gui, other than the network's own (encoder.py) and the material source's, calls the network's decoder or turns its output into properties itself: each asks its material source's decode.
+- `test_every_source_gives_what_the_run_reads`: The network and the database's own values each give every member of MaterialSource.
+- `test_the_network_decodes_inside_the_tree`: The network's decode gives every column of the database, one value per point, and the gradient of a property reaches the latent points.
+- `test_the_database_decodes_to_each_elements_own_material`: The database's own values: each element gets its material's row, whatever its latent point, and there is no network to save.
 
 ### `tests/code_rules/test_physics_folders.py`
 

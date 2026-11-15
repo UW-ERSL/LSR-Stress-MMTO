@@ -65,13 +65,15 @@ def latent_smoothing(xb: torch.Tensor, z: torch.Tensor, Hm: "SparseOperator", Hs
 #   key          the history key of what it adds to the objective each iteration (0 while it is off)
 #   raw_key      optional: the history key of its value before weight and scale (0 while it is off)
 #   physics      the physics it applies to; empty: every physics
+#   reads_latent_points  stated in every entry: True when fn reads the latent points (m.z, m.z_real); a run
+#                with no latent points (a material source of latent dimension 0) leaves such a penalty out
 SCALES = ("raw", "first value")
 
 
 class Penalty:
     """One term added to the objective, as the comment above describes its arguments. ValueError for a scale
-    not in SCALES."""
-    __slots__ = ("name", "shown", "help", "fn", "weight", "scale", "key", "raw_key", "physics")
+    not in SCALES; TypeError when reads_latent_points is not True or False."""
+    __slots__ = ("name", "shown", "help", "fn", "weight", "scale", "key", "raw_key", "physics", "reads_latent_points")
 
     name: str
     shown: str
@@ -82,15 +84,19 @@ class Penalty:
     key: str
     raw_key: str | None
     physics: frozenset[str]
+    reads_latent_points: bool
 
     def __init__(self, name: str, shown: str, help: str, fn: "Callable[[MMTOModelAD], torch.Tensor]",
                  weight: "Callable[[RunState, Iteration], float]", scale: str, key: str, raw_key: str | None = None,
-                 physics: Iterable[str] = ()) -> None:
+                 physics: Iterable[str] = (), *, reads_latent_points: bool) -> None:
         if scale not in SCALES:
             raise ValueError(f"penalty {name!r}: scale must be one of {', '.join(map(repr, SCALES))}, "
                              f"not {scale!r}")
+        if not isinstance(reads_latent_points, bool):
+            raise TypeError(f"penalty {name!r}: reads_latent_points must be True or False, not {reads_latent_points!r}")
         self.name, self.shown, self.help, self.fn, self.weight = name, shown, help, fn, weight
         self.scale, self.key, self.raw_key, self.physics = scale, key, raw_key, frozenset(physics)
+        self.reads_latent_points = reads_latent_points
 
     def keys(self) -> list[str]:
         """Its history keys: its raw value's (if it has one), then what it adds."""
@@ -177,12 +183,13 @@ def _distance_penalty_weight(state: "RunState", it: "Iteration") -> float:
 PENALTIES = [
     Penalty("LatentSmoothing", "Latent smoothing",
             "Discourages neighbouring elements from flickering between materials.",
-            lambda m: latent_smoothing(m.x_phys, m.z, m.Hm, m.Hsm), _latent_smoothing_weight, "raw", "Pz_n"),
+            lambda m: latent_smoothing(m.x_phys, m.z, m.Hm, m.Hsm), _latent_smoothing_weight, "raw", "Pz_n",
+            reads_latent_points=True),
     # x enters the distance penalty as a frozen weight (detached), so its x block is zero by construction
     Penalty("DistancePenalty", "Distance penalty",
             "Pushes each element's material towards one of the real materials in the database.",
             lambda m: distance_penalty(m.x_phys, m.z, m.z_real), _distance_penalty_weight, "first value", "Pn",
-            raw_key="P"),
+            raw_key="P", reads_latent_points=True),
 ] + [Penalty(physics=[m.NAME], **p) for m in MODULES for p in m.PENALTIES]
 
 

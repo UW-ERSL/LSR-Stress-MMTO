@@ -59,7 +59,8 @@ MODULE_ENTRIES = {
                                 "problem without a solution (the part free to move), or None",
     "QUANTITIES": "its objectives and constraints, each as the arguments of a Quantity",
     "PENALTIES": "the terms it adds to the objective besides those every physics has, each as the arguments "
-                 "of a Penalty (design/latent_penalties.py); may be empty",
+                 "of a Penalty (design/latent_penalties.py), saying whether it reads the latent points; may be "
+                 "empty",
     "SETTINGS": "its own settings, each as the arguments of a Setting",
     "RESULT_FIELDS": "the results a run saves, {name: dict(view, title, measures, where, shape)}: view the Results "
                      "panel's choice that shows it, title its colour scale's, measures what it is (for its unit), "
