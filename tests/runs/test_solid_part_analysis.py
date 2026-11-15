@@ -355,7 +355,8 @@ def test_analyse_this_design():
     final check analysed (its solid elements) and the materials it used (the network's values of the real
     materials, written into the run's database), it gives the run's own final check: the stress and the
     displacement of every element and node, to 1 part in 10,000 of the largest. Twice the load gives twice the displacement; a project whose mesh
-    is not the run's is refused, saying what differs; saved, its record says which run it analysed."""
+    is not the run's is refused, saying what differs, and so is a database changed since the run, naming the cell;
+    saved, its record says which run it analysed."""
     import openpyxl
     from lsr_mmto.results.load_results import load
     with tempfile.TemporaryDirectory() as d:
@@ -374,6 +375,16 @@ def test_analyse_this_design():
             for r, value in enumerate(ran.material_property(head), start=3):
                 sheet.cell(row=r, column=c, value=float(value))
         book.save(os.path.join(d, "materials", "BM1_3Mats_2Attr.xlsx"))
+        with pytest.raises(ValueError, match=r"the database the run used \(BM1_3Mats_2Attr.xlsx\) has changed since "
+                                             r"the run: cell B3 is"):
+            A.analyse_design(p, folder)                                  # changed since the run: refused
+        from lsr_mmto.materials.network_stamp import database_stamp
+        manifest = os.path.join(folder, "run_data.config.json")          # as if the run had read these values
+        with open(manifest) as fh:
+            config = json.load(fh)
+        config["database"] = database_stamp(os.path.join(d, "materials", "BM1_3Mats_2Attr.xlsx"))
+        with open(manifest, "w") as fh:
+            json.dump(config, fh)
 
         a = A.analyse_design(p, folder, save_dir=os.path.join(d, "results", "design check"))
         assert a.analysed_material == f"design of {ran.config['run']['timestamp'].replace('T', ' ')}"

@@ -22,6 +22,7 @@ A Yes to the question stamps the network with the database as it is now (stamp),
     write_network(nt, weights, record)   a network file written with its weights and a record
     stamp(nt, xlsx, to_confirm)     a network stamped again with the database as it is now
     compare(xlsx, nt)               a Comparison: one of the states above and a line saying what changed
+    changed_cells(then, now), listed(lines)   the cells two records differ in, and those cells in a line
 """
 import math
 import warnings
@@ -115,7 +116,8 @@ class Comparison:
     text: str
 
 
-def _changed_cells(then: list[list[str]], now: list[list[str]]) -> list[str]:
+def changed_cells(then: list[list[str]], now: list[list[str]]) -> list[str]:
+    """Each cell of the first sheet that differs between two records' "main", as "cell B4 is x, was y"."""
     from lsr_mmto.materials.databases import _cell
     out = []
     for r in range(max(len(then), len(now))):
@@ -128,7 +130,8 @@ def _changed_cells(then: list[list[str]], now: list[list[str]]) -> list[str]:
     return out
 
 
-def _listed(lines: list[str]) -> str:
+def listed(lines: list[str]) -> str:
+    """The first SHOWN_CELLS lines, then how many more."""
     shown = "; ".join(lines[:SHOWN_CELLS])
     return shown + (f"; and {len(lines) - SHOWN_CELLS} more" if len(lines) > SHOWN_CELLS else "")
 
@@ -140,9 +143,9 @@ def compare(xlsx: str, nt: str) -> Comparison:
         return Comparison(NO_STAMP, "it was trained before networks kept a record of their database, so "
                                     "it can't be checked against the database")
     now = database_stamp(xlsx)
-    cells = _changed_cells(then.get("main", []), now["main"])
+    cells = changed_cells(then.get("main", []), now["main"])
     if cells:
-        return Comparison(CHANGED, f"the database has changed since its network was trained: {_listed(cells)}")
+        return Comparison(CHANGED, f"the database has changed since its network was trained: {listed(cells)}")
     if then.get("display") != now["display"]:
         was, is_ = then.get("display"), now["display"]
         names = [row[0] for row in now["main"][2:]]
@@ -151,7 +154,7 @@ def compare(xlsx: str, nt: str) -> Comparison:
                      for what, a, b in (("colour", old[0], new[0]), ("label", old[1], new[1])) if a != b]
         else:
             lines = ["the Display sheet"]
-        return Comparison(DISPLAY, f"only colours or labels changed since its network was trained: {_listed(lines)}")
+        return Comparison(DISPLAY, f"only colours or labels changed since its network was trained: {listed(lines)}")
     if then.get("to_confirm"):
         return Comparison(TO_CONFIRM, str(then["to_confirm"]))
     return Comparison(SAME, "")

@@ -138,7 +138,9 @@ def analyse_design(project: "Project", run_folder: str, save_dir: str | None = N
     now, with its settings, checked as a run is checked. Each element with a density above 0.5 is solid, in its
     nearest material of the database the run used (the run's material_indices, as Export STL takes them), with
     that material's values as the database gives them; the others are empty. The run's mesh must be the
-    project's now: the same mesh dofs, single element layer and part, else a ValueError says what differs.
+    project's now: the same mesh dofs, single element layer and part, else a ValueError says what differs; and
+    the database the run used must be as the run read it (its record of every cell, kept by runs that have one;
+    else its material names), else a ValueError names the cells changed.
     Returns the analysis as a Run (load), its record saying which run it analysed (Run.analysed_design).
 
     project: the project, a Project, with the supports and loads to analyse the design under
@@ -179,6 +181,14 @@ def analyse_design(project: "Project", run_folder: str, save_dir: str | None = N
         if not os.path.isfile(used) or database_table(used)[0] != [str(n).strip() for n in run.material_names]:
             raise ValueError(f"the database the run used ({os.path.basename(used)}) is not there as it was, so its "
                              f"materials are not known")
+        then = (run.config or {}).get("database")
+        if isinstance(then, dict) and isinstance(then.get("main"), list):      # every cell, as the run read them
+            from lsr_mmto.materials.network_stamp import changed_cells, database_stamp, listed
+            cells = changed_cells(then["main"], database_stamp(used)["main"])
+            if cells:
+                raise ValueError(f"the database the run used ({os.path.basename(used)}) has changed since the run: "
+                                 f"{listed(cells)}; bring back the version the run used (Versions... in Materials) "
+                                 f"to analyse its design")
         x = (np.asarray(run.x_cont, dtype=float) > 0.5).astype(float)
         return (x, np.asarray(run.material_indices, dtype=int), used, f"Design of {when}",
                 {"material": f"design of {when}", "design_of": os.path.basename(run_folder)})

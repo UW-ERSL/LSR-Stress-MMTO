@@ -878,7 +878,7 @@ report = export(r, mesh, folder)
 
 `analyse_design(project, run_folder, save_dir=None, should_stop=None)`, after `from lsr_mmto.optimize.solid_part_analysis import analyse_design`
 
-Analyses a saved run's design as built, solved once under the project's supports and loads as they are now, with its settings, checked as a run is checked. Each element with a density above 0.5 is solid, in its nearest material of the database the run used (the run's material_indices, as Export STL takes them), with that material's values as the database gives them; the others are empty. The run's mesh must be the project's now: the same mesh dofs, single element layer and part, else a ValueError says what differs. Returns the analysis as a Run (load), its record saying which run it analysed (Run.analysed_design).
+Analyses a saved run's design as built, solved once under the project's supports and loads as they are now, with its settings, checked as a run is checked. Each element with a density above 0.5 is solid, in its nearest material of the database the run used (the run's material_indices, as Export STL takes them), with that material's values as the database gives them; the others are empty. The run's mesh must be the project's now: the same mesh dofs, single element layer and part, else a ValueError says what differs; and the database the run used must be as the run read it (its record of every cell, kept by runs that have one; else its material names), else a ValueError names the cells changed. Returns the analysis as a Run (load), its record saying which run it analysed (Run.analysed_design).
 
 | argument | format | default |
 |---|---|---|
