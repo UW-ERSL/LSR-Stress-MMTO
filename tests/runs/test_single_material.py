@@ -2,9 +2,9 @@
 test_single_material.py
 =======================
 A project of a single material, every element the same material, the design the densities only: one database
-material (material_source "one_database_material", the database's one material at its database values, no
-network read or trained), or the network pinned to one database material (pinned_material, that material's
-properties as the network gives them). Each runs through to the save; the project saves and reads back its
+material (material_source "one_database_material": pinned_material, or the database's only material, at its
+database values, no network read or trained), or the network pinned to one database material
+(pinned_material, that material's properties as the network gives them). Each runs through to the save; the project saves and reads back its
 choice, an older file reads as the network with no pin, and the project's check refuses what cannot run.
 
     python -m pytest tests/runs/test_single_material.py
@@ -82,6 +82,21 @@ def test_one_database_material_runs_with_no_network():
     assert r.n_latent == 0 and np.all(r.material_indices == 0)
     assert np.allclose(saved["property_Youngs_Modulus"], E)
     assert not {"Pz_n", "Pn", "P"} & set(r.history)
+
+
+def test_one_material_of_a_database_of_several():
+    """Single material with the 6-material database itself: the material named (pinned_material) is every
+    element's, at its database values, with no network read or trained; nothing needs deleting from the
+    database."""
+    from lsr_mmto.materials.databases import database_table
+    names, attributes, _, values = database_table(DATABASE + ".xlsx")
+    p = _ubracket()
+    p.material_source, p.pinned_material = "one_database_material", str(names[ROW])
+    assert p.validate() == [], p.validate()
+    with tempfile.TemporaryDirectory() as d:
+        r, saved = _saved_run(p, os.path.join(d, "run"))
+    assert r.n_latent == 0 and np.all(r.material_indices == ROW) and r.meta["vae_net"] is None
+    assert np.allclose(saved["property_Youngs_Modulus"], values[ROW, attributes.index("Youngs_Modulus")])
 
 
 def test_the_settings_of_the_latent_points_change_nothing_with_one_material():
@@ -195,9 +210,9 @@ def test_the_choice_is_saved_and_an_older_file_reads_as_the_network():
 
 def test_what_cannot_run_is_refused():
     """The project's check refuses: a material source it does not know; a pin that names no material of the
-    database; one database material with a database of several, or with a pin; the network with a database of
-    one material; and, for a single material, a quantity that reads the latent points (material volume
-    fraction)."""
+    database, with either source; single material with no material chosen from a database of several (one
+    material, none chosen, is that one); the network with a database of one material; and, for a single
+    material, a quantity that reads the latent points (material volume fraction)."""
     from lsr_mmto.materials.databases import database_table
 
     def said(p):
@@ -210,13 +225,15 @@ def test_what_cannot_run_is_refused():
     assert "Fix every element to: 'no such material' is not in" in said(p)
     p = _ubracket()
     p.material_source = "one_database_material"
-    assert "Single material: 6Materials_AF_3Attr.xlsx has 6 materials" in said(p)
+    assert "Single material: choose the material, one of the 6 in 6Materials_AF_3Attr.xlsx" in said(p)
     p.pinned_material = "anything"
-    assert "Single material takes no fixed material" in said(p)
+    assert "Material: 'anything' is not in 6Materials_AF_3Attr.xlsx" in said(p)
     with tempfile.TemporaryDirectory() as d:
         p = _ubracket()
         p.database = _one_material_database(d)
         assert "Multi material: one_material.xlsx has one material, and the network needs at least two" in said(p)
+        p.material_source = "one_database_material"
+        assert p.validate() == [], p.validate()
     p = _ubracket()
     p.pinned_material = str(database_table(DATABASE + ".xlsx")[0][ROW])
     p.constraint("MaterialVolumeFraction(1)", "<=", 0.3)

@@ -176,7 +176,7 @@ def test_summary_in_sections():
 
 
 def test_display_options():
-    """Display Options in plain words, without the controls that have nothing to act on, and its cuts
+    """View (PyTO-AD's Display Options) in plain words, without the controls that have nothing to act on, and its cuts
     work: a cut along x draws the part clipped, and back to 0 draws it whole again."""
     w = window()
     w.open_display_options_window()
@@ -184,8 +184,9 @@ def test_display_options():
     settle(0.2)
     shown = [x.text() for x in d.findChildren((QtWidgets.QLabel, QtWidgets.QCheckBox, QtWidgets.QPushButton))
              if x.isVisible()]
-    assert shown == ["Cut along x (%)", "Cut along y (%)", "Cut along z (%)", "Show bounding box",
+    assert shown == ["Cut along x (%)", "Cut along y (%)", "Cut along z (%)",
                      "Show the part's triangles", "See-through part", "Hide Selected Part", "Save Image", "Close"]
+    assert d.windowTitle() == "View" and w.view_button.isEnabled() and "Display Options" not in G.SIDEBAR
     part = w.part_actor()
     whole = part.GetMapper().GetInput().GetNumberOfCells()
     d.x_cutting_spin.setValue(40)
@@ -200,6 +201,56 @@ def test_display_options():
     w.close()
 
 
+def test_view_leaves_the_scene_as_it_was():
+    """Every View option ticked and unticked, twice, and every cut set and set back: the 3D view holds the same
+    drawings as before, each visible as before and over the same space. (Ticking the bounding box once left
+    a box from -1 to 1 on every axis behind for good; the box is no longer offered.)"""
+    def scene():
+        out = []
+        for a in w.plotter.actors.values():
+            visible = a.GetVisibility() if hasattr(a, "GetVisibility") else None
+            bounds = tuple(round(x, 6) for x in a.GetBounds()) if hasattr(a, "GetBounds") else None
+            out.append((visible, bounds))
+        return sorted(out, key=str)
+    w = window("U-bracket")
+    before = scene()
+    w.open_display_options_window()
+    d = w._display_options_dialog
+    settle(0.2)
+    boxes = [b for b in d.findChildren(QtWidgets.QCheckBox) if b.isVisible()]
+    assert len(boxes) == 2
+    for _ in range(2):
+        for box in boxes:
+            box.setChecked(not box.isChecked())
+            settle()
+            box.setChecked(not box.isChecked())
+            settle()
+    for spin in (d.x_cutting_spin, d.y_cutting_spin, d.z_cutting_spin):
+        spin.setValue(50)
+        settle()
+        spin.setValue(0)
+        settle()
+    assert scene() == before, (before, scene())
+    assert not any("BoundingBox" in str(n) or "bounding_box" in str(n) for n in w.plotter.actors)
+    w.close()
+
+
+def test_no_window_has_the_help_button():
+    """Windows' "?" help button, which has no help to show, is off for every window once the app's style is on
+    (main_window.apply_style), the windows inherited from PyTO-AD too; and no window turns it off on its own,
+    so there is one way of doing it."""
+    G.apply_style(APP)
+    try:
+        for window in (QtWidgets.QDialog(), QtWidgets.QMessageBox(), G.DisplayOptions(G.MMTOWindow())):
+            assert not window.windowFlags() & QtCore.Qt.WindowContextHelpButtonHint, window
+    finally:
+        APP.setStyleSheet("")
+        QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_DisableWindowContextHelpButton, False)
+    for path in glob.glob(os.path.join(ROOT, "gui", "*.py")):
+        with open(path, encoding="utf-8") as f:
+            assert "WindowContextHelpButtonHint" not in f.read(), path
+
+
 def styled():
     """The window's style sheet on the app, as main() puts it; cleared again by the caller."""
     G.apply_style(APP)
@@ -208,9 +259,9 @@ def styled():
 
 def test_top_row_and_bottom_buttons():
     """One top row: LSR MMTO, File and Help (their menus and shortcuts), Part / Design, the light / dark
-    switch, Export STL, Run, Analyse; in a window held at 1225 px the row fits and nothing in it is cut short;
-    while a run goes (Analyse steps aside), a progress text longer than the room left ends in an ellipsis (a
-    shorter one shows whole).
+    switch, View, Export STL, Run, Analyse; in a window held at 1225 px the row fits and nothing in it is cut
+    short; while a run goes (View and Analyse step aside), a progress text longer than the room left ends in an
+    ellipsis (a shorter one shows whole).
     Snap, Measure and Ruler at the bottom drive the window's measuring and scales."""
     styled()
     try:
@@ -221,8 +272,8 @@ def test_top_row_and_bottom_buttons():
                  if b.objectName() == "menuButton"}
         assert set(menus) == {"&File", "&Help"} and "&Save" in menus["&File"]
         assert {a.shortcut().toString() for a in w.actions()} >= {"Ctrl+N", "Ctrl+O", "Ctrl+S"}
-        assert [b.text() for b in (w.part_button, w.design_button, w.export_button, w.run_button,
-                                   w.analyse_button)] == ["Part", "Design", "Export STL", "Run", "Analyse"]
+        assert [b.text() for b in (w.part_button, w.design_button, w.view_button, w.export_button, w.run_button,
+                                   w.analyse_button)] == ["Part", "Design", "View", "Export STL", "Run", "Analyse"]
         assert not w.design_button.isEnabled() and w.part_button.isChecked()      # no design yet
         w.update_top_row()
         assert not w.export_button.isEnabled() and w.shown_run() is None          # nothing to export
@@ -232,7 +283,8 @@ def test_top_row_and_bottom_buttons():
                                   (" ".join(["Starting: building the mesh and the material network..."] * 3),
                                    False, False),                   # longer than the room in any font
                                   ("Iteration 6 / 40 \u00b7 0:09 so far \u00b7 about 0:46 left", True, False)):
-            w.analyse_button.setVisible(idle)                   # as update_top_row sets it while a run goes
+            w.analyse_button.setVisible(idle)                   # as update_top_row sets them while a run goes
+            w.view_button.setVisible(idle)
             p.setText(text)
             row = w.top_row.widgetForAction(w.top_row.actions()[0])
             room = w.top_row.layout().contentsRect().width()

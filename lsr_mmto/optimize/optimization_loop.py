@@ -273,15 +273,18 @@ def material_source(project: "Project", s: "RunSettings", vae_params: "VAEParams
     database's materials as latent points (materials, latent dimension), the network's largest error per
     property in % ({} with no network), and saveNet resolved (None is the .nt beside the database).
 
-    One database material: DatabaseMaterials, the database's one material for every element; no network is read
-    or trained. Otherwise the material network of the database xlsx: read when there is one and
+    One database material: DatabaseMaterials, the pinned material (the database's only one when none is pinned)
+    for every element, at its database values; no network is read or trained. Otherwise the material network of the database xlsx: read when there is one and
     s.use_pretrained_vae, else trained and saved; a network further off than s.network_error_warning asks
     on_network_error whether to go on (NetworkRunCancelled when it says no). With a pinned material, the
     network pinned to it (PinnedMaterial); else the network itself."""
     from lsr_mmto.materials.material_source import DatabaseMaterials, PinnedMaterial
     if project.material_source == "one_database_material":
-        materials = DatabaseMaterials(xlsx, 0)
-        print(f"Materials: {materials.materialNames[0]}, at its database values in every element; no network")
+        from lsr_mmto.materials.databases import database_table
+        names = [str(n) for n in database_table(xlsx)[0]]
+        materials = DatabaseMaterials(xlsx, 0 if project.pinned_material is None else
+                                      names.index(str(project.pinned_material)))
+        print(f"Materials: {names[int(materials.rows)]}, at its database values in every element; no network")
         return materials, torch.zeros((len(materials.materialNames), 0)), {}, saveNet
     matEncoder = MaterialEncoder(vae_params)
     matEncoder.readExcel(xlsx)

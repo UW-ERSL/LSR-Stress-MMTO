@@ -13,11 +13,11 @@ import os
 import subprocess
 import sys
 
-from PyQt5 import QtCore, QtWidgets
+from PyQt5 import QtCore, QtGui, QtWidgets
 
 from lsr_mmto.problem.settings import BY_KEY, VAE_PARAMS as VAE_KEYS
 
-from .panel_widgets import Info, database_choice, fit_columns, ok_cancel, same, swatch
+from .panel_widgets import Info, database_choice, fit_columns, ok_cancel, same, spread_columns, swatch
 
 
 CONVERT_HELP = ("The database is written again as the project's own copy, in its materials folder, with these "
@@ -91,10 +91,12 @@ def latent_help(d_eff, n_z, ratios):
 
 INCLUDED = " (included)"                     # after the name of a database that comes with LSR MMTO
 NO_DATABASE = "No database yet. Make one with New database, or bring one in with Import."
-SOURCE_HELP = ("**Single material:** every element is the database's one material, with its values from the "
-               "database. The database holds exactly one material, and no network is trained.\n\n"
+SOURCE_HELP = ("**Single material:** every element is the one material you choose from the database, with its "
+               "values from the database. No network is trained.\n\n"
                "**Multi material:** the database holds two or more materials, and a network learns them. The "
                "optimization chooses each element's material, unless you fix every element to one of them.")
+MATERIAL_HELP = ("The material every element is, with its values as the database gives them. The optimization "
+                 "only chooses where the part is solid.")
 FIX_HELP = ("Fixes every element to one material of the database, with its values as the network gives them. "
             "The optimization then only chooses where the part is solid.\n\n"
             "Use it to compare a design of one material with a design of several, both through the same network.")
@@ -102,10 +104,10 @@ NOTHING_FIXED = "None (the optimizer chooses)"
 
 
 def source_text(project, shown=str):
-    """The project's choice of materials in the design, in the window's words; shown(name) is the fixed
-    material as the window shows it (its label)."""
+    """The project's choice of materials in the design, in the window's words; shown(name) is the chosen or
+    fixed material as the window shows it (its label)."""
     if project.material_source == "one_database_material":
-        return "Single material"
+        return "Single material" + ("" if project.pinned_material is None else f": {shown(project.pinned_material)}")
     if project.pinned_material is not None:
         return f"Multi material, every element fixed to {shown(project.pinned_material)}"
     return "Multi material"
@@ -135,7 +137,6 @@ def database_choices(project):
     """[(value, text, where)] for the Database list: every database in the project's materials folder, then
     the project's own database when it lives elsewhere. value is what project.database holds; text what the
     list shows (a database that comes with LSR MMTO as '<name> (included)'); where its file."""
-    from lsr_mmto.materials.databases import DATABASE_VAE
     from lsr_mmto.problem.project_folder import MATERIALS
     folder = os.path.join(project.base_dir, MATERIALS)
     out = []
@@ -196,8 +197,23 @@ class MaterialsPanel(QtWidgets.QDialog):
             source.addWidget(button)
         self.single_button.toggled.connect(lambda _: self._choose_source())
         source.addWidget(Info(SOURCE_HELP))
+        source.addSpacing(24)
+        self.fix_row = QtWidgets.QWidget()          # Material: (single) or Fix every element to: (multi)
+        fix = QtWidgets.QHBoxLayout(self.fix_row)
+        fix.setContentsMargins(0, 0, 0, 0)
+        self.fix_label = QtWidgets.QLabel()
+        fix.addWidget(self.fix_label)
+        self.fix_combo = QtWidgets.QComboBox()
+        self.fix_combo.currentIndexChanged.connect(lambda _: self._choose_fixed())
+        fix.addWidget(self.fix_combo)
+        self.fix_info = Info(FIX_HELP)
+        fix.addWidget(self.fix_info)
+        source.addWidget(self.fix_row)
         source.addStretch()
         layout.addLayout(source)
+        single = project.material_source == "one_database_material"
+        self._choice = {True: project.pinned_material if single else None,     # each choice's material, kept
+                        False: None if single else project.pinned_material}    # while the other is chosen
 
         row = QtWidgets.QHBoxLayout()
         row.addWidget(QtWidgets.QLabel("Database:"))
@@ -216,24 +232,15 @@ class MaterialsPanel(QtWidgets.QDialog):
         row.addWidget(self.included)
         layout.addLayout(row)
 
-        self.fix_row = QtWidgets.QWidget()                          # with multi material only
-        fix = QtWidgets.QHBoxLayout(self.fix_row)
-        fix.setContentsMargins(0, 0, 0, 0)
-        fix.addWidget(QtWidgets.QLabel("Fix every element to:"))
-        self.fix_combo = QtWidgets.QComboBox()
-        self.fix_combo.currentIndexChanged.connect(lambda _: self._choose_fixed())
-        fix.addWidget(self.fix_combo)
-        fix.addWidget(Info(FIX_HELP))
-        fix.addStretch()
-        layout.addWidget(self.fix_row)
-
         actions = QtWidgets.QHBoxLayout()
         self.new_button = QtWidgets.QPushButton("New database...")
         self.edit_button = QtWidgets.QPushButton("Edit...")
         self.excel_button = QtWidgets.QPushButton("Open in Excel")
+        self.versions_button = QtWidgets.QPushButton("Versions...")
         self.import_button = QtWidgets.QPushButton("Import...")
         for button, slot in ((self.new_button, self.new_database), (self.edit_button, self.edit_database),
-                             (self.excel_button, self._open_in_excel), (self.import_button, self.import_database)):
+                             (self.excel_button, self._open_in_excel), (self.versions_button, self.open_versions),
+                             (self.import_button, self.import_database)):
             button.clicked.connect(lambda _=False, s=slot: s())     # not s(checked): Qt's checked is no path
             if button is self.import_button:
                 actions.addStretch()
@@ -297,36 +304,50 @@ class MaterialsPanel(QtWidgets.QDialog):
             self._refresh()
 
     def _choose_source(self):
-        """Single or multi material chosen; single material fixes no material."""
+        """Single or multi material chosen: each takes back the material chosen for it before (single material:
+        else the database's first; multi material: else none fixed), and keeps the other's for a switch back."""
         single = self.single_button.isChecked()
+        self._choice[not single] = self.project.pinned_material
+        self.project.pinned_material = self._choice[single]
         self.project.material_source = "one_database_material" if single else "network"
-        if single:
-            self.project.pinned_material = None
         self._refresh()
 
     def _choose_fixed(self):
         if self.fix_combo.isEnabled():                              # not while the list is filled
             self.project.pinned_material = self.fix_combo.currentData()
+            if self.project.material_source == "one_database_material":
+                self._refresh()                                     # the report names the material
 
     def _label(self, name):
-        """A material's label, as Fix every element to shows it; its name when the list does not have it."""
+        """A material's label, as the list shows it; its name when the list does not have it."""
         i = self.fix_combo.findData(str(name))
         return self.fix_combo.itemText(i) if i >= 0 else str(name)
 
-    def _fill_fixed(self, names, labels):
-        """The Fix every element to list for the database's materials, keeping the material fixed when the
-        database has it; returns a line saying a fixed material the database does not have is no longer fixed,
-        or None."""
+    def _fill_fixed(self, names, labels, colours):
+        """The list beside the choice for the database's materials: with single material, Material: and every
+        material, the chosen one (else the first) selected; with multi material, Fix every element to: with
+        None first. A chosen material the database does not have is dropped; returns a line saying so, or None."""
+        single = self.project.material_source == "one_database_material"
+        self.fix_label.setText("Material:" if single else "Fix every element to:")
+        self.fix_info.setToolTip(MATERIAL_HELP if single else FIX_HELP)
         self.fix_combo.setEnabled(False)
         self.fix_combo.clear()
-        self.fix_combo.addItem(NOTHING_FIXED, None)
-        for name, label in zip(names, labels):
-            self.fix_combo.addItem(label, str(name))
+        if not single:
+            self.fix_combo.addItem(NOTHING_FIXED, None)
+        for name, label, colour in zip(names, labels, colours):
+            self.fix_combo.addItem(swatch(colour) if colour else QtGui.QIcon(), label, str(name))
         pinned, said = self.project.pinned_material, None
         if pinned is not None and self.fix_combo.findData(str(pinned)) < 0:
-            said = f"{pinned} is not in this database, so no material is fixed now."
-            self.project.pinned_material = pinned = None
+            said = f"{pinned} is not in this database, so " + \
+                ("its first material is chosen." if single else "no material is fixed now.")
+            pinned = None
+        if single and pinned is None and len(names) > 1:           # one material: None already means it
+            pinned = str(names[0])
+        self.project.pinned_material = pinned
         self.fix_combo.setCurrentIndex(0 if pinned is None else self.fix_combo.findData(str(pinned)))
+        metrics = self.fix_combo.fontMetrics()                      # as wide as its longest entry and its arrow
+        self.fix_combo.setFixedWidth(max([metrics.horizontalAdvance(self.fix_combo.itemText(i))
+                                          for i in range(self.fix_combo.count())] + [40]) + 72)
         self.fix_combo.setEnabled(True)
         return said
 
@@ -429,6 +450,28 @@ class MaterialsPanel(QtWidgets.QDialog):
         lines.append("Check the values in the editor, then Save.")
         return "\n".join(lines)
 
+    def _own_database(self):
+        """The database's file when it is the project's own (an included one has no versions), else None."""
+        from lsr_mmto.materials.databases import in_shipped_folder
+        if self.project.database is None:
+            return None
+        xlsx, error = database_choice(self.project)
+        return None if error or in_shipped_folder(xlsx) else xlsx
+
+    def open_versions(self):
+        """Versions...: the older versions of the project's own database; the panel read again after a restore.
+        The window, or None."""
+        from .database_versions_window import VersionsWindow
+        xlsx = self._own_database()
+        if xlsx is None:
+            return None
+        window = VersionsWindow(self, xlsx)
+        window.exec_()
+        if window.restored:
+            self._refresh()
+            self.report.setText("An older version was restored.\n" + self.report.toPlainText())
+        return window
+
     def edit_database(self):
         """The database in the editor: one of the project's own is changed in place; one that comes with
         LSR MMTO is saved as a copy in the project's folder, which the project then uses."""
@@ -518,6 +561,7 @@ class MaterialsPanel(QtWidgets.QDialog):
                                        bool(self.project.unit_conversion()[0]))
         for button in (self.edit_button, self.excel_button):
             button.setEnabled(self.project.database is not None)
+        self.versions_button.setEnabled(self._own_database() is not None)
         if self.project.database is None:
             self.report.setText(NO_DATABASE)
             return
@@ -536,12 +580,13 @@ class MaterialsPanel(QtWidgets.QDialog):
             return
         self._shown_table = (names, attributes, units, values, colours, labels)
         if not errors:
-            unfixed = None if single else self._fill_fixed(names, labels)   # the fixed material, before the check
+            unfixed = self._fill_fixed(names, labels, colours)               # the material chosen, before the check
+            self.fix_row.setVisible(True)
             fit = [f"Error: {e}" for e in self.project.material_source_errors(xlsx)]
             if single:
-                lines[:0] = ["1 material, at its database values; no network."] if not fit else fit
+                lines[:0] = fit or ([f"{self.fix_combo.currentText()}, at its database values; no network."] +
+                                    ([unfixed] if unfixed else []))
             else:
-                self.fix_row.setVisible(True)
                 if fit:
                     lines[:0] = fit
                 else:
@@ -588,13 +633,16 @@ class MaterialsPanel(QtWidgets.QDialog):
                     unit = f" {units[j]}" if units[j] else ""
                     cell.setToolTip(f"Database: {r['database']:.6g}{unit}\nNetwork: {r['network']:.6g}{unit}\n"
                                     f"Difference: {r['difference']:+.3g}{unit}")
-                    cell.setTextAlignment(int(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter))
                 else:
                     cell = QtWidgets.QTableWidgetItem("" if errors else format(values[i, j], ".6g"))
+                cell.setTextAlignment(int(QtCore.Qt.AlignCenter))
                 self.table.setItem(i, 2 + j, cell)
+        for j in range(len(attributes)):
+            self.table.horizontalHeaderItem(2 + j).setTextAlignment(int(QtCore.Qt.AlignCenter))
         self.table.verticalHeader().setVisible(False)
         self.table.setColumnHidden(1, list(labels) == list(names))      # Material: only when the labels differ
         fit_columns(self.table)
+        spread_columns(self.table, 2)                                   # the values fill the table's width
 
     def _network_line(self):
         """How closely the trained network gives back the database's materials, in one line (every value

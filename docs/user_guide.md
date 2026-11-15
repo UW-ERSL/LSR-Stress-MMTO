@@ -36,15 +36,16 @@ From left to right:
 - **LSR MMTO**, and the **File** and **Help** menus. File is described in section 3. Help has this **User guide** (also F1), the **Researcher guide** (how the code works and how to add to it, for changing LSR MMTO itself) and **About LSR MMTO**.
 - **Part** and **Design**, a two-way switch for the 3D view. **Part** shows the part, with its supports, loads and previews. **Design** shows the design of the last run you made or opened. Design is greyed until there is a design to show.
 - The **moon** button switches the 3D view to dark; it then shows a **sun**, which switches it back to light. The 3D view starts light. Only the background and the window's own drawings (the ruler, Measure, labels) change colour; the materials keep the colours the database gives them.
+- **View** changes how the part is drawn: its triangles, see-through, and cuts to see inside it. See section 13. While a run goes, View steps aside, as Analyse does.
 - **Export STL** writes the design on the screen as STL files. It is greyed while there is no finished design on the screen. See section 12.
-- **Run** starts a run of the project. While the run goes, the same button reads **Stop**, and the run's progress shows beside it, for example *Iteration 29 / 40 · 0:33 so far · about 0:12 left*. See section 10.
+- **Run** starts a run of the project. While the run goes, the same button reads **Stop**. When the Current run panel is out of sight (Results chosen, or the panel closed), the run's progress shows beside it, for example *Iteration 29 / 40 · 0:33 so far · about 0:12 left*. See section 10.
 - **Analyse** solves the project once with the whole part solid in one material, without optimizing, to check the setup before a run. While a run goes, Analyse steps aside for the run's progress. See section 10.4.
 
 ### 2.2 The buttons on the right
 
-**Units**, **Materials**, **Supports and loads**, **Formulation**, **Settings**, **Current run**, **Results** and **Display Options**. Units, Materials, Supports and loads and Formulation show how far each step is: a green tick once it is set up and nothing in it stops a run, a red mark when something in it would stop a run (the messages say what, as an **Error**), and the button's own picture while it is not set up yet. A warning does not change the mark.
+**Units**, **Materials**, **Supports and loads**, **Formulation**, **Settings**, **Current run** and **Results**, the steps in order. Units, Materials, Supports and loads and Formulation show how far each step is: a green tick once it is set up and nothing in it stops a run, a red mark when something in it would stop a run (the messages say what, as an **Error**), and the button's own picture while it is not set up yet. A warning does not change the mark.
 
-Units, Materials, Formulation, Settings and Display Options open as windows with OK and Cancel (or Apply and Close): OK puts your changes into the project, and Cancel leaves the project as it was.
+Units, Materials, Formulation and Settings open as windows with OK and Cancel (or Apply and Close): OK puts your changes into the project, and Cancel leaves the project as it was.
 
 Supports and loads, Current run and Results open as panels beside the 3D view, so you can work on the part while they are open. When more than one is open they share the space as tabs. A panel can be made wider or narrower by dragging its edge.
 
@@ -145,12 +146,13 @@ The materials the optimization chooses from come from a **material database**: a
 
 Open **Materials** from the buttons on the right. The window shows:
 
-- **Materials in the design:** **Single material** or **Multi material**. With single material, every element is the database's one material, with its values from the database: the database holds exactly one material, no network is trained, and the optimization only chooses where the part is solid. With multi material, the database holds two or more materials and the network learns them.
+- **Materials in the design:** **Single material** or **Multi material**, and on the same row the material to use:
+  - With single material, **Material:** lists the database's materials. Every element is the one you choose, with its values from the database; no network is trained, and the optimization only chooses where the part is solid. Any database works, so you never need to delete materials to run one of them.
+  - With multi material, the database holds two or more materials and the network learns them. **Fix every element to:** is *None (the optimizer chooses)*, or one of the database's materials. Fixed, every element is that material, with its values as the network gives them, and the optimization only chooses where the part is solid. Use it to compare a design of one material with a design of several, both through the same network.
 - **Database:** the database the project uses. The list holds the project's own databases: every database in its materials folder, and the one it uses when that one is kept elsewhere. **Included databases** beside it lists the databases that come with LSR MMTO; choosing one makes it the project's database, shown in the list as *its name (included)*.
 - With no database chosen yet, the report says so; make one with **New database...**, or bring one in with **Import...**.
-- With multi material, **Fix every element to:** *None (the optimizer chooses)*, or one of the database's materials. Fixed, every element is that material, with its values as the network gives them, and the optimization only chooses where the part is solid. Use it to compare a design of one material with a design of several, both through the same network.
 - A table of the database's materials, each in the colour and with the label it is drawn with, and its properties with their units.
-- Under the table, a short report: how many materials there are, the latent dimension recommended for them, how closely the trained network gives them back, and any errors or warnings. The (i) next to it explains the recommended latent dimension. With single material, the report says the one material is used at its database values. A database that does not fit the choice is an error there, for example *Single material: steels.xlsx has 3 materials, and a single material takes a database of exactly one*.
+- Under the table, a short report: how many materials there are, the latent dimension recommended for them, how closely the trained network gives them back, and any errors or warnings. The (i) next to it explains the recommended latent dimension. With single material, the report names the material, used at its database values. A database that does not fit the choice is an error there, for example *Multi material: steel.xlsx has one material, and the network needs at least two to learn from*.
 
 With one material, there are no points on the material map, so a few things are greyed out elsewhere: **Material volume fraction** in Formulation, and the settings that act on the material map (the Distance penalty and Latent smoothing groups, Latent smoothing radius, Starting latent point and Snap to real materials). With single material, the VAE settings are greyed out too. A run of one material has no **Latent space** tab.
 
@@ -161,9 +163,10 @@ Choose a database and press **OK**. When you change the database, the network se
 The buttons next to the list:
 
 - **New database...** opens the database editor (section 6.3) on an empty database, to type or paste your materials in.
-- **Import...** brings in a table of materials you already have, in Excel (.xlsx or .xls) or CSV. A database made by LSR MMTO (one whose check finds nothing wrong) is used where it is, with its trained network if it has one next to it. Any other table becomes a new database: the first column holds the material names and the first row the properties. A property can be written under any of the names LSR MMTO knows it by (for example Young's modulus as Youngs_Modulus, Youngs Modulus or E), and a unit may follow in brackets, as in *Density [kg/m^3]*. A second row of units, as in an LSR MMTO database, is read too. Columns that are not a property LSR MMTO knows are left out, and one message lists them. The database editor then opens with what was read, for you to check and save.
 - **Edit...** opens the database in the editor. One of your own is changed in place. One that comes with LSR MMTO is saved as a copy in your project's folder, and the project then uses the copy. A column that is not a property LSR MMTO knows is left out, and a note over the table names it; Save writes the database without it.
-- **Open in Excel** opens the database file in Excel, or whatever opens .xlsx files on your computer. When you come back to the Materials window after saving it there, the window reads the database again by itself.
+- **Open in Excel** opens the database file in Excel, or whatever opens .xlsx files on your computer. When you come back to the Materials window after saving it there, the window reads the database again by itself. A change made in Excel keeps no older version (section 6.5).
+- **Versions...** lists the older versions kept of one of your own databases (section 6.5).
+- **Import...**, at the right, brings in a table of materials you already have, in Excel (.xlsx or .xls) or CSV. A database made by LSR MMTO (one whose check finds nothing wrong) is used where it is, with its trained network if it has one next to it. Any other table becomes a new database: the first column holds the material names and the first row the properties. A property can be written under any of the names LSR MMTO knows it by (for example Young's modulus as Youngs_Modulus, Youngs Modulus or E), and a unit may follow in brackets, as in *Density [kg/m^3]*. A second row of units, as in an LSR MMTO database, is read too. Columns that are not a property LSR MMTO knows are left out, and one message lists them. The database editor then opens with what was read, for you to check and save.
 
 New database and Import (of a table that is not yet a database) save into the project's folder, so the project must be saved first; LSR MMTO says so if it is not.
 
@@ -191,6 +194,8 @@ The editor shows the database as a table:
 
 You can paste a block copied from Excel into the table. Problems show in red once you have typed in a row, and are listed under the table (a missing value, a value outside what the property allows, two materials with the same name); a new, empty form shows none. **Save** keeps the database in the project's folder and the project then uses it.
 
+While there are changes not saved, the editor's title says *(modified)*. Saving changes to a database that already has its first version kept (section 6.5) asks *Keep the older version?*: **Yes** keeps the database as it was before your changes, **No** saves without keeping it, **Cancel** goes back to editing. Closing the editor with changes not saved asks first: **Save...** saves them, **Discard changes** closes without them, **Cancel** goes back to editing. A database with columns LSR MMTO does not know shows *(modified)* from the start, since Save writes it without them.
+
 If you change the numbers of a database that already has a trained network, the network no longer fits it: LSR MMTO sets the old network aside, and the next run trains a new one.
 
 ### 6.4 The database file
@@ -205,15 +210,21 @@ The attributes a material database can hold:
 
 | Attribute | What it is | Units |
 | --- | --- | --- |
-| Density | Mass per unit volume | kg/m^3, g/cm^3, t/mm^3, lb/in^3, lbf*s^2/in^4 |
-| Cost | Price per unit mass | USD/kg, USD/g, USD/t, USD/lb, USD/(lbf*s^2/in) |
+| Density | Mass per unit volume | kg/m^3, g/cm^3, t/mm^3, lb/in^3, lbf\*s^2/in^4 |
+| Cost | Price per unit mass | USD/kg, USD/g, USD/t, USD/lb, USD/(lbf\*s^2/in) |
 | Young's modulus | Young's modulus, the stiffness | Pa, kPa, MPa, GPa, psi, ksi |
 | Poisson's ratio | Poisson's ratio | - |
 | Yield strength | Yield strength, the stress at which the material yields | Pa, kPa, MPa, GPa, psi, ksi |
-| Thermal conductivity | Thermal conductivity, how well heat flows through it | W/(m*K), mW/(mm*K), BTU/(s*in*°R) |
+| Thermal conductivity | Thermal conductivity, how well heat flows through it | W/(m\*K), mW/(mm\*K), BTU/(s\*in\*°R) |
 | Thermal expansion coefficient | Coefficient of thermal expansion, the strain per degree of temperature rise | 1/K, 1/°R |
 
 <!-- end of list -->
+
+### 6.5 Older versions
+
+The first version of a database is always kept: a database you make or import in the editor as it was first saved, an included database you edit as it came, and any other database (one made before LSR MMTO kept versions, one imported as it is) as it was before your first change in the editor or before **Convert to ... units**. Later versions are kept when you answer **Yes** to *Keep the older version?*. A version keeps the trained network with it, so going back to it needs no new training.
+
+**Versions...** in the Materials window lists them, newest first, each with when it was kept and how many materials it has. **Restore** puts the chosen version back in the database's place; it first asks *Keep the current version?*, so a restore can be undone too. **Delete** deletes the chosen version, after you confirm; that cannot be undone. The versions are kept in a **versions** folder beside the database (for your own databases, inside the project's materials folder), out of the Database list, and **File > Save As** takes them with the project. An included database has none: it is never changed.
 
 ## 7. Supports and loads
 
@@ -608,12 +619,11 @@ While it works, a note at the top of the 3D view says it is exporting. When it i
 
 After an export, Results shows the smooth pieces on the part, each in its material's colour: **Show** turns to **Smooth (exported)**. It is there for every run whose folder holds the exported files, also later, and greyed for a run not exported yet. Beside it, tick **Pull the material pieces apart** to set the pieces side by side in a row along x, the largest first, so each can be seen on its own. The legend at the top left names each piece, with its share of the volume.
 
-## 13. Display options
+## 13. View
 
-**Display Options** changes how the part is drawn:
+**View**, in the top row, changes how the part is drawn:
 
 - **Cut along x (%)**, **Cut along y (%)** and **Cut along z (%)**: cut away that share of the part, along x, y or z, to see inside it. 0 shows it whole. The cut works on the design too.
-- **Show bounding box**: the box around the part.
 - **Show the part's triangles**: the edges of the STL's triangles.
 - **See-through part**: the part drawn half transparent, to see supports, loads and selections behind it.
 - **Hide Selected Part**: takes the highlight of picked faces off the view.

@@ -141,7 +141,8 @@ QCheckBox::indicator { border: 1px solid #b8c0cc; border-radius: 4px; background
 QCheckBox::indicator:checked { background: #2f5fe0; border-color: #2f5fe0; image: url(ICONS/check_white.svg); }
 QCheckBox::indicator:hover, QRadioButton::indicator:hover { border-color: #3b5bdb; }
 QRadioButton::indicator { border: 1px solid #b8c0cc; border-radius: 8px; background: #ffffff; }
-QRadioButton::indicator:checked { border: 5px solid #2f5fe0; background: #ffffff; }
+QRadioButton::indicator:checked { border-color: #2f5fe0; background: qradialgradient(cx: 0.5, cy: 0.5, radius: 0.5,
+    fx: 0.5, fy: 0.5, stop: 0 #2f5fe0, stop: 0.5 #2f5fe0, stop: 0.56 #ffffff, stop: 1 #ffffff); }
 
 /* groups */
 QGroupBox { background: #ffffff; border: 1px solid #dfe4ec; border-radius: 8px; margin-top: 14px; padding: 12px 10px 8px 10px; }

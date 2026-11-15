@@ -203,6 +203,41 @@ def fit_columns(table, most=COLUMN_MOST, least=()):
             item.setToolTip(title if want > most else "")
 
 
+class _Spread(QtCore.QObject):
+    """Keeps a table's spare width shared out over its columns from start on (spread_columns), whenever the
+    table is resized."""
+
+    def __init__(self, table, start):
+        super().__init__(table)
+        self.table, self.start, self.fitted = table, start, []
+        table.viewport().installEventFilter(self)                    # the cells' area: its width is what to fill
+
+    def eventFilter(self, watched, event):
+        if event.type() == QtCore.QEvent.Resize:
+            self.apply()
+        return False
+
+    def apply(self):
+        t = self.table
+        if len(self.fitted) != t.columnCount():
+            return
+        shown = [c for c in range(t.columnCount()) if not t.isColumnHidden(c)]
+        spread = [c for c in shown if c >= self.start]
+        spare = max(t.viewport().width() - sum(self.fitted[c] for c in shown), 0)
+        for c in shown:
+            t.setColumnWidth(c, self.fitted[c] + (spare // len(spread) if c in spread else 0))
+
+
+def spread_columns(table, start):
+    """The table's columns from start on share its spare width, so together they fill it; the widths fit_columns
+    gave them are the least they keep, also when the table is resized."""
+    keeper = getattr(table, "_spread", None)
+    if keeper is None:
+        keeper = table._spread = _Spread(table, start)
+    keeper.fitted = [table.columnWidth(c) for c in range(table.columnCount())]
+    keeper.apply()
+
+
 def with_info(widget, text):
     """widget with an (i) beside it, as one widget."""
     box = QtWidgets.QWidget()
@@ -231,7 +266,6 @@ def swatch(colour, size=14):
 
 
 def ok_cancel(dialog, layout):
-    dialog.setWindowFlag(QtCore.Qt.WindowContextHelpButtonHint, False)      # Windows' "?": no help to show
     buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
     buttons.accepted.connect(dialog.accept)
     buttons.rejected.connect(dialog.reject)

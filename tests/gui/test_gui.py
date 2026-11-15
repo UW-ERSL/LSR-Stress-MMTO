@@ -419,8 +419,7 @@ def test_side_marks():
         assert w.project.validate() == [] and w.project.warnings()                # warnings: still ticked
         APP.processEvents()                                                    # the marks, once the part is drawn
         assert marks(w) == {"Units": "check", "Materials": "check", "Supports and loads": "check",
-                            "Formulation": "check", "Settings": None, "Run": None, "Results": None,
-                            "Display Options": None}
+                            "Formulation": "check", "Settings": None, "Run": None, "Results": None}
         w.project.bcs.append({"kind": "fixed", "on": "nowhere", "dofs": "xyz"})
         w.project_changed()                                                    # as Supports and loads says
         assert marks(w)["Supports and loads"] == "error" and marks(w)["Formulation"] == "check"
@@ -927,12 +926,14 @@ def test_database_editor():
         assert material_display(copy)[1] == ["Red", "Mat2_Blue", "Mate3_Green"]
 
 
-def test_typing_a_material_name_types_it_once():
+def test_typing_a_material_name_types_it_once(monkeypatch):
     """A letter typed in the Material column, which stays in place when the table scrolls sideways, opens one
     editor and goes into the cell once (B stayed B, not BB), as one typed in any other column; Escape still
-    closes the editor."""
+    closes the editor, after asking about the changes not saved (answered Discard changes here)."""
     from PyQt5.QtTest import QTest
     from gui import database_editor as DE
+    asked = []
+    monkeypatch.setattr(DE, "ask", lambda parent, title, *a, **k: asked.append(title) or QtWidgets.QMessageBox.Discard)
     with scratch() as d:
         w = opened("L-bracket", d)
         e = DE.DatabaseEditor(w, os.path.join(d, "materials"), unit_system=w.project.units, project=w.project)
@@ -950,17 +951,19 @@ def test_typing_a_material_name_types_it_once():
             assert e.table.item(r, column).text() == "B", (column, e.table.item(r, column).text())
         e.table.frozen.setFocus()
         QTest.keyClick(e.table.frozen, QtCore.Qt.Key_Escape)
-        assert not e.isVisible()
+        assert not e.isVisible() and asked == ["Close the editor"]
 
 
-def test_database_editor_look():
+def test_database_editor_look(monkeypatch):
     """The New database editor: the units row is part of the headers' band (no "Units" text, as tall as a
     material row, each unit's drop-down inside it with room for its text, "no unit" for Poisson's ratio); a
     blank form shows no red, a row typed in does; each column as wide as its title up to 200 px, a longer
     title cut short with the whole of it as the header's tip; the Material column stays in place when the
-    table scrolls sideways; the four buttons under the table share its width equally."""
+    table scrolls sideways; the four buttons under the table share its width equally. Closed with its changes
+    discarded."""
     from gui import database_editor as DE
     from gui.panel_widgets import COLUMN_MOST
+    monkeypatch.setattr(DE, "ask", lambda *a, **k: QtWidgets.QMessageBox.Discard)
     with scratch() as d:
         w = opened("L-bracket", d)
         e = DE.DatabaseEditor(w, os.path.join(d, "materials"), unit_system=w.project.units, project=w.project)
@@ -2326,8 +2329,10 @@ def test_convert_units():
     """Convert to <units> units (Materials), on a copy of the Airplane bracket project (mmKS, its database in
     kg/m^3, Pa and USD/kg): the button shows only while the units differ; the window lists each column with its
     factor and the limits; OK writes the project's own copy with the values times the factors exactly and the
-    limits converted, saves the project, and leaves no unit warning; the network file is byte-identical and
-    still gives the materials back as closely; the shipped database is untouched. Unticked, the limits stay."""
+    limits converted, saves the project, and leaves no unit warning, the copy as it was before kept as its first
+    version; the network file is byte-identical and still gives the materials back as closely; the shipped
+    database is untouched. Unticked, the limits stay."""
+    from lsr_mmto.materials import database_versions
     from lsr_mmto.materials.databases import DATABASE_DIR, database_table
     from lsr_mmto.materials.encoder import network_reconstruction
     shipped = os.path.join(DATABASE_DIR, "CustomAlloys20_3D")
@@ -2359,7 +2364,9 @@ def test_convert_units():
                                     "Mass <= 4e+07 -> 4e-05 t", "Cost <= 7.5e+08 -> 0.75 USD"], seen[-1]
             p, folder = w.project, os.path.join(d, "A", "materials")
             assert p.database == "materials/CustomAlloys20_3D.xlsx" and sorted(os.listdir(folder)) == \
-                ["CustomAlloys20_3D.nt", "CustomAlloys20_3D.xlsx"]
+                ["CustomAlloys20_3D.nt", "CustomAlloys20_3D.xlsx", "versions"]
+            first, = database_versions.versions(os.path.join(folder, "CustomAlloys20_3D.xlsx"))
+            assert first.first and np.array_equal(database_table(first.path)[3], old)
             _, _, units, new = database_table(os.path.join(folder, "CustomAlloys20_3D.xlsx"))
             stored = np.vectorize(lambda v: float("%.16g" % v))(old * factors)   # as an Excel file keeps them
             assert units == ["t/mm^3", "MPa", "USD/t", "MPa"] and np.array_equal(new, stored)

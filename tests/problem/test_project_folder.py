@@ -55,7 +55,9 @@ def test_create():
 
 def test_pack_an_example():
     """Save As: the STL into part/, the shipped database and its network into materials/; the example's
-    file is unchanged; the copy has the same settings, the same checks and builds the same problem."""
+    file is unchanged; the copy has the same settings, the same checks and builds the same problem. Saved
+    As again, its database's older versions go with it."""
+    from lsr_mmto.materials import database_versions
     d = _scratch()
     original = os.path.join(PROJECTS, "L-bracket.mmto")
     before = open(original).read()
@@ -74,6 +76,10 @@ def test_pack_an_example():
         assert os.path.normpath(q.network_path()) == os.path.join(d, "Mine", "materials", "BM1_3Mats_2Attr.nt")
         assert F.has_own_folder(q) and F.results_root(q) == os.path.join(d, "Mine", "results")
         assert F.bring_in_database(q) is None                       # already in the folder
+        kept = database_versions.keep(os.path.join(d, "Mine", "materials", "BM1_3Mats_2Attr.xlsx"), first=True)
+        F.pack(q, os.path.join(d, "Again"))
+        assert [os.path.basename(v.path) for v in database_versions.versions(
+            os.path.join(d, "Again", "materials", "BM1_3Mats_2Attr.xlsx"))] == [os.path.basename(kept.path)]
     finally:
         shutil.rmtree(d, ignore_errors=True)
 

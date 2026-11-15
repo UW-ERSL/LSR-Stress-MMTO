@@ -158,7 +158,13 @@ def generate():
             out.append(f"| `{e.key}` | {_physics(e.physics, PHYSICS)} | {default} | {meaning} |")
         out.append("")
     out += python_section()
-    return "\n".join(out)
+    return "\n".join(stars_kept(line) if line.startswith("|") else line for line in out)
+
+
+def stars_kept(row):
+    """A table row with each lone * (lbf*s^2/in) outside `code` escaped, so markdown shows it, not italics."""
+    return "".join(part if part.startswith("`") else re.sub(r"(?<![\\*])\*(?!\*)", r"\\*", part)
+                   for part in re.split(r"(`[^`]*`)", row))
 
 
 # ---------------------------------------------------------------------- the Python section

@@ -65,12 +65,12 @@ A database is an .xlsx file: attribute names in row 1, units in row 2, then one 
 
 | attribute | other names | meaning | allowed range | units |
 |---|---|---|---|---|
-| `Density` |  | mass per unit volume | 0 < value | kg/m^3, g/cm^3, t/mm^3, lb/in^3, lbf*s^2/in^4 |
-| `Cost` |  | price per unit mass | 0 <= value | USD/kg, USD/g, USD/t, USD/lb, USD/(lbf*s^2/in) |
+| `Density` |  | mass per unit volume | 0 < value | kg/m^3, g/cm^3, t/mm^3, lb/in^3, lbf\*s^2/in^4 |
+| `Cost` |  | price per unit mass | 0 <= value | USD/kg, USD/g, USD/t, USD/lb, USD/(lbf\*s^2/in) |
 | `Youngs_Modulus` | Youngs Modulus, Young_Modulus, E | Young's modulus, the stiffness | 0 < value | Pa, kPa, MPa, GPa, psi, ksi |
 | `Poissons_Ratio` | Poisson_Ratio, Poissons Ratio, nu | Poisson's ratio | -1 < value < 0.5 | none (may be blank) |
 | `Yield_Strength` | Yield Strength, Yield | yield strength, the stress at which the material yields | 0 < value | Pa, kPa, MPa, GPa, psi, ksi |
-| `Conductivity` | Thermal_Conductivity, Thermal Conductivity, k | thermal conductivity, how well heat flows through it | 0 < value | W/(m*K), mW/(mm*K), BTU/(s*in*°R) |
+| `Conductivity` | Thermal_Conductivity, Thermal Conductivity, k | thermal conductivity, how well heat flows through it | 0 < value | W/(m\*K), mW/(mm\*K), BTU/(s\*in\*°R) |
 | `Thermal_Expansion` | Thermal Expansion, CTE, alpha | coefficient of thermal expansion, the strain per degree of temperature rise | 0 < value | 1/K, 1/°R |
 
 An optional sheet `Display` gives each material the colour and the label it is shown with: columns Material, Color (#rrggbb) and Label, one row per material, matched by name. An empty Color is the default colour, an empty Label the material's name. Two materials with the same colour or the same label are an error. The run record stores both.
@@ -83,7 +83,7 @@ A project declares the units its numbers are in, as the PyTO-AD GUI does (`setti
 |---|---|---|---|---|---|---|
 | `MKS` | m | N | Pa | kg/m^3 | kg | USD/kg |
 | `mmKS` | mm | N | MPa | t/mm^3 | t | USD/t |
-| `IPS` | in | lbf | psi | lbf*s^2/in^4 | lbf*s^2/in | USD/(lbf*s^2/in) |
+| `IPS` | in | lbf | psi | lbf\*s^2/in^4 | lbf\*s^2/in | USD/(lbf\*s^2/in) |
 
 ## Physics
 
@@ -106,11 +106,11 @@ An objective or a constraint is one quantity, e.g. `Mass()` or `MaterialVolumeFr
 | `FailureFactorPNorm` | Failure factor (p-norm) | `structural` | yes | yes | Yield_Strength | mean p-norm of von Mises / yield strength, per element | One value close to the highest stress / yield strength in the part. Above 1 means some element yields. |
 | `ThermalCompliance` | Thermal compliance | `thermal` | yes | yes | Conductivity | f . T | How hot the part gets where the heat goes in. Lower carries the heat away better. |
 | `ThermoelasticCompliance` | Thermoelastic compliance | `thermoelastic` | yes | yes |  | (F + F_th) . u, the total load including the thermal force | How much the part gives under the loads and the heating. Lower is stiffer. |
-| `Mass` | Mass |  | yes | yes | Density | sum of density * x_phys * element volume | The mass of the part, from each material's density. |
-| `Cost` | Cost |  |  | yes | Density, Cost | sum of density * cost * x_phys * element volume | The cost of the part, from each material's density and cost per mass. |
+| `Mass` | Mass |  | yes | yes | Density | sum of density \* x_phys \* element volume | The mass of the part, from each material's density. |
+| `Cost` | Cost |  |  | yes | Density, Cost | sum of density \* cost \* x_phys \* element volume | The cost of the part, from each material's density and cost per mass. |
 | `VolumeFraction` | Volume fraction |  |  | yes |  | mean of x_phys | The share of the design space filled with material, 0 to 1. |
 | `MaterialVolumeFraction` | Material volume fraction |  |  | yes |  | volume fraction of one database material, softmax weights | The share of the design space filled with one chosen material, 0 to 1. |
-| `MassFraction` | Mass fraction |  |  | yes | Density | mass / (reference density * design domain volume), reference from the database | The part's mass compared with the whole part made solid in one material: 0.4 allows 40 % of that mass. Choose the material, or the heaviest or the lightest of the database. |
+| `MassFraction` | Mass fraction |  |  | yes | Density | mass / (reference density \* design domain volume), reference from the database | The part's mass compared with the whole part made solid in one material: 0.4 allows 40 % of that mass. Choose the material, or the heaviest or the lightest of the database. |
 
 ## Settings
 
@@ -607,7 +607,7 @@ p.database = "6Materials_AF_3Attr"
 
 | argument | format | default |
 |---|---|---|
-| `value` | where each element's material properties come from: "network" (the material network, from the database; Multi material in the Materials window) or "one_database_material" (one material, the database's only one, at its database values, with no network; Single material) | `'network'` |
+| `value` | where each element's material properties come from: "network" (the material network, from the database; Multi material in the Materials window) or "one_database_material" (one material of the database, pinned_material, at its database values, with no network; Single material) | `'network'` |
 
 ```python
 p.material_source = "network"
@@ -619,7 +619,7 @@ p.material_source = "network"
 
 | argument | format | default |
 |---|---|---|
-| `value` | with "network", one database material's name: every element is that material, through the network (Fix every element to, in the Materials window); None lets the optimization choose each element's material | `None` |
+| `value` | one database material's name, every element that material. With "network": through the network (Fix every element to, in the Materials window), and None lets the optimization choose each element's material. With "one_database_material": at its database values (Material:), and None only for a database of one material, which is then that one | `None` |
 
 ```python
 p.pinned_material = None

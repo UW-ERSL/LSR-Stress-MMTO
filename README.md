@@ -127,12 +127,13 @@ The pages in `docs/` and `CONTRIBUTING.md` can also be read inside the GUI: the 
 
 | File | Purpose |
 |---|---|
-| `main_window.py` | the window: New, Open and Save of .mmto projects, units, geometry, the top row (Run, Analyse, Export STL, Part and Design, light and dark) and the status bar (Snap, Measure, Ruler) |
+| `main_window.py` | the window: New, Open and Save of .mmto projects, units, geometry, the top row (Run, Analyse, Export STL, Part and Design, light and dark, View) and the status bar (Snap, Measure, Ruler) |
 | `materials_panel.py` | the Materials panel |
 | `formulation_panel.py` | the Formulation panel: objective and constraints |
 | `settings_panel.py` | the Settings panel |
 | `supports_and_loads_panel.py` | the Supports and loads panel: selections, supports, loads, keep solid, preview |
 | `database_editor.py` | making and changing a material database in the app |
+| `database_versions_window.py` | Versions... in the Materials panel: restoring or deleting an older version of a database |
 | `run_panel.py` | the Current run panel: a run's progress, its live design and latent space, its log; the Analyse window |
 | `results_panel.py` | the Results panel: a finished run's tables, plots and 3D design |
 | `draw_design.py` | draws a design in the 3D view |
@@ -161,6 +162,7 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad_imp
 | File | Purpose |
 |---|---|
 | `databases.py` | the attributes a material database may hold, the check of a database, the colour and label of each material, the VAE settings of each shipped database |
+| `database_versions.py` | the older versions kept of a material database, so that a change can be undone |
 | `encoder.py` | reads a material database, trains or loads the VAE; its `decode` gives each element's properties from its latent point |
 | `material_source.py` | where a run gets each element's material properties from: what every material source gives, the network fixed to one material, and the database's own values with no network (a single material, Analyse) |
 | `networks.py` | the VAE network |

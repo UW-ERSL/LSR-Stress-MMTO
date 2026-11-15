@@ -366,9 +366,10 @@ that replaces a network keeps the old one as `<name>.previous.nt`. A database no
 starts from `VAEParams`, with the recommended latent dimension; a project that sets another
 one runs with a warning.
 
-A database of one material is for a project of a single material (`material_source =
-"one_database_material"`, Single material in the app): every element gets its database values and no
-network is read or trained. A network needs at least two materials to learn from.
+A project of a single material (`material_source = "one_database_material"`, Single material in the
+app) takes any database: every element gets the database values of `pinned_material` (of the database's
+only material, for a database of one), and no network is read or trained. A network needs at least two
+materials to learn from.
 
 ## A change to the project file format
 

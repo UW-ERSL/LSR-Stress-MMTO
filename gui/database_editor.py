@@ -7,6 +7,10 @@ headers. It saves the same Excel file as before (databases.write_database), so E
 open it. A database that comes with LSR MMTO is never changed: it is saved as a copy in the
 project's folder. When the numbers change, the network trained on the old numbers no longer
 fits: it is set aside as <name>.previous.nt and the next run trains a new one.
+
+Older versions (materials/database_versions.py): the first version of a database is always kept, and a Save
+over a database that has one asks whether to keep the version before the changes. The title says (modified)
+while there are changes not saved, and closing with them asks first.
 """
 import os
 
@@ -28,6 +32,16 @@ HELP = ("One row per material. Shown as is optional: a shorter name for legends 
         "property's unit. Add property opens the list of properties to add, a column each; Remove property removes "
         "the column you are in.\n\n"
         "You can paste a block copied from Excel into the table.")
+
+
+def ask(parent, title, text, buttons, default, words=None):
+    """A question in a message box: the button pressed (one of buttons, QMessageBox's standard buttons, worded
+    as words says: {button: text})."""
+    box = QtWidgets.QMessageBox(QtWidgets.QMessageBox.Question, title, text, buttons, parent)
+    box.setDefaultButton(default)
+    for button, text in (words or {}).items():
+        box.button(button).setText(text)
+    return box.exec_()
 
 
 def shown(key):
@@ -157,7 +171,6 @@ class AddPropertiesDialog(QtWidgets.QDialog):
         from lsr_mmto.materials.databases import ATTRIBUTES
         super().__init__(parent)
         self.setWindowTitle("Add properties")
-        self.setWindowFlag(QtCore.Qt.WindowContextHelpButtonHint, False)
         self.setFixedSize(460, 520)
         layout = QtWidgets.QVBoxLayout(self)
         self.search = QtWidgets.QLineEdit()
@@ -320,13 +333,20 @@ class DatabaseEditor(QtWidgets.QDialog):
             self._load(path)
         self.name.setReadOnly(path is not None and not self.copy)
         self._where()
+        self.title = self.windowTitle()
+        self.imported = imported is not None                        # saved nowhere yet
+        self.unchanged = self._state()                              # what (modified) compares with
         self.name.textChanged.connect(lambda _: (self._where(), self.check()))
         self.check()
 
     # ------------------------------------------------------------------ reading
     def _free_name(self, stem):
+        """stem, or stem 2, stem 3, ...: a name no database in the folder has, nor had (its older versions are
+        still there), so a new database never takes on another's versions."""
+        from lsr_mmto.materials.database_versions import versions
         name, k = stem, 2
-        while os.path.exists(os.path.join(self.folder, name + ".xlsx")):
+        while os.path.exists(os.path.join(self.folder, name + ".xlsx")) or \
+                versions(os.path.join(self.folder, name + ".xlsx")):
             name, k = f"{stem} {k}", k + 1
         return name
 
@@ -517,6 +537,7 @@ class DatabaseEditor(QtWidgets.QDialog):
                                                      "Colour of " + (self.table.item(r, 0).text() or "the material"))
             if colour.isValid():
                 self._set_colour(r, colour.name())
+                self.check()
 
     def colour(self, r):
         return self.table.item(r, 2).data(QtCore.Qt.UserRole)
@@ -591,7 +612,18 @@ class DatabaseEditor(QtWidgets.QDialog):
         said += whole
         self.problems_text.setText(said[0] + (f" (and {len(said) - 1} more)" if len(said) > 1 else "") if said else "")
         self.save_button.setEnabled(not out)
+        if hasattr(self, "unchanged"):
+            self.setWindowTitle(self.title + (" (modified)" if self.modified() else ""))
         return out
+
+    def _state(self):
+        return self.name.text(), list(self.attributes), self.contents()
+
+    def modified(self):
+        """True while a Save would change the file: the table differs from the database opened (or from a new
+        one's start), the database had columns that Save leaves out, or the table holds an import not yet
+        saved."""
+        return self._state() != self.unchanged or bool(self.left_out) or self.imported
 
     def _mark(self, r, c, bad, reason):
         item = self.table.item(r, c)
@@ -625,11 +657,46 @@ class DatabaseEditor(QtWidgets.QDialog):
         return path
 
     def accept(self):
+        """Save. Over a database that has changed: its first version kept first if it has none (without asking),
+        else after a yes to keeping the older version; a database new here, or copied from an included one,
+        gets its first version: itself as saved, or the included one as it came."""
+        from lsr_mmto.materials import database_versions as V
         if self.check():
             return
+        Box = QtWidgets.QMessageBox
+        name = self.name.text().strip()
+        in_place = self.path is not None and not self.copy and os.path.isfile(self.path)
         try:
-            self.save()
+            if in_place and self.modified():
+                if not V.has_first(self.path):
+                    V.keep(self.path, first=True)
+                else:
+                    answer = ask(self, f"Save {name}", "Keep the older version?", Box.Yes | Box.No | Box.Cancel,
+                                 Box.Yes)
+                    if answer not in (Box.Yes, Box.No):
+                        return
+                    if answer == Box.Yes:
+                        V.keep(self.path)
+            path = self.save()
+            if self.path is None:
+                V.keep(path, first=True)
+            elif self.copy:
+                V.keep(path, first=True, source=self.path)
         except OSError as e:
             QtWidgets.QMessageBox.warning(self, "Database", f"Not saved: {e}")
             return
         super().accept()
+
+    def reject(self):
+        """Cancel, Esc or the window closed: with changes not saved, asked first (Save... saves them, as Save)."""
+        if self.modified():
+            Box = QtWidgets.QMessageBox
+            answer = ask(self, "Close the editor", f"{self.name.text().strip()} has changes that aren't saved.",
+                         Box.Save | Box.Discard | Box.Cancel, Box.Save,
+                         {Box.Save: "Save...", Box.Discard: "Discard changes"})
+            if answer == Box.Save:
+                self.accept()
+                return
+            if answer != Box.Discard:
+                return
+        super().reject()

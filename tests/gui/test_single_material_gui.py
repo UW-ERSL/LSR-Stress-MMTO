@@ -76,17 +76,19 @@ def names():
 
 
 def test_materials_window_single_or_multi_material():
-    """Multi material, as every project before this choice: Fix every element to lists None and the database's
-    materials, and the material chosen is the project's pinned material after OK. Single material with that
-    6-material database: an error in the report, no Fix every element to and no Network error tab. With a
-    database of one material: the report says it is used at its database values, and OK hands back the single
-    material and the database. Multi material with a database of one material is an error; a fixed material that
-    a newly chosen database does not have is no longer fixed, and the report says so."""
+    """Multi material, as every project before this choice: Fix every element to, on the top row, lists None and
+    the database's materials, and the material chosen is the project's pinned material after OK. Single material
+    with the same 6-material database: the list becomes Material:, with every material and no None; the
+    database's first is chosen unless one was chosen for single material before, the report names it, and OK
+    hands back the single material and that material; no Network error tab. Back to multi material: nothing is
+    fixed, and back to single material: its material again. A database of one material works for single
+    material and is an error for multi material; a fixed material that a newly chosen database does not have is
+    no longer fixed, and the report says so."""
     with scratch() as d:
         w = opened(d)
         m = materials_panel.MaterialsPanel(w, w.project)
         assert m.multi_button.isChecked() and not m.single_button.isChecked()
-        assert m.fix_row.isVisibleTo(m) and m.tabs.isTabVisible(1)
+        assert m.fix_row.isVisibleTo(m) and m.tabs.isTabVisible(1) and m.fix_label.text() == "Fix every element to:"
         assert [m.fix_combo.itemData(i) for i in range(m.fix_combo.count())] == [None] + names()
         assert m.fix_combo.itemText(0) == materials_panel.NOTHING_FIXED and m.fix_combo.currentIndex() == 0
         m.fix_combo.setCurrentIndex(1 + ROW)
@@ -98,33 +100,76 @@ def test_materials_window_single_or_multi_material():
         m = materials_panel.MaterialsPanel(w, w.project)
         assert m.fix_combo.currentData() == names()[ROW]                       # the fixed material, shown again
         m.single_button.setChecked(True)
-        report = m.report.toPlainText()
-        assert report.startswith("Error: Single material: 6Materials_AF_3Attr.xlsx has 6 materials"), report
-        assert not m.fix_row.isVisibleTo(m) and not m.tabs.isTabVisible(1)
-        assert m.project.pinned_material is None
-        one = one_material_database(d)
-        m.set_database(one)
-        assert m.report.toPlainText().startswith("1 material, at its database values; no network."), \
+        assert m.fix_label.text() == "Material:" and m.fix_row.isVisibleTo(m) and not m.tabs.isTabVisible(1)
+        assert [m.fix_combo.itemData(i) for i in range(m.fix_combo.count())] == names()
+        assert m.project.pinned_material == names()[0] and m.fix_combo.currentIndex() == 0
+        m.fix_combo.setCurrentIndex(ROW)
+        assert m.report.toPlainText().startswith(f"{label}, at its database values; no network."), \
             m.report.toPlainText()
         assert not m.latent_info.isVisibleTo(m)
+        m.multi_button.setChecked(True)
+        assert m.project.pinned_material == names()[ROW] and m.fix_combo.currentIndex() == 1 + ROW   # its own
+        m.single_button.setChecked(True)
+        assert m.project.pinned_material == names()[ROW]                       # its choice, back again
         vae = dict(w.project.settings["vae"])
-        lines = m.apply(w.project)
-        assert lines == ["Database: one_material.xlsx", "Materials in the design: Single material"], lines
+        assert m.apply(w.project) == [f"Materials in the design: Single material: {label}"]
         assert w.project.settings["vae"] == vae                                # no network: its settings stay
-        assert (w.project.material_source, w.project.pinned_material) == ("one_database_material", None)
+        assert (w.project.material_source, w.project.pinned_material) == ("one_database_material", names()[ROW])
         assert w.project.validate() == [], w.project.validate()
 
         m = materials_panel.MaterialsPanel(w, w.project)
-        assert m.single_button.isChecked()
+        assert m.single_button.isChecked() and m.fix_combo.currentData() == names()[ROW]
+        m.set_database(one_material_database(d))
+        assert m.project.pinned_material == names()[ROW]                       # the same material, by name
+        lines = m.apply(w.project)
+        assert lines[0] == "Database: one_material.xlsx" and w.project.validate() == [], (lines, w.project.validate())
+
+        m = materials_panel.MaterialsPanel(w, w.project)
         m.multi_button.setChecked(True)
         assert "Error: Multi material: one_material.xlsx has one material, and the network needs at least two" \
             in m.report.toPlainText()
-        m = materials_panel.MaterialsPanel(w, w.project)                       # a fixed material another lacks
-        m.multi_button.setChecked(True)
-        m.project.pinned_material = "no such material"
+        m.project.pinned_material = "no such material"                         # a fixed material another lacks
         m.set_database(DATABASE)
         assert "no such material is not in this database, so no material is fixed now." in m.report.toPlainText()
         assert m.project.pinned_material is None and m.fix_combo.currentIndex() == 0
+
+
+def test_materials_window_keeps_each_choice_and_changes_nothing_on_its_own():
+    """Multi material with a fixed material, then single material, then multi again: the fixed material is back.
+    A single material the newly chosen database does not have: its first material is chosen, and the report
+    says so. Single material on a database of one material with no material named: opening and OK change
+    nothing. Analyse starts on the project's material."""
+    from gui import run_panel
+    with scratch() as d:
+        w = opened(d)
+        m = materials_panel.MaterialsPanel(w, w.project)
+        m.fix_combo.setCurrentIndex(1 + ROW)
+        m.single_button.setChecked(True)
+        m.fix_combo.setCurrentIndex(1)
+        m.multi_button.setChecked(True)
+        assert m.project.pinned_material == names()[ROW]
+        m.single_button.setChecked(True)
+        assert m.project.pinned_material == names()[1]
+        m.set_database(one_material_database(d))
+        assert m.project.pinned_material is None and m.fix_combo.currentData() == names()[ROW]   # its only one
+        assert f"{names()[1]} is not in this database, so its first material is chosen." in m.report.toPlainText()
+
+        w.project.database = one_material_database(d)
+        w.project.material_source, w.project.pinned_material = "one_database_material", None
+        m = materials_panel.MaterialsPanel(w, w.project)
+        assert m.fix_combo.currentText() and m.project.pinned_material is None
+        assert m.apply(w.project) == [] and w.project.pinned_material is None
+
+        w.project.database = DATABASE
+        w.project.pinned_material = names()[ROW]
+        chosen = []
+        real = run_panel.AnalyseDialog.exec_
+        run_panel.AnalyseDialog.exec_ = lambda dialog: chosen.append(dialog.material.currentIndex()) or 0
+        try:
+            w.open_run_panel().analyse()
+        finally:
+            run_panel.AnalyseDialog.exec_ = real
+        assert chosen == [ROW]
 
 
 def test_settings_greyed_with_one_material():

@@ -170,9 +170,10 @@ def latent_frame(state, order):
 
 class AnalyseDialog(QtWidgets.QDialog):
     """Analyse: the material the solid part is analysed in (the database's materials, as the Materials
-    panel names them), and whether the analysis is saved in the results."""
+    panel names them; chosen first, the project's single or fixed material), and whether the analysis is
+    saved in the results."""
 
-    def __init__(self, parent, labels):
+    def __init__(self, parent, labels, chosen=0):
         from .panel_widgets import ok_cancel
         super().__init__(parent)
         self.setWindowTitle("Analyse")
@@ -182,6 +183,7 @@ class AnalyseDialog(QtWidgets.QDialog):
         row.addWidget(QtWidgets.QLabel("Material:"))
         self.material = QtWidgets.QComboBox()
         self.material.addItems([str(label) for label in labels])
+        self.material.setCurrentIndex(chosen)
         row.addWidget(self.material, stretch=1)
         row.addWidget(Info(ANALYSE_HELP))
         layout.addLayout(row)
@@ -300,6 +302,8 @@ class RunWindow(StructuralTopOptWindow):
         self.project = w.project.copy()                            # the run's own copy: edits go to the next run
         self.save_dir = results_folder(self.project)
         self.stop_requested, self.history = False, {"objective": [], "constraints": []}
+        self.history_figure.clear()                                # not the last run's curves until the first
+        self.history_canvas.draw_idle()                            # iteration of this one
         self.started, self.last_draw = time.time(), 0.0
         self.first_frame, self.optimizing = True, False
         self.max_iterations = int(self.project.settings["common"]["maxIterations"])
@@ -322,8 +326,11 @@ class RunWindow(StructuralTopOptWindow):
         from lsr_mmto.materials.databases import material_display
         if not self._checked():
             return False
-        labels = material_display(self.window.project.database_paths()[0])[1]
-        dialog = AnalyseDialog(self, labels)
+        from lsr_mmto.materials.databases import database_table
+        xlsx = self.window.project.database_paths()[0]
+        labels, names = material_display(xlsx)[1], [str(n) for n in database_table(xlsx)[0]]
+        pinned = self.window.project.pinned_material
+        dialog = AnalyseDialog(self, labels, names.index(str(pinned)) if str(pinned) in names else 0)
         if dialog.exec_() != QtWidgets.QDialog.Accepted:
             return False
         return self.start_analysis(dialog.material.currentIndex(), dialog.save.isChecked())

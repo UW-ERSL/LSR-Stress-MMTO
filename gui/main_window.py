@@ -19,12 +19,12 @@ The 3D view shows either the part (the Setup view: supports, loads, previews) or
 Design view: a run's result, drawn by draw_design.py). Anything about the setup switches to the
 Setup view; the design is kept until the next run, so Design in the top row always brings it back.
 The top row also holds Run (Stop while a run goes), Analyse (the solid part analysed once in one
-material), Export STL and the light / dark switch of the 3D view; Snap, Measure and Ruler are in the
-status bar.
+material), Export STL, the light / dark switch of the 3D view and View (PyTO-AD's Display Options:
+the part's triangles, see-through, cuts); Snap, Measure and Ruler are in the status bar.
 
     python run_gui.py [project.mmto]        (from the repository folder)
 
-The sidebar keeps PyTO-AD's Units and Display Options, and adds Materials,
+The sidebar keeps PyTO-AD's Units, and adds Materials,
 Formulation and Settings (materials_panel.py, formulation_panel.py, settings_panel.py) and
 Supports and loads (supports_and_loads_panel.py). Picking with the
 mouse is PyTO-AD's Structural Loads window; each Apply in it is adopted into the project.
@@ -66,11 +66,10 @@ SIDEBAR_WORDS = {"Run": "Current run"}                   # a sidebar button's te
 SIDEBAR_STEPS = {"Units": "units", "Materials": "materials", "Supports and loads": "supports and loads",
                  "Formulation": "formulation"}           # the buttons marked by their step's check (Project.GUI_STEPS)
 SIDEBAR_ICONS = {"Units": "units", "Materials": "materials", "Supports and loads": "supports",
-                 "Formulation": "formulation", "Settings": "settings", "Run": "run", "Results": "results",
-                 "Display Options": "display"}
+                 "Formulation": "formulation", "Settings": "settings", "Run": "run", "Results": "results"}
 MESSAGE_LINES = 3                                        # the message panel starts three lines high
 SIDEBAR = ("Units", "Materials", "Supports and loads", "Formulation", "Settings", "Run",
-           "Results", "Display Options")
+           "Results")                                    # the steps, in order; View is in the top row
 FOLDER_HELP = ("A project keeps everything it uses in its own folder: the project file, the part (in part), "
                "the material database and its trained network (in materials), and the results of every run "
                "(in results).\n\nZip the folder to send the whole project.")
@@ -86,7 +85,9 @@ def icon(name):
 
 
 def apply_style(app):
-    """The window's style sheet on the whole app, its pictures found in gui/assets/icons."""
+    """The window's style sheet on the whole app, its pictures found in gui/assets/icons; and no window with
+    Windows' "?" help button, which has no help to show."""
+    QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_DisableWindowContextHelpButton)
     with open(STYLE, encoding="utf-8") as f:
         app.setStyleSheet(f.read().replace("ICONS/", ICONS.replace("\\", "/") + "/"))
 
@@ -510,11 +511,15 @@ class PickWindow(StructuralLoadsWindow):
 
 
 class DisplayOptions(DisplayOptionsWindow):
-    """PyTO-AD's Display Options with the words of LSR MMTO, and without the controls that have nothing
-    to act on here: the geometry, field and display choices and the eigen number (for PyTO-AD's own
-    analyses), the thermal, optimization-option and structural load drawings (LSR MMTO draws supports and
-    loads in the Supports and loads panel), the text over the 3D view (the part's facts are behind the (i)
-    in the status bar) and the animation."""
+    """PyTO-AD's Display Options, opened by View in the top row, with the words of LSR MMTO, and without the
+    controls that have nothing to act on here: the geometry, field and display choices and the eigen number
+    (for PyTO-AD's own analyses), the thermal, optimization-option and structural load drawings (LSR MMTO
+    draws supports and loads in the Supports and loads panel), the text over the 3D view and the bounding box
+    (the part's facts and size are behind the (i) in the status bar), and the animation.
+
+    The bounding box is left out for a second reason: drawn through pyvista's add_bounding_box and taken
+    away by name, it left pyvista's own box behind, which pyvista drew again around an empty scene, from -1
+    to 1 on every axis, for good."""
 
     WORDS = {"XCuttingPercent": "Cut along x (%)", "YCuttingPercent": "Cut along y (%)",
              "ZCuttingPercent": "Cut along z (%)", "Show triangles": "Show the part's triangles",
@@ -522,12 +527,15 @@ class DisplayOptions(DisplayOptionsWindow):
 
     def setup_ui(self):
         super().setup_ui()
+        self.setWindowTitle("View")
         for label in self.findChildren(QtWidgets.QLabel):
             label.setText(self.WORDS.get(label.text(), label.text()))
         for box in self.findChildren(QtWidgets.QCheckBox):
             box.setText(self.WORDS.get(box.text(), box.text()))
         self.show_text.setChecked(False)
+        self.show_bounding_box_checkbox.setChecked(False)
         hidden = [self.geometry_combo, self.field_combo, self.display_combo, self.eigen_spin, self.show_text,
+                  self.show_bounding_box_checkbox,
                   self.show_structural_loads_checkbox, self.show_thermal_loads_checkbox,
                   self.show_topopt_options_checkbox]
         hidden += [b for b in self.findChildren(QtWidgets.QPushButton) if b.text().startswith("Animate")]
@@ -1052,6 +1060,9 @@ class MMTOWindow(MainWindow):
         self.theme_button = button("", "moon", "themeButton")
         self.theme_button.clicked.connect(lambda: self.set_dark_view(not self.dark_view))
         row.addWidget(self.theme_button)
+        self.view_button = button("View", "display")
+        self.view_button.clicked.connect(lambda: self.open_display_options_window())
+        row.addWidget(self.view_button)
         self.export_button = button("Export STL", "export")
         self.export_button.setEnabled(False)
         self.export_button.clicked.connect(self.export_stl)
@@ -1123,15 +1134,20 @@ class MMTOWindow(MainWindow):
             self.run_button.style().unpolish(self.run_button)
             self.run_button.style().polish(self.run_button)
             self.analyse_button.setVisible(not running)            # steps aside for the progress: the row
+            self.view_button.setVisible(not running)               # (View too)
         rw = getattr(self, "run_window", None)
         if running:
             self.run_button.setEnabled(not getattr(rw, "stop_requested", False))
-            self.progress_text.setText(re.sub(r"<[^>]+>", " ", rw.status.text()))
+            shown = rw.status.isVisible()                          # on screen in Current run: not said twice
+            self.progress_text.setText("" if shown else re.sub(r"<[^>]+>", " ", rw.status.text()))
         else:
             self.run_button.setEnabled(self.project is not None)
             self.progress_text.setText("")
         self.run_button.setToolTip("" if self.project is not None else NO_PROJECT)
         self.analyse_button.setEnabled(self.project is not None)    # still fits a window 1225 px wide
+        self.view_button.setEnabled(self.project is not None)
+        self.view_button.setToolTip("How the part is drawn: its triangles, see-through, cuts" if self.project
+                                    is not None else NO_PROJECT)
         self.analyse_button.setToolTip("" if self.project is not None else NO_PROJECT)
         shown = self.shown_run()
         self.export_button.setEnabled(shown is not None and not self.exporting)

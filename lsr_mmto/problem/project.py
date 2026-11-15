@@ -175,11 +175,12 @@ class Project:
         Example: p.keep_support_elements = True
     material_source: where each element's material properties come from: "network" (the material
         network, from the database; Multi material in the Materials window) or "one_database_material" (one
-        material, the database's only one, at its database values, with no network; Single material)
+        material of the database, pinned_material, at its database values, with no network; Single material)
         Example: p.material_source = "network"
-    pinned_material: with "network", one database material's name: every element is that material,
-        through the network (Fix every element to, in the Materials window); None lets the optimization
-        choose each element's material
+    pinned_material: one database material's name, every element that material. With "network": through
+        the network (Fix every element to, in the Materials window), and None lets the optimization choose
+        each element's material. With "one_database_material": at its database values (Material:), and None
+        only for a database of one material, which is then that one
         Example: p.pinned_material = None
     settings[section][name]: one setting: section is "common", "advanced" or "vae", name a setting of
         that section; every setting, its default and what it does are under Settings
@@ -200,7 +201,7 @@ class Project:
     keep_support_elements: bool
     _database: str | None                       # a shipped database's name or a path, behind the database property
     material_source: str                        # one of MATERIAL_SOURCES
-    pinned_material: str | None                 # with "network": a material's name, or None
+    pinned_material: str | None                 # a material's name, or None: see the docstring
     formulation: dict[str, Any]                 # {"objective": {"expression", "sense"} or None, "constraints": [...]}
     settings: dict[str, dict[str, Any]]         # {section: {key: value}}
     _gui: dict[str, Any]                        # everything else in the file, kept for the GUI
@@ -220,7 +221,7 @@ class Project:
         self.keep_support_elements = False
         self._database = None
         self.material_source = "network"        # or "one_database_material": see the docstring
-        self.pinned_material = None             # with "network": None, or a material's name to pin every element to
+        self.pinned_material = None             # None, or the material every element is: see the docstring
         self.formulation = {"objective": None, "constraints": []}
         self.settings = {k: dict(v) for k, v in DEFAULT_SETTINGS.items()}
         self._gui = {}                          # everything else in the file, kept for the GUI
@@ -561,8 +562,8 @@ class Project:
 
     def material_source_errors(self, xlsx: str) -> list[Problem]:
         """What is wrong with the material source for the database xlsx (which passes its check): a source not in
-        MATERIAL_SOURCES; with one database material, a database of more than one or a pin; with the network,
-        a database of one material, or a pin that names no material of the database."""
+        MATERIAL_SOURCES; with one database material, no material chosen from a database of several; with the
+        network, a database of one material; and a pinned material the database does not have."""
         from lsr_mmto.materials.databases import database_table
         names = [str(n) for n in database_table(xlsx)[0]]
         db = os.path.basename(xlsx)
@@ -572,14 +573,12 @@ class Project:
                                             f"LSR MMTO knows; choose Single material or Multi material (in a "
                                             f"script, material_source is {' or '.join(map(repr, MATERIAL_SOURCES))})"))
         elif self.material_source == "one_database_material":
-            if len(names) != 1:
-                out.append(Problem("materials", f"Single material: {db} has {len(names)} materials, and a single "
-                                                f"material takes a database of exactly one; make a database of the "
-                                                f"one material, or choose Multi material and fix every element "
-                                                f"to it"))
-            if self.pinned_material is not None:
-                out.append(Problem("materials", "Single material takes no fixed material: the database's one "
-                                                "material is used"))
+            if self.pinned_material is None and len(names) > 1:
+                out.append(Problem("materials", f"Single material: choose the material, one of the "
+                                                f"{len(names)} in {db}"))
+            elif self.pinned_material is not None and str(self.pinned_material) not in names:
+                out.append(Problem("materials", f"Material: {self.pinned_material!r} is not in {db}; one of "
+                                                f"{', '.join(names)}"))
         elif len(names) < 2:
             out.append(Problem("materials", f"Multi material: {db} has one material, and the network needs at "
                                             f"least two to learn from; choose Single material"))

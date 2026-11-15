@@ -330,7 +330,6 @@ class RegionDialog(QtWidgets.QDialog):
 
     def __init__(self, parent, project, name=None, preview=None):
         super().__init__(parent)
-        self.setWindowFlag(QtCore.Qt.WindowContextHelpButtonHint, False)
         self.setWindowTitle("Selection")
         self.resize(520, 380)
         self.project, self.old_name, self.preview = project, name, preview
@@ -851,7 +850,6 @@ class BCDialog(QtWidgets.QDialog):
         self.preview = preview
         self.pages = None                                           # the strip's open_page, when docked
         self.new_regions = {}                                       # made here with New selection; added on OK
-        self.setWindowFlag(QtCore.Qt.WindowContextHelpButtonHint, False)
         self.setWindowTitle("Support or load")
         self.resize(480, 220)
         self.project, self.old, self.kinds = project, bc, BC_KINDS
@@ -1057,7 +1055,6 @@ class SupportsPanel(QtWidgets.QDialog):
 
     def __init__(self, window):
         super().__init__(window)
-        self.setWindowFlag(QtCore.Qt.WindowContextHelpButtonHint, False)
         self.setWindowModality(QtCore.Qt.NonModal)
         self.setWindowTitle("Supports and loads")
         self.resize(760, 620)
