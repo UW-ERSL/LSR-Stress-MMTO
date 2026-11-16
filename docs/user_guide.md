@@ -1,110 +1,138 @@
 # LSR MMTO user guide
 
-This guide walks through every part of the LSR MMTO window. Open it in the window with Help > User guide, or press F1.
+This guide explains every part of the LSR MMTO window. To open it, go to Help > User guide, or press F1.
 
-Next to most fields there is a small (i). Click it to see what that field means. This guide gives the bigger picture: what each part is for, how the parts fit together, and what to watch out for.
+Most fields have a small (i) next to them. Click it to find out what the field means. This guide explains how the different parts work, why they are needed, how they connect to each other, and what problems to look out for.
 
 ## 1. Start here
 
-LSR MMTO designs a part made of several materials. You give it the shape the part may fill, where the part is held and pushed, and a list of materials. It works out where material should go, and which material goes where, so that the part does what you ask (for example, as stiff as it can be for a given weight).
+LSR MMTO helps you design a part using several materials. First, you tell it the space the part is allowed to occupy, where the part is supported, where forces act on it, and which materials it can use. The software then decides where to put material and which material to use in each place. It tries to produce a design that meets your goal. For example, you might want the stiffest possible part while keeping its weight below a certain limit.
 
-The work always goes in the same order, and the buttons on the right of the window follow it from top to bottom:
+You always follow the same steps. The buttons on the right side of the window are arranged in that order, from top to bottom:
 
-1. **The part.** File > New makes a project from an STL file of the space the part may fill. See The part, section 5.
-2. **The units.** The unit system all your numbers are in. See Units, section 4.
-3. **The materials.** A material database: one row per material, with its properties. See Materials, section 6.
-4. **Supports and loads.** Where the part is held, and where and how hard it is pushed. See section 7.
-5. **The objective and the constraints.** What to make as small as possible, and the limits it must keep to. See Formulation, section 8.
-6. **Run.** The blue button at the top. The design grows on the screen while it runs. See Running, section 10.
-7. **The results.** Each run's design, its numbers and its plots. See Results, section 11.
-8. **Export STL.** The design as STL files, one for the whole part and one per material. See section 12.
+1. **The part.** Use File > New to create a project from an STL file. This file defines the space the part is allowed to occupy. See The part, section 5.
+2. **The units.** Choose the unit system used for all the numbers in your project. See Units, section 4.
+3. **The materials.** Choose a material database. It has one row for each material, along with its properties. See Materials, section 6.
+4. **Supports and loads.** Tell the software where the part is held in place, where forces act, and how large those forces are. See section 7.
+5. **The objective and the constraints.** Choose what the software should minimize and what limits the design must satisfy. See Formulation, section 8.
+6. **Run.** Press the blue button at the top to start the optimization. You can watch the design develop on the screen as it runs. See Running, section 10.
+7. **The results.** Look at the design, numerical results, and plots from each run. See Results, section 11.
+8. **Export STL.** Export the design as STL files. You get one file for the whole part and a separate file for each material. See section 12.
 
-Settings (section 9) has everything else, and most projects can leave it as it is.
+Settings (section 9) contains the remaining options. For most projects, you can leave them as they are.
 
-Next to most fields there is a small (i). Rest the mouse on it for its first sentence; click it for a card with the whole explanation and what its numbers are (a click outside the card, or Esc, closes it). When a field puzzles you, the (i) is the quickest answer. This guide gives the bigger picture.
+Most fields have a small (i) next to them. Move your mouse over it to read the first sentence of its explanation. Click it to open a card with the full explanation, including what the numbers mean. To close the card, click anywhere outside it or press Esc. If you do not understand a field, checking its (i) is usually the fastest way to find out what it does. This guide explains how everything fits together.
 
-To try LSR MMTO before making a project of your own, open one of the examples: click it under **Try an example** on the start page, or use File > Open. The examples are the L-bracket, the U-bracket, the beam and the airplane bracket. They are complete, so you can press Run at once. An example never changes: when you save it, or run it, LSR MMTO asks for a folder of your own and saves a copy there.
+If you want to try LSR MMTO before creating your own project, start with one of the examples. You can click an example under **Try an example** on the start page, or open one through File > Open. There are four examples: the L-bracket, the U-bracket, the beam and the airplane bracket. Each example is already set up, so you can press Run immediately. The original examples are never changed. If you run or save one, LSR MMTO asks you to choose your own folder and saves a copy there.
 
 ## 2. The window
 
-While no project is open, the 3D view shows the start page: **New project from an STL...** (the same as File > New), **Open a project...** (File > Open), and four examples under **Try an example**. Until a project is open, the buttons on the right, Run, Analyse, Export STL and Part / Design are greyed.
+When no project is open, the 3D view shows the start page. It has **New project from an STL...**, which does the same thing as File > New, and **Open a project...**, which does the same thing as File > Open. It also shows four examples under **Try an example**. Until you open a project, the buttons on the right are greyed out, and so are Run, Analyse, Export STL and Part / Design.
 
 ### 2.1 The top row
 
-From left to right:
+The top row contains the following controls, from left to right:
 
-- **LSR MMTO**, and the **File** and **Help** menus. File is described in section 3. Help has this **User guide** (also F1), the **Researcher guide** (how the code works and how to add to it, for changing LSR MMTO itself) and **About LSR MMTO**.
-- **Part** and **Design**, a two-way switch for the 3D view. **Part** shows the part, with its supports, loads and previews. **Design** shows the design of the last run you made or opened. Design is greyed until there is a design to show.
-- The **moon** button switches the 3D view to dark; it then shows a **sun**, which switches it back to light. The 3D view starts light. Only the background and the window's own drawings (the ruler, Measure, labels) change colour; the materials keep the colours the database gives them.
-- **View** changes how the part is drawn: its triangles, see-through, and cuts to see inside it. See section 13. While a run goes, View steps aside, as Analyse does.
-- **Export STL** writes the design on the screen as STL files. It is greyed while there is no finished design on the screen. See section 12.
-- **Run** starts a run of the project. While the run goes, the same button reads **Stop**. When the Current run panel is out of sight (Results chosen, or the panel closed), the run's progress shows beside it, for example *Iteration 29 / 40 · 0:33 so far · about 0:12 left*. See section 10.
-- **Analyse** solves the project once with the whole part solid in one material, without optimizing, to check the setup before a run. While a run goes, Analyse steps aside for the run's progress. See section 10.4.
+- **LSR MMTO**, followed by the **File** and **Help** menus. The File menu is explained in section 3. The Help menu contains the **User guide** (which you can also open with F1), the **Researcher guide** (which explains how the code works and how to extend or change LSR MMTO), and **About LSR MMTO**.
+- **Part** and **Design** are two options for what you see in the 3D view. **Part** shows the original part, along with its supports, loads and previews. **Design** shows the optimized design from the most recent run you made or opened. You cannot select Design until there is a design available to show.
+- The **moon** button changes the 3D view to dark mode. Once you click it, the button becomes a **sun**, which changes the view back to light mode. The 3D view starts in light mode. This only changes the background and the colours of the window's own drawings, such as the ruler, Measure and labels. It does not change the material colours, which come from the material database.
+- **View** controls how the part appears in the 3D view. You can change how its triangles are shown, make it see-through, or cut through it to look inside. See section 13. While a run or an analysis is going, View is temporarily hidden, just like Analyse.
+- **Export STL** saves the design currently shown on the screen as STL files. It is greyed out while no finished design is shown on the screen. See section 12.
+- **Run** starts optimizing the project. While the optimization is running, this button changes to **Stop**. If the Current run panel is hidden because you selected Results or closed the panel, the run's progress appears next to the button. For example, it might show *Iteration 29 / 40 · 0:33 so far · about 0:12 left*. See section 10.
+- **Analyse** solves the project once, treating the entire part as solid and made from one material. It does not optimize the design. This lets you check whether the project is set up correctly before starting an optimization. While a run is in progress, Analyse is temporarily replaced by the run's progress. See section 10.4.
 
 ### 2.2 The buttons on the right
 
-**Units**, **Materials**, **Supports and loads**, **Formulation**, **Settings**, **Current run** and **Results**, the steps in order. Units, Materials, Supports and loads and Formulation show how far each step is: a green tick once it is set up and nothing in it stops a run, a red mark when something in it would stop a run (the messages say what, as an **Error**), and the button's own picture while it is not set up yet. A warning does not change the mark.
+The buttons on the right are **Units**, **Materials**, **Supports and loads**, **Formulation**, **Settings**, **Current run** and **Results**. They are arranged in the order you normally use them.
 
-Units, Materials, Formulation and Settings open as windows with OK and Cancel (or Apply and Close): OK puts your changes into the project, and Cancel leaves the project as it was.
+The first four buttons, Units, Materials, Supports and loads, and Formulation, also show whether each step is ready:
 
-Supports and loads, Current run and Results open as panels beside the 3D view, so you can work on the part while they are open. When more than one is open they share the space as tabs. A panel can be made wider or narrower by dragging its edge.
+- A green tick means that step has been set up and has no problems that would prevent a run.
+- A red mark means there is a problem that would prevent a run. The messages explain what is wrong and label it as an **Error**.
+- If the step has not been set up yet, the button shows its normal picture.
 
-While a run goes, the buttons on the right step aside, and the Current run panel takes half the window beside the design growing in the 3D view. You can still drag the divider between them. When the run ends, or you stop it, the buttons come back and the panel goes back to its width.
+Warnings do not change these marks.
+
+Units, Materials, Formulation and Settings open in separate windows. These windows have OK and Cancel buttons, or Apply and Close. When you press OK, your changes are applied to the project. When you press Cancel, the project stays as it was before you opened the window.
+
+Supports and loads, Current run and Results work differently. They open as panels beside the 3D view, so you can still interact with the part while using them. If you open more than one panel, they share the same space using tabs. You can drag the edge of a panel to make it wider or narrower.
+
+While a run or an analysis is going, the buttons on the right are temporarily hidden. The Current run panel then takes up half the window, beside the 3D view where you can watch the design develop. You can still drag the divider to change how much space each side uses. When the run finishes or you stop it, the buttons return and the panel goes back to its previous width.
 
 ### 2.3 The 3D view
 
-- Drag with the left mouse button to turn the part.
-- Turn the mouse wheel to zoom.
-- Drag with the middle button, or with Shift and the left button, to move the part across the view.
+You can move around the 3D view using the mouse:
 
-A click on the part selects nothing, unless one of these is open:
+- Hold the left mouse button and drag to rotate the part.
+- Turn the mouse wheel to zoom in or out.
+- Hold the middle mouse button and drag to move the part across the screen. You can also hold Shift and drag with the left mouse button.
 
-- the **Pick** window (section 7.2), where a click picks faces;
-- **Measure** (below), where a click is a point to measure;
-- a form under Supports and loads, where a click copies the point under the mouse, to paste into a field with Ctrl+V.
+Normally, clicking on the part does not select anything. There are three exceptions:
+
+- When the **Pick** window is open (section 7.2), clicking on the part selects faces.
+- When **Measure** is active (explained below), each click chooses a point for measuring.
+- When a form under Supports and loads is open, clicking on the part copies the coordinates of the point under your mouse. You can then paste those coordinates into a field using Ctrl+V.
 
 ### 2.4 The messages
 
-Under the 3D view, the messages, three lines high at first. Drag the divider between the 3D view and the messages to make them taller or shorter; LSR MMTO keeps that height for the next time. At the top, the project's errors (red) and warnings (amber) as they are now, with a thin line under them: one you put right goes at once, and shows again if it comes back. They take at most half of the messages' height, and with none they take no room. Under them, what happened: what was opened and saved, what a run is doing. A message repeated at once is shown once, with how many times, for example *(×3)*. Scroll up to read earlier ones. The bin at the top right clears what happened; the errors and warnings stay.
+The messages area is below the 3D view. It starts out three lines tall. You can drag the divider between the messages and the 3D view to make it taller or shorter. LSR MMTO remembers the height you choose and uses it the next time.
 
-An **Error** stops a run from starting until it is put right. A **Warning** lets the run go, but says something is probably not what you meant. Section 14 lists the common ones.
+The top of this area shows any current problems with your project. Errors appear in red and warnings in amber. A thin line separates them from the other messages.
+
+These errors and warnings are kept up to date. When you fix a problem, its message disappears immediately. If the same problem comes back, the message appears again. They can take up at most half the height of the messages area. If there are no errors or warnings, they take up no space.
+
+Below them is a record of what the software has done. This includes what was opened and saved and what is happening during a run.
+
+If the same message appears several times in a row, it is shown only once, with a count of how many times it occurred. For example, *(×3)* means the message appeared three times.
+
+You can scroll up to read older messages. The bin button at the top right clears the history of what happened. It does not clear the current errors or warnings.
+
+An **Error** means you cannot start a run until you fix the problem. A **Warning** means you can still start the run, but something in the setup may not be what you intended. See section 14 for the common errors and warnings.
 
 ### 2.5 The bottom bar
 
-- On the left, the part's size, for example *Part: x 0 to 200 · y 0 to 200 · z 0 to 1 mm*. The (i) next to it gives the part's file, volume, size and material database.
-- In the middle, the point under the mouse on the part, and what Measure has measured.
-- **Snap**: rounds the point under the mouse, a copied point and Measure to a step. The steps follow the part's size: a round number near a thousandth, a hundredth and a tenth of its largest extent, in the project's length unit (on a 200 mm part 0.2, 2 and 20 mm). With Snap: 2 mm, a point at x 37.62 reads 38.
-- **Measure**: click it, then click two points on the part to see the distance between them, and its x, y and z parts. A third click starts again. The line and its points are dark in the light 3D view and white in the dark one. Press Esc, or click Measure again, to stop.
-- **Ruler**: shows scales along the part, in the project's length unit. Click it again to hide them.
+The bottom bar shows information about the part and provides tools for measuring it.
+
+- On the left, you can see the part's size. For example, *Part: x 0 to 200 · y 0 to 200 · z 0 to 1 mm*. Click the (i) beside it to see the part's file, volume, dimensions and material database.
+- In the middle, you can see the coordinates of the point under your mouse when it is over the part. This area also shows the measurements made using Measure.
+- **Snap** rounds coordinates to a chosen step size. It affects the point under your mouse, points you copy, and measurements made with Measure. The available steps depend on the size of the part. They are rounded values near one-thousandth, one-hundredth and one-tenth of the part's largest dimension, using the project's length unit. For a part that is 200 mm long, the steps are 0.2, 2 and 20 mm. If you choose Snap: 2 mm, a point at x 37.62 is shown as 38.
+- **Measure** lets you measure distances on the part. Click Measure, then click two points on the part. It shows the distance between them, along with the x, y and z components of that distance. If you click a third point, you start a new measurement. In the light 3D view, the measurement line and its points are dark. In the dark view, they are white. To stop measuring, press Esc or click Measure again.
+- **Ruler** shows scales along the part, using the project's length unit. Click it again to hide the scales.
 
 ## 3. File menu
 
-- **New...** makes a new project. Give it a **Name**, a **Location**, the **Part (STL)** and the **Physics** (Structural is the one there is today). LSR MMTO makes a folder of that name at that location, copies the STL into it and saves the project there. Every setting starts at its usual value.
-- **Open...** opens a project, a file ending in .mmto. Only LSR MMTO projects open here.
-- **Save** saves the project in its file. A project never saved, or an example, is saved with Save As instead.
-- **Save As...** saves the project as a new one, in a new folder, with everything it uses copied in. The new project takes the new name; the runs made so far stay with the old one.
-- **Replace part...** changes the project's STL for another one. See section 5.
-- **Scale part...** multiplies every coordinate of the part by a number, for a part drawn in another unit. See section 5.
-- **Export as script** writes the project as a short Python script, *name*_setup.py, in the project's folder. Every save writes it again, so it always matches the project; this entry saves first if needed and says where the script is. Open it in any text editor to see the whole project written out, or to change it.
-- **Run script...** runs a Python script, such as one written by Export as script and then changed. What the script prints goes to the messages. When the script saves a project in its folder, that project opens in the window.
+The File menu contains the following options:
+
+- **New...** creates a new project. You enter a **Name**, choose a **Location**, provide the **Part (STL)**, and choose the **Physics**. Structural is the only physics option currently available. LSR MMTO then creates a folder with the project name at the location you chose. It copies the STL file into that folder and saves the project there. All settings start with their default values.
+- **Open...** opens an existing project. Project files have the .mmto extension. This option only opens LSR MMTO projects.
+- **Save** saves the project to its existing file. If the project has never been saved, or if it is an example, LSR MMTO uses Save As instead.
+- **Save As...** creates a new copy of the project in a new folder. Everything the project uses is copied into that folder. The new project gets the new name, but any runs you already completed remain with the original project.
+- **Replace part...** replaces the STL file used by the project with another STL file. See section 5.
+- **Scale part...** multiplies all the part's coordinates by a number. This is useful when the part was created using a different unit. See section 5.
+- **Export as script** creates a short Python script representing the project. It is named *name*_setup.py and saved in the project's folder. Every time you save the project, the script is written again so it stays consistent with the project. If necessary, this menu option saves the project first. It also tells you where the script was saved. You can open the script in any text editor to see the entire project written out or to make changes to it.
+- **Run script...** runs a Python script. For example, you can run a script created using Export as script after making changes to it. Anything the script prints appears in the messages area. If the script saves a project in its folder, LSR MMTO opens that project in the window.
 - **Exit** closes LSR MMTO.
 
-The window's title shows the project's name, with *(example)* for an example and a * when there are changes not saved yet. Before closing, or opening another project, LSR MMTO asks whether to save them.
+The title of the window shows the project name. If you are using an example, it also shows *(example)*. If you have made changes that have not been saved, an * appears in the title.
+
+If you try to close the window or open a different project while you have unsaved changes, LSR MMTO asks whether you want to save them.
 
 ### 3.1 The project folder
 
-A project keeps everything it uses in its own folder:
+Every project has its own folder, which contains everything the project needs:
 
-- the project file, *name*.mmto, and its script, *name*_setup.py;
-- **part**: the STL, and any other STL a selection uses;
-- **materials**: the material database and its trained network, when the database is one of your own;
-- **results**: one folder per run, named by when it was made.
+- The project file, *name*.mmto, and its Python script, *name*_setup.py.
+- **part**: a folder containing the part's STL file and any additional STL files used by selections.
+- **materials**: a folder containing the material database and its trained network, if you are using a database of your own.
+- **results**: a folder containing a separate folder for each run, named according to when that run was made.
 
-Zip the folder to send the whole project to someone else. A run remembers its files by where they sit in the project folder, so its runs still show and export after the folder is moved, renamed or unzipped elsewhere.
+If you want to send the entire project to someone else, you can zip its folder.
+
+Each run remembers where its files are located relative to the project folder. This means you can move the entire folder, rename it, or unzip it somewhere else without breaking the results. The runs will still appear in Results, and you can still export them.
 
 ## 4. Units
 
-**Units** sets the unit system every number of the project is in. Choose it under **Unit System**:
+**Units** controls the unit system used for every number in the project. Open Units and choose a system under **Unit System**:
 
 | Unit system | Length | Force | Stress | Density | Mass |
 | --- | --- | --- | --- | --- | --- |
@@ -112,39 +140,41 @@ Zip the folder to send the whole project to someone else. A run remembers its fi
 | mmKS | mm | N | MPa | t/mm^3 | t |
 | IPS | in | lbf | psi | lbf*s^2/in^4 | lbf*s^2/in |
 
-Press **Apply**. The messages say *Project units: mmKS. Numbers are not converted.* The part's size at the bottom left, the ruler and the Snap steps show the new length unit at once.
+Press **Apply** to use the selected unit system. The messages show *Project units: mmKS. Numbers are not converted.* The part's size at the bottom left, the ruler and the Snap steps immediately start showing the new length unit.
 
-Nothing is converted. The numbers you typed stay as they are, and only their unit changes. Choose the unit system first, then type the numbers in it: the part's size, forces, pressures and distances, and the bounds of the constraints. The units show beside every field that has one.
+Changing the unit system does not convert any numbers. Every number you entered stays exactly the same. Only the unit assigned to it changes.
 
-The material database has its own units, in its second row. When they do not match the project's (a Young's modulus in Pa in an mmKS project, for example), the messages say so and by how much, and what it changes in the results. See section 14.
+For this reason, choose your unit system before entering the numbers for your project. This includes the part's dimensions, forces, pressures, distances and constraint limits. Enter all these values using the unit system you selected. Fields that have units show them next to the value.
 
-**Temperature Unit** and **Angle Unit** are in the same window; LSR MMTO does not use them yet.
+The material database has its own units, shown in its second row. These may not match the units of your project. For example, the database might give Young's modulus in Pa while your project uses mmKS. If this happens, the messages explain the mismatch, how large the difference is, and how it affects the results. See section 14.
+
+**Temperature Unit** and **Angle Unit** are also available in the Units window, but LSR MMTO does not use them yet.
 
 ## 5. The part
 
-The part is an STL file of the space the part may fill: the design domain. The optimization decides where, inside it, material goes. The surface of the STL is the outside of that space.
+The part is defined by an STL file. This file describes the space the part is allowed to occupy, called the design domain. The optimization decides where to put material inside that space. The STL surface defines its outer boundary.
 
-The part comes in when you make the project (File > New). To use a different STL, choose File > **Replace part...** and choose the new STL. If some selections are faces you picked on the old STL, LSR MMTO says so first: picked faces are stored by triangle number, and on another STL the same numbers are other faces. Pick them again afterwards. In a project folder of its own, the new STL is copied into the part folder.
+You provide the STL file when you create the project (File > New). If you want to use a different STL, choose File > **Replace part...** and choose the new STL. If you picked faces on the old STL to make selections, LSR MMTO warns you first. Picked faces are saved using their triangle numbers. Those numbers can refer to different faces in another STL, so you need to pick the faces again afterwards. In a project folder of its own, the new STL is copied into the part folder.
 
-The STL should be closed (watertight) and in the project's length unit. The size in the bottom bar (section 2.5) is a quick check: a part that should be 200 mm long and reads *x 0 to 0.2 mm* was drawn in metres.
+The STL should describe a closed (watertight) surface and use the project's length unit. You can check the part's size in the bottom bar (section 2.5): a part that should be 200 mm long and reads *x 0 to 0.2 mm* was drawn in metres.
 
-To fix that, choose File > **Scale part...** and type in **Scale by** the number every coordinate is multiplied by: 1000 from metres to millimetres, 1/1000 back, 25.4 from inches to millimetres. The window shows the size the part will have. OK changes the project's own copy of the part, in its part folder, so scaling again multiplies again (by 2, then by 3, is by 6). An example, or a project whose part is not in a folder of its own, is first saved as a project of your own: the STL the part came from never changes. Only the part is scaled. The units, the loads, the limits and the materials stay as they are. Faces you picked stay picked. Selections with coordinates or lengths you typed (a Box, a Cylinder, ...) are not scaled, so LSR MMTO names them first: check them afterwards. A length in element sizes, such as 1.5h, follows the mesh by itself. Runs made before keep their size: Results shows them, and Export STL exports them, at the size they were run at.
+To fix that, choose File > **Scale part...** and type in **Scale by** the number every coordinate is multiplied by: 1000 from metres to millimetres, 1/1000 back, 25.4 from inches to millimetres. The window previews the new size of the part. OK changes the project's own copy of the part, in its part folder, so scaling again multiplies again (by 2, then by 3, is by 6). An example, or a project whose part is not in a folder of its own, is first saved as a project of your own: the STL the part came from never changes. Scaling changes only the part. It does not change the units, loads, limits or materials. Faces you picked stay picked. Selections with coordinates or lengths you typed (a Box, a Cylinder, ...) are not scaled, so LSR MMTO names them first: check them afterwards. A length in element sizes, such as 1.5h, follows the mesh by itself. Earlier runs keep their original size: Results shows them, and Export STL exports them, at the size they were run at.
 
 ### 5.1 The mesh
 
-A run does not work on the STL itself. It fills the part with a grid of small equal blocks, the elements, and decides the material of each one. The corners of the blocks are the nodes, which supports and loads act on.
+A run does not work directly on the STL. Instead, it fills the part with a grid of equally sized blocks called elements. It then decides what material each element should contain. The corners of these blocks are called nodes. Supports and loads act on these nodes.
 
-How fine the grid is comes from **Mesh dofs** in Settings: the number of unknowns the mesh is built for, three at each node for a structural problem (the movement in x, y and z). More is finer, and slower. A finer mesh shows more detail, and makes smoother STL files when you export.
+The fineness of the grid is controlled by **Mesh dofs** in Settings: the number of unknowns the mesh is built for, three at each node for a structural problem (the movement in x, y and z). A larger value gives a finer mesh but also makes the computation slower. A finer mesh captures more detail and produces smoother STL files when you export the design.
 
-For a flat part, tick **Single element layer (2D)** in Settings: the grid then has one element through the thickness, and the run is much faster.
+If your part is flat, tick **Single element layer (2D)** in Settings: the grid then has one element through the thickness, and the run is much faster.
 
-The preview under Supports and loads (section 7.7) builds the same mesh the run will use, so you can see how many elements and nodes the run will have.
+The preview under Supports and loads (section 7.7) builds the same mesh the run will use, so you can check how many nodes and elements the run will use.
 
 ## 6. Materials
 
-The materials the optimization chooses from come from a **material database**: a spreadsheet with one row per material and one column per property (density, Young's modulus, and so on). LSR MMTO learns a map of the materials from it, the material network, so that the optimization can move smoothly from one material to another. Each element of the design ends up with one of the database's materials.
+The optimization chooses materials from a **material database**: a spreadsheet. Each row represents one material, and each column represents a property (density, Young's modulus, and so on). LSR MMTO uses this database to train a material network. The network creates a map of the materials so the optimization can move smoothly between different material choices. In the final design, each element is assigned one of the materials in the database.
 
-Open **Materials** from the buttons on the right. The window shows:
+Open **Materials** from the buttons on the right. The window contains:
 
 - **Materials in the design:** **Single material** or **Multi material**, and on the same row the material to use:
   - With single material, **Material:** lists the database's materials. Every element is the one you choose, with its values from the database; no network is trained, and the optimization only chooses where the part is solid. Any database works, so you never need to delete materials to run one of them.
@@ -152,15 +182,15 @@ Open **Materials** from the buttons on the right. The window shows:
 - **Database:** the database the project uses. The list holds the project's own databases: every database in its materials folder, and the one it uses when that one is kept elsewhere. **Included databases** beside it lists the databases that come with LSR MMTO; choosing one makes it the project's database, shown in the list as *its name (included)*.
 - With no database chosen yet, the report says so; make one with **New database...**, or bring one in with **Import...**.
 - A table of the database's materials, each in the colour and with the label it is drawn with, and its properties with their units.
-- Under the table, a short report: how many materials there are, the latent dimension recommended for them, how closely the trained network gives them back, and any errors or warnings. The (i) next to it explains the recommended latent dimension. With single material, the report names the material, used at its database values. A database that does not fit the choice is an error there, for example *Multi material: steel.xlsx has one material, and the network needs at least two to learn from*.
+- Under the table, a short report: how many materials there are, the latent dimension recommended for them, how closely the trained network gives them back, and any errors or warnings. The (i) next to it explains the recommended latent dimension. For a single-material design, the report names the material, which the run uses at its database values. A database that does not fit the choice is an error there, for example *Multi material: steel.xlsx has one material, and the network needs at least two to learn from*.
 
-With one material, there are no points on the material map, so a few things are greyed out elsewhere: **Material volume fraction** in Formulation, and the settings that act on the material map (the Distance penalty and Latent smoothing groups, Latent smoothing radius, Starting latent point and Snap to real materials). With single material, the VAE settings are greyed out too. A run of one material has no **Latent space** tab.
+When you use only one material, there is no material map. Because of this, some options elsewhere in the software are greyed out: **Material volume fraction** in Formulation, and the settings that act on the material map (the Distance penalty and Latent smoothing groups, Latent smoothing radius, Starting latent point and Snap to real materials). With single material, the VAE settings are greyed out too. A run of one material has no **Latent space** tab.
 
-Choose a database and press **OK**. When you change the database, the network settings of the new one come with it (see Settings, section 9), and the messages say what changed. A database with a trained network sets the network's shape (its latent dimension and hidden layer width) from the network itself, so they always match. In a project folder of its own, the database you choose is copied into the project's materials folder, with its trained network, so the project keeps everything it uses.
+Select a database and press **OK**. When you select a different database, its network settings are loaded as well (see Settings, section 9), and the messages explain the changes. A database with a trained network sets the network's shape (its latent dimension and hidden layer width) from the network itself, so they always match. In a project folder of its own, the database you choose is copied into the project's materials folder, with its trained network, so the project keeps everything it uses.
 
 ### 6.1 Where a database comes from
 
-The buttons next to the list:
+The following buttons appear beside the database list:
 
 - **New database...** opens the database editor (section 6.3) on an empty database, to type or paste your materials in.
 - **Edit...** opens the database in the editor. One of your own is changed in place. One that comes with LSR MMTO is saved as a copy in your project's folder, and the project then uses the copy. A column that is not a property LSR MMTO knows is left out, and a note over the table names it; Save writes the database without it.
@@ -168,50 +198,50 @@ The buttons next to the list:
 - **Versions...** lists the older versions kept of one of your own databases (section 6.5).
 - **Import...**, at the right, brings in a table of materials you already have, in Excel (.xlsx or .xls) or CSV. A database made by LSR MMTO (one whose check finds nothing wrong) is used where it is, with its trained network if it has one next to it. Any other table becomes a new database: the first column holds the material names and the first row the properties. A property can be written under any of the names LSR MMTO knows it by (for example Young's modulus as Youngs_Modulus, Youngs Modulus or E), and a unit may follow in brackets, as in *Density [kg/m^3]*. A second row of units, as in an LSR MMTO database, is read too. Columns that are not a property LSR MMTO knows are left out, and one message lists them. The database editor then opens with what was read, for you to check and save.
 
-New database and Import (of a table that is not yet a database) save into the project's folder, so the project must be saved first; LSR MMTO says so if it is not.
+Creating a new database or importing a table that is not already a database saves it in the project folder. Because of this, you must save the project first; LSR MMTO says so if it is not.
 
 When some columns of the database are in other units than the project's (section 4), a button **Convert to mmKS units...** (with the project's unit system) shows under the report. It opens a window that lists each of those columns with what its numbers are multiplied by, for example *Young's modulus: Pa -> MPa, x 1e-06*, and the limits of the formulation written for the old numbers with what they become, for example *Mass <= 4e+07 -> 4e-05 t*. **Convert these limits too** is ticked, so each limit keeps its meaning. **OK** writes the converted database as the project's own copy, in its materials folder (one that comes with LSR MMTO is never changed), keeps its trained network, which still fits up to rounding in the last digit (the next run asks once before using it, section 6.4), converts the ticked limits, saves the project and says in the messages what was converted.
 
 ### 6.2 Values and Network error
 
-Two tabs on the table choose what it shows:
+Use the two tabs above the table to choose what information you see:
 
 - **Values**: each material's properties, as the database gives them.
 - **Network error**: for each value, how far the trained network is from it when it turns the material into its point on the material map and back, in % of that property's range over the database's materials. Rest the mouse on a cell to see both values and the difference in the property's unit.
 
 Network error is greyed until the database has a trained network. The first run with a new database trains one. With single material there is no network, and no Network error tab.
 
-A small error (well under 1 %) means the run works with properties very close to the database's. If an error is large, the run's materials differ from the real ones by that much; see the network warning in section 14.
+A small error (well under 1 %) means the properties used during the run are very close to the values in the database. If the error is large, the materials used by the run differ from the actual database values by that amount; see the network warning in section 14.
 
 ### 6.3 The database editor
 
-The editor shows the database as a table:
+The database editor displays the materials in a table:
 
 - **Database name**: the database's name, which is also its file name. The grey words beside it say where it is saved (rest the mouse on them for the whole path).
 - One row per material: its name under **Material**, **Shown as** (an optional shorter name for legends and plots) and **Colour** (click it to choose another). The Material column stays in place when the table scrolls sideways.
 - One column per property, as wide as its title (a long title is cut short with ...; rest the mouse on it for the whole name). The row under the titles holds each property's unit; a property without a unit says *no unit*.
 - **Add material** and **Remove material** add and remove rows. **Add property** opens the **Add properties** window: every property below with a tick box, those this project needs first (the ones its physics, its objective and its constraints read), then the others. Those already in the table are ticked and greyed. Tick as many as you want (the search box finds one by any of its names); **Add 2 properties** adds a column for each. **Remove property** removes the column you are in.
 
-You can paste a block copied from Excel into the table. Problems show in red once you have typed in a row, and are listed under the table (a missing value, a value outside what the property allows, two materials with the same name); a new, empty form shows none. **Save** keeps the database in the project's folder and the project then uses it.
+You can copy several cells from Excel and paste them directly into the table. Problems show in red once you have typed in a row, and are listed under the table (a missing value, a value outside what the property allows, two materials with the same name); a new, empty form shows none. **Save** keeps the database in the project's folder and the project then uses it.
 
 While there are changes not saved, the editor's title says *(modified)*. Saving changes to a database that already has its first version kept (section 6.5) asks *Keep the older version?*: **Yes** keeps the database as it was before your changes, **No** saves without keeping it, **Cancel** goes back to editing. Closing the editor with changes not saved asks first: **Save...** saves them, **Discard changes** closes without them, **Cancel** goes back to editing. A database with columns LSR MMTO does not know shows *(modified)* from the start, since Save writes it without them.
 
-If you change the materials (a name, or a material added or taken away) or the numbers of a database that already has a trained network, the network no longer fits it: LSR MMTO sets the old network aside, and the next run trains a new one.
+If you change the materials (a name, or a material added or taken away) or the numbers of a database that already has a trained network, the trained network no longer matches the database: LSR MMTO sets the old network aside, and the next run trains a new one.
 
 ### 6.4 The database file
 
 A database is an Excel file (.xlsx): row 1 holds the property names, row 2 their units, and then one row per material, its name in the first column. An optional second sheet, **Display**, holds the colour (#rrggbb) and the shorter label each material is drawn with; the editor writes it for you.
 
-The trained network is a file next to the database with the same name and the ending .nt (my_materials.xlsx and my_materials.nt). A database that comes with LSR MMTO has its network already, and the one in LSR MMTO's own folder is never trained again. Its copy in your project's folder can be: see Use the trained network, in Settings.
+The trained network is stored in a file beside the database with the same name and the ending .nt (my_materials.xlsx and my_materials.nt). A database that comes with LSR MMTO has its network already, and the one in LSR MMTO's own folder is never trained again. Its copy in your project's folder can be: see Use the trained network, in Settings.
 
-A trained network keeps a record of the database it learned from: every name, unit and number, and each material's colour and label. Before every run, LSR MMTO compares the database with that record:
+A trained network keeps a record of the database it learned from: every name, unit and number, and each material's colour and label. Before each run, LSR MMTO checks the current database against this saved record:
 
 - A number, a unit, a name, or a material added or taken away, however small the change: the run doesn't start until a new network is trained (untick **Use the trained network** in Settings) or the version the network was trained on is brought back with **Versions...** (section 6.5). The report under the table names the cells that changed.
 - Only colours or labels changed, the units converted (section 6.1), or a network trained before networks kept this record: the next run asks once, *Use it for my_materials.xlsx as it is now?* **Yes** uses the network and records the database as it is now, so you aren't asked again; **No** starts nothing. The report under the table says when the next run will ask.
 
 LSR MMTO writes a number into the file with up to 16 significant digits, so a difference beyond that is not kept.
 
-The attributes a material database can hold:
+A material database can contain these attributes:
 
 <!-- list: material_attributes -->
 
@@ -229,21 +259,21 @@ The attributes a material database can hold:
 
 ### 6.5 Older versions
 
-The first version of a database is always kept: a database you make or import in the editor as it was first saved, an included database you edit as it came, and any other database (one made before LSR MMTO kept versions, one imported as it is) as it was before your first change in the editor or before **Convert to ... units**. Later versions are kept when you answer **Yes** to *Keep the older version?*. A version keeps the trained network with it, so going back to it needs no new training.
+The first version of a database is always kept: a database you make or import in the editor as it was first saved, an included database you edit as it came, and any other database (one made before LSR MMTO kept versions, one imported as it is) as it was before your first change in the editor or before **Convert to ... units**. Later versions are kept when you answer **Yes** to *Keep the older version?*. Each saved version also includes its trained network. This means you can restore that version without training a new network.
 
 **Versions...** in the Materials window lists them, newest first, each with when it was kept and how many materials it has. **Restore** puts the chosen version back in the database's place; it first asks *Keep the current version?*, so a restore can be undone too. **Delete** deletes the chosen version, after you confirm; that cannot be undone. The versions are kept in a **versions** folder beside the database (for your own databases, inside the project's materials folder), out of the Database list, and **File > Save As** takes them with the project. An included database has none: it is never changed.
 
 ## 7. Supports and loads
 
-A part needs two things before it can be optimized: something that holds it, and something that pushes on it. In LSR MMTO these are **supports** and **loads**. Each one acts on a **selection**: a named piece of the part, such as one face, a hole, or a few faces you clicked.
+Before you can optimize a part, you need to define what holds it in place and what forces act on it. In LSR MMTO, these are called **supports** and **loads**. Each support or load is applied to a **selection**: a named piece of the part, such as one face, a hole, or a few faces you clicked.
 
-Open **Supports and loads** from the buttons on the right of the window. The panel shows:
+Open **Supports and loads** from the buttons on the right of the window. The panel contains:
 
 - **Add**, to put a new support or load on the part, and **Preview** and **Clear**.
 - A list of the supports and loads, with their **Type**, **Where** (the selection they act on) and **Value**. Double-click one to change it. **Delete** removes the one you clicked.
 - **Selections**, closed at first. Click it to see every selection of the project, with its **Name**, its **Type**, and a **Keep solid** tick.
 
-Changes go into the project at once. Use File > Save to keep them.
+Your changes are applied to the project immediately. Use File > Save to keep them.
 
 ### 7.1 Two ways to add a support or load
 
@@ -252,7 +282,7 @@ Click **Add** and choose one of:
 - **Click on the part...** opens the **Pick** window. You click faces on the part, choose what they are, and press **Apply**. This is the quickest way for a face you can see.
 - **Enter by hand...** opens a form. You choose the **Type**, choose the selection under **Where** (or make one there with **New selection...**), and fill in the values. **Preview**, or Enter, checks the values and shows the selection on the part (with an arrow for a load), and the form stays open; **OK** keeps it. Use this when a face is hard to click, when you need exact numbers, or when the place is not a face at all (a hole, a patch, a point).
 
-Both end up in the same list, and you can change either one later by double-clicking it.
+Both methods add a support or load to the same list. You can edit either one later by double-clicking it.
 
 ### 7.2 Picking faces on the part
 
@@ -268,15 +298,15 @@ Click **Add**, then **Click on the part...**. The Pick window opens beside the p
 
 The pick becomes a support or load in the list, on a new selection named gui_support1, gui_load1 and so on. Rename the selection under Selections if you like.
 
-Faces are only picked while the Pick window is open. Closing it clears whatever was picked and not applied. With it closed, clicking and dragging on the part just turns the view.
+You can select faces only while the Pick window is open. Closing it clears whatever was picked and not applied. With it closed, clicking and dragging on the part just turns the view.
 
 A picked selection remembers the triangles of the STL by their numbers. If you load a different STL for the part, the same numbers are different faces, so pick them again.
 
 ### 7.3 Selections
 
-A selection is a named piece of the part. Several supports and loads can share one selection, and the name shows under **Where**. To make one, open **Selections** and click **Add**, or click **New selection...** in the support or load form.
+A selection identifies a particular region of the part and gives that region a name. You can use the same selection for several supports or loads. Its name appears under **Where**. To make one, open **Selections** and click **Add**, or click **New selection...** in the support or load form.
 
-The Selection form has a **Name** (letters, digits and _, not starting with a digit), a type, and the type's own fields. The (i) next to the type says what it selects. The part's size is shown under the type, so you can see which numbers make sense. Two buttons help you check a selection before you keep it:
+The Selection form has a **Name** (letters, digits and _, not starting with a digit), a type, and the type's own fields. The (i) next to the type says what it selects. The part's size is shown under the type, so you can see which numbers make sense. You can check the selection before saving it using two buttons:
 
 - **Preview** draws the selection on the part in orange, and says how many nodes it has on the mesh the run will use.
 - **Clear** empties the form, every field back to its default, and removes that drawing.
@@ -285,7 +315,7 @@ Pressing Enter in the form does the same as **Preview**: it checks what you type
 
 While the form is open, rest the mouse on the part to read the coordinates under it. Click the part to copy that point; paste it into a field with Ctrl+V.
 
-The types of selection:
+The available selection types are:
 
 - **Face of the part**: every node on one outer side of the part, such as Right (x max) or Bottom (y min). The quickest way to hold or load a whole side of a box-like part. *Example: Side Left (x min) to clamp the left end of a beam.*
 - **Rows on a face**: a few rows of nodes at one end of a face. Use it to put a load on a small patch instead of a whole face. *Example: the top 8 rows of the right face: Face Right (x max), Counted along y, Number of rows 8, From High end.* A row is one layer of nodes, so the patch is as tall as that many elements.
@@ -298,9 +328,9 @@ The types of selection:
 - **Inside an STL**: every node inside a closed surface loaded from another STL file (**File**, with **Browse...**). Use it for a shape no other type describes, such as a collar around a bore. **Move by** (x, y, z, default 0, 0, 0) moves the shape before nodes are selected, for example when the STL was saved shifted to 0, 0, 0. Preview draws the shape where it ends up.
 - **Combined selections**: two selections of the project joined, overlapped, or one taken from the other. **How** is one of **Join: in A or in B**, **Overlap: in both A and B**, or **A minus B: in A, not in B**. It follows them: change Selection A or Selection B later and this selection changes too. It appears once the project has at least two selections. *Example: the left face without its bottom rows: A minus B, with A a face and B the rows.*
 
-Three more types are made with the mouse, and show up when you open such a selection: **Picked faces** (faces you clicked), **Node numbers** (single nodes, by number; they stay right only while the mesh does not change) and **Dragged box** (a box dragged over the part in earlier versions; a project that has one still opens and runs as before).
+Three additional types are created using the mouse. They appear when you open one of these selections: **Picked faces** (faces you clicked), **Node numbers** (single nodes, by number; they stay right only while the mesh does not change) and **Dragged box** (a box dragged over the part in earlier versions; a project that has one still opens and runs as before).
 
-Most types have a **Tolerance**: how far outside the selection a node may sit and still count. **Automatic** is right almost always.
+Most selection types have a **Tolerance**: how far outside the selection a node may sit and still count. **Automatic** is right almost always.
 
 The **Code line** tab shows the same selection as one line of text, for example `rows(face="xmax", axis="y", n=8, end="max")`. You can type a selection there instead of filling in the form.
 
@@ -308,7 +338,7 @@ A number can be typed as plain arithmetic, in the Selection form, on the Code li
 
 A length of a selection (a radius, a distance, the ends of a cylinder, a tolerance) can also be given in element sizes with h: 1.5h is one and a half element sizes, and 5 + 1h is 5 plus one element size. Such a length is kept as you typed it and follows the mesh: a finer mesh gives a smaller h.
 
-Every selection type at a glance:
+Here is a summary of all selection types:
 
 <!-- list: selection_types -->
 
@@ -332,7 +362,7 @@ Every selection type at a glance:
 
 ### 7.4 Supports
 
-A support holds the part. Without one, the part would float away under the loads.
+A support restricts how the part can move. Without enough support, the applied loads could make the whole part move instead of deforming it.
 
 - **Fixed support**: holds the selection still. Under **Held in**, tick the directions it is held in: x, y and z for a clamp, or only some of them for a support that lets the part slide in the others (for example, held in y only, like a part resting on a floor).
 - **Moved support**: moves the selection by a set **Distance** in the ticked directions (**Moved in**), instead of holding it still. Use it to push or pull on a part by a known amount rather than with a known force.
@@ -341,7 +371,7 @@ A support given in the Pick window is a Fixed support: Fixed XYZ holds x, y and 
 
 ### 7.5 Loads
 
-A load pushes on the part.
+A load represents a force or pressure acting on the part.
 
 - **Force**: a **Total force** on the selection, given as its x, y and z parts. The total is shared equally between the nodes of the selection: a force of 0, -100, 0 on a selection of 50 nodes puts 0, -2, 0 on each node. The force does not grow when the selection does, so a bigger selection only spreads the same force wider.
 - **Pressure**: a **Pressure** on the selection, turned into one force: Pressure times **Area**, pushing along **Direction**, shared equally between the nodes. Give the area as a number, or tick **from the selection** to use the size of the selection across the direction. With from the selection, the Direction must be along x, y or z, and the area is that of the rectangle around the selection, seen along the Direction. On a round or uneven face that rectangle is larger than the face, so type the area instead.
@@ -354,7 +384,7 @@ The units show beside each field, from the project's units (for example N and MP
 
 Tick **Keep solid** next to a selection, under Selections, and the optimization keeps material there: it favours those elements above every other, so they end the run solid. Use it for the places the part must keep whatever happens: where bolts go, where it is clamped, a mounting face.
 
-A selection can be kept solid without any support or load on it.
+You can mark a selection to remain solid even if no support or load acts on that selection.
 
 ### 7.7 The preview
 
@@ -365,7 +395,7 @@ Press **Preview** at the top of the panel to see everything on the mesh the run 
 - other selections as orange points,
 - kept-solid elements as grey blocks.
 
-Under the buttons, one line gives the verdict:
+A line below the buttons gives the verdict, whether the supports hold the part:
 
 - **The supports hold the part against the loads.** All is well.
 - **Error: the supports leave the part free to move or rotate in a direction the loads push...** Add supports, or tick more directions on one, until the part cannot move or turn.
@@ -374,7 +404,7 @@ A selection with no nodes on the mesh shows in red: *name has no nodes on this m
 
 Click a row of the list, or a selection under Selections, to see only that one on the part. **Clear** removes the preview, and any faces picked in the Pick window but not applied.
 
-The preview uses the run's mesh, not the STL, so it shows exactly the nodes the run will use. A finer mesh (Settings) gives more nodes, and can change which nodes a small selection catches.
+The preview uses the same mesh as the optimization, rather than the STL surface. This means the nodes shown are the nodes the run will actually use. A finer mesh (Settings) gives more nodes, and can change which nodes a small selection catches.
 
 ### 7.8 Common mistakes
 
@@ -385,7 +415,7 @@ The preview uses the run's mesh, not the STL, so it shows exactly the nodes the 
 - **A pressure with the wrong area.** Pressure times Area is the force. With from the selection, the area is the rectangle around the selection; on a round face, type the area instead.
 - **Picked faces after changing the STL.** Picked faces are stored by triangle number, so they belong to one STL. Pick them again on the new one.
 
-Every type of support and load at a glance:
+Here is a summary of all support and load types:
 
 <!-- list: support_and_load_kinds -->
 
@@ -402,7 +432,7 @@ Every type of support and load at a glance:
 
 ## 8. Formulation
 
-**Formulation** says what the optimization is for: one quantity to make as small as possible (the objective), and limits other quantities must keep to (the constraints).
+**Formulation** defines the optimization problem: you choose one quantity to minimize (the objective) and set limits that other quantities must satisfy (the constraints).
 
 - **Minimize**: choose the objective. For example **Compliance**, to make the part as stiff as it can be, or **Mass**, to make it as light as it can be.
 - **Constraints**: one row per constraint: the quantity, then **<=** and its limit, with the limit's unit beside it. For example *Mass <= 0.002 t*, or *Volume fraction <= 0.3* (at most 30 % of the design space filled). The (i) at the end of the row says what the quantity is. **Add constraint** adds a row; **Remove** takes one away. A new row starts at a limit that suits its quantity (0.4 for a fraction, 1 for the failure factor, and for Mass 40 % of the part solid in the lightest material); the row's (i), and the limit when you rest the mouse on it, say how it was worked out, for example *Starting limit 0.0035 kg: 40% of the mass of the whole part made solid in its lightest material (0.00875 kg)*. Change it to the one you want.
@@ -413,14 +443,14 @@ A quantity the database cannot give is greyed out in the list, and resting the m
 
 A constraint keeps its quantity at or below its limit. To ask for at least some amount, constrain the opposite: instead of a minimum stiffness, minimize compliance with a limit on mass, or minimize mass with a limit on compliance.
 
-Some pairs that work well:
+Here are some useful combinations of objectives and constraints:
 
 - **Stiffest part for its weight**: Minimize Compliance, with Mass (or Volume fraction) <= a limit.
 - **Lightest part that does not yield**: Minimize Mass, with Failure factor (p-norm) <= 1.
 - **Lowest stress**: Minimize Stress (p-norm), with Volume fraction <= a limit.
 - **Cheapest part**: Minimize Mass or Compliance, with Cost <= a limit (the database needs a Cost column).
 
-What the objective and the constraints can be:
+The following quantities can be used as objectives or constraints:
 
 <!-- list: quantities -->
 
@@ -441,7 +471,7 @@ What the objective and the constraints can be:
 
 ## 9. Settings
 
-**Settings** has everything about how the optimization runs. Most projects keep the values a new project starts with.
+**Settings** contains the options that control how the optimization runs. For most projects, you can keep the default values.
 
 The window has two tabs:
 
@@ -454,13 +484,13 @@ Every setting has an (i) that says what it does. A setting with a value other th
 
 Press **OK** to keep the changes, or **Cancel** to leave everything as it was.
 
-The settings that matter most often:
+The settings you will use most often are:
 
 - **Mesh dofs**: how fine the mesh is. More gives finer detail and smoother STL files, and takes longer. Start coarse while you set a problem up, and go finer for the design you keep.
 - **Single element layer (2D)**: for a flat part, one element through its thickness. Much faster.
 - **Max iterations**: the run stops after this many iterations at the latest. It can stop earlier, once the design has settled (Convergence tolerance, under Advanced).
 
-Every setting, in the groups of the Settings panel:
+The following table lists every setting, organized by its group in the Settings panel:
 
 <!-- list: settings -->
 
@@ -514,12 +544,12 @@ Every setting, in the groups of the Settings panel:
 
 ## 10. Running
 
-Press **Run** at the top. Before it starts:
+Press **Run** at the top. Before the run begins:
 
 - LSR MMTO checks the project. If something is missing or wrong, the run does not start, and the Current run panel lists why under *Cannot start:*. See section 14.
 - The project is saved, so the run matches the file. If there are unsaved changes, LSR MMTO asks first. An example is saved as a project of your own first.
 
-The run keeps its own copy of the project, so you can go on editing while it runs; the changes go into the next run.
+Each run uses its own copy of the project. You can continue editing the project while a run is in progress, but those changes will only affect the next run.
 
 ### 10.1 While it runs
 
@@ -531,7 +561,7 @@ The buttons on the right step aside, and the **Current run** panel takes half th
 
 The 3D view shows the design as it grows: each element in its material's colour, pale while it is half solid and in full colour once solid. Elements that are almost empty are not drawn. At the top left, a legend gives each material's colour and its share of the design, largest first (counted by how solid each element is). It shows whenever the database has more than one material, also while the design uses only one of them. **Part**, at the top, shows the part again without stopping the run; **Design** brings the growing design back. Untick **Show the design while it runs** to leave the 3D view alone.
 
-The panel's tabs:
+The panel has these tabs:
 
 - **Progress**: the objective, as a solid line, and each constraint, as a dotted line named as in Formulation with its limit, for example *Mass <= 0.4 t*. A constraint is met at or below the grey line at 0.
 - **Latent space**: where the elements' materials are heading on the material map. Red points are the elements, black stars the database's materials. As the run goes on, the points usually gather on the stars. A design of one material has no Latent space tab.
@@ -541,7 +571,7 @@ The panel's tabs:
 
 Press **Stop** (the Run button, while a run goes). The run ends after the iteration under way and keeps the design reached so far; the line says *Stopping after the iteration under way; the design so far is kept...* while it finishes. Stopped while the material network is still training, nothing is saved.
 
-You cannot open another project, or close LSR MMTO, while a run goes. Stop it first.
+You cannot open another project or close LSR MMTO while a run is active. You must stop the run first.
 
 ### 10.3 When it ends
 
@@ -553,20 +583,20 @@ Under the tabs:
 - **Open in Results** shows the run in the Results panel.
 - **Delete this run** removes the run and its folder, after asking. This cannot be undone.
 
-Every run has its own folder in the project's results folder, named by when it started.
+Each run is saved in a separate folder inside the project's results folder. The folder name records when the run started.
 
-How long a run takes depends mostly on Mesh dofs and Max iterations: a few minutes for a coarse flat part, up to hours for a fine 3D part.
+The run time mainly depends on Mesh dofs and Max iterations: a few minutes for a coarse flat part, up to hours for a fine 3D part.
 
 ### 10.4 Analyse
 
-**Analyse**, beside Run, solves the project once with every element of the part solid, in one material of the database. It uses that material's values as the database gives them, the project's supports and loads, and the same mesh as a run. Nothing is optimized and the material network is not used, so it is quick. Use it to check the supports, the loads and the materials before a run: a stress far from what you expect usually means a load or a unit is wrong.
+**Analyse**, beside Run, solves the project once with every element of the part solid, in one material of the database. It uses that material's values as the database gives them, the project's supports and loads, and the same mesh as a run. This does not perform optimization or use the material network, so it is faster than a full run. Use it to check the supports, the loads and the materials before a run: a stress far from what you expect usually means a load or a unit is wrong.
 
 Press **Analyse**. A small window asks for:
 
 - **Material**: the material the whole part is made of, named as in the Materials panel.
 - **Save in the results**: unticked, the analysis is only shown, and nothing is written, not even the project. Ticked, it is kept in the project's results folder like a run; the project is saved first, as before a run.
 
-The same checks as for a run come first: if something stops a run, it stops the analysis too, and the Current run panel says why under *Cannot start:*. While it goes, the line beside the buttons says *Analysing the solid part in* and the material, and **Stop** ends it; nothing is saved then.
+Before starting, LSR MMTO performs the same checks that it uses for an optimization run: if something stops a run, it stops the analysis too, and the Current run panel says why under *Cannot start:*. While it goes, the line beside the buttons says *Analysing the solid part in* and the material, and **Stop** ends it; nothing is saved then.
 
 When it is done, Results shows it the way it shows a run, titled **Analysis:** and the material: the part in the 3D view (Material, Density, Stress, Displacement, Solid) and its **Summary**, with the objective and each constraint for the solid part. An analysis has no **Convergence** and no **Latent space**. A material volume fraction is worked out from the material network, which an analysis does not use, so the Summary and Compare leave it out.
 
@@ -594,7 +624,7 @@ When it is done, Results shows it the way it shows a run, titled **Analysis:** a
 
 ### 11.1 The Summary
 
-The Summary is in sections:
+The Summary is divided into these sections:
 
 - **Result**: the objective, with its value and unit. Then a table of the constraints: each one's name, its **Value**, its **Limit**, how much of the limit it **Used**, and **✓ met** in green or **✗ not met** in red. A constraint counts as met when it is at most 0.1 % over its limit.
 - **Design**: the number of **Elements**, how many are **Solid** (density 0.5 or more) and what share of the elements that is, and **Grey (in between)**: how much of the design is neither solid nor empty. 0 % is a clean design.
@@ -615,20 +645,20 @@ Tick two runs and press **Compare**. A Compare window opens with their convergen
 
 **Export STL**, at the top, writes the design shown in the 3D view as STL files, for printing or for CAD. It works on a finished run's design: the last run, or the run shown in Results. It is greyed while the 3D view shows the part, while a run still goes, while two runs are compared, and for a run of another project.
 
-The files go into the run's folder:
+The exported STL files are saved in the run's folder:
 
 - **design.stl**: the whole part, in one piece, for printing in one material. Faces of your STL the optimization did not touch keep their exact shape. When that smooth surface cannot be closed (a plate only two elements thick can do this, and an analysis has no empty elements to take away), design.stl is built from the material regions instead, the same surface the material files share, and the messages say so.
 - **design_*material*.stl**: one file per material the design uses. Together they make up the part, with no gaps and no overlaps between them.
 
-The files are smoothed, so they do not show the staircase of the elements. Smoothing cannot add detail finer than the mesh: features one element across are dropped, and square corners come out rounded. For a part to print, run on a finer mesh.
+The exported files have smoothed surfaces, so the individual mesh elements do not appear as staircase-shaped steps. Smoothing cannot add detail finer than the mesh: features one element across are dropped, and square corners come out rounded. For a part to print, run on a finer mesh.
 
-While it works, a note at the top of the 3D view says it is exporting. When it is done, the note says how many files were saved, with a link, **Open folder**. The messages list every file with its volume next to the design's, and say whether each file is closed. *NOT closed* after a file means it has holes, which some printers and CAD programs refuse; a finer mesh usually helps.
+While it works, a note at the top of the 3D view says it is exporting. When it is done, the note says how many files were saved, with a link, **Open folder**. The messages show each file, compare its volume with the design's volume, and report whether the file has a closed surface. *NOT closed* after a file means it has holes, which some printers and CAD programs refuse; a finer mesh usually helps.
 
 After an export, Results shows the smooth pieces on the part, each in its material's colour: **Show** turns to **Smooth (exported)**. It is there for every run whose folder holds the exported files, also later, and greyed for a run not exported yet. Beside it, tick **Pull the material pieces apart** to set the pieces side by side in a row along x, the largest first, so each can be seen on its own. The legend at the top left names each piece, with its share of the volume.
 
 ## 13. View
 
-**View**, in the top row, changes how the part is drawn:
+**View**, in the top row, controls how the part is displayed:
 
 - **Cut along x (%)**, **Cut along y (%)** and **Cut along z (%)**: cut away that share of the part, along x, y or z, to see inside it. 0 shows it whole. The cut works on the design too.
 - **Show the part's triangles**: the edges of the STL's triangles.
@@ -638,11 +668,11 @@ After an export, Results shows the smooth pieces on the part, each in its materi
 
 ## 14. When something goes wrong
 
-Each message below is written as LSR MMTO shows it, with what it means and what to do. Names such as corner, clamp or my_materials stand for your own selections and files. Some messages use the names a project file stores; this section says which field each one is.
+The messages below are written as LSR MMTO shows them. Each one is followed by an explanation of what it means and how to fix the problem. Names such as corner, clamp or my_materials stand for your own selections and files. Some messages use the names a project file stores; this section says which field each one is.
 
 ### 14.1 Before a run
 
-These appear in the messages as **Error:** lines, and under *Cannot start:* in the Current run panel. The run starts once they are put right.
+These appear in the messages as **Error:** lines, and under *Cannot start:* in the Current run panel. You can start the run once you fix these problems.
 
 - **no supports** / **no loads**: the project has no support, or no load. Add them under Supports and loads (section 7).
 - **no material database**: choose one under Materials (section 6).
@@ -689,7 +719,7 @@ These appear in the messages as **Error:** lines, and under *Cannot start:* in t
 ### 14.6 Opening and saving
 
 - **STL not found: ...**, when a project opens: the part's file is not where the project says. Choose it again with File > Replace part... (section 5).
-- **3 settings missing from the file were set to their defaults; Save writes them.**: the project was made by an older version. Nothing to do; save to keep the values.
+- **3 settings missing from the file were set to their defaults; Save writes them.**: the project was made by an older version. You do not need to fix anything. Save the project to keep these values.
 - **Not saved: ...**: the project could not be written, for example the folder is read-only or the file is open elsewhere. Save it somewhere else with Save As.
 - **Start a project first: File > New or File > Open.**: the panel needs a project. Make or open one.
 - **A run is going. Stop it first...**: another project cannot open, and LSR MMTO cannot close, while a run goes.

@@ -41,8 +41,8 @@ How to start
        then a test can register it, as tests/physics/test_thermal_physics.py does with thermal.
     5. Copy tests/physics/test_thermal_physics.py for your physics: a case whose answer is known, and a short run.
 
-The bounds of a physics
------------------------
+The rules of a physics
+----------------------
     1. The core reaches a physics only through its front page; nothing outside the folder imports its
        other files (tests/code_rules/test_physics_folders.py checks it).
     2. More files inside the folder are fine, when the name says the job (heat_radiation.py).

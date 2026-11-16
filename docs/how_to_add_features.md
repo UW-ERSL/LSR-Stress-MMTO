@@ -248,7 +248,7 @@ Start from `lsr_mmto/physics/template/`, the blank form: each blank is marked `F
 goes in it, and its functions raise until they are filled in. `lsr_mmto/physics/thermal/` is the same
 form filled in, a working steady heat conduction with its own example materials. Copy the form, rename
 its five files, fill the blanks, and add one line to `MODULES`; the steps are at the top of
-`template/template_module.py`, with the four bounds a physics keeps to (also in CONTRIBUTING).
+`template/template_module.py`, with the four rules a physics follows (also in CONTRIBUTING).
 
 A physics is a folder in `lsr_mmto/physics/`, e.g. `thermoelastic/`, with five files:
 

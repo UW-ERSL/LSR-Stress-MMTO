@@ -2,29 +2,29 @@
 
 Multi-material topology optimization in a learned material space, with a GUI that takes a part from its STL to the optimized design.
 
-This is the `autodiff` branch, built on [PyTO-AD](https://github.com/UW-ERSL/PyTO-AD). The `main` branch holds older code and is not developed further.
+This code is on the `autodiff` branch, built on [PyTO-AD](https://github.com/UW-ERSL/PyTO-AD). The `main` branch holds older code and is no longer being developed.
 
-Install below, then open LSR MMTO from the Start menu. Everything, from your part's STL to the optimized design, is done in the GUI.
+Install below, then open LSR MMTO from the Start menu. You can complete the entire process in the GUI, starting with the STL file for the part and ending with the optimized design.
 
 ## What LSR MMTO is
 
-LSR MMTO designs parts made of several materials: it decides where material goes in the part and which material from a database goes where. The materials sit in a learned material space, so the optimization can move from one material to another smoothly. A problem is set up, run and exported in the LSR MMTO GUI, from the part's STL to the optimized design as STL, or in a short Python script.
+LSR MMTO designs parts that use more than one material: it chooses where to place material and which database material to use in each location. The software represents the materials in a learned material space, which lets the optimizer move smoothly between material choices. A problem is set up, run and exported in the LSR MMTO GUI, from the STL file for the part to the optimized design as STL, or in a small Python script.
 
-Today it solves structural problems, with stiffness, mass, cost, volume and stress as the objective or the constraints. Thermal problems, and thermoelastic problems with temperature-dependent material properties, are in development.
+Currently, it solves structural problems, with stiffness, mass, cost, volume and stress as the objective or the constraints. Thermal problems, and thermoelastic problems with temperature-dependent material properties, are still being developed.
 
 ## Installation
 
-First, download the code: on this page, switch the branch menu (top left, it says `main`) to **autodiff**, then click the green **Code** button, then **Download ZIP**, and unzip it anywhere. With git instead: `git clone -b autodiff https://github.com/UW-ERSL/LSR-Stress-MMTO.git`.
+Start by downloading the code: on this page, switch the branch menu (top left, it says `main`) to **autodiff**, then click the green **Code** button, then **Download ZIP**, and unzip it anywhere. With git instead: `git clone -b autodiff https://github.com/UW-ERSL/LSR-Stress-MMTO.git`.
 
-If you already have conda (Miniforge, Miniconda or Anaconda), skip step 1. If you already have an environment that runs this code, you can keep using it; `requirements.txt` lists what it needs. To set everything up yourself instead, see [Setting up by hand](#setting-up-by-hand) further down.
+If conda is already installed (Miniforge, Miniconda or Anaconda), skip step 1. If you already have an environment that runs this code, you do not need to replace it; `requirements.txt` lists what it needs. If you prefer to install everything manually, see [Setting up by hand](#setting-up-by-hand) further down.
 
 1. **Install Miniforge.** Download the Windows installer, `Miniforge3-Windows-x86_64.exe`, from [github.com/conda-forge/miniforge](https://github.com/conda-forge/miniforge/releases/latest), run it, and accept the defaults.
 
 2. **Open the Miniforge Prompt.** Start menu, type `Miniforge Prompt`, open it. With Miniconda or Anaconda it is the `Anaconda Prompt`.
 
-3. **Run the setup.** In that prompt, type `python` and a space, **without pressing Enter**, then drag `setup_environment.py` into the window, and only then press Enter. It first asks one question, whether to put an LSR MMTO icon on the desktop (it always goes in the Start menu), and then runs on its own. It takes roughly 10 minutes and ends with `Done.`
+3. **Run the setup.** In that prompt, type `python` and a space, **without pressing Enter**, then drag `setup_environment.py` into the window, and only then press Enter. The setup first asks one question, whether to put an LSR MMTO icon on the desktop (it always goes in the Start menu), and then completes the remaining steps automatically. It takes roughly 10 minutes and ends with `Done.`
 
-   This also downloads [PyTO-AD](https://github.com/UW-ERSL/PyTO-AD), the differentiable topology optimization code this branch builds on (finite element analysis, filters, MMA, automatic differentiation), into a folder next to this one, unless it is already there. It creates its own environment, `lsr-stress-mmto-ad`, so it never touches the one `main` uses.
+   The setup also downloads [PyTO-AD](https://github.com/UW-ERSL/PyTO-AD), the differentiable topology optimization code this branch builds on (finite element analysis, filters, MMA, automatic differentiation), into a folder next to this one, unless it is already there. It creates its own environment, `lsr-stress-mmto-ad`, so it does not change the environment `main` uses.
 
 4. **Open LSR MMTO.** Start menu, type LSR, and open it, or use the desktop icon. The start page offers the four examples and New project from an STL.
 
@@ -44,7 +44,7 @@ https://github.com/user-attachments/assets/abb986d8-c686-4a75-b559-3b81c5ae498f
 
 Each panel's (i) button explains that panel, and Help > User guide covers every step.
 
-If the app crashes or stops responding, `crash_report.log` in `%LOCALAPPDATA%\LSR MMTO` (paste that into the File Explorer address bar) records what happened; send it along with a description of what you were doing.
+If the application crashes or freezes, `crash_report.log` in `%LOCALAPPDATA%\LSR MMTO` (paste that into the File Explorer address bar) contains information about what went wrong; send it along with a description of what you were doing.
 
 ## Your first project in Python
 
@@ -52,7 +52,7 @@ If the app crashes or stops responding, `crash_report.log` in `%LOCALAPPDATA%\LS
 
 ## Setting up by hand
 
-In a Miniforge Prompt (or Anaconda Prompt), from inside this folder, run these one at a time.
+In a Miniforge Prompt (or Anaconda Prompt), while you are in this folder, enter these commands one at a time.
 
 **Create the environment:**
 
@@ -94,27 +94,27 @@ git clone https://github.com/UW-ERSL/PyTO-AD.git ../PyTO-AD
 git -C ../PyTO-AD checkout 790d935
 ```
 
-To use a PyTO-AD you already have instead, it must sit next to this folder and be named `PyTO-AD`. If yours has another name, run `mklink /J PyTO-AD <its name>` in the folder that holds both.
+If you want to use an existing PyTO-AD installation instead, it must sit next to this folder and be named `PyTO-AD`. If yours has another name, run `mklink /J PyTO-AD <its name>` in the folder that holds both.
 
 ## Removing LSR MMTO
 
-Windows Settings > Apps > LSR MMTO > Uninstall. It lists what it removes and what it keeps, and asks before it starts. It removes the Start menu and desktop shortcuts, the Python environment `lsr-stress-mmto-ad`, the Jupyter kernel and the GUI's saved settings. It keeps this folder, PyTO-AD next to it and your projects, and says where they are, so you can delete them yourself if you no longer want them.
+Windows Settings > Apps > LSR MMTO > Uninstall. The uninstaller shows what will be removed and what will be kept, and asks before it starts. It removes the Start menu and desktop shortcuts, the Python environment `lsr-stress-mmto-ad`, the Jupyter kernel and the GUI's saved settings. It keeps this folder, PyTO-AD next to it and your projects, and says where they are, so you can remove them manually if you no longer need them.
 
 ## Files
 
-The pages in `docs/` and `CONTRIBUTING.md` can also be read inside the GUI: the user guide under Help > User guide, and the others under Help > Researcher guide, so no Markdown viewer is needed.
+The pages in `docs/` and `CONTRIBUTING.md` are also available inside the GUI: the user guide under Help > User guide, and the others under Help > Researcher guide, so you do not need a separate Markdown viewer.
 
 ### Top level
 
 | File | Purpose |
 |---|---|
-| `Python_walkthrough.ipynb` | one whole project in Python, from the STL to the exported design |
+| `Python_walkthrough.ipynb` | a complete project in Python, from the STL to the exported design |
 | `run_gui.py` | starts the LSR MMTO GUI: `python run_gui.py`, or `python run_gui.py projects/beam.mmto` |
 | `make_shortcut.py` | adds LSR MMTO to the Start menu, the desktop and Settings > Apps (Windows); the setup runs it, and running it again (`python make_shortcut.py`, with the environment active) repairs the shortcuts after the folder moves |
 | `uninstall_lsr_mmto.py` | removes LSR MMTO; Settings > Apps > LSR MMTO > Uninstall runs it |
 | `projects/` | the four examples as project files: geometry, supports, loads, materials, objective, constraints, settings |
 | `docs/how_the_code_works.md` | how the code is laid out, and what happens in one run |
-| `docs/code_map.md` | the map of the code: what is where, and where a new feature goes |
+| `docs/code_map.md` | the map of the code: what is where, and where to add a new feature |
 | `docs/reference.md` | everything a project file can hold, and every Python call a project script uses, generated from the code |
 | `docs/how_to_add_features.md` | how to add a quantity, a selection type, a kind of support or load, a setting, a material attribute, a physics or a database |
 | `CONTRIBUTING.md` | how changes to the code are made and checked |
@@ -155,16 +155,16 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad_imp
 | `selections.py` | named selections of the mesh that supports, loads and keep-solid regions act on |
 | `boundary_conditions.py` | what a kind of support or load is (`BCKind`), and the list of kinds of every physics |
 | `project_folder.py` | keeps everything a project uses in its folder |
-| `mesh.py` | turns the part's STL into the voxel mesh |
+| `mesh.py` | turns the STL file for the part into the voxel mesh |
 
 #### `lsr_mmto/materials/`
 
 | File | Purpose |
 |---|---|
 | `databases.py` | the attributes a material database may hold, the check of a database, the colour and label of each material, the VAE settings of each shipped database |
-| `database_versions.py` | the older versions kept of a material database, so that a change can be undone |
+| `database_versions.py` | the older versions kept of a material database, which lets you undo changes |
 | `encoder.py` | reads a material database, trains or loads the VAE; its `decode` gives each element's properties from its latent point |
-| `material_source.py` | where a run gets each element's material properties from: what every material source gives, the network fixed to one material, and the database's own values with no network (a single material, Analyse) |
+| `material_source.py` | where a run gets each element's material properties from: what every material source gives, the network fixed to one material, and the database's own values without using a network (a single material, Analyse) |
 | `network_stamp.py` | the record a trained network keeps of the database it learned from: a run does not use a network whose database has changed since |
 | `networks.py` | the VAE network |
 
@@ -185,7 +185,7 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad_imp
 
 | File | Purpose |
 |---|---|
-| `quantities.py` | every objective and constraint a formula can name, as differentiable functions; autograd gives their gradients |
+| `quantities.py` | every objective and constraint a formula can name, as differentiable functions; autograd calculates their gradients |
 | `formulation_text.py` | reads the formula text of the objective and the constraints |
 
 #### `lsr_mmto/physics/`
@@ -194,7 +194,7 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad_imp
 |---|---|
 | `available_physics.py` | the list of physics a project may name, and what each one's front page gives |
 | `structural/structural_module.py` | the structural module's front page: everything the rest of the code takes from it |
-| `structural/structural_physics.py` | the structural solver, one iteration's solve, element stress, von Mises, p-norm |
+| `structural/structural_physics.py` | the structural solver, the solve performed during one iteration, element stress, von Mises, p-norm |
 | `structural/structural_supports_and_loads.py` | the structural supports and loads: fixed, displacement, force, traction, and the check that they hold the part |
 | `structural/structural_quantities.py` | the structural objectives and constraints: compliance, p-norm stress, p-norm failure factor |
 | `structural/structural_results.py` | what each iteration records, the final check, the results a run saves and its Summary rows |
@@ -209,9 +209,9 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad_imp
 | `design_model.py` | one iteration: design, properties, the physics' solve, objective and constraints |
 | `mmto_to_params.py` | the parameter container the loop reads |
 | `filters.py` | the density and material filters |
-| `history.py` | what each iteration records and prints |
+| `history.py` | the information recorded and printed at every iteration |
 | `final_design_analysis.py` | the final design analysed three ways, and the run saved |
-| `solid_part_analysis.py` | Analyse: the whole part solid in one material, solved once without optimizing |
+| `solid_part_analysis.py` | Analyse: the entire part treated as solid in one material, solved once without optimizing |
 | `save_results.py` | saves a finished run to disk |
 | `gradient_check.py` | the autodiff gradient against central finite differences |
 

@@ -1,9 +1,9 @@
 # The map of the code
 
-Two parts. The first is the code as nested trees: each part says what it is and what slots into it.
-The second is a decision tree for a researcher with something to add: answer its questions from the
-top, and the leaf you reach names the file, the test to copy and the section of
-[how_to_add_features.md](how_to_add_features.md) to follow. The rules for any change are in
+Two parts. First, there are nested trees showing how the code is organized: each part says what it does and which pieces belong inside it.
+Second, there is a decision tree for researchers who want to add a feature: answer its questions from the
+top, and the final branch tells you the file, the test to copy and the section of
+[how_to_add_features.md](how_to_add_features.md) to follow. The rules you must follow for changes are in
 [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ## 1. What is where
@@ -149,7 +149,7 @@ Is it about one physics only?
     │     lsr_mmto/problem/project.py, with an upgrade for older files
     │     test: tests/problem/test_project.py · docs: "A change to the project file format"
     └── none of these: it changes what the core assumes
-          a widening of the core: CONTRIBUTING, "Where a change goes", its four rules
+          a widening of the core: CONTRIBUTING, "Where a change goes", its four rules for a widening of the core
           test: tests/runs/test_regression.py, and a test of its own
 ```
 
