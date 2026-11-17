@@ -257,7 +257,9 @@ def problem_solver(physics: "ModuleType", mesh: "HexMesher", mat_prop: "Material
     fe_solver.solver and fe_solver.dsolver, so it follows this choice automatically. elem_body_force: one
     per element, or None (Project.build always gives None). dsolver: the deflation solver, which keeps whether
     each solve converged (iterative_solve_check.py); the caller makes it and keeps it, to read those solves
-    whatever the physics' solver keeps (a new one when not given). Prints the solver chosen."""
+    whatever the physics' solver keeps (a new one when not given). Above the limit, raises ValueError when the
+    deflation space leaves a field without a space of its size (iterative_solve_check.py). Prints the solver
+    chosen."""
     from lsr_mmto.optimize.iterative_solve_check import CheckedDeflationSolver
     from lsr_mmto.pyto_ad_imports import DIRECT_SOLVER_DOF_CUTOFF    # dof limit for the direct solver; above it, DPCG
 
@@ -267,6 +269,12 @@ def problem_solver(physics: "ModuleType", mesh: "HexMesher", mat_prop: "Material
     if to_params.nDOFDesired > DIRECT_SOLVER_DOF_CUTOFF and physics.deflation_space is not None:
         linear_solver = linear_solvers.Solvers.DPCG
         physics.deflation_space(dsolver, mesh)
+        for field, per_node in physics.FIELDS.items():     # a field no space fits would be solved unchecked
+            n = per_node * mesh.num_nodes
+            W = getattr(dsolver.space_for(n), "W", None)
+            if W is None or W.shape[0] != n:
+                raise ValueError(f"physics {physics.NAME!r}: its deflation_space gives no space for the field "
+                                 f"{field} ({per_node} unknown{'s' if per_node > 1 else ''} per node), so its solve would not be checked")
     print("Solver:", linear_solver.name)
     return physics.make_solver(mesh, mat_prop, bcs, linear_solver, dsolver, elem_body_force)
 

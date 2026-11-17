@@ -6,7 +6,9 @@ wait for an answer that never comes, and the whole run would hang. Here every me
 answers at once (Cancel, or OK where that is its only button), and a test that met one it did not
 ask for fails at its end, naming the dialog's title and text. A test that means to answer a dialog
 says so, as test_gui.answers() does. The app's settings (what a user's window keeps between sessions, the
-message panel's height) go to a folder of the test run's own.
+message panel's height) go to a folder of the test run's own. And no solve is left unchecked: plain CG, which
+PyTO-AD falls back to for a system that no deflation space fits, fails the test that reaches it (every iterative
+solve is DPCG on a checked solver, optimize/iterative_solve_check.py).
 """
 import tempfile
 
@@ -89,3 +91,15 @@ def no_dialog_waits():
         met = "; ".join(_unasked)
         _unasked.clear()
         pytest.fail(f"a dialog opened that the test did not answer: {met}", pytrace=False)
+
+
+@pytest.fixture(autouse=True)
+def no_unchecked_solve(monkeypatch):
+    """Plain CG fails the test: PyTO-AD reaches it only for a system no deflation space fits, and its solves are
+    not checked."""
+    import scipy.sparse.linalg
+
+    def plain_cg(*args, **kwargs):
+        raise AssertionError("an iterative solve ran plain CG, which is not checked: the physics' deflation_space "
+                             "has no space for this system (iterative_solve_check.py)")
+    monkeypatch.setattr(scipy.sparse.linalg, "cg", plain_cg)

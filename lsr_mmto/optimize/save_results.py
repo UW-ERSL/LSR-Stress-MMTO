@@ -530,5 +530,6 @@ def record_arrays(save_dir: str, data: dict[str, Any]) -> tuple[dict[str, np.nda
         "vae_net":     None if cfg.get("vae_params", {}) is None else os.path.basename(
                            str(tp.get("MaterialsExcelFile", ""))).replace(".xlsx", ".nt"),
         "results":     data["result_info"],
-    }, default=str))
+        "solver_check": cfg.get("solver_check"),   # the iterative solves that did not converge, also here so the
+    }, default=str))                                # .npz alone says which numbers are not reliable
     return rec, cfg

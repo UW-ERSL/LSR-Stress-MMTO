@@ -48,7 +48,8 @@ def make_solver(mesh: "HexMesher", mat_prop: "Material", bcs: "dict[str, BC]", l
     mat_prop        a placeholder material from Project.build; the real properties come each iteration
     bcs             {field name: PyTO-AD BC}, one per field in FIELDS, built from the supports and loads
     linear_solver   PARDISO, or DPCG for a large problem when the physics has a deflation_space
-    dsolver         the deflation solver, used only with DPCG
+    dsolver         the deflation solver, used only with DPCG; a solver of a system that is not the size of
+                    its W takes dsolver.space_for(its unknowns) instead, as ConductionHexFEA does
     elem_body_force a body force per element, or None
 
     The solver is usually PyTO-AD's solver of the physics, subclassed (a Helper below) so that each element
@@ -77,9 +78,12 @@ def analyse(m: "MMTOModelAD | _Analysed") -> None:
 # ----------------------------------------------------------------------------- OPTIONAL entries of this file
 # OPTIONAL: deflation_space, for the deflation linear solver
 # def deflation_space(dsolver: "DeflationSolver", mesh: "HexMesher") -> None:
-#     """Builds the deflation space of this physics' system on dsolver, so problems above the direct
-#     solver's limit (DIRECT_SOLVER_DOF_CUTOFF in PyTO-AD) use DPCG. Structural's are the rigid-body
-#     motions of groups of nodes. Left out, the direct solver runs at every size."""
+#     """Builds the deflation space of each of this physics' systems on dsolver, so problems above the
+#     direct solver's limit (DIRECT_SOLVER_DOF_CUTOFF in PyTO-AD) use DPCG, checked. Structural's are the
+#     rigid-body motions of groups of nodes (3 unknowns per node); a field of one unknown per node calls
+#     thermal_physics.deflation_space (or adds its own with dsolver.add_space, as that does). A physics of
+#     several fields calls one for each, as thermoelastic does; a field no space fits stops the run above
+#     the limit. Left out, the direct solver runs at every size."""
 
 # ----------------------------------------------------------------------------- Helpers
 # Your solver class goes here: PyTO-AD's solver of the physics subclassed so each element gets its own

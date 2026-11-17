@@ -434,18 +434,35 @@ def test_a_result_the_physics_does_not_return_stops_the_save_with_a_message(monk
         run(p, save_dir=d, verbose=False)
 
 
-def test_a_large_thermal_problem_keeps_the_direct_solver(monkeypatch, capsys):
-    """Above the direct solver's limit the loop uses DPCG only for a physics with a deflation space; thermal
-    has none, so it keeps PARDISO. The limit is lowered here so the test stays small."""
-    import lsr_mmto.pyto_ad_imports as imports
-    from lsr_mmto.problem.project import run
-    monkeypatch.setattr(imports, "DIRECT_SOLVER_DOF_CUTOFF", 100)
+def test_a_large_thermal_problem_uses_dpcg_and_gives_the_direct_answer():
+    """Above the direct solver's limit thermal uses DPCG on its own deflation space (a constant on each group of
+    nodes). On a near-binary design the temperature and its gradient (the adjoint solve) are the direct
+    solver's, and every iterative solve, the adjoint's too, is kept by the run's checked solver as converged."""
+    from types import SimpleNamespace
+    from lsr_mmto.optimize.iterative_solve_check import CheckedDeflationSolver
+    from lsr_mmto.optimize.optimization_loop import problem_solver
+    from lsr_mmto.pyto_ad_imports import DIRECT_SOLVER_DOF_CUTOFF, linear_solvers
+    compliance = next(q["fn"] for q in THERMAL.QUANTITIES if q["name"] == "ThermalCompliance")
     p = _held_and_heated("large")
-    p.settings["common"]["maxIterations"] = 2
-    with tempfile.TemporaryDirectory() as d:
-        run(p, save_dir=d, verbose=True)
-    out = capsys.readouterr().out
-    assert "Solver: PARDISO" in out and "Solver: DPCG" not in out
+    p.complete_settings()
+    mesh, mat_prop, bcs, _, _, _ = p.build(verbose=False)
+    n = mesh.num_elems
+    rng = np.random.default_rng(0)
+    x = np.where(rng.uniform(size=n) < 0.7, 1.0, 1e-3)
+    answers, checked = {}, CheckedDeflationSolver()
+    for name, n_dof in (("PARDISO", 1), ("DPCG", DIRECT_SOLVER_DOF_CUTOFF + 1)):
+        fe = problem_solver(THERMAL, mesh, mat_prop, bcs, None, SimpleNamespace(nDOFDesired=n_dof),
+                            dsolver=checked if name == "DPCG" else None)
+        assert fe.solver == getattr(linear_solvers.Solvers, name), (name, fe.solver)
+        x_phys = torch.tensor(x, dtype=torch.float64, requires_grad=True)
+        model = SimpleNamespace(fe=fe, x_phys=x_phys, props={"Conductivity": torch.full((n,), 3.0)})
+        THERMAL.analyse(model)
+        compliance(model, None).backward()
+        answers[name] = (model.T.detach().numpy(), x_phys.grad.numpy())
+    for what, direct, iterative in zip(("temperature", "gradient"), answers["PARDISO"], answers["DPCG"]):
+        error = np.max(np.abs(iterative - direct)) / np.max(np.abs(direct))
+        assert error < 1e-6, f"{what}: largest difference {error:.1e} of its largest value"
+    assert len(checked.solves) == 2 and all(ok for _, _, ok in checked.solves), checked.solves
 
 
 def test_a_large_structural_problem_still_uses_dpcg(monkeypatch, capsys):

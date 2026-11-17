@@ -25,6 +25,7 @@ sys.path.insert(0, ROOT)
 
 from lsr_mmto.optimize import optimization_loop as M  # noqa: E402
 from lsr_mmto.optimize import save_results as run_save  # noqa: E402
+from lsr_mmto.physics.available_physics import MODULES  # noqa: E402
 from lsr_mmto.problem.project import Project, _run_arguments  # noqa: E402
 from lsr_mmto.problem.settings import DEFAULT_SETTINGS, RUN_KEYS, SETTINGS  # noqa: E402
 
@@ -455,6 +456,34 @@ def test_a_solve_converged_unless_it_used_up_its_iterations():
     assert failed["all steps, off"] == 1.0 and np.isnan(failed["broke down"]), failed
 
 
+def test_every_field_of_every_physics_has_a_deflation_space():
+    """Above the direct solver's limit every system a physics solves is solved by DPCG, checked, only if its
+    deflation space fits it: PyTO-AD solves a system that no space fits by plain CG, which is not checked. So the
+    space a physics builds (its deflation_space) covers each of its fields, one system of (unknowns per node) x
+    nodes each: the solver's own W or one of its added spaces (CheckedDeflationSolver.space_for). A physics whose
+    space leaves a field out (here a made-up one: structural's space, and a temperature too) is refused before
+    its solver is made, naming the field."""
+    from types import SimpleNamespace
+    import lsr_mmto.pyto_ad_imports as imports
+    from lsr_mmto.optimize.iterative_solve_check import CheckedDeflationSolver
+    from lsr_mmto.physics.structural import structural_physics
+    mesh = Project.load(UBRACKET).mesh()
+    for module in [m for m in MODULES if m.deflation_space is not None]:
+        checked = CheckedDeflationSolver()
+        module.deflation_space(checked, mesh)
+        for field, per_node in module.FIELDS.items():
+            n = per_node * mesh.num_nodes
+            W = checked.space_for(n).W
+            assert W.shape[0] == n, f"{module.NAME}: no deflation space for field {field} ({n} unknowns)"
+    made_up = SimpleNamespace(NAME="made up", FIELDS={"u": 3, "T": 1}, deflation_space=structural_physics.deflation_space,
+                              make_solver=lambda *a: None)
+    try:
+        M.problem_solver(made_up, mesh, None, {}, None, SimpleNamespace(nDOFDesired=imports.DIRECT_SOLVER_DOF_CUTOFF + 1))
+        raise AssertionError("a field without a deflation space was not refused")
+    except ValueError as e:
+        assert "no space for the field T (1 unknown per node)" in str(e), e
+
+
 def test_a_solve_that_does_not_converge_is_marked():
     """The iterative solver (DPCG, forced here by lowering the direct solver's limit) records whether each solve
     converged: a run whose solves all converge records none that failed and its Summary says nothing of it. When
@@ -462,7 +491,8 @@ def test_a_solve_that_does_not_converge_is_marked():
     are still printed and saved, but the run record names them with their error, the log says they and the
     results the run saves are not reliable, the Summary has a Final check row naming them, its (i) gives each
     error, and Compare keeps the row beside a run without it. An analysis whose solve stops short has a Solver
-    row. The solve inside is replaced by an exact one, so the test checks the record, not DPCG itself."""
+    row. The .npz keeps the same record (its meta_json), and the lines said in red at the end name the same
+    solves. The solve inside is replaced by an exact one, so the test checks the record, not DPCG itself."""
     import contextlib
     import io
     import lsr_mmto.pyto_ad_imports as imports
@@ -470,7 +500,7 @@ def test_a_solve_that_does_not_converge_is_marked():
     from lsr_mmto.problem.project import run
     from lsr_mmto.results import compare
     from lsr_mmto.results.load_results import load
-    from lsr_mmto.results.tables import Table, solver_details, solver_rows
+    from lsr_mmto.results.tables import Table, solver_details, solver_rows, solver_warning
 
     def exact(self, K, f, W, M, rtol=1e-8, maxIters=2000, verbose=False, coarse=None):
         self.last_iterations = 1
@@ -523,6 +553,14 @@ def test_a_solve_that_does_not_converge_is_marked():
     assert ["Final check", "", solver_rows(r)[0][1]] in rows, rows
     assert analysis.config["solver_check"]["final_check_not_converged"], analysis.config["solver_check"]
     assert solver_rows(analysis) == [["Solver", "did not converge: not reliable"]]
+    for each in (fine, r, analysis):                         # the .npz says it too, without its config file
+        assert each.meta["solver_check"] == each.config["solver_check"], each.meta
+    assert solver_warning(fine) == []
+    assert solver_warning(r) == ["Not reliable: the solver did not converge for Binarized topology, Binarized + "
+                                 "snapped materials, so their numbers and the Stress and Displacement shown are not "
+                                 "reliable (Summary, (i))."], solver_warning(r)
+    assert solver_warning(analysis) == ["Not reliable: the solver did not converge, so the numbers of this analysis "
+                                        "and the Stress and Displacement shown are not reliable (Summary, (i))."]
 
 
 if __name__ == "__main__":

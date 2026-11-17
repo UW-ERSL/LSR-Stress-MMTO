@@ -474,6 +474,29 @@ def solver_details(run: "Run") -> str:
             + (f"Relative error of each design's solve (0 is exact): {errors}." if failed else ""))
 
 
+def solver_warning(run: "Run") -> list[str]:
+    """The lines said when a run or an analysis ends with solves that did not converge (the run record's
+    solver_check): under Current run, in red, and in the messages panel. None when every solve converged."""
+    from lsr_mmto.optimize.iterative_solve_check import short_label
+    check = (run.config or {}).get("solver_check") or {}
+    failed = check.get("final_check_not_converged") or {}
+    views = [info.get("view") or name for name, info in run.result_info.items()]
+    saved = ", ".join(views[:-1]) + " and " + views[-1] if len(views) > 1 else "".join(views)    # A, B and C
+    if run.analysed_material is not None:
+        return [f"Not reliable: the solver did not converge, so the numbers of this analysis"
+                + (f" and the {saved} shown" if saved else "") + " are not reliable (Summary, (i))."] if failed else []
+    lines = []
+    n = check.get("iterations_not_converged")
+    if n:
+        lines.append(f"Not reliable: the solver did not converge in {n} solve{'s' if n > 1 else ''} of the "
+                     f"iterations; the design reached may not be the best one.")
+    if failed:
+        shown = f" and the {saved} shown" if saved and check.get("results_from") in failed else ""
+        lines.append(f"Not reliable: the solver did not converge for {', '.join(short_label(k) for k in failed)}, "
+                     f"so {'its' if len(failed) == 1 else 'their'} numbers{shown} are not reliable (Summary, (i)).")
+    return lines
+
+
 def summary_details(run: "Run") -> str:
     """What the summary's words mean, and each constraint's exact value and limit: the text behind its (i)."""
     obj = (run.config or {}).get("topopt_params", {}).get("Objective") or ["objective", None]

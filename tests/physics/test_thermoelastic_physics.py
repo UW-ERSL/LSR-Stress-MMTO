@@ -153,10 +153,11 @@ def test_gradients_agree_with_finite_differences():
 
 def test_a_large_problem_uses_dpcg_and_gives_the_direct_answer():
     """Above the direct solver's limit the core uses DPCG for a physics with a deflation space; thermoelastic
-    takes structural's, since its displacement's system is structural's. The temperature's system has one
-    unknown per node, which that space does not fit, so its solve runs plain PCG on the same dsolver. The bar,
-    heated and pulled down, solved this way (the limit passed by asking for more unknowns than it) gives the
-    direct solver's temperature and displacement."""
+    takes structural's for its displacement and thermal's for its temperature (one unknown per node), both on
+    the same checked solver. The bar, heated and pulled down, solved this way (the limit passed by asking for
+    more unknowns than it) gives the direct solver's temperature and displacement, and both solves are kept as
+    converged."""
+    from lsr_mmto.optimize.iterative_solve_check import CheckedDeflationSolver
     from lsr_mmto.optimize.optimization_loop import problem_solver
     from lsr_mmto.pyto_ad_imports import DIRECT_SOLVER_DOF_CUTOFF, linear_solvers, mat_lib
     T_ref, E, nu = 293.15, 200.0, 0.3
@@ -171,10 +172,11 @@ def test_a_large_problem_uses_dpcg_and_gives_the_direct_answer():
         "CustomMaterial", youngs_modulus=1.0, poissons_ratio=0.3, mass_density=1.0, yield_strength=1.0)
     n = mesh.num_elems
     each = lambda v: torch.full((n,), v, dtype=torch.float64)  # noqa: E731
-    answers = {}
+    answers, checked = {}, CheckedDeflationSolver()
     for name, n_dof in (("PARDISO", 1), ("DPCG", DIRECT_SOLVER_DOF_CUTOFF + 1)):
         bcs, _ = p.supports_and_loads(mesh)
-        fe = problem_solver(THERMOELASTIC, mesh, mat_prop, bcs, None, SimpleNamespace(nDOFDesired=n_dof))
+        fe = problem_solver(THERMOELASTIC, mesh, mat_prop, bcs, None, SimpleNamespace(nDOFDesired=n_dof),
+                            dsolver=checked if name == "DPCG" else None)
         assert fe.solver == getattr(linear_solvers.Solvers, name), (name, fe.solver)
         m = SimpleNamespace(fe=fe, x_phys=each(1.0),
                             props={"Youngs_Modulus": each(E), "Conductivity": each(3.0),
@@ -186,6 +188,7 @@ def test_a_large_problem_uses_dpcg_and_gives_the_direct_answer():
     for what, direct, iterative in zip(("temperature", "displacement"), answers["PARDISO"], answers["DPCG"]):
         error = np.max(np.abs(iterative - direct)) / np.max(np.abs(direct))
         assert error < 1e-6, f"{what}: largest difference {error:.1e} of its largest value"
+    assert len(checked.solves) == 2 and all(ok for _, _, ok in checked.solves), checked.solves
 
 
 def test_a_part_left_free_in_a_rigid_motion_is_refused():

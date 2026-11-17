@@ -29,10 +29,10 @@ The helpers behind each entry:
     make_solver              ConductionHexFEA
     SUPPORT_AND_LOAD_KINDS   _apply_fixed_temperature, _apply_heat_source, _check_total
 
-Left out, so the defaults apply (OPTIONAL_ENTRIES): OPTIONAL_PROPERTIES, SETTINGS, PENALTIES,
-deflation_space (the direct solver at every size).
+Left out, so the defaults apply (OPTIONAL_ENTRIES): OPTIONAL_PROPERTIES, SETTINGS, PENALTIES.
 """
-from lsr_mmto.physics.thermal.thermal_physics import CONDUCTIVITY, analyse, make_solver  # noqa: F401
+from lsr_mmto.physics.thermal.thermal_physics import (CONDUCTIVITY, analyse, deflation_space,  # noqa: F401
+                                                     make_solver)
 from lsr_mmto.physics.thermal.thermal_quantities import QUANTITIES  # noqa: F401
 from lsr_mmto.physics.thermal.thermal_results import (RESULT_FIELDS, SUMMARY_ROWS,  # noqa: F401
                                                       final_summary, iteration_diagnostics)

@@ -16,6 +16,8 @@ structural solver is given E and nu per element.
                   loads are built
     analyse       optimize/design_model.py (MMTOModelAD.evaluate), once per iteration, after the density
                   filter and projection (m.x_phys) and the decode of the latent points (m.props)
+    deflation_space  optimize/optimization_loop.py (problem_solver), once per run, above the direct
+                  solver's limit
 """
 from typing import TYPE_CHECKING, Any
 
@@ -26,6 +28,7 @@ import lsr_mmto.pyto_ad_imports  # noqa: F401  puts PyTO-AD on sys.path, float64
 from lsr_mmto.pyto_ad_imports import hex_element_stiffness as _hex_ek, mat_lib
 from lsr_mmto.pyto_ad_imports import topopt_material_model as ad_mm
 from lsr_mmto.pyto_ad_imports import hex_thermal_fea
+from lsr_mmto.optimize.iterative_solve_check import one_value_per_node_space
 
 if TYPE_CHECKING:
     from pyto.autodiff.material_model import MaterialModel
@@ -35,6 +38,7 @@ if TYPE_CHECKING:
     from pyto.solve.deflation import DeflationSolver
     from pyto.solve.solvers import Solvers
     from lsr_mmto.optimize.design_model import MMTOModelAD
+    from lsr_mmto.optimize.iterative_solve_check import CheckedDeflationSolver
     from lsr_mmto.optimize.solid_part_analysis import _Analysed
 
 _DTYPE = torch.float64
@@ -62,6 +66,8 @@ class ConductionHexFEA(hex_thermal_fea.HexThermalFEA):
             mat_prop = mat_lib.create_material_with_defaults(name="unit", thermal_conductivity=1.0)
         # PyTO-AD's thermal solver makes the mesh's one-dof-per-node table (mesh.edofMatThermal) itself,
         # and points mesh.edofMat at it.
+        if hasattr(kwargs.get("dsolver"), "space_for"):        # the run's deflation space of one value per node
+            kwargs["dsolver"] = kwargs["dsolver"].space_for(mesh.num_nodes)
         super().__init__(mesh=mesh, mat_prop=mat_prop, bc=bc, solver=solver, **kwargs)
         K_unit = _hex_ek.hex8_stiffness_matrix_thermal(1.0, mesh.elem_size)
         self.K_unit = torch.tensor(K_unit, dtype=_DTYPE)                       # (8, 8)
@@ -87,9 +93,17 @@ def make_solver(mesh: "HexMesher", mat_prop: "Material", bcs: "dict[str, BC]", l
                 dsolver: "DeflationSolver | None", elem_body_force: np.ndarray | None) -> ConductionHexFEA:
     """The thermal solver of the mesh, on the temperature's supports and loads (bcs["T"]). mat_prop is
     Project.build's placeholder material (the conductivities come each iteration); elem_body_force is not
-    used. With no deflation space the loop passes PARDISO at every size, so dsolver is None."""
+    used. dsolver: the run's deflation solver, with the space of deflation_space when the problem is above the
+    direct solver's limit."""
     return ConductionHexFEA(mesh=mesh, mat_prop=mat_prop, bc=bcs["T"], solver=linear_solver, dsolver=dsolver,
                             rtol=1e-8)
+
+
+# OPTIONAL: deflation_space, for the deflation linear solver
+def deflation_space(dsolver: "CheckedDeflationSolver", mesh: "HexMesher") -> None:
+    """The deflation space of the temperature's system, one value per node: a constant on each group of nodes
+    (iterative_solve_check.one_value_per_node_space), kept on dsolver for the solver of one unknown per node."""
+    dsolver.add_space(one_value_per_node_space(dsolver, mesh))
 
 
 # ESSENTIAL: analyse, one iteration's solve

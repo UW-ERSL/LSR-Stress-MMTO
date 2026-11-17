@@ -20,6 +20,7 @@ its epochs from the lines the training prints.
 
 The project can still be edited while a run goes: the run has its own copy, taken when it starts.
 """
+import html
 import os
 import re
 import subprocess
@@ -637,7 +638,7 @@ class RunWindow(StructuralTopOptWindow):
         w.message_text.append(f"Run {how}: results in {save_dir}")
         for widget in self.run_buttons:
             widget.setVisible(True)
-        self.show_results(save_dir)
+        self.say_not_reliable(self.show_results(save_dir))
         results = getattr(w, "results_window", None)
         if results is not None:
             try:
@@ -659,6 +660,7 @@ class RunWindow(StructuralTopOptWindow):
             return
         self.status.setText(f"Analysis of {what} done, " + ("saved in the results." if save_dir else "not saved."))
         w.message_text.append(f"Analysis done: {what}" + (f", results in {save_dir}" if save_dir else ", not saved"))
+        self.say_not_reliable(analysed)
         results = w.open_results_panel()
         if results is not None:
             results.show_analysis(analysed, draw_design.mesh_of(w, self.project), save_dir)
@@ -666,17 +668,28 @@ class RunWindow(StructuralTopOptWindow):
                 results.offer_compare(save_dir, getattr(self, "design_of", None))
 
     def show_results(self, save_dir):
-        """The final design on the part, and tabs for the convergence, the latent space, the summary."""
+        """The final design on the part, and tabs for the convergence, the latent space, the summary. Returns the
+        run, None when it could not be read."""
         from lsr_mmto.results import load_results
         try:
             run = load_results.load(os.path.join(save_dir, "run_data"))
         except Exception as e:                                      # noqa: BLE001
             self.status.setText(self.status.text() + f"<br>The results could not be read: {e}")
-            return
+            return None
         mesh = draw_design.mesh_of(self.window, self.project)
         if int(mesh.num_elems) == int(run.n_elems):
             self.window.set_design(lambda w: draw_design.record(w, run, mesh, "Material"), run=(save_dir, run, mesh))
         result_tabs(self.tabs, run, keep=2)                        # Progress and Log stay
+        return run
+
+    def say_not_reliable(self, run):
+        """Under the status line in red, and in the messages panel: the run's or analysis's solves that did not
+        converge (tables.solver_warning); nothing when they all did, or run is None."""
+        from lsr_mmto.results.tables import solver_warning
+        lines = solver_warning(run) if run is not None else []
+        for line in lines:
+            self.status.setText(self.status.text() + f"<br><span style='color:#b00000'>{html.escape(line)}</span>")
+            self.window.message_text.append(line)
 
     def open_folder(self):
         open_folder(self.save_dir)

@@ -2152,6 +2152,36 @@ def _wait(condition, seconds=600):
     return condition()
 
 
+def test_a_run_whose_solver_did_not_converge_says_so_in_red():
+    """When a run ends with solves that did not converge, Current run says so in red under its status line, one
+    line each (tables.solver_warning), and the messages panel says it too; a run whose solves all converged, or
+    one that could not be read, adds nothing."""
+    from types import SimpleNamespace
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        r = w.open_run_panel()
+        saved = {"stress": {"view": "Stress"}, "u": {"view": "Displacement"}}
+        failed = SimpleNamespace(analysed_material=None, result_info=saved, config={"solver_check": {
+            "iterations_not_converged": 6, "results_from": "Binarized + snapped materials (x binarized, snapped z)",
+            "final_check_not_converged": {"Binarized topology (x projected -> binarized, raw z)": 0.4}}})
+        fine = SimpleNamespace(analysed_material=None, result_info=saved, config={"solver_check": {
+            "iterations_not_converged": 0, "final_check_not_converged": {}}})
+        for run in (fine, None):
+            r.status.setText("Run finished after 40 iterations, 1:02.")
+            before = w.message_text.toPlainText()
+            r.say_not_reliable(run)
+            assert r.status.text() == "Run finished after 40 iterations, 1:02." and \
+                w.message_text.toPlainText() == before
+        r.say_not_reliable(failed)
+        lines = ["Not reliable: the solver did not converge in 6 solves of the iterations; the design reached may "
+                 "not be the best one.",
+                 "Not reliable: the solver did not converge for Binarized topology, so its numbers are not "
+                 "reliable (Summary, (i))."]
+        assert r.status.text() == "Run finished after 40 iterations, 1:02." + "".join(
+            f"<br><span style='color:#b00000'>{line}</span>" for line in lines), r.status.text()
+        assert w.message_text.toPlainText().endswith("\n".join(lines))
+
+
 def test_run():
     """Run: a real short optimization from the strip; live plot and design; results in a folder of its
     own with the tabs at the end; Stop ends a run early and keeps its design; nothing closes mid-run."""

@@ -27,6 +27,7 @@ import torch
 import lsr_mmto.pyto_ad_imports  # noqa: F401  puts PyTO-AD on sys.path, float64 default
 from lsr_mmto.physics.structural import structural_physics
 from lsr_mmto.physics.structural.structural_physics import MultiMaterialHexFEA
+from lsr_mmto.physics.thermal import thermal_physics
 from lsr_mmto.physics.thermal.thermal_physics import ConductionHexFEA
 from lsr_mmto.pyto_ad_imports import topopt_material_model as ad_mm
 if TYPE_CHECKING:
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
     from pyto.solve.deflation import DeflationSolver
     from pyto.solve.solvers import Solvers
     from lsr_mmto.optimize.design_model import MMTOModelAD
+    from lsr_mmto.optimize.iterative_solve_check import CheckedDeflationSolver
     from lsr_mmto.optimize.solid_part_analysis import _Analysed
     from lsr_mmto.problem.settings import RunSettings
 
@@ -90,11 +92,12 @@ def elastic_constants(props: dict[str, torch.Tensor], settings: "RunSettings") -
     return E, nu
 # ----------------------------------------------------------------------------- OPTIONAL entries of this file
 # OPTIONAL: deflation_space, for the deflation linear solver
-def deflation_space(dsolver: "DeflationSolver", mesh: "HexMesher") -> None:
-    """Structural's: the displacement's system is structural's, so its deflation space (the rigid-body motions
-    of groups of nodes) is the same. Both solves share dsolver; the temperature's system has one unknown per
-    node, which the space does not fit, so PyTO-AD's solve runs plain PCG there (autodiff/sparse_solve.py)."""
+def deflation_space(dsolver: "CheckedDeflationSolver", mesh: "HexMesher") -> None:
+    """Structural's and thermal's: the displacement's system is structural's (its space the rigid-body motions
+    of groups of nodes) and the temperature's is thermal's (a constant on each of the same groups). Both solves
+    share dsolver; each solver takes the space of its own size (CheckedDeflationSolver.space_for)."""
     structural_physics.deflation_space(dsolver, mesh)
+    thermal_physics.deflation_space(dsolver, mesh)
 
 
 # HELPER: the solver class make_solver builds

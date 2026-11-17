@@ -5,7 +5,8 @@ A thermal project, the physics the window has never shown, taken through the win
 would: saved and opened again, Run, its Results views and Summary, Analyse, Analyse this design,
 Compare, Export STL, and a new database in the editor. A physics that is not structural must go through
 every step with nothing of structural's showing: no stress, no failure factor, no force or stress units.
-About ten seconds.
+A run and an analysis whose solver did not converge say so in red under Current run (the lines themselves
+stood in for here). About ten seconds.
 
     python tests/gui/test_thermal_walk_through.py        (or: python -m pytest tests)
 """
@@ -72,6 +73,9 @@ def test_a_thermal_project_through_the_window(monkeypatch):
         dialog.save.setChecked(True)
         return QtWidgets.QDialog.Accepted
     monkeypatch.setattr(run_panel.AnalyseDialog, "exec_", analyse_with)
+    from lsr_mmto.results import tables                    # the red line at the end of a run and an analysis,
+    said = lambda run: [f"Not reliable: a test line for {run.analysed_material or 'the run'}."]   # noqa: E731
+    monkeypatch.setattr(tables, "solver_warning", said)    # as if their solver had not converged
     for name in ("question", "warning", "information"):
         monkeypatch.setattr(Box, name, staticmethod(lambda *a, _n=name, **k: Box.Yes if _n == "question" else Box.Ok))
 
@@ -110,6 +114,7 @@ def test_a_thermal_project_through_the_window(monkeypatch):
         assert r.start_optimization()
         assert _wait(lambda: not r.optimization_running), "the run did not finish"
         assert r.status.text().startswith("Run finished after 3 iterations"), r.status.text()
+        assert "<span style='color:#b00000'>Not reliable: a test line for the run.</span>" in r.status.text()
         run_folder = r.save_dir
         ran = load(run_folder)
         assert ran.physics == "thermal" and list(ran.results) == ["temperature"]
@@ -133,6 +138,8 @@ def test_a_thermal_project_through_the_window(monkeypatch):
         assert w.analyse()                                            # Analyse: the solid part, saved
         assert _wait(lambda: not w.run_going_now()), "the analysis did not finish"
         assert r.status.text().startswith("Analysis of the solid part in"), r.status.text()
+        assert "<span style='color:#b00000'>Not reliable: a test line for " in r.status.text()
+        assert "a test line for the run" in w.message_text.toPlainText()          # and in the messages panel
         solid = r.save_dir
         assert load(solid).results["temperature"].shape == ran.results["temperature"].shape
 
