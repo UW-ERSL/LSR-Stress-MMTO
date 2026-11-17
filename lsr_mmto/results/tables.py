@@ -403,8 +403,10 @@ def summary(run: "Run") -> Tables:
         bound = float(spec[2]) if len(spec) > 2 else np.nan
         if not given(run, i):
             continue
+        at_least = run.constraint_op(i) == ">="                 # Used means nothing for a least: left empty
         rows.append([constraint_name(run, i), _amount(run, spec[0], run.utilisation(i) * bound),
-                     _amount(run, spec[0], bound), f"{100 * run.utilisation(i):.1f} %", met_cell(met(run, i))])
+                     ("at least " if at_least else "") + _amount(run, spec[0], bound),
+                     "" if at_least else f"{100 * run.utilisation(i):.1f} %", met_cell(met(run, i))])
     units = (run.config or {}).get("units") or {}
     run_rows = [["Iterations", str(run.iterations)]] if analysis is None else []
     if units.get("system") not in (None, "none"):
@@ -488,8 +490,12 @@ def summary_details(run: "Run") -> str:
         bound = float(spec[2]) if len(spec) > 2 else np.nan
         if not given(run, i):
             continue
-        lines.append(f"{constraint_name(run, i)}: {run.utilisation(i) * bound:.6g} against a limit of {bound:.6g} "
-                     f"({100 * run.utilisation(i):.2f} % of it). Met means at most 0.1 % over the limit.")
+        if run.constraint_op(i) == ">=":
+            lines.append(f"{constraint_name(run, i)}: {run.utilisation(i) * bound:.6g} against a lower limit of "
+                         f"{bound:.6g} ({100 * run.utilisation(i):.2f} % of it). Met means at most 0.1 % under it.")
+        else:
+            lines.append(f"{constraint_name(run, i)}: {run.utilisation(i) * bound:.6g} against a limit of {bound:.6g} "
+                         f"({100 * run.utilisation(i):.2f} % of it). Met means at most 0.1 % over the limit.")
     lines.append("Solid: elements with a density of 0.5 or more.")
     if analysis is None:
         lines.append("Grey (in between): how much of the design is neither solid nor empty; 0 % is a clean design.")

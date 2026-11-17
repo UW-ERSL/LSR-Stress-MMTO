@@ -67,8 +67,8 @@ RUN_COLOURS = ("#2b3a67", "#b2452e")                     # the left run, the rig
 
 
 def convergence_overlaid(runs):
-    """Two runs' objective, and each constraint as a fraction of its budget, overlaid: one colour per
-    run, one line style per constraint, one legend under both plots (it never covers the curves)."""
+    """Two runs' objective, and each constraint as a fraction of its limit (at most or at least), overlaid: one
+    colour per run, one line style per constraint, one legend under both plots (it never covers the curves)."""
     import numpy as np
     from matplotlib.figure import Figure
     from matplotlib.lines import Line2D
@@ -82,13 +82,16 @@ def convergence_overlaid(runs):
         top.plot(np.arange(J.size), J, color=colour, **wide)                        # match, both stay visible
         cons = np.asarray(run.history.get("constraints", []), dtype=float)
         if cons.size:
-            cons = cons.reshape(cons.shape[0], -1) + 1.0                    # stored as value/budget - 1
+            from lsr_mmto.formulation.quantities import op_of, share_of_limit
+            cons = cons.reshape(cons.shape[0], -1)                          # the optimizer's g
             n_cons = max(n_cons, cons.shape[1])
             for i in range(cons.shape[1]):
-                bottom.plot(np.arange(cons.shape[0]), cons[:, i], styles[i % len(styles)], color=colour,
+                spec = run.constraint_spec[i] if i < len(run.constraint_spec) else []
+                share = share_of_limit(cons[:, i], op_of(spec), float(spec[2]) if len(spec) > 2 else 1.0)
+                bottom.plot(np.arange(cons.shape[0]), share, styles[i % len(styles)], color=colour,
                             **(dict(lw=2.8, zorder=2, alpha=0.75) if k else dict(lw=1.2, zorder=3)))
     top.set_ylabel("objective")
-    bottom.set_ylabel("constraint / budget")
+    bottom.set_ylabel("constraint / its limit")
     bottom.axhline(1.0, color="#999999", lw=0.8, ls="--")
     bottom.set_xlabel("iteration")
     for ax in (top, bottom):

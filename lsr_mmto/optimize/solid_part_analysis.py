@@ -88,10 +88,10 @@ class _Analysed:
 
 
 def _quantities(m: _Analysed, to_params: "MMTOParams",
-                labels: list[str]) -> list[tuple[str, float | None, float | None]]:
-    """[(name as the app shows it, value or None, limit or None)] of the objective and then each constraint,
+                labels: list[str]) -> list[tuple[str, float | None, float | None, str]]:
+    """[(name as the app shows it, value or None, limit or None, op)] of the objective and then each constraint,
     at the solid part; None for a quantity that reads the latent points."""
-    from lsr_mmto.formulation.quantities import find_quantity, quantity_label
+    from lsr_mmto.formulation.quantities import find_quantity, op_of, quantity_label
     out = []
     for spec in [tuple(to_params.Objective)] + [tuple(c) for c in to_params.Constraints]:
         name, opt, limit = spec[0], spec[1], (float(spec[2]) if len(spec) > 2 else None)
@@ -100,16 +100,16 @@ def _quantities(m: _Analysed, to_params: "MMTOParams",
                 value = float(find_quantity(name).fn(m, opt))
         except NoLatentPoints:
             value = None
-        out.append((quantity_label(name, opt, labels), value, limit))
+        out.append((quantity_label(name, opt, labels), value, limit, op_of(spec)))
     return out
 
 
-def _print_quantities(title: str, values: list[tuple[str, float | None, float | None]]) -> None:
+def _print_quantities(title: str, values: list[tuple[str, float | None, float | None, str]]) -> None:
     """The objective and the constraints, as the final check prints its numbers."""
     print("\n" + "=" * 70)
     print(f"[ANALYSIS] {title}: the objective and the constraints")
-    for name, value, limit in values:
-        bound = "" if limit is None else f" (limit {limit:.6g})"
+    for name, value, limit, op in values:
+        bound = "" if limit is None else f" ({'limit' if op == '<=' else 'at least'} {limit:.6g})"
         print(f" {name}{bound} : " + (NOT_GIVEN if value is None else f"{value:.6g}"))
     print("=" * 70 + "\n")
 
@@ -207,6 +207,7 @@ def _analyse(project: "Project",
     """The project's physics solved once on a design: design(mesh, the project's database) gives each element's
     density (1 or 0), its material's row in the database, that database, the design's title, and the record's
     "analysis" entry. See analyse_solid_part."""
+    from lsr_mmto.formulation.quantities import constraint_g
     from lsr_mmto.materials.databases import material_display
     from lsr_mmto.materials.material_source import DatabaseMaterials
     from lsr_mmto.optimize import save_results
@@ -258,7 +259,7 @@ def _analyse(project: "Project",
 
     nan = float("nan")
     history = {**own, "J_phys": [nan if values[0][1] is None else values[0][1]],
-               "constraints": [[nan if v is None else v / limit - 1.0 for _, v, limit in values[1:]]]}
+               "constraints": [[nan if v is None else constraint_g(v, op, limit) for _, v, limit, op in values[1:]]]}
     config = {
         "run": {"example": project.name, "comment": project.comment or project.name,
                 "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),

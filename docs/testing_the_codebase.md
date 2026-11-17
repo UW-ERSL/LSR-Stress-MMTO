@@ -1,6 +1,6 @@
 # Testing the codebase
 
-Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 343 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
+Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 351 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
 
 Run them all from the repository folder with `python -m pytest tests -q -n 4` (`-n 2` on a computer with less than 16 GB of memory), one folder with `python -m pytest tests/<folder> -q`, or one file with `python -m pytest tests/<folder>/<file> -q`.
 
@@ -56,6 +56,7 @@ Autodiff gradients of the objectives and constraints against central finite diff
 - `test_objective_failurefactorpnorm`: The autodiff gradient of the objective FailureFactorPNorm agrees with central finite differences.
 - `test_constraint_compliance`: The autodiff gradient of the constraint Compliance agrees with central finite differences.
 - `test_constraint_mass`: The autodiff gradient of the constraint Mass agrees with central finite differences.
+- `test_constraint_mass_at_least`: The autodiff gradient of the constraint Mass, at least agrees with central finite differences.
 - `test_constraint_failurefactorpnorm`: The autodiff gradient of the constraint FailureFactorPNorm agrees with central finite differences.
 - `test_objective_stresspnorm`: The autodiff gradient of the objective StressPNorm agrees with central finite differences.
 - `test_constraint_volumefraction`: The autodiff gradient of the constraint VolumeFraction agrees with central finite differences.
@@ -77,6 +78,17 @@ The gradient check itself: gradient_check.check(p) sets a project up as run(p) d
 ## problem
 
 Setting up a project: saving and loading, the checks before a run, the selections, the mesh, the project folder.
+
+### `tests/problem/test_at_most_and_at_least.py`
+
+A constraint is at most its limit (<=) or at least it (>=), for every quantity of every physics, with no code in any physics: each test below runs over available_physics.MODULES, so a new physics is tested as it is added. The optimizer sees g = value / limit - 1 or g = 1 - value / limit, both met at g <= 0; a run's record keeps g and its op, and value / limit comes back from them. A new limit starts by its quantity's rule, 40% of its reference at most and 10% at least, worked out in the design's material when it is one, and a limit still at its start follows a change of materials (restarted_limits). One short U-bracket run with an at-least limit checks the whole way, from the project to the Summary.
+
+- `test_every_quantity_of_every_physics_takes_at_most_and_at_least`: Either op is accepted by the project's check and goes to the run as [name, options, limit, op]; any other op is refused, saying which two there are.
+- `test_the_optimizer_sees_g_met_at_or_below_zero_either_way`: The model's g at value v and limit b (the same for every quantity: it reads only the value): (v - b) / |b| at most and (b - v) / |b| at least, v / b - 1 and 1 - v / b for a positive limit, its gradient +1/|b| and -1/|b|; met exactly when the value is within its limit, a negative limit too; value / limit comes back from g, op and limit (share_of_limit).
+- `test_every_constraint_of_a_project_goes_to_the_run_with_its_op`: A project of each physics with every one of its constraint quantities, at most and at least in turn: what Project.build gives the optimizer (formulation_params) holds each as [name, options, limit, op].
+- `test_a_new_limit_starts_by_its_rule`: A quantity with a reference starts at 40% of it at most and 10% at least, and says both rules in its (i); one with a fixed start keeps it at most and has none at least.
+- `test_mass_and_cost_start_in_the_designs_material_and_follow_it`: Mass starts at 40% of the part solid in the design's material (the lightest of a mix), and Cost at 40% of it solid in the design's material (the cheapest of a mix, by density times cost); changing to a single material moves a limit still at its start to the new one (restarted_limits), saying so, and leaves a typed limit as it is.
+- `test_a_run_with_an_at_least_limit_is_recorded_and_shown_as_one`: A short U-bracket run with Mass at least its 10% start: the record keeps the op, value / limit comes back from the recorded g, the Summary shows "at least" and no Used for it, met agrees with value >= limit, Compare shows met alone, and the run's lines print ">=".
 
 ### `tests/problem/test_mesh.py`
 
@@ -349,7 +361,8 @@ The LSR MMTO window, off-screen: the names it takes from PyTO-AD exist; each pro
 - `test_settings_panel_edits`: Settings panel edits.
 - `test_formulation_panel`: Formulation panel.
 - `test_formulation_mass_fraction_row`: A Mass fraction row reads 'Mass fraction of [material] <= [limit] of a solid part in that material': its choices are the materials' labels, then the heaviest and the lightest; it is saved with the material word, opens again with it chosen, and is named in words in the messages. A material volume fraction row keeps only the materials.
-- `test_a_new_constraint_row_starts_at_its_quantity_limit`: A new row starts at the limit its quantity declares (start_bound): 0.4 for the fractions, 1 for the failure factor, and for Mass 0.4 times the part solid in the lightest material (far above the low-mass warning); a quantity that declares none starts at 0 as before. A limit typed by the user is kept when the quantity changes, and an existing row keeps its own.
+- `test_a_new_constraint_row_starts_at_its_quantity_limit`: A new row starts at the limit its quantity's rule gives: at most 40% of its reference (0.4 for the fractions, and for Mass 0.4 times the part solid in the lightest material, far above the low-mass warning), 1 for the failure factor; a quantity that declares none starts at 0 as before. Switched to at least (>=), a row still at its start moves to 10% of the same reference, and back again; the (i) says the rules, a typed limit too. A limit typed by the user is kept when the quantity or the direction changes, and an existing row keeps its own.
+- `test_limits_still_at_their_start_follow_the_materials`: Materials changed with OK: a limit still at its start (40% at most, 10% at least) moves to the start for the design's material now, also when Edit... changed the database's numbers while Materials was open, and the messages say so; a typed limit stays. The window's Compare plot draws an at-least constraint as value / limit from its g, met above the line.
 - `test_materials_panel`: The Database list holds the project's own databases (its materials folder, and its database when it lives elsewhere); those that come with LSR MMTO are under Included databases and show as '<name> (included)' once chosen. With no database the report says how to get one and Edit and Open in Excel are off. The database's file saved again while the window is in the background is read again when the window is active again.
 - `test_import_button_opens_the_file_window`: Import... clicked asks for the file to import (the click once handed Qt's checked, False, over as the file and the window never opened).
 - `test_no_button_hands_its_checked_to_a_method_that_takes_an_argument`: A button's clicked (or an action's triggered) connected straight to a method that takes an argument hands the method Qt's checked (False) as that argument. Every such connection in gui/ goes through a lambda.

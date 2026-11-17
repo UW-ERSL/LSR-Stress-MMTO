@@ -160,7 +160,7 @@ def test_a_run_with_a_mass_fraction_constraint():
     fraction = (g[:, 0] + 1) * 0.4
     assert np.all((fraction > 0) & (fraction < 2)), fraction
     spec = out["config"]["topopt_params"]["Constraints"][0]
-    assert list(spec) == ["MassFraction", {"material_id": "lightest"}, 0.4], spec
+    assert list(spec) == ["MassFraction", {"material_id": "lightest"}, 0.4, "<="], spec
     assert quantity_label(spec[0], spec[1], list("ABCDEF")) == "Mass fraction of the lightest"
     rec = json.loads(json.dumps(out["config"]["arguments_resolved"]["to_problem"]))
     assert Project.from_record(rec).to_dict() == p.to_dict()

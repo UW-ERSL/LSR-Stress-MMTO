@@ -97,7 +97,7 @@ The `physics` of a project names the model its optimization uses.
 
 ## Quantities
 
-An objective or a constraint is one quantity, e.g. `Mass()` or `MaterialVolumeFraction(2, tau=0.5)`. A material is its row in the database, counted from 0. `MassFraction` also takes `heaviest` or `lightest` in its place, e.g. `MassFraction(lightest)`. A constraint is value / bound - 1 <= 0. An empty physics column: every physics has it.
+An objective or a constraint is one quantity, e.g. `Mass()` or `MaterialVolumeFraction(2, tau=0.5)`. A material is its row in the database, counted from 0. `MassFraction` also takes `heaviest` or `lightest` in its place, e.g. `MassFraction(lightest)`. A constraint is at most its limit (`<=`) or at least it (`>=`), for any quantity: the optimizer sees value / limit - 1 <= 0 or 1 - value / limit <= 0. An empty physics column: every physics has it.
 
 | name | shown as | physics | objective | constraint | needs columns | value | meaning |
 |---|---|---|---|---|---|---|---|
@@ -689,7 +689,7 @@ A limit on a quantity, expression op bound; each call adds one more constraint.
 | argument | format | default |
 |---|---|---|
 | `expression` | one quantity, text, such as "Mass()" or "MaterialVolumeFraction(2, tau=0.5)" (see Quantities) | required |
-| `op` | "<=", the only one for now | required |
+| `op` | "<=" (at most bound) or ">=" (at least bound), for any quantity | required |
 | `bound` | the limit, a number in the project's units | required |
 
 ```python
@@ -804,7 +804,7 @@ One optimization run. Per-element arrays are in solver element order.
 | `iterations` | how many iterations the optimizer made |
 | `final_objective` | the objective at the last iteration |
 | `objective_label` | the objective's name as the GUI shows it |
-| `constraint(i)` | constraint i (counted from 0) at the last iteration, as value / bound - 1: 0 or less is met |
+| `constraint(i)` | constraint i (counted from 0) at the last iteration, as the optimizer's g: 0 or less is met |
 
 ```python
 print(r.iterations, r.final_objective)

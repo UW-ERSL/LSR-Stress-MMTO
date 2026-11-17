@@ -45,6 +45,7 @@ def _paper_objective(t):
 
 
 def _paper_constraint(c):
+    assert len(c) < 4 or c[3] == "<=", c                      # the paper's constraints are all at most
     return [_PAPER_CONSTRAINT[c[0]], c[1], c[2]]
 
 

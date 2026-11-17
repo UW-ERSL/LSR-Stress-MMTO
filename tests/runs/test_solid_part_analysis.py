@@ -93,7 +93,7 @@ def test_compliance_is_a_direct_solve_of_the_solid_part(monkeypatch):
         u = fe.solve(torch.ones(n, dtype=torch.float64), MaterialModel.SIMP)
         direct = float(torch.dot(fe.total_force, u))
         run = A.analyse_solid_part(p, row)
-        name, value, limit = seen[-1][0]
+        name, value, limit, _ = seen[-1][0]
         assert name == "Compliance" and limit is None
         assert abs(value - direct) <= 1e-10 * abs(direct), (row, value, direct)
         assert np.isclose(run.final_objective, direct, rtol=1e-6)            # the record keeps it as float32
@@ -181,7 +181,7 @@ def test_a_quantity_of_the_latent_points_is_not_given(monkeypatch):
     p = Project.load(os.path.join(PROJECTS, "L-bracket.mmto"))
     p.n_dof = 3000
     run = A.analyse_solid_part(p, 0)
-    assert seen[-1][0][1] is not None and all(v is None for _, v, _ in seen[-1][1:])
+    assert seen[-1][0][1] is not None and all(v is None for _, v, _, _ in seen[-1][1:])
     assert np.isfinite(run.final_objective) and np.all(np.isnan(run.history["constraints"]))
     text = str(tables.summary(run))
     assert run.objective_label in text and "volume fraction" not in text and "Constraint" not in text, text

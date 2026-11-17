@@ -29,7 +29,7 @@ import torch
 import lsr_mmto.pyto_ad_imports  # noqa: F401  puts PyTO-AD on sys.path (and its float64 default)
 
 from lsr_mmto.design.density_filter_and_projection import SparseOperator, density_filter, heaviside
-from lsr_mmto.formulation.quantities import find_quantity
+from lsr_mmto.formulation.quantities import constraint_g, find_quantity, op_of
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -84,7 +84,7 @@ class MMTOModelAD:
     x_phys: torch.Tensor                     # filtered and projected density, (N,)
     props: dict[str, torch.Tensor]           # every decoded property, per element, by database column
     J: torch.Tensor                          # objective, a scalar
-    cons: list[torch.Tensor]                 # constraints g_k = value / limit - 1, scalars
+    cons: list[torch.Tensor]                 # constraints g_k (quantities.constraint_g), scalars, met when <= 0
 
     def __init__(self, fe: Any, physics: "ModuleType", enc: "MaterialSource", H_density: "spmatrix",
                  Hs_density: np.ndarray, H_material: "spmatrix", Hs_material: np.ndarray, z_real: np.ndarray,
@@ -115,7 +115,7 @@ class MMTOModelAD:
         self.physics.analyse(self)              # the solve, and what the physics' quantities read
 
         self.J = self._objective()
-        self.cons = [self._constraint(name, opt, limit) for name, opt, limit in self.to_params.Constraints]
+        self.cons = [self._constraint(c[0], c[1], c[2], op_of(c)) for c in self.to_params.Constraints]
         return self.J, self.cons
 
     def physical_density(self, x: np.ndarray, beta: float, eta: float, use_heaviside: bool = True,
@@ -140,9 +140,11 @@ class MMTOModelAD:
         name, opt = self.to_params.Objective[0], self.to_params.Objective[1]
         return self._value(find_quantity(name), opt)
 
-    def _constraint(self, name: str, opt: dict[str, int | float | str] | None, limit: float) -> torch.Tensor:
-        """A constraint at the current state as value / limit - 1, a torch scalar; met when <= 0."""
-        return self._value(find_quantity(name), opt) / limit - 1.0
+    def _constraint(self, name: str, opt: dict[str, int | float | str] | None, limit: float,
+                    op: str = "<=") -> torch.Tensor:
+        """A constraint at the current state as the g the optimizer sees (quantities.constraint_g): value / limit
+        - 1 for "<=", 1 - value / limit for ">=", a torch scalar; met when <= 0."""
+        return constraint_g(self._value(find_quantity(name), opt), op, limit)
 
     def grad_phys(self, q: torch.Tensor) -> np.ndarray:
         """dq/d(x_phys, z) as one numpy vector [x (N) ; z latent-major (N*latentDim)], for a scalar q of the last

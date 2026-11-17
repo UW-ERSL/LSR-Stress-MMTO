@@ -138,17 +138,19 @@ def log_design_state(history: dict[str, list[float | np.ndarray]], iteration: in
 
 def constraints_over_limit(history: dict[str, list[float | np.ndarray]], to_params: "MMTOParams",
                            material_labels: list[str] | None = None) -> list[str]:
-    """The constraints of the last evaluated design that are over their limit, as lines of text
-    ("Mass: 3.2, 6.4 times its limit of 0.5"); [] when none is, or nothing was evaluated."""
-    from lsr_mmto.formulation.quantities import quantity_label
+    """The constraints of the last evaluated design that are not met, as lines of text ("Mass: 3.2, 6.4 times its
+    limit of 0.5", "Mass: 0.02, 0.2 times its lower limit of 0.1"); [] when every one is, or nothing was evaluated."""
+    from lsr_mmto.formulation.quantities import op_of, quantity_label, share_of_limit
     if not history.get("constraints"):
         return []
     lines = []
-    for (name, options, bound), g in zip(to_params.Constraints, np.asarray(history["constraints"][-1]).flatten()):
+    for c, g in zip(to_params.Constraints, np.asarray(history["constraints"][-1]).flatten()):
+        name, options, bound, op = c[0], c[1], c[2], op_of(c)
         if not np.isfinite(g) or g > 0:
             label = quantity_label(name, options, material_labels)
-            value = (g + 1) * bound
-            times = f"{value / bound:.3g} times its limit" if np.isfinite(g) and bound else "not a number"
+            value = share_of_limit(g, op, bound) * bound
+            times = (f"{value / bound:.3g} times its {'limit' if op == '<=' else 'lower limit'}"
+                     if np.isfinite(g) and bound else "not a number")
             lines.append(f"{label}: {value:.4g}, {times} of {bound:.4g}")
     return lines
 
@@ -162,9 +164,10 @@ def log_objective_and_constraints(history: dict[str, list[float | np.ndarray]], 
     full Obj line + per-constraint lines; in simple mode print one compact per-iteration line, with the
     physics' own numbers (summary_rows, its SUMMARY_ROWS) that this iteration recorded. Each constraint is
     named as the app names it."""
-    from lsr_mmto.formulation.quantities import quantity_label
+    from lsr_mmto.formulation.quantities import op_of, quantity_label, share_of_limit
     cons_flat = np.asarray(cons).flatten()
     constraint_names = [quantity_label(c[0], c[1], material_labels) for c in to_params.Constraints]
+    values = [share_of_limit(g, op_of(c), c[2]) * c[2] for c, g in zip(to_params.Constraints, cons_flat)]
 
     history["objective"].append(float(obj))
     history["constraints"].append(cons_flat.copy())
@@ -178,17 +181,10 @@ def log_objective_and_constraints(history: dict[str, list[float | np.ndarray]], 
             + "".join(f"{key}={value:.3g} | " for key, value in penalties.items())
             + f"f={float(obj):.4g}"
         )
-        for idx, val in enumerate(cons_flat):
-            print(
-                f"Constraint {idx+1} ({constraint_names[idx]}): "
-                f"{(val + 1) * to_params.Constraints[idx][2]:.3g} "
-                f"<= {to_params.Constraints[idx][2]:.3g}?"
-            )
+        for idx, c in enumerate(to_params.Constraints):
+            print(f"Constraint {idx+1} ({constraint_names[idx]}): {values[idx]:.3g} {op_of(c)} {c[2]:.3g}?")
     else:
-        cons_str = " ".join(
-            f"{constraint_names[idx]}={(val + 1) * to_params.Constraints[idx][2]:.3g}"
-            for idx, val in enumerate(cons_flat)
-        )
+        cons_str = " ".join(f"{constraint_names[idx]}={values[idx]:.3g}" for idx in range(len(values)))
         own = "".join(f"{row['label']}={history[key][-1]:{row['format']}} "
                       for key, row in (summary_rows or {}).items() if history.get(key))
         print(f"[iter] f={float(obj):.4g} J={J_phys:.4g} {own}| {cons_str}")

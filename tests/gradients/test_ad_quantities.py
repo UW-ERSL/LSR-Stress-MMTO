@@ -40,6 +40,7 @@ QUANTITIES = [
     ("objective FailureFactorPNorm", ("FailureFactorPNorm", None), None),
     ("constraint Compliance", None, ("Compliance", None, 1.0)),
     ("constraint Mass", None, ("Mass", None, 1.0)),
+    ("constraint Mass, at least", None, ("Mass", None, 1.0, ">=")),          # g = 1 - value / limit
     ("constraint FailureFactorPNorm", None, ("FailureFactorPNorm", None, 1.0)),
     ("objective StressPNorm", ("StressPNorm", None), None),
     ("constraint VolumeFraction", None, ("VolumeFraction", None, 0.4)),

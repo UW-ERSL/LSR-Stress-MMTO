@@ -93,12 +93,12 @@ def test_validate():
     p.bcs.append({"kind": "fixed", "on": "nowhere", "dofs": "xyz"})
     p.bcs.append({"kind": "fixed", "on": "bottom", "dofs": "xw"})
     p.bcs.append({"kind": "traction", "on": "bottom", "pressure": 1, "direction": [1, 1, 0], "area": "bbox"})
-    p.constraint("Mass()", ">=", 1.0)
+    p.constraint("Mass()", "<", 1.0)                                    # neither at most nor at least
     p.keep_solid_names.append("ghost")
     p.database = "NoSuchDatabase.xlsx"
     errors = "\n".join(p.validate())
     for says in ["no selection named 'nowhere'", "dofs must be letters", "needs a direction along x, y or z",
-                 "only '<=' for now", "keep_solid: no selection named 'ghost'", "does not exist"]:
+                 "the operator must be '<=' or '>='", "keep_solid: no selection named 'ghost'", "does not exist"]:
         assert says in errors, (says, errors)
     empty = Project("empty", stl="UBracket.STL", base_dir=UBRACKET)
     errors = "\n".join(empty.validate())
@@ -179,7 +179,7 @@ def test_build_coded():
     assert np.allclose(F.sum(0), [-1, -2.0 * area, 0])
     # formulation, settings, keep-solid
     assert to_params.Objective == ("FailureFactorPNorm", None)
-    assert to_params.Constraints == [("Mass", None, 0.0035)]
+    assert to_params.Constraints == [("Mass", None, 0.0035, "<=")]           # [name, options, limit, op]
     assert to_params.RelativeFilterRadius == 3.5 and to_params.ExtrudeZ is True
     assert vae_params.latentDim == 2 and vae_params.learningRate == 1e-4      # database default kept
     assert np.array_equal(to_params.ElemsToKeep, S.face("ymin").evaluate(mesh, "elements"))

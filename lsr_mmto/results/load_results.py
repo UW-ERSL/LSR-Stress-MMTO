@@ -156,7 +156,7 @@ class Run:
     iterations: how many iterations the optimizer made
     final_objective: the objective at the last iteration
     objective_label: the objective's name as the GUI shows it
-    constraint(i): constraint i (counted from 0) at the last iteration, as value / bound - 1: 0 or less is met
+    constraint(i): constraint i (counted from 0) at the last iteration, as the optimizer's g: 0 or less is met
     Example: print(r.iterations, r.final_objective)
     """
     path: str
@@ -255,16 +255,24 @@ class Run:
         return self.last("grey")
 
     def constraint(self, i: int) -> float:
-        """g_i at the final iteration, stored as value/budget - 1."""
+        """g_i at the final iteration, as the optimizer saw it (quantities.constraint_g): met when <= 0."""
         return self.last("constraints", col=i)
 
+    def constraint_op(self, i: int) -> str:
+        """Constraint i's op: "<=" (at most its limit) or ">=" (at least)."""
+        from lsr_mmto.formulation.quantities import op_of
+        return op_of(self.constraint_spec[i])
+
     def utilisation(self, i: int) -> float:
-        """value/budget at the final iteration."""
-        return self.constraint(i) + 1.0
+        """value / limit at the final iteration, either op."""
+        from lsr_mmto.formulation.quantities import share_of_limit
+        spec = self.constraint_spec[i]
+        return share_of_limit(self.constraint(i), self.constraint_op(i), float(spec[2]) if len(spec) > 2 else 1.0)
 
     @property
     def constraint_spec(self) -> list:
-        """The constraints as the record's topopt_params holds them, [name, options, bound] each; [] for none."""
+        """The constraints as the record's topopt_params holds them, [name, options, limit, op] each ([name,
+        options, limit] in a record made before ">="); [] for none."""
         return self.config.get("topopt_params", {}).get("Constraints", [])
 
     def material_property(self, key: str) -> np.ndarray:

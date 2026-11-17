@@ -185,8 +185,10 @@ class MaterialsPanel(QtWidgets.QDialog):
         super().__init__(parent)
         self.setWindowTitle("Materials")
         self.resize(820, 520)
+        from lsr_mmto.formulation.quantities import starting_limits
         self.project = project.copy()
         self.original = project.database
+        self.starting_limits = starting_limits(project)  # before Edit... can change the database's numbers
         layout = QtWidgets.QVBoxLayout(self)
 
         source = QtWidgets.QHBoxLayout()

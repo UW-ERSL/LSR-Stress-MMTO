@@ -135,7 +135,8 @@ def generate():
     out += ["", "## Quantities", "",
             "An objective or a constraint is one quantity, e.g. `Mass()` or "
             "`MaterialVolumeFraction(2, tau=0.5)`. A material is its row in the database, counted from 0."
-            + worded + " A constraint is value / bound - 1 <= 0. An empty physics column: every physics has it.", "",
+            + worded + " A constraint is at most its limit (`<=`) or at least it (`>=`), for any quantity: the optimizer "
+            "sees value / limit - 1 <= 0 or 1 - value / limit <= 0. An empty physics column: every physics has it.", "",
             "| name | shown as | physics | objective | constraint | needs columns | value | meaning |",
             "|---|---|---|---|---|---|---|---|"]
     for q in QUANTITIES:

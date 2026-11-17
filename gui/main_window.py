@@ -2007,6 +2007,9 @@ class MMTOWindow(MainWindow):
 
     def apply_panel(self, panel):
         lines = panel.apply(self.project)
+        if isinstance(panel, MaterialsPanel):         # a limit still at its starting value follows the materials
+            from lsr_mmto.formulation.quantities import restarted_limits
+            lines += restarted_limits(panel.starting_limits, self.project)
         if lines and isinstance(panel, MaterialsPanel) and self.own_folder():
             from lsr_mmto.problem.project_folder import bring_in_database
             try:

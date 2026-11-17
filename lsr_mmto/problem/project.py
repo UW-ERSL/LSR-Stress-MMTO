@@ -40,7 +40,8 @@ Forces are used as given, with no unit conversion: they must be in the units of 
 material database.
 
 Objective and constraints are written as PyTO-AD stores them: an expression, a sense
-(minimize) or an operator (<=) and a bound. An expression is exactly one quantity, e.g. "Mass()"
+(minimize) or an operator (<= at most, >= at least) and a bound.
+An expression is exactly one quantity, e.g. "Mass()"
 or "MaterialVolumeFraction(2, tau=0.5)"; every quantity is listed in docs/reference.md.
 """
 import json
@@ -54,7 +55,7 @@ from lsr_mmto.materials.databases import (ATTRIBUTES, DATABASE_DIR, DATABASE_VAE
                                          check_database, database_attributes, database_units, in_shipped_folder,
                                          recommended_latent_dim, unit_ratio)
 from lsr_mmto.formulation.formulation_text import parse_expression, to_params_form
-from lsr_mmto.formulation.quantities import default_of, find_quantity, takes
+from lsr_mmto.formulation.quantities import OPS, default_of, find_quantity, takes
 from lsr_mmto.physics.available_physics import PHYSICS
 from lsr_mmto.problem.boundary_conditions import BC_KINDS
 from lsr_mmto.problem.settings import (BY_KEY, DEFAULT_SETTINGS, MESH_DEFAULTS, SETTINGS, VAE_PARAMS, pyto_ad_value,
@@ -359,7 +360,7 @@ class Project:
 
         expression: one quantity, text, such as "Mass()" or "MaterialVolumeFraction(2, tau=0.5)" (see
             Quantities)
-        op: "<=", the only one for now
+        op: "<=" (at most bound) or ">=" (at least bound), for any quantity
         bound: the limit, a number in the project's units
         Example: p.constraint("Mass()", "<=", 0.0035)
         """
@@ -537,8 +538,9 @@ class Project:
         if any(t <= 0 for t in taus):
             errors.append(Problem("formulation", "tau must be greater than 0"))
         for i, c in enumerate(self.formulation.get("constraints", []), 1):
-            if c.get("op") != "<=":
-                errors.append(Problem("formulation", f"constraint {i}: only '<=' for now"))
+            if c.get("op") not in OPS:
+                errors.append(Problem("formulation", f"constraint {i}: the operator must be '<=' or '>=', not "
+                                                     f"{c.get('op')!r}"))
             if not c.get("bound"):
                 errors.append(Problem("formulation", f"constraint {i}: the bound must be a nonzero number"))
             try:
@@ -767,7 +769,8 @@ class Project:
         for i, c in enumerate(self.formulation.get("constraints", []), 1):
             try:
                 q = by_name.get(parse_expression(c["expression"])[0])
-                said = q.bound_warning(self, float(c["bound"])) if q and q.bound_warning else None
+                said = q.bound_warning(self, float(c["bound"])) if q and q.bound_warning and \
+                    c.get("op", "<=") == "<=" else None                     # its warnings are about "at most"
             except Exception:                                                          # noqa: BLE001
                 continue                                    # a bad constraint is an error of its own
             if said:
@@ -969,6 +972,14 @@ class Project:
         from lsr_mmto.problem.mesh import make_mesh
         return make_mesh(self.stl_path(), self.n_dof, self.single_layer, self.unknowns_per_node())
 
+    def formulation_params(self) -> "tuple[tuple, list[tuple]]":
+        """The objective and the constraints as a run gets them (to_params.Objective, to_params.Constraints):
+        (name, options) and [(name, options, limit, op)], op "<=" (at most) or ">=" (at least)."""
+        obj = self.formulation["objective"]
+        return (to_params_form(obj["expression"], "objective"),
+                [to_params_form(c["expression"], "constraint", c["bound"]) + (c.get("op", "<="),)
+                 for c in self.formulation.get("constraints", [])])
+
     def build(self, verbose: bool = True, network: bool = True) \
             -> "tuple[HexMesher, Material, dict[str, BC], None, MMTOParams, VAEParams]":
         """mesh, mat_prop, bc, elem_body_force, to_params, vae_params, after the project's check (validate; with
@@ -1007,10 +1018,7 @@ class Project:
                 e.at_build(getattr(self, e.key) if e.section == "mesh" else self.settings[e.section][e.key])
         xlsx, _ = self.database_paths()
         to_params.MaterialsExcelFile = xlsx
-        obj = self.formulation["objective"]
-        to_params.Objective = to_params_form(obj["expression"], "objective")
-        to_params.Constraints = [to_params_form(c["expression"], "constraint", c["bound"])
-                                 for c in self.formulation.get("constraints", [])]
+        to_params.Objective, to_params.Constraints = self.formulation_params()
 
         vae_params = VAEParams()
         for k in VAE_PARAMS:

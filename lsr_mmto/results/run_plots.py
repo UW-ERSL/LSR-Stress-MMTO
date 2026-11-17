@@ -138,11 +138,12 @@ def _panel_image(run: Run, mesh: HexMesher | None, camera: Any, size: tuple[int,
 
 
 def convergence(run: Run, out: str | None = None) -> Figure | list[str]:
-    """Objective and every constraint as a fraction of its budget.
+    """Objective and every constraint as a fraction of its limit (value / limit, at most or at least: an at-most
+    one is met at or below 1, an at-least one at or above).
 
     Ported from postprocess.py's plot_convergence, which produced the published
     Fig. 7 and Fig. 21. Objective on the left axis, constraints on the right,
-    with a dashed line at 1.0 for the budget.
+    with a dashed line at 1.0 for the limit.
     """
     import matplotlib.pyplot as plt
 
@@ -180,15 +181,18 @@ def convergence(run: Run, out: str | None = None) -> Figure | list[str]:
     axL.set_axisbelow(True)
 
     if n_con:
+        from lsr_mmto.formulation.quantities import SHOWN_OPS, share_of_limit
         axR = axL.twinx()
         for i in range(n_con):
-            frac = cons[:, i] + 1.0        # stored as value/budget - 1
+            op = run.constraint_op(i) if i < len(run.constraint_spec) else "<="
+            limit = float(run.constraint_spec[i][2]) if i < len(run.constraint_spec) else 1.0
+            frac = share_of_limit(cons[:, i], op, limit)   # the optimizer's g as value / limit
             handles.append(axR.plot(np.arange(1, frac.size + 1), frac,
                                     color=CON_COLORS[i % len(CON_COLORS)], lw=1.6,
-                                    label=labels[i])[0])
+                                    label=f"{labels[i]} {SHOWN_OPS[op]}")[0])
         handles.append(axR.axhline(1.0, color="#999999", lw=1.0, ls="--",
-                                   label="Budget"))
-        axR.set_ylabel("Constraint value (fraction of budget)")
+                                   label="Limit"))
+        axR.set_ylabel("Constraint value (fraction of its limit)")
 
     axL.legend(handles=handles, loc="upper right", frameon=True, framealpha=0.95,
                edgecolor="#cccccc", fontsize=9.5)

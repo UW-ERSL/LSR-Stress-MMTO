@@ -36,7 +36,7 @@ def database_columns(project):
 
 
 class FormulationPanel(QtWidgets.QDialog):
-    """The objective (minimized) and the constraints (quantity <= bound). A quantity the database
+    """The objective (minimized) and the constraints (quantity <= bound, or >= bound). A quantity the database
     cannot give, or one that reads the latent points with a single material, is greyed out with the reason;
     a row that already has one keeps it, with the reason beside it in red."""
 
@@ -146,25 +146,32 @@ class FormulationPanel(QtWidgets.QDialog):
         combo.setCurrentIndex(combo.findData(name) if name else -1)
 
     def add_row(self, constraint):
-        """A constraint row: quantity, of material (a quantity that takes one), <=, bound, unit, (i)."""
+        """A constraint row: quantity, of material (a quantity that takes one), <= or >=, bound, unit, (i)."""
         from lsr_mmto.formulation.formulation_text import parse_expression
+        from lsr_mmto.formulation.quantities import OPS
         row = QtWidgets.QHBoxLayout()
         widgets = {"quantity": self._quantity_combo("constraint"), "of": QtWidgets.QLabel("of"),
-                   "material": QtWidgets.QComboBox(), "bound": NumberEdit(0.0), "unit": QtWidgets.QLabel(),
-                   "info": Info(""), "why": QtWidgets.QLabel(), "remove": QtWidgets.QPushButton("Remove")}
+                   "material": QtWidgets.QComboBox(), "op": QtWidgets.QComboBox(), "bound": NumberEdit(0.0),
+                   "unit": QtWidgets.QLabel(), "info": Info(""), "why": QtWidgets.QLabel(),
+                   "remove": QtWidgets.QPushButton("Remove")}
+        for op, words in zip(OPS, ("at most", "at least")):
+            widgets["op"].addItem(op, op)
+            widgets["op"].setItemData(widgets["op"].count() - 1, words, QtCore.Qt.ToolTipRole)
         n = len(self.labels) if self.labels else 0
         for i in range(n):
             widgets["material"].addItem(swatch(self.colours[i]), self.labels[i], i)
         widgets["bound"].setFixedWidth(150)
         set_style(widgets["unit"], GREY)
         set_style(widgets["why"], "color: #b00000;")
-        for key in ("quantity", "of", "material", "<=", "bound", "unit", "info", "why"):
-            row.addWidget(QtWidgets.QLabel("<=") if key == "<=" else widgets[key])
+        for key in ("quantity", "of", "material", "op", "bound", "unit", "info", "why"):
+            row.addWidget(widgets[key])
         row.addStretch()
         row.addWidget(widgets["remove"])
-        entry = {"widgets": widgets, "layout": row, "original": constraint}
+        entry = {"widgets": widgets, "layout": row, "original": constraint, "op": "<="}
         if constraint:
             self._set_quantity(widgets["quantity"], constraint.get("expression"))
+            entry["op"] = constraint.get("op", "<=")
+            widgets["op"].setCurrentIndex(max(0, widgets["op"].findData(entry["op"])))
             widgets["bound"].set_value(constraint.get("bound") or 0.0)
             try:
                 name, args, kwargs = parse_expression(constraint["expression"])
@@ -177,6 +184,7 @@ class FormulationPanel(QtWidgets.QDialog):
             except ValueError:
                 pass
         widgets["quantity"].currentIndexChanged.connect(lambda _=None, e=entry: self._update_row(e))
+        widgets["op"].currentIndexChanged.connect(lambda _=None, e=entry: self._switch_op(e))
         widgets["bound"].textEdited.connect(lambda _=None, e=entry: self._own_limit(e))
         widgets["remove"].clicked.connect(lambda _=False, e=entry: self.remove_row(e))
         self.rows.append(entry)
@@ -208,26 +216,53 @@ class FormulationPanel(QtWidgets.QDialog):
         w["of"].setVisible(material)
         w["material"].setVisible(material)
         w["info"].setVisible(bool(name))
-        w["info"].setToolTip(self.quantities[name].help if name in self.quantities else "")
+        op = w["op"].currentData()
         if not entry["original"] and name in self.quantities and not w["bound"].edited():
             q = self.quantities[name]
-            w["bound"].set_value(q.first_bound(self.project) or 0.0)   # a new row's limit, and where it comes from
-            start = q.start_text(self.project)
-            w["bound"].setToolTip(start or "")
-            if start:
-                w["info"].setToolTip(f"{q.help}\n\n{start}")
+            w["bound"].set_value(q.first_bound(self.project, op) or 0.0)   # a new row's limit, from its rule
+            w["bound"].setToolTip(q.start_text(self.project, op) or "")
+        self._info(entry)
         unit = bound_unit(name, self.units) if name else ""
         w["unit"].setText("" if unit in ("fraction of the design domain", "no units") else unit)
         w["why"].setText(self.reason(name) or "" if name else "")
         if hasattr(self, "tau_box"):
             self._show_tau()
 
-    def _own_limit(self, entry):
-        """A limit typed in: the words on where the starting limit came from go."""
+    def _info(self, entry):
+        """The row's (i): what the quantity is, and its starting limit and how it is worked out (the 40% rule
+        for at most, the 10% rule for at least), for a typed limit too, so the start for the materials chosen
+        now is always there to see."""
         w = entry["widgets"]
         name = w["quantity"].currentData()
-        w["bound"].setToolTip("")
-        w["info"].setToolTip(self.quantities[name].help if name in self.quantities else "")
+        if name not in self.quantities:
+            w["info"].setToolTip("")
+            return
+        q = self.quantities[name]
+        start = q.start_text(self.project, w["op"].currentData())
+        w["info"].setToolTip(q.help + (f"\n\n{start}" if start else ""))
+
+    def _switch_op(self, entry):
+        """<= switched to >= or back: a limit still at its starting value moves to the other rule's (40% at
+        most, 10% at least); a typed one, or one with no rule for the other way, stays."""
+        import math
+        w = entry["widgets"]
+        name, old, new = w["quantity"].currentData(), entry["op"], w["op"].currentData()
+        entry["op"] = new
+        if name in self.quantities and w["bound"].ok():
+            q = self.quantities[name]
+            start, then = q.first_bound(self.project, new), q.first_bound(self.project, old)
+            at_start = (not entry["original"] and not w["bound"].edited()) or \
+                (then is not None and math.isclose(w["bound"].value(), then, rel_tol=1e-12))   # not a typed limit
+            if start is not None and at_start:
+                w["bound"].set_value(start)
+            if at_start:
+                w["bound"].setToolTip(q.start_text(self.project, new) or "")
+        self._info(entry)
+
+    def _own_limit(self, entry):
+        """A limit typed in: the words on where the starting limit came from leave the limit's tip; the (i) keeps
+        them."""
+        entry["widgets"]["bound"].setToolTip("")
 
     def remove_row(self, entry):
         self.rows.remove(entry)
@@ -275,7 +310,7 @@ class FormulationPanel(QtWidgets.QDialog):
             given = ([str(w["material"].currentData() or 0)] if self._takes(name, "material") else []) + \
                 ([f"tau={self.tau.value():g}"] if self._takes(name, "tau") else [])
             expression = f"{name}({', '.join(given)})"
-            new = {"expression": expression, "op": "<=", "bound": w["bound"].value()}
+            new = {"expression": expression, "op": w["op"].currentData(), "bound": w["bound"].value()}
             if old and self._same_expression(old.get("expression"), expression):
                 new["expression"] = old["expression"]
             if old and same(old.get("bound"), new["bound"]):
@@ -323,5 +358,5 @@ def formulation_lines(f, project):
         except ValueError:
             unit = ""
         unit = "" if unit in ("no units", "fraction of the design domain", "no unit system declared") else f" {unit}"
-        lines.append(f"Constraint: {words(c['expression'])} <= {c['bound']:g}{unit}")
+        lines.append(f"Constraint: {words(c['expression'])} {c.get('op', '<=')} {c['bound']:g}{unit}")
     return lines

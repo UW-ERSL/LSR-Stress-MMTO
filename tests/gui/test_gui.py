@@ -647,10 +647,12 @@ def test_formulation_mass_fraction_row():
 
 
 def test_a_new_constraint_row_starts_at_its_quantity_limit():
-    """A new row starts at the limit its quantity declares (start_bound): 0.4 for the fractions, 1 for the
-    failure factor, and for Mass 0.4 times the part solid in the lightest material (far above the low-mass
-    warning); a quantity that declares none starts at 0 as before. A limit typed by the user is kept when
-    the quantity changes, and an existing row keeps its own."""
+    """A new row starts at the limit its quantity's rule gives: at most 40% of its reference (0.4 for the
+    fractions, and for Mass 0.4 times the part solid in the lightest material, far above the low-mass warning),
+    1 for the failure factor; a quantity that declares none starts at 0 as before. Switched to at least (>=), a
+    row still at its start moves to 10% of the same reference, and back again; the (i) says the rules, a typed
+    limit too. A limit typed by the user is kept when the quantity or the direction changes, and an existing row
+    keeps its own."""
     from lsr_mmto.formulation.quantities import part_volume
     from lsr_mmto.materials.databases import database_table
     with scratch() as d:
@@ -669,19 +671,30 @@ def test_a_new_constraint_row_starts_at_its_quantity_limit():
         row["quantity"].setCurrentText("Mass")
         assert w.project.formulation["constraints"][0]["expression"] == "Mass()"
         start = ("Starting limit 0.0035 kg: 40% of the mass of the whole part made solid in its lightest material "
-                 "(0.00875 kg). Type your own limit to change it.")
+                 "(0.00875 kg). An at-most limit starts at 40% and an at-least limit at 10%. Type your own limit to "
+                 "change it.")
         assert row["bound"].toolTip() == start                                 # where the limit comes from
         assert row["info"].toolTip().endswith("\n\n" + start)
         assert row["info"].toolTip().startswith(f.quantities["Mass"].help)
         row["quantity"].setCurrentText("Volume fraction")
-        assert row["bound"].toolTip() == ("Starting limit 0.4: 40% of the design space filled. Type your own limit "
-                                          "to change it.")
+        assert row["bound"].toolTip() == ("Starting limit 0.4: 40% of the design space filled. An at-most limit "
+                                          "starts at 40% and an at-least limit at 10%. Type your own limit to "
+                                          "change it.")
         row["quantity"].setCurrentText("Compliance")                           # none declared: no words
         assert row["bound"].toolTip() == "" and row["info"].toolTip() == f.quantities["Compliance"].help
         row["quantity"].setCurrentText("Mass")
+        row["op"].setCurrentText(">=")                                         # at least: the 10% rule
+        assert abs(row["bound"].value() - 0.1 * lightest) <= 1e-12 * lightest
+        assert row["bound"].toolTip().startswith("Starting limit 0.000875 kg: 10% of the mass of the whole part")
+        assert "Starting limit 0.000875 kg" in row["info"].toolTip()
+        row["op"].setCurrentText("<=")
+        assert abs(row["bound"].value() - 0.4 * lightest) <= 1e-12 * lightest
         row["bound"].textEdited.emit("0.002")
-        assert row["bound"].toolTip() == "" and "Starting limit" not in row["info"].toolTip()
+        assert row["bound"].toolTip() == "" and "Starting limit 0.0035 kg" in row["info"].toolTip()
         row["bound"].setText("0.002")                                          # typed: kept from now on
+        row["op"].setCurrentText(">=")
+        assert row["bound"].value() == 0.002 and f.formulation()["constraints"][-1]["op"] == ">="
+        row["op"].setCurrentText("<=")
         row["quantity"].setCurrentText("Volume fraction")
         assert row["bound"].value() == 0.002
         f.rows[0]["widgets"]["quantity"].setCurrentText("Volume fraction")    # an existing row keeps its limit
@@ -689,6 +702,49 @@ def test_a_new_constraint_row_starts_at_its_quantity_limit():
         f.add_row(None)["widgets"]["quantity"].setCurrentText("Mass")
         f.apply(w.project)
         assert not any("lightest material" in x for x in w.project.warnings())
+
+
+def test_limits_still_at_their_start_follow_the_materials():
+    """Materials changed with OK: a limit still at its start (40% at most, 10% at least) moves to the start for
+    the design's material now, also when Edit... changed the database's numbers while Materials was open, and the
+    messages say so; a typed limit stays. The window's Compare plot draws an at-least constraint as value / limit
+    from its g, met above the line."""
+    from types import SimpleNamespace
+    from lsr_mmto.formulation.quantities import find_quantity, part_volume
+    from lsr_mmto.materials.databases import database_table, material_display, write_database
+    with scratch() as d:
+        w = opened("U-bracket", d)
+        assert w.save_project_as(os.path.join(d, "P", "P.mmto")) and w.own_folder()
+        from lsr_mmto.problem.project_folder import bring_in_database
+        bring_in_database(w.project)                                          # its own copy, to edit
+        mass = find_quantity("Mass")
+        w.project.formulation["constraints"] = [
+            {"expression": "Mass()", "op": "<=", "bound": mass.first_bound(w.project, "<=")},
+            {"expression": "Mass()", "op": ">=", "bound": mass.first_bound(w.project, ">=")},
+            {"expression": "Mass()", "op": "<=", "bound": 1.0}]               # typed
+        xlsx = w.project.database_paths()[0]
+        names, attributes, units, values = database_table(xlsx)
+        m = materials_panel.MaterialsPanel(w, w.project)
+        values[:, attributes.index("Density")] *= 2.0                        # as Edit... saves it, panel open
+        colours, labels = material_display(xlsx)
+        write_database(xlsx, attributes, units, names, labels, colours, values.tolist())
+        m.single_button.setChecked(True)
+        m.fix_combo.setCurrentIndex(m.fix_combo.findData(names[-1]))
+        before = w.message_text.toPlainText()
+        w.apply_panel(m)
+        solid = values[-1, attributes.index("Density")] * part_volume(w.project.stl_path())
+        bounds = [c["bound"] for c in w.project.formulation["constraints"]]
+        assert abs(bounds[0] - 0.4 * solid) <= 1e-12 * solid and abs(bounds[1] - 0.1 * solid) <= 1e-12 * solid
+        assert bounds[2] == 1.0
+        assert w.message_text.toPlainText()[len(before):].count("Starting limit of Mass") == 2
+
+    run = SimpleNamespace(history={"J_phys": [1.0, 0.9], "constraints": [[0.2], [-0.5]]},
+                          constraint_spec=[["Mass", None, 0.1, ">="]], constraint_op=lambda i: ">=",
+                          constraint_label=lambda i: "Mass")
+    from gui import results_panel
+    fig = results_panel.convergence_overlaid({"a": run})
+    line = fig.axes[1].get_lines()[0]
+    assert list(line.get_ydata()) == [0.8, 1.5]                              # value / limit: 1 - g
 
 
 def test_materials_panel():

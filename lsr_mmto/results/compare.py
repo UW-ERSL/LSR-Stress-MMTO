@@ -86,8 +86,10 @@ def table(runs: dict[str, Run]) -> Tables:
     for i in range(len(r0.constraint_spec)):
         if not all(given(r, i) for r in rs):               # an analysis's constraint it cannot give: left out
             continue
-        result.append([f"{constraint_name(r0, i)}, used"] +
-                      [met_cell(met(r, i), f"{100 * r.utilisation(i):.1f} %") for r in rs])
+        least = [r.constraint_op(i) == ">=" for r in rs]       # Used means nothing at least: met or not alone
+        result.append([constraint_name(r0, i) + ("" if all(least) else ", used")] +
+                      [met_cell(met(r, i), "" if at_least else f"{100 * r.utilisation(i):.1f} %")
+                       for r, at_least in zip(rs, least)])
     design = [["Elements"] + [f"{r.n_elems:,}" for r in rs],
               ["Solid"] + [f"{int(r.solid.sum()):,} ({100 * r.solid.mean():.1f} %)" for r in rs]]
     if optimized:
@@ -112,8 +114,9 @@ def table(runs: dict[str, Run]) -> Tables:
 
 
 def histories(runs: dict[str, Run], out: str | None = None) -> Figure | list[str]:
-    """Objective, constraints (fraction of budget) and grayness, all runs overlaid,
-    and the relative difference of each objective history from the first run's."""
+    """Objective, constraints (each as a fraction of its limit, at most or at least) and grayness, all runs
+    overlaid, and the relative difference of each objective history from the first run's."""
+    from lsr_mmto.formulation.quantities import SHOWN_OPS, share_of_limit
     from .run_plots import _save, new_subplots
 
     names = list(runs)
@@ -133,10 +136,13 @@ def histories(runs: dict[str, Run], out: str | None = None) -> Figure | list[str
 
         cons = np.asarray(h.get("constraints", []), dtype=float)
         if cons.size:
-            cons = cons.reshape(cons.shape[0], -1) + 1.0      # stored as value/budget - 1
+            cons = cons.reshape(cons.shape[0], -1)               # the optimizer's g: value / limit from it and op
             for i in range(cons.shape[1]):
-                a_con.plot(np.arange(1, cons.shape[0] + 1), cons[:, i], ls, color=c, lw=1.2,
-                           label=f"{n}, {runs[n].constraint_label(i)}")
+                spec = runs[n].constraint_spec[i] if i < len(runs[n].constraint_spec) else ["", None, 1.0]
+                op = runs[n].constraint_op(i) if i < len(runs[n].constraint_spec) else "<="
+                a_con.plot(np.arange(1, cons.shape[0] + 1), share_of_limit(cons[:, i], op, float(spec[2])), ls,
+                           color=c, lw=1.2,
+                           label=f"{n}, {runs[n].constraint_label(i)} {SHOWN_OPS[op]}")
 
         g = np.asarray(h.get("grey", []), dtype=float).ravel()
         a_grey.plot(np.arange(1, g.size + 1), 100 * g, ls, color=c, lw=1.4, label=n)
@@ -148,7 +154,7 @@ def histories(runs: dict[str, Run], out: str | None = None) -> Figure | list[str
                             label=f"{n} vs {names[0]}")
 
     a_obj.set_title(f"objective: {runs[names[0]].objective_label}")
-    a_con.set_title("constraints, fraction of budget")
+    a_con.set_title("constraints, fraction of the limit")
     a_con.axhline(1.0, color="#999999", lw=1.0, ls="--")
     a_grey.set_title("grayness (%)")
     a_diff.set_title("relative difference in the objective")

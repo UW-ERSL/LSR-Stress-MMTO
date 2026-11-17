@@ -453,9 +453,9 @@ def setup(*, s: "RunSettings", project: "Project", save_dir: str, verbose: bool,
         initialize_SIMP_THERMAL_PENALTY(1)
 
     initialDensity = 0.5                       # or the bound of the first constraint that sets it
-    for name, _, bound in to_params.Constraints:
-        if find_quantity(name).sets_start_density:
-            initialDensity = bound
+    for c in to_params.Constraints:
+        if find_quantity(c[0]).sets_start_density:
+            initialDensity = c[2]
             break
 
     d0 = initialDensity * np.ones(num_elems, dtype=float)

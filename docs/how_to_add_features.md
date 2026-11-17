@@ -51,15 +51,23 @@ as torch from the model's state; autograd gives the gradient.
   allowed and the panel offers *the heaviest* and *the lightest* after the materials. A word is an
   entry of `MATERIAL_WORDS` (its text in the app and the database column that picks the row), and
   the quantity's function gets the word: `material_row` turns it into the row.
-- `bound_warning` (optional): `bound_warning(project, bound)` gives a warning about a constraint's
+- Every quantity can be limited at most (`<=`) or at least (`>=`); nothing in the quantity or its
+  physics changes for it. The optimizer sees `g = value / limit - 1` or `g = 1 - value / limit`
+  (`constraint_g` in `quantities.py`), and `tests/problem/test_at_most_and_at_least.py` checks both
+  for every quantity of every physics in `available_physics.MODULES`.
+- `bound_warning` (optional): `bound_warning(project, bound)` gives a warning about an at-most
   limit, shown with the project's other warnings before a run, or None. Mass warns about a limit
-  below 1 % of the part solid in the lightest material.
-- `start_bound` (optional): the limit a new constraint row in the Formulation panel starts at, a
-  number or a function of the project (the fractions give 0.4, the failure factor 1, Mass 0.4 times
-  the part solid in the lightest material). Without it a new row starts at 0. `start_note` says in
-  plain words how it is worked out, for the row's (i) and the limit's tip; `{reference}` in it is
-  filled with `start_reference(project)` in the quantity's unit (Mass: "40% of the mass of the whole
-  part made solid in its lightest material ({reference})").
+  below 1 % of the part solid in the design's material (the lightest of a mix).
+- `start_reference` (optional): what a new constraint row's limit is a share of, a number (1.0 for a
+  fraction of the design space) or a function of the project (Mass: the part solid in the design's
+  material, or the lightest of a mix; Cost: the same, the cheapest of a mix). A row starts at 40% of
+  it at most (`AT_MOST_SHARE`, the 40% rule) and 10% at least (`AT_LEAST_SHARE`, the 10% rule), and
+  a limit still at its start follows a change of materials (`restarted_limits`). `start_note` says in
+  plain words how it is worked out, for the row's (i) and the limit's tip: `{share}`, `{material}`
+  and `{reference}` in it are filled in (Mass: "{share} of the mass of the whole part made solid in
+  {material} ({reference})"); `start_mix` is what `{material}` says for a mix of materials.
+- `start_bound` (optional): a fixed at-most start, for a quantity whose start is no share of anything
+  (the failure factor, 1). Without either a new row starts at 0.
 - A project names it by its name; the objective and the constraints are kept by that name. A
   quantity of one physics is refused by the project's check in a project of another physics.
 - `reads_latent_points` (optional, `False` by default): `True` when its function reads the latent
