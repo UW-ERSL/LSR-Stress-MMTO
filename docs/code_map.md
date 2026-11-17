@@ -18,7 +18,7 @@ LSR MMTO
 ├── the core (lsr_mmto/)          no physics in it: it asks the physics for what it needs
 │   ├── problem/                  what the user sets up
 │   │   ├── project.py            the project: load, save, check, build, run(p)
-│   │   ├── settings.py           slot: a setting every physics has (one entry of SETTINGS)
+│   │   ├── settings.py           slot: a setting every physics has (one entry of CORE_SETTINGS)
 │   │   ├── selections.py         slot: a selection type (one class)
 │   │   ├── boundary_conditions.py   the kinds of support and load, made from every physics' kinds
 │   │   ├── mesh.py               the voxel mesh, its size from the physics' unknowns, its surface faces
@@ -39,7 +39,7 @@ LSR MMTO
 │   ├── elements/hex_element.py   the hexahedral element: strain matrix, Lame parameters
 │   ├── design/                   how the optimizer's numbers become what the physics uses
 │   │   ├── density_filter_and_projection.py   densities to physical densities
-│   │   └── latent_penalties.py                slot: a penalty every physics has (PENALTIES):
+│   │   └── latent_penalties.py                slot: a penalty every physics has (CORE_PENALTIES):
 │   │                                          latent smoothing, the distance penalty
 │   ├── formulation/              what is minimized and limited
 │   │   ├── quantities.py         slot: a quantity for every physics (Mass, Cost, the volume fractions)
@@ -96,7 +96,9 @@ Is it about one physics only?
 │   ├── a new physics altogether?
 │   │     copy physics/template/ and fill its FILL lines (physics/thermal/ is one done); one line in
 │   │     available_physics.py
-│   │     test: a copy of tests/physics/test_thermal_physics.py, tests/code_rules/test_physics_folders.py · docs: "A physics"
+│   │     test: its own file in tests/physics/, started from test_structural_physics.py, with its
+│   │     tiny_example (run by tests/runs/test_every_physics_runs.py),
+│   │     tests/code_rules/test_physics_folders.py · docs: "A physics"
 │   ├── something to solve for, or a different solver?
 │   │     <name>_physics.py (make_solver, analyse), FIELDS on the front page
 │   │     test: a case whose answer is known, as thermal's bar test · docs: "A physics"
@@ -135,13 +137,13 @@ Is it about one physics only?
     │     one entry of QUANTITIES, lsr_mmto/formulation/quantities.py
     │     test: tests/gradients/test_ad_quantities.py · docs: "A quantity"
     ├── a setting for every physics?
-    │     one entry of SETTINGS, lsr_mmto/problem/settings.py
+    │     one entry of CORE_SETTINGS, lsr_mmto/problem/settings.py
     │     test: tests/runs/test_run_project.py · docs: "A setting"
     ├── a new way to treat the constraints?
     │     one entry of CONSTRAINT_METHODS, lsr_mmto/optimize/optimization_loop.py
     │     test: tests/runs/test_regression.py · docs: "A constraint method"
     ├── a term added to the objective (a penalty) every physics has?
-    │     one entry of PENALTIES, lsr_mmto/design/latent_penalties.py
+    │     one entry of CORE_PENALTIES, lsr_mmto/design/latent_penalties.py
     │     test: tests/physics/test_thermal_physics.py, tests/runs/test_regression.py · docs: "A penalty"
     ├── another step of each iteration (a continuation)?
     │     one step of ITERATION_STEPS, lsr_mmto/optimize/optimization_loop.py

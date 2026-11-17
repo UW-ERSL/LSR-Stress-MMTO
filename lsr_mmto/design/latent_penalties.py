@@ -1,8 +1,8 @@
 """
 latent_penalties.py
 ===================
-The terms the optimization loop adds to the objective, each one entry of PENALTIES, in the order
-they are added. Two every physics has are written here:
+The terms the optimization loop adds to the objective, each one entry of PENALTIES (made by penalties_of),
+in the order they are added. Two every physics has are written here, in CORE_PENALTIES:
 
     LatentSmoothing   Pz, each element's distance to the mean of its neighbours' latent points
     DistancePenalty   Dp, each solid element's distance to the nearest real material
@@ -21,6 +21,8 @@ from lsr_mmto.design.density_filter_and_projection import sparse_matmul
 from lsr_mmto.physics.available_physics import MODULES
 
 if TYPE_CHECKING:
+    from types import ModuleType
+
     from scipy.sparse import spmatrix
 
     from lsr_mmto.design.density_filter_and_projection import SparseOperator
@@ -47,8 +49,8 @@ def latent_smoothing(xb: torch.Tensor, z: torch.Tensor, Hm: "SparseOperator", Hs
 
 # ----------------------------------------------------------------------------- penalties
 # Every term added to the objective is one entry of PENALTIES. One that every physics has is written
-# here; one of a physics is written in its module (PENALTIES on its front page, as the arguments below
-# without physics). Each iteration the loop asks every penalty for its weight; a weight of 0 leaves it
+# here, in CORE_PENALTIES; one of a physics is written in its module (PENALTIES on its front page, as the
+# arguments below without physics). Each iteration the loop asks every penalty for its weight; a weight of 0 leaves it
 # out of that iteration, otherwise it adds weight * value / scale to the objective, and the same times
 # the value's gradient (autograd) to the objective's gradient.
 #
@@ -180,7 +182,7 @@ def _distance_penalty_weight(state: "RunState", it: "Iteration") -> float:
     return gamma
 
 
-PENALTIES = [
+CORE_PENALTIES = [
     Penalty("LatentSmoothing", "Latent smoothing",
             "Discourages neighbouring elements from flickering between materials.",
             lambda m: latent_smoothing(m.x_phys, m.z, m.Hm, m.Hsm), _latent_smoothing_weight, "raw", "Pz_n",
@@ -190,7 +192,31 @@ PENALTIES = [
             "Pushes each element's material towards one of the real materials in the database.",
             lambda m: distance_penalty(m.x_phys, m.z, m.z_real), _distance_penalty_weight, "first value", "Pn",
             raw_key="P", reads_latent_points=True),
-] + [Penalty(physics=[m.NAME], **p) for m in MODULES for p in m.PENALTIES]
+]
+
+
+def penalties_of(modules: "list[ModuleType]") -> list[Penalty]:
+    """Every penalty: the core's (CORE_PENALTIES), then each module's (its PENALTIES, as the arguments of a
+    Penalty), each once (available_physics.joined): one several physics give the same way is one, tagged with
+    all of them; two different ones under one name are an error. So are two that write the same history key,
+    since a run's history would then keep only one of them."""
+    from lsr_mmto.physics.available_physics import joined, one_each
+    entries = joined("penalties", {p.name: p for p in CORE_PENALTIES}, modules,
+                     lambda m: one_each("penalties", m, m.PENALTIES))
+    out = CORE_PENALTIES + [Penalty(physics=tags, **entry) for entry, tags in entries.values()
+                            if not isinstance(entry, Penalty)]
+    writes: dict[str, str] = {}
+    for p in out:
+        for key in p.keys():
+            if key in writes:
+                who = (f"the penalty {p.name!r} records {key!r} twice" if writes[key] == p.name else
+                       f"the penalties {writes[key]!r} and {p.name!r} both record {key!r}")
+                raise ValueError(f"{who} in a run's history; give one of them another key")
+            writes[key] = p.name
+    return out
+
+
+PENALTIES = penalties_of(MODULES)
 
 
 def smooth_latent_gradient_inplace(vec: np.ndarray, H_material: "spmatrix", Hs_material: np.ndarray, num_elems: int,

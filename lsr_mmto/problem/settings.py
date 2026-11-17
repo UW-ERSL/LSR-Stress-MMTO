@@ -1,14 +1,14 @@
 """
 settings.py
 ===========
-Every setting of a project, each in one entry of SETTINGS: its section, its name, the value a new
+Every setting of a project, each in one entry of CORE_SETTINGS (or of a physics' SETTINGS): its section, its name, the value a new
 project starts from, the label the app shows, its one help text (the app's (i) and the settings
 page), and the group of the Settings panel it sits in. Everything else is made from this list:
 DEFAULT_SETTINGS, the Settings panel, docs/reference.md, and the settings object s the
 optimization reads (s.gamma_factor).
 
-A new setting is one Setting here (or, for a setting of one physics, one entry of SETTINGS on its
-module's front page), plus the line in optimize/optimization_loop.py that reads s.<name>. A setting
+A new setting is one Setting in CORE_SETTINGS here (or, for a setting of one physics, one entry of SETTINGS
+on its module's front page; SETTINGS, made by settings_of, holds them all), plus the line in optimize/optimization_loop.py that reads s.<name>. A setting
 PyTO-AD's TOParams already has a field for names it (pyto_ad_field): build() copies it there, and
 the run reads it from there (to_params.MaxIterations), so the two never disagree.
 
@@ -25,6 +25,8 @@ from typing import TYPE_CHECKING, Any, Callable
 from lsr_mmto.physics.available_physics import MODULES
 
 if TYPE_CHECKING:
+    from types import ModuleType
+
     from lsr_mmto.problem.project import Project
 
 
@@ -91,8 +93,8 @@ class Setting:
 
 _PLATEAU = "Start the ramp when the objective plateaus"
 
-# in the order the Settings panel shows them, group by group
-SETTINGS = [
+# the settings every project has, in the order the Settings panel shows them, group by group
+CORE_SETTINGS = [
     # ---- Main
     Setting("mesh", "n_dof", 30000, "Mesh dofs",
             "How fine the mesh is: the number of unknowns it is built for, counting each unknown at each "
@@ -202,7 +204,31 @@ SETTINGS = [
     Setting("vae", "numEpochs", FROM_DATABASE, "Max epochs", "Training stops after this many passes at the latest.",
             "VAE", integer=True),
 ]
-SETTINGS += [Setting(physics=m.NAME, **args) for m in MODULES for args in m.SETTINGS]   # each physics' own, after the rest
+
+
+def settings_of(modules: "list[ModuleType]") -> list[Setting]:
+    """Every setting: the core's (CORE_SETTINGS), then each module's own (its SETTINGS, as the arguments of a
+    Setting), after the rest; refused when two have one key (one_setting_per_name)."""
+    out = CORE_SETTINGS + [Setting(physics=m.NAME, **args) for m in modules for args in m.SETTINGS]
+    one_setting_per_name(out)
+    return out
+
+
+def one_setting_per_name(entries: list[Setting]) -> None:
+    """ValueError when two settings have one key, naming where each comes from: a project stores a setting by
+    its key alone, so the later one would silently take the earlier one's place in every project. A setting
+    belongs to the core or to one physics; two physics that need the same thing give it keys of their own."""
+    where: dict[str, str] = {}
+    for e in entries:
+        here = "the core" if e.physics is None else f"the {e.physics} physics"
+        if e.key in where:
+            which = f"the one in {here}" if where[e.key] == "the core" else "one of them"
+            raise ValueError(f"two settings have the key {e.key!r}: one in {where[e.key]}, one in {here}; "
+                             f"give {which} another key")
+        where[e.key] = here
+
+
+SETTINGS = settings_of(MODULES)
 # the views made from SETTINGS, kept in step by _make_views
 BY_KEY, DEFAULT_SETTINGS, MESH_DEFAULTS = {}, {}, {}
 VAE_PARAMS = RUN_KEYS = ()
@@ -210,8 +236,10 @@ VAE_PARAMS = RUN_KEYS = ()
 
 def _make_views() -> None:
     """BY_KEY, DEFAULT_SETTINGS, MESH_DEFAULTS, VAE_PARAMS and RUN_KEYS from SETTINGS. The dicts are
-    filled in place, so a module that imported them sees a setting added later (as the tests do)."""
+    filled in place, so a module that imported them sees a setting added later (as the tests do). Refuses two
+    settings of one name first (one_setting_per_name), leaving the views as they were."""
     global VAE_PARAMS, RUN_KEYS
+    one_setting_per_name(SETTINGS)
     BY_KEY.clear()
     BY_KEY.update((e.key, e) for e in SETTINGS)
     for section in ("common", "advanced", "vae"):

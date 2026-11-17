@@ -1,6 +1,6 @@
 # Testing the codebase
 
-Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 363 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
+Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 368 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
 
 Run them all from the repository folder with `python -m pytest tests -q -n 4` (`-n 2` on a computer with less than 16 GB of memory), one folder with `python -m pytest tests/<folder> -q`, or one file with `python -m pytest tests/<folder>/<file> -q`.
 
@@ -8,14 +8,19 @@ Run them all from the repository folder with `python -m pytest tests -q -n 4` (`
 
 Each physics gives the right answers: its solver on cases with a known answer, its gradients, its runs.
 
+### `tests/physics/test_structural_physics.py`
+
+The structural physics (lsr_mmto/physics/structural/): its tiny example, which tests/runs/test_every_physics_runs.py checks and runs. Structural is the physics the core's own tests use, so its other tests are with the core's: a run and its record in tests/runs/, its gradients in tests/gradients/, the paper's examples in tests/runs/test_regression.py. The smallest test file a physics can have: start from this one for a new physics.
+
+
 ### `tests/physics/test_thermal_physics.py`
 
-The thermal physics (lsr_mmto/physics/thermal/) keeps working: its solver gives the right answer on a bar, and short U-bracket runs go through with it and its example database, with no core file changed. Copy this file for a physics of your own. A physics not yet in available_physics.MODULES can be tested before it is: wrap each test in registered(module), which adds it to the core's lists as its line in MODULES would.
+The thermal physics (lsr_mmto/physics/thermal/) keeps working: its solver gives the right answer on a bar, and short U-bracket runs go through with it and its example database, with no core file changed. Copy this file for a physics of your own. A physics not yet in available_physics.MODULES can be tested before it is: wrap each test in registered(module) (tests/physics/core_lists_for_a_test.py), which adds it to the core's lists as its line in MODULES would.
 
 - `test_a_project_sees_only_its_own_physics_settings`: The Settings panel shows the settings every project has and those of the project's own physics, each group once. Thermal has none of its own, so one is given to it here, added to the core's settings as registering adds a front page's.
 - `test_thermal_solver_gives_a_straight_line_along_a_bar`: T held at 0 at one end of a bar and 1 at the other, solid everywhere, one conductivity: T rises in a straight line from end to end, at every node. Trilinear elements give this exactly.
 - `test_thermal_gradients_agree_with_finite_differences`: ThermalCompliance, f . T, on the bar held at 0 on one end with 1 of heat put in at the other, at an uneven design (densities and conductivities differ by element). Its autograd gradient for the density and the conductivity of a few elements, each where the gradient is large, agrees with central differences: the quantity's own function after the physics' analyse, the thermal solve included.
-- `test_thermal_physics_runs_with_no_core_file_changed`: Thermal physics runs with no core file changed.
+- `test_thermal_physics_runs_with_no_core_file_changed`: A thermal project passes its check and a structural kind on it is refused; built, it holds the temperature and spreads the heat source over its nodes. Its tiny example's run (tiny_run, run once per session for every test that reads it) saved the temperature at each node, as thermal's own result, and recorded thermal's own numbers and none of structural's.
 - `test_a_thermal_summary_shows_its_own_row_and_units`: A run in mmKS: its Summary has thermal's own row, the max temperature in K, and its Units row the units of the thermal kinds; nothing of structural's (no failure factor, no force or stress).
 - `test_a_thermal_run_with_held_temperatures_only`: The physics says what a project must have (NEEDS): thermal needs a support and no load, so a run with two held temperatures and no source goes through, and its save gives no RuntimeWarning (no load nodes, so no load centroid in the record); the structural physics still needs a load.
 - `test_a_thermal_run_of_one_material`: Thermal with one material in the design: the network fixed to one of the example database's materials, and a database of that one material at its database values. Each runs through to the save, every element is that material, with the conductivity the network or the database gives, and the objective is finite.
@@ -37,7 +42,7 @@ The thermal physics (lsr_mmto/physics/thermal/) keeps working: its solver gives 
 
 ### `tests/physics/test_thermoelastic_physics.py`
 
-The thermoelastic physics (lsr_mmto/physics/thermoelastic/) gives the right answers: a bar heated evenly and held only against rigid motion grows freely by its thermal strain. Its solver is checked on its own (make_solver, then analyse), so no material database is needed.
+The thermoelastic physics (lsr_mmto/physics/thermoelastic/) gives the right answers: a bar heated evenly and held only against rigid motion grows freely by its thermal strain. Its solver is checked on its own (make_solver, then analyse), so no material database is needed; its tiny example, which tests/runs/test_every_physics_runs.py runs, writes a database of one material.
 
 - `test_a_bar_heated_evenly_grows_freely`: The bar held at T_ref + dT on two opposite faces with no heat source, so dT everywhere; held only in x on xmin, y on ymin and z on zmin, so nothing stops it growing. Each node moves by alpha * dT times its distance from those three faces, in each direction: the thermal strain with no stress. Trilinear elements give this linear field exactly. A bar that shrinks has H's sign wrong; one that grows (1 - 2 nu) times too little is missing the 1 / (1 - 2 nu).
 - `test_no_heating_gives_the_structural_compliance`: The bar held at T_ref at both ends, so no thermal strain anywhere: clamped on xmin and pulled down on xmax, its thermoelastic compliance (f + f_th) . u equals the structural solver's f . u for the same mesh, supports, load and material, and the thermal force is zero.
@@ -46,6 +51,10 @@ The thermoelastic physics (lsr_mmto/physics/thermoelastic/) gives the right answ
 - `test_gradients_agree_with_finite_differences`: J = (f + f_th) . u on the bar clamped and held at T_ref on xmin and heated on xmax (no applied force, so all of J is the heating's, and finite differences can see each element's part), at an uneven design (densities, expansion coefficients and conductivities all differ by element). Its autograd gradient for the density, the expansion coefficient and the conductivity of a few elements, each where the gradient is large, agrees with central differences: the whole chain T -> f_th -> u, the thermal solve included. The expansion coefficient and the conductivity reach J only through the heating.
 - `test_a_large_problem_uses_dpcg_and_gives_the_direct_answer`: Above the direct solver's limit the core uses DPCG for a physics with a deflation space; thermoelastic takes structural's for its displacement and thermal's for its temperature (one unknown per node), both on the same checked solver. The bar, heated and pulled down, solved this way (the limit passed by asking for more unknowns than it) gives the direct solver's temperature and displacement, and both solves are kept as converged.
 - `test_a_part_left_free_in_a_rigid_motion_is_refused`: The thermal force pushes in every direction, so the part must be held against all six rigid motions, whatever the applied loads: one left free makes the displacement's matrix singular, and the direct solver then gives a displacement with an arbitrary drift in it. Held in x on xmin and y on ymin only, the bar can still move in z; held in all directions along one edge only, it can still rotate about that edge. Each refusal names the motion left free. Held as in the free-expansion test (x, y and z on three faces), it is held against all six, though it can still grow.
+
+### `tests/physics/core_lists_for_a_test.py` (a script, not collected by pytest)
+
+The core's lists changed for one test, and put back after it: registered(module) adds a physics as its line in available_physics.MODULES would, making every list with the functions start-up makes them with (remake_lists), so whatever start-up would refuse is refused here too; added(entries, ...) adds entries to one list. Not a test file: a physics' own test file imports what it needs from here, and copying a test file never copies these.
 
 ## gradients
 
@@ -230,6 +239,13 @@ The four benchmarks (projects/*.mmto) against what their coded versions gave bef
 - `test_compare_problem_u_bracket`: The U-bracket project builds the same held dofs, imposed values, forces, keep-solid elements and mesh as its retired coded version did.
 - `test_compare_problem_beam`: The beam project builds the same held dofs, imposed values, forces, keep-solid elements and mesh as its retired coded version did.
 - `test_compare_problem_airplane_bracket`: The Airplane bracket project builds the same held dofs, imposed values, forces, keep-solid elements and mesh as its retired coded version did.
+
+### `tests/runs/test_every_physics_runs.py`
+
+Every physics in available_physics.MODULES runs: its tiny example passes the project's check, goes through a short run of 2 iterations, is saved, reads back with its final check's results, and its objective is a number at every iteration. This file names no physics: each gives its own example, as tiny_example in its own test file, tests/physics/test_<physics>_physics.py, where everything about testing that physics lives. A physics added to MODULES is run here at once; until its test file gives a tiny_example, this test fails saying what to add.
+
+- `test_every_physics_runs_its_tiny_example`: The physics' tiny example passes the project's check, so a failure of its run is the run's, not the setup's. Its run (tiny_run) was saved; read back, it is a run of that physics with every result its RESULT_FIELDS lists, each a finite number, and a finite objective at the start and at each of 2 iterations.
+- `test_a_physics_with_no_test_file_or_no_tiny_example_is_told_what_to_add`: A physics whose test file is missing fails here with the file to add and what to put in it; one whose test file has no tiny_example fails saying to add one.
 
 ### `tests/runs/test_final_check.py`
 
@@ -573,7 +589,7 @@ A function that changes an object it is given says so in its docstring, in one l
 
 ### `tests/code_rules/test_extending.py`
 
-A new setting is one entry of SETTINGS (lsr_mmto/problem/settings.py), and a new objective or constraint is one entry of QUANTITIES (lsr_mmto/formulation/quantities.py): nothing else is written by hand. One made-up setting and one made-up quantity are added here, and each must reach every place that uses it: the defaults, the settings page, the app's panel, the settings a run gets. A physics may leave out its optional entries, its Summary rows reach the Summary, and a new database starts with the columns its project's physics reads.
+A new setting is one entry of CORE_SETTINGS (lsr_mmto/problem/settings.py), and a new objective or constraint is one entry of CORE_QUANTITIES (lsr_mmto/formulation/quantities.py): nothing else is written by hand. One made-up setting and one made-up quantity are added here, and each must reach every place that uses it: the defaults, the settings page, the app's panel, the settings a run gets. A physics may leave out its optional entries, its Summary rows reach the Summary, and a new database starts with the columns its project's physics reads. Two things of one name are refused at start-up, naming both places, and registering a physics in a test makes the core's lists as start-up does.
 
 - `test_one_entry_makes_a_setting`: One entry makes a setting.
 - `test_one_entry_makes_a_quantity`: One entry makes a quantity.
@@ -581,6 +597,9 @@ A new setting is one entry of SETTINGS (lsr_mmto/problem/settings.py), and a new
 - `test_a_physics_may_leave_out_its_optional_entries`: _checked gives a physics that leaves out an OPTIONAL_ENTRIES entry its "none" value, and refuses one that leaves out any other entry, naming it, or gives SIMP_PENALTIES without set_simp_penalties.
 - `test_a_physics_summary_rows_reach_the_summary`: Each SUMMARY_ROWS entry is a row of the Summary with the last value its history key recorded, and a key the run did not record (or recorded as nan) gives no row.
 - `test_a_new_database_starts_with_the_columns_its_physics_reads`: Density, the properties the project needs, then its physics' optional ones, in the property list's order: an L-bracket that limits no stress needs no yield strength.
+- `test_two_things_of_one_name_are_refused`: Start-up refuses, naming both places: a physics setting with a name the core already uses (it would take the core setting's place in every project), two different penalties of one name, two penalties that write one history key, two quantities of one name in one physics, a material property's alias that is another property's name, and a result shown as a view every run has (Material, Density or Solid).
+- `test_the_reserved_views_are_the_results_panels_own`: RESERVED_VIEWS, the views a physics' result may not take, are exactly the views the Results panel gives every run (gui/draw_design.py, views with no run's results).
+- `test_registering_in_a_test_makes_the_lists_as_start_up_does`: remake_lists (tests/physics/core_lists_for_a_test.py), which registered uses, makes from MODULES exactly the lists start-up made: the same physics, quantities, penalties, settings, properties, aliases and kinds, in the same order. A step start-up takes that it does not would show here.
 
 ### `tests/code_rules/test_layout.py`
 

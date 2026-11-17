@@ -4,11 +4,11 @@ test_thermal_physics.py
 The thermal physics (lsr_mmto/physics/thermal/) keeps working: its solver gives the right answer on a bar,
 and short U-bracket runs go through with it and its example database, with no core file changed. Copy this
 file for a physics of your own. A physics not yet in available_physics.MODULES can be tested before it is:
-wrap each test in registered(module), which adds it to the core's lists as its line in MODULES would.
+wrap each test in registered(module) (tests/physics/core_lists_for_a_test.py), which adds it to the core's
+lists as its line in MODULES would.
 
     python tests/physics/test_thermal_physics.py        (or: python -m pytest tests)
 """
-import contextlib
 import os
 import sys
 import tempfile
@@ -18,9 +18,11 @@ import torch
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from lsr_mmto.physics import available_physics  # noqa: E402
 from lsr_mmto.physics.thermal import thermal_module as THERMAL  # noqa: E402
+from core_lists_for_a_test import added  # noqa: E402
 
 available_physics._checked(THERMAL)                 # the defaults of the entries it leaves out, as registering gives
 
@@ -31,87 +33,6 @@ EXAMPLE_VAE = dict(latentDim=2, vae_hiddenDim=50, learningRate=5e-4, klFactor=1e
                    numEpochs=100000)                # the settings its network (example_materials.nt) was trained with
 
 
-@contextlib.contextmanager
-def registered(module):
-    """The core's lists with module added, as its line in available_physics.MODULES adds it when they are
-    made (its quantities, penalties, kinds, settings, material properties and unit kinds), and taken out
-    again afterwards. A module already in MODULES is left as it is: nothing added, nothing taken out. The
-    kinds of support and load are made again from MODULES each way (boundary_conditions.bc_kinds_of, as at
-    start-up), since a kind may be shared: one tagged with several physics stays when one of them goes."""
-    if module in available_physics.MODULES:
-        yield
-        return
-    from lsr_mmto.design import latent_penalties
-    from lsr_mmto.formulation import quantities
-    from lsr_mmto.materials import databases
-    from lsr_mmto.problem import settings
-    available_physics._checked(module)
-    added_q = [quantities.Quantity(physics=[module.NAME], **q) for q in module.QUANTITIES]
-    added_p = [latent_penalties.Penalty(physics=[module.NAME], **p) for p in module.PENALTIES]
-    added_s = [settings.Setting(physics=module.NAME, **a) for a in module.SETTINGS]
-    added_u = [k for k in module.UNIT_KINDS if k not in databases.UNITS]
-    databases._add_unit_kinds(module)                     # first: an attribute's kind must be a unit kind
-    added_a = {k: a for k, a in databases.attributes_of([module]).items() if k not in databases.ATTRIBUTES}
-    available_physics.MODULES.append(module)
-    available_physics.PHYSICS[module.NAME] = module
-    quantities.QUANTITIES.extend(added_q)
-    latent_penalties.PENALTIES.extend(added_p)
-    _remake_kinds()
-    settings.SETTINGS.extend(added_s)
-    settings._make_views()
-    databases.ATTRIBUTES.update(added_a)
-    databases.SHOWN.update({k: a.shown for k, a in added_a.items()})
-    aliases = {n.lower(): a.name for a in added_a.values() for n in (a.name,) + a.aliases}
-    databases._BY_ALIAS.update(aliases)
-    try:
-        yield
-    finally:
-        available_physics.MODULES.remove(module)
-        del available_physics.PHYSICS[module.NAME]
-        for q in added_q:
-            quantities.QUANTITIES.remove(q)
-        for p in added_p:
-            latent_penalties.PENALTIES.remove(p)
-        _remake_kinds()
-        for s in added_s:
-            settings.SETTINGS.remove(s)
-        settings._make_views()
-        for k in added_a:
-            del databases.ATTRIBUTES[k], databases.SHOWN[k]
-        for n in aliases:
-            del databases._BY_ALIAS[n]
-        for k in added_u:
-            del databases.UNITS[k]
-            for table in databases.UNIT_SYSTEMS.values():
-                del table[k]
-
-
-def _remake_kinds():
-    """The core's kinds of support and load made again from available_physics.MODULES, in place (the core
-    reads the same dict), as start-up makes them. Made in full before the old ones are cleared, so an error
-    leaves them as they were."""
-    from lsr_mmto.problem import boundary_conditions
-    kinds = boundary_conditions.bc_kinds_of(available_physics.MODULES)
-    boundary_conditions.BC_KINDS.clear()
-    boundary_conditions.BC_KINDS.update(kinds)
-
-
-@contextlib.contextmanager
-def added(entries, *new, then=None):
-    """The core's list entries with new added at its end, in place (the core reads the same list), and taken
-    out again afterwards; then(), when given, is called after each change (settings._make_views)."""
-    entries.extend(new)
-    if then is not None:
-        then()
-    try:
-        yield
-    finally:
-        for e in new:
-            entries.remove(e)
-        if then is not None:
-            then()
-
-
 def _project(name, stl, base_dir, n_dof):
     from lsr_mmto.problem.project import Project
     p = Project(name, stl=stl, n_dof=n_dof, single_layer=True, base_dir=base_dir)
@@ -120,6 +41,21 @@ def _project(name, stl, base_dir, n_dof):
     p.settings["vae"].update(EXAMPLE_VAE)
     p.objective("ThermalCompliance()")
     p.constraint("VolumeFraction()", "<=", 0.5)
+    return p
+
+
+def tiny_example(folder):
+    """The smallest thermal project that runs, which tests/runs/test_every_physics_runs.py runs: the bar on a
+    coarse mesh, held at 0 on its xmin face with 1 of heat put in on its xmax face, its thermal compliance made
+    least with half its volume, the example database and its network, 2 iterations. folder is a scratch folder
+    (this example writes nothing there)."""
+    from lsr_mmto.problem import selections as S
+    p = _project("tiny thermal", "RectangularBeam.STL", BAR, 1500)
+    p.add_selection("xmin", S.face("xmin"))
+    p.add_selection("xmax", S.face("xmax"))
+    p.bcs += [{"kind": "fixed_temperature", "on": "xmin", "value": 0.0},
+              {"kind": "heat_source", "on": "xmax", "total": 1.0}]
+    p.settings["common"]["maxIterations"] = 2
     return p
 
 
@@ -221,12 +157,13 @@ def test_thermal_gradients_agree_with_finite_differences():
                 best = min(best, abs(fd - g[i]) / abs(g[i]))
             assert best < 1e-5, f"{name}[{i}]: relative difference {best:.1e}"
 
-def test_thermal_physics_runs_with_no_core_file_changed():
+def test_thermal_physics_runs_with_no_core_file_changed(tiny_run):
+    """A thermal project passes its check and a structural kind on it is refused; built, it holds the temperature
+    and spreads the heat source over its nodes. Its tiny example's run (tiny_run, run once per session for every
+    test that reads it) saved the temperature at each node, as thermal's own result, and recorded thermal's own numbers
+    and none of structural's."""
     from lsr_mmto.problem import selections as S
-    from lsr_mmto.problem.project import run
-    from lsr_mmto.results import load_results
     p = _held_and_heated("thermal")
-    p.settings["common"]["maxIterations"] = 2
     p.complete_settings()
     assert p.validate() == []
 
@@ -239,13 +176,12 @@ def test_thermal_physics_runs_with_no_core_file_changed():
     assert list(bcs) == ["T"] and len(bcs["T"].fixed_dofs) > 0
     assert np.isclose(bcs["T"].force.sum(), 1.0)                 # the source, shared by its nodes
 
-    with tempfile.TemporaryDirectory() as d:
-        run(p, save_dir=d, verbose=False)
-        r = load_results.load(os.path.join(d, "run_data.npz"))
-    assert list(r.results) == ["temperature"] and r.results["temperature"].shape == (len(mesh.node_xyz),)
+    _, r = tiny_run("thermal")
+    same = tiny_example(None)                                   # the shared project is only read, never changed
+    same.complete_settings()
+    assert list(r.results) == ["temperature"] and r.results["temperature"].shape == (len(same.mesh().node_xyz),)
     assert r.result_info["temperature"]["view"] == "Temperature"
     assert r.result_info["temperature"]["where"] == "node"
-    assert len(r.history["objective"]) >= 2                     # MMA evaluates the start too
     assert np.all(np.isfinite(r.history["objective"])) and r.history["objective"][0] > 0
     assert len(r.history["max_temperature"]) >= 2
     assert "max_failure_factor" not in r.history                 # structural's keys are structural's

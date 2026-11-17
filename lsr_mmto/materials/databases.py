@@ -194,17 +194,30 @@ CORE_ATTRIBUTES = [
 
 def attributes_of(modules: "list[ModuleType]") -> dict[str, Attribute]:
     """{name: Attribute}: the core's attributes and those the modules bring (their NEW_PROPERTIES), each once."""
-    from lsr_mmto.physics.available_physics import joined
+    from lsr_mmto.physics.available_physics import joined, one_each
     entries = joined("material properties", {a.name: a for a in CORE_ATTRIBUTES}, modules,
-                     lambda m: {p["name"]: p for p in m.NEW_PROPERTIES})
+                     lambda m: one_each("material properties", m, m.NEW_PROPERTIES))
     return {name: entry if isinstance(entry, Attribute) else Attribute(physics=tags, **entry)
             for name, (entry, tags) in entries.items()}
+
+
+def aliases_of(attributes: dict[str, Attribute]) -> dict[str, str]:
+    """{a name or alias, in lower case: the attribute it names} for every attribute; ValueError when one of them
+    (whatever its case) names two attributes, naming both, since a database column could then mean either."""
+    out: dict[str, str] = {}
+    for a in attributes.values():
+        for k in (a.name,) + a.aliases:
+            if out.get(k.lower(), a.name) != a.name:
+                raise ValueError(f"the material properties {out[k.lower()]!r} and {a.name!r} are both called {k!r}; "
+                                 f"give one of them another name or alias")
+            out[k.lower()] = a.name
+    return out
 
 
 ATTRIBUTES = attributes_of(MODULES)
 # each attribute's name as a user reads it, from its entry
 SHOWN = {a.name: a.shown for a in ATTRIBUTES.values()}
-_BY_ALIAS = {k.lower(): a.name for a in ATTRIBUTES.values() for k in (a.name,) + a.aliases}
+_BY_ALIAS = aliases_of(ATTRIBUTES)
 
 
 def density_column(names: Iterable[str]) -> str | None:

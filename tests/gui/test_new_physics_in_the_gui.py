@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.join(ROOT, "tests", "physics"))
 from PyQt5 import QtWidgets  # noqa: E402
 
 from test_gui import Box, answers, opened, scratch  # noqa: E402
-from test_thermal_physics import registered  # noqa: E402
+from core_lists_for_a_test import registered  # noqa: E402
 
 APP = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 

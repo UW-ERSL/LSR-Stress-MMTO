@@ -69,7 +69,8 @@ MODULE_ENTRIES = {
                  "empty",
     "SETTINGS": "its own settings, each as the arguments of a Setting",
     "RESULT_FIELDS": "the results a run saves, {name: dict(view, title, measures, where, shape)}: view the Results "
-                     "panel's choice that shows it, title its colour scale's, measures what it is (for its unit), "
+                     "panel's choice that shows it (not one of RESERVED_VIEWS), title its colour scale's, measures "
+                     "what it is (for its unit), "
                      "where 'element' (one value per element, the default) or 'node' (one per node), shape "
                      "'scalar' (one number, the default) or 'vector' (x, y and z); final_summary returns their "
                      "values",
@@ -118,15 +119,25 @@ OPTIONAL_ENTRIES = {
 }
 
 
+# the Results panel's views every run has (gui/draw_design.py, views): a result shown as one of them would be hidden
+RESERVED_VIEWS = ("Material", "Density", "Solid")
+
+
 def _checked(module: "ModuleType") -> "ModuleType":
     """Returns the module, given the "none" value of each OPTIONAL_ENTRIES entry it leaves out; raises
-    TypeError naming every other MODULE_ENTRIES entry it does not give."""
+    TypeError naming every other MODULE_ENTRIES entry it does not give, and ValueError for a result shown
+    as one of RESERVED_VIEWS."""
     missing = [k for k in MODULE_ENTRIES if not hasattr(module, k) and k not in OPTIONAL_ENTRIES]
     if missing:
         raise TypeError(f"physics module {module.__name__} does not give {', '.join(missing)}")
     if hasattr(module, "SIMP_PENALTIES") != hasattr(module, "set_simp_penalties"):    # one is no use alone
         raise TypeError(f"physics module {module.__name__} gives one of SIMP_PENALTIES and set_simp_penalties: "
                         f"give both, or neither")
+    for name, field in module.RESULT_FIELDS.items():
+        if field.get("view") in RESERVED_VIEWS:
+            raise ValueError(f"physics module {module.__name__}: the result {name!r} is shown as "
+                             f"{field['view']!r}, a view every run already has ({', '.join(RESERVED_VIEWS)}); "
+                             f"give it another view")
     for k, none in OPTIONAL_ENTRIES.items():
         if not hasattr(module, k):
             setattr(module, k, none())
@@ -136,11 +147,22 @@ def _checked(module: "ModuleType") -> "ModuleType":
 PHYSICS = {m.NAME: _checked(m) for m in MODULES}
 
 
+def one_each(what: str, module: "ModuleType", items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """{name: item} of a module's list of entries (each the arguments of one, with a "name"), for joined;
+    ValueError when two of them share a name, which the dict would otherwise keep only the last of."""
+    out: dict[str, dict[str, Any]] = {}
+    for item in items:
+        if item["name"] in out:
+            raise ValueError(f"the {module.NAME} physics gives two {what} named {item['name']!r}; rename one of them")
+        out[item["name"]] = item
+    return out
+
+
 def joined(what: str, core: dict[str, Any], modules: "list[ModuleType]",
            entries: "Callable[[ModuleType], dict[str, Any]]") -> dict[str, tuple[Any, list[str]]]:
     """{name: (entry, the names of the physics that give it)}: the core's entries (core: {name: entry}, every
     physics has them; tagged with none) and each module's (entries(module): {name: entry}) in one list, as the
-    core's lists of properties, quantities and kinds of support and load are made. An entry several physics
+    core's lists of properties, quantities, penalties and kinds of support and load are made. An entry several physics
     give the same way (the same object, or equal) is one entry tagged with all of them; two different
     entries under one name are an error naming both places. what names the kind of entry in that error.
     Entries are of any kind (Quantity, Attribute, the arguments of one as a dict), compared with is or ==."""
@@ -155,8 +177,10 @@ def joined(what: str, core: dict[str, Any], modules: "list[ModuleType]",
                 continue
             have, tags = out[name]
             if not (have is entry or have == entry):
-                raise ValueError(f"two different {what} are named {name!r}: one in {where[name]}, one in {here}. "
-                                 f"Rename one of them, or give the same entry in both.")
+                fix = (f"rename the one in {here}" if where[name] == "the core" else
+                       "rename one of them, or give the same entry in both")
+                raise ValueError(f"two different {what} are named {name!r}: one in {where[name]}, one in {here}; "
+                                 f"{fix}")
             if where[name] != "the core" and m.NAME not in tags:
                 tags.append(m.NAME)
     return out

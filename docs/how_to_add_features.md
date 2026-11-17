@@ -83,7 +83,7 @@ as torch from the model's state; autograd gives the gradient.
 `lsr_mmto/physics/template/template_module.py` has one penalty of a physics, commented out: what it is
 given, its weight and its scale.
 
-A penalty every physics has (latent smoothing, the distance penalty) is one entry in `PENALTIES` in
+A penalty every physics has (latent smoothing, the distance penalty) is one entry in `CORE_PENALTIES` in
 `lsr_mmto/design/latent_penalties.py`. A penalty of one physics is one entry in `PENALTIES` on that
 physics' front page, given as the arguments of a `Penalty` without `physics`. Each iteration the loop
 adds them in that order, those every physics has first. Its function computes it as torch from the
@@ -175,7 +175,7 @@ run: both generators above (the reference page and the user guide list every kin
 
 ## A setting
 
-One entry in `SETTINGS` in `lsr_mmto/problem/settings.py`, or, for a setting of one physics, one
+One entry in `CORE_SETTINGS` in `lsr_mmto/problem/settings.py`, or, for a setting of one physics, one
 entry in `SETTINGS` on its front page (as the arguments of a `Setting`), plus the line that reads it
 as `s.<name>` (in `lsr_mmto/optimize/optimization_loop.py`, or in the physics' own code, which gets
 the same `s`):
@@ -237,8 +237,8 @@ The structural physics brings Young's modulus, Poisson's ratio and the yield str
 tests and the GUI alike). One name has one meaning: a physics may give an attribute another physics
 gives too only exactly as that one gives it, and it is then one entry shared by both; two different
 entries under one name stop LSR MMTO from starting, with a message naming both places. A name in a
-physics' `PROPERTIES` or in a quantity's `needs` that no entry defines stops it too. The quantities
-and the kinds of support and load are joined the same way.
+physics' `PROPERTIES` or in a quantity's `needs` that no entry defines stops it too. The quantities,
+the penalties and the kinds of support and load are joined the same way.
 
 A new kind of quantity (a conductivity, say) belongs to the physics that uses it: an entry in
 `UNIT_KINDS` on its front page, with each unit's value in SI and its unit in each unit system
@@ -271,9 +271,18 @@ A physics is a folder in `lsr_mmto/physics/`, e.g. `thermoelastic/`, with five f
 
 plus one line in `MODULES` in `lsr_mmto/physics/available_physics.py`. The entries are described in
 `MODULE_ENTRIES` there; `thermal/thermal_module.py` and `structural/structural_module.py` are complete
-examples, and `tests/physics/test_thermal_physics.py` tests thermal: copy it for yours (its `registered` tests a
-physics before its line is in `MODULES`). `tests/code_rules/test_physics_folders.py` checks that every physics keeps
-the form's files and places. A project names its physics with `"physics"` in its file (`p.physics` in code); an unknown name is an error before the run. The material
+examples. Your physics' tests go in one file, `tests/physics/test_<name>_physics.py`: start from
+`tests/physics/test_structural_physics.py`, the smallest one, and copy what you need from
+`tests/physics/test_thermal_physics.py`, a fuller set (a case whose answer is known, runs, gradients). The file
+gives a `tiny_example`: the smallest project of your physics that runs, in 2 iterations. `registered`
+(`tests/physics/core_lists_for_a_test.py`) tests a physics before its line is in `MODULES`. `tests/runs/test_every_physics_runs.py` runs every physics' `tiny_example` (a run, its save, reading it back,
+the final check). It names no physics, so you add nothing to it; it fails, naming your file, until your file has a
+`tiny_example`. `tests/code_rules/test_physics_folders.py` checks that every physics keeps the form's files and
+places. Each name means one thing: a kind of support or load, a quantity, a penalty or a material property (or
+an alias of one) that the core or another physics already has may be given again only exactly as that one is,
+and is then shared; a setting key, and a history key a penalty writes, belong to one place only; no result may
+be shown as Material, Density or Solid (`RESERVED_VIEWS`, the views every run has). Start-up refuses a physics
+that breaks one of these, naming both places. A project names its physics with `"physics"` in its file (`p.physics` in code); an unknown name is an error before the run. The material
 attributes it reads that the core does not have (Density and Cost) are its own, in `NEW_PROPERTIES`
 (see "A material attribute"). What else to run: both generators above, since its settings,
 quantities, kinds and attributes join their lists.
@@ -357,9 +366,9 @@ example. Five things differ from a physics of one field:
 - A setting belongs to one physics, and the GUI shows only the settings of the project's physics. A
   physics that needs a setting another one has gives its own, under its own key: thermoelastic's
   Poisson's ratio settings start with `te_`.
-- A test can use another physics' parts: `registered` (`tests/physics/test_thermal_physics.py`) adds a physics to
-  the core's lists for one test, as its line in `MODULES` would, and takes it out after; for a physics
-  already in `MODULES` it does nothing.
+- A test can use another physics' parts: `registered` (`tests/physics/core_lists_for_a_test.py`) adds a physics to
+  the core's lists for one test, making them with the same functions start-up does, so a physics start-up would
+  refuse is refused there too, and takes it out after; for a physics already in `MODULES` it does nothing.
 
 ## A material database
 

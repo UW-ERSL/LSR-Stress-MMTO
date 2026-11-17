@@ -8,8 +8,13 @@ ask for fails at its end, naming the dialog's title and text. A test that means 
 says so, as test_gui.answers() does. The app's settings (what a user's window keeps between sessions, the
 message panel's height) go to a folder of the test run's own. And no solve is left unchecked: plain CG, which
 PyTO-AD falls back to for a system that no deflation space fits, fails the test that reaches it (every iterative
-solve is DPCG on a checked solver, optimize/iterative_solve_check.py).
+solve is DPCG on a checked solver, optimize/iterative_solve_check.py). And each physics' tiny example runs at
+most once per test session (once per worker with -n), for every test that only needs a run of that physics to
+look at (tiny_run).
 """
+import importlib
+import os
+import sys
 import tempfile
 
 import pytest
@@ -103,3 +108,42 @@ def no_unchecked_solve(monkeypatch):
         raise AssertionError("an iterative solve ran plain CG, which is not checked: the physics' deflation_space "
                              "has no space for this system (iterative_solve_check.py)")
     monkeypatch.setattr(scipy.sparse.linalg, "cg", plain_cg)
+
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def tiny_example_of(physics):
+    """The tiny_example function of a physics, from its own test file, tests/physics/test_<physics>_physics.py;
+    the test fails, saying what to add, when that file or its tiny_example is missing."""
+    file = f"tests/physics/test_{physics}_physics.py"
+    if not os.path.exists(os.path.join(ROOT, file)):
+        pytest.fail(f"the {physics} physics has no test file: add {file}, with a tiny_example "
+                    f"(start from tests/physics/test_structural_physics.py)", pytrace=False)
+    sys.path.insert(0, os.path.join(ROOT, "tests", "physics"))
+    module = importlib.import_module(f"test_{physics}_physics")
+    if not hasattr(module, "tiny_example"):
+        pytest.fail(f"{file} has no tiny_example: add one (see tiny_example in "
+                    f"tests/physics/test_structural_physics.py)", pytrace=False)
+    return module.tiny_example
+
+
+@pytest.fixture(scope="session")
+def tiny_run(tmp_path_factory):
+    """tiny_run(physics): that physics' tiny example (tiny_example_of) run and saved, once per test session (once
+    per worker with -n); (the project, the run read back from its saved folder). A test that needs a run of a
+    physics, and nothing about how that run was set up, reads this one instead of running its own. Only for
+    tests that change nothing: no monkeypatch around the call, no edit of the project or the run, since every
+    later reader gets the same ones."""
+    from lsr_mmto.problem.project import run
+    from lsr_mmto.results import load_results
+    runs = {}
+
+    def made(physics):
+        if physics not in runs:
+            folder = str(tmp_path_factory.mktemp(f"tiny_{physics}"))
+            project = tiny_example_of(physics)(folder)
+            run(project, save_dir=os.path.join(folder, "run"), verbose=False)
+            runs[physics] = project, load_results.load(os.path.join(folder, "run", "run_data.npz"))
+        return runs[physics]
+    return made

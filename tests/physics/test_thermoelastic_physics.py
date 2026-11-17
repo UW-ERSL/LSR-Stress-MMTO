@@ -3,7 +3,8 @@ test_thermoelastic_physics.py
 =============================
 The thermoelastic physics (lsr_mmto/physics/thermoelastic/) gives the right answers: a bar heated evenly
 and held only against rigid motion grows freely by its thermal strain. Its solver is checked on its own
-(make_solver, then analyse), so no material database is needed.
+(make_solver, then analyse), so no material database is needed; its tiny example, which
+tests/runs/test_every_physics_runs.py runs, writes a database of one material.
 
     python -m pytest tests/physics/test_thermoelastic_physics.py
 """
@@ -30,6 +31,30 @@ def _bar(name, n_dof=2000):
     p.physics = "thermoelastic"
     for side in ("xmin", "xmax", "ymin", "ymax", "zmin", "zmax"):
         p.add_selection(side, S.face(side))
+    return p
+
+
+def tiny_example(folder):
+    """The smallest thermoelastic project that runs: the bar on a coarse mesh, held on its xmin face at the
+    reference temperature, with 1 of heat put in and a pull down on its xmax face, its thermoelastic compliance
+    made least with half its volume, 2 iterations. Thermoelastic has no example database with a network yet, so
+    its material is one written in folder (aluminium's numbers, in MKS) and the project is of that one material."""
+    from openpyxl import Workbook
+    wb = Workbook()
+    wb.active.append(["Attributes", "Density", "Youngs_Modulus", "Poissons_Ratio", "Thermal_Expansion", "Conductivity"])
+    wb.active.append(["Material/Units", "kg/m^3", "Pa", None, "1/K", "W/(m*K)"])
+    wb.active.append(["Aluminium", 2700.0, 69e9, 0.33, 23e-6, 167.0])
+    database = os.path.join(folder, "one_material.xlsx")
+    wb.save(database)
+    p = _bar("tiny thermoelastic", n_dof=1500)
+    p.database, p.material_source = database, "one_database_material"
+    p.add_bc("fixed", "xmin", dofs="xyz")
+    p.add_bc("force", "xmax", total=[0, -1, 0])
+    p.bcs += [{"kind": "fixed_temperature", "on": "xmin", "value": 293.15},
+              {"kind": "heat_source", "on": "xmax", "total": 1.0}]
+    p.objective("ThermoelasticCompliance()")
+    p.constraint("VolumeFraction()", "<=", 0.5)
+    p.settings["common"]["maxIterations"] = 2
     return p
 
 

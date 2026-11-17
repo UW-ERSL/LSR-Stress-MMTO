@@ -83,8 +83,8 @@ tests needs its line in `FOLDERS` there. While developing, run only the tests fo
 | `lsr_mmto/problem/` (the project, selections, mesh, supports and loads, settings, the project folder) | `problem/test_project.py`, `problem/test_selections.py`, `problem/test_mesh.py`, `problem/test_project_folder.py` |
 | `lsr_mmto/materials/` (databases, the material network) | `materials/test_databases.py` |
 | `lsr_mmto/formulation/` (quantities, the formula text) | `code_rules/test_extending.py`, `problem/test_project.py`, `gradients/test_ad_quantities.py` |
-| `lsr_mmto/physics/` | `physics/test_thermal_physics.py`, `physics/test_thermoelastic_physics.py`, `code_rules/test_physics_folders.py`, `gui/test_thermal_walk_through.py`, `runs/test_final_check.py`, `runs/test_solid_part_analysis.py` |
-| `lsr_mmto/optimize/`, `lsr_mmto/design/`, `lsr_mmto/elements/` (what happens during an optimization run) | `runs/test_run_project.py`, `gradients/test_gradcheck.py`, `runs/test_regression.py`, `runs/test_solid_part_analysis.py` |
+| `lsr_mmto/physics/` | `runs/test_every_physics_runs.py`, `physics/test_structural_physics.py`, `physics/test_thermal_physics.py`, `physics/test_thermoelastic_physics.py`, `code_rules/test_physics_folders.py`, `code_rules/test_extending.py`, `gui/test_thermal_walk_through.py`, `runs/test_final_check.py`, `runs/test_solid_part_analysis.py` |
+| `lsr_mmto/optimize/`, `lsr_mmto/design/`, `lsr_mmto/elements/` (what happens during an optimization run) | `runs/test_run_project.py`, `code_rules/test_extending.py`, `gradients/test_gradcheck.py`, `runs/test_regression.py`, `runs/test_solid_part_analysis.py` |
 | `lsr_mmto/results/` (reading runs back, tables, figures, STL export) | `runs/test_stl_export.py`, `problem/test_project_folder.py`, `runs/test_solid_part_analysis.py` |
 | `gui/` | `gui/test_gui.py`, `gui/test_gui_look.py`, `docs/test_user_guide.py`, `gui/test_thermal_walk_through.py` |
 | a docstring, or anything under `docs/` | `docs/test_reference.py`, `docs/test_user_guide.py`, `docs/test_code_map.py`, `docs/test_testing_doc.py`, `code_rules/test_docstring_reads_and_sets.py` |
@@ -110,11 +110,18 @@ Run every test once before committing. To find the lines of code that are not co
   `Reads it.x. Sets it.y.` (`tests/code_rules/test_docstring_reads_and_sets.py` checks that line against the code). A
   class lists its fields and their types at the top. Names needed only for hints are imported under
   `if TYPE_CHECKING:`.
-- A test of something all physics modules share (a run goes through, its gradients, a run saved and read back,
-  the final check) runs for every physics: `@pytest.mark.parametrize` over `available_physics.MODULES`.
-  The existing tests will then also test any newly added physics; the new physics adds tests only for what is its own: its
-  solver against a case with a known answer, its quantities, its supports and loads. A test written for
-  one physics only becomes such a loop the next time it is changed.
+- Everything about testing one physics lives in its own file, `tests/physics/test_<physics>_physics.py`: its
+  solver against a case with a known answer, its quantities, its supports and loads, and its `tiny_example`,
+  the smallest project of it that runs. `tests/physics/test_structural_physics.py` is the smallest such file to
+  start from; the helpers for registering a physics in a test are in `tests/physics/core_lists_for_a_test.py`,
+  which is not copied.
+- A test of something all physics share runs for every physics: `@pytest.mark.parametrize` over
+  `available_physics.MODULES`, naming no physics, so it tests a new physics at once.
+  `tests/runs/test_every_physics_runs.py` runs each physics' `tiny_example` through a run, its save, reading it
+  back and the final check, and fails, naming the file, for a physics whose test file has none. A physics' own
+  file does not repeat what such a test checks; a test that only needs a run of a physics reads the one
+  `tiny_run` (`tests/conftest.py`) makes once per session (once per worker with `-n`). A test written for one physics only becomes such a
+  loop the next time it is changed.
 - Moving or renaming code must not change any numerical result: the first iterations of the shipped
   projects give the same objective and constraints, to 1 part in a million, before and after
   (`tests/runs/test_regression.py` checks it). Results from later iterations can differ slightly from one run to the

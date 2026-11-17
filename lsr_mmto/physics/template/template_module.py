@@ -35,11 +35,20 @@ How to start
     1. Copy this folder, e.g. to physics/heat/, and rename the five files (heat_module.py, heat_physics.py,
        heat_supports_and_loads.py, heat_quantities.py, heat_results.py) and the imports between them.
     2. Fill every FILL, file by file in the order above. thermal's file of the same job shows each one done.
-    3. Give it names of its own: NAME, each kind of support and load, each quantity, each penalty and each
-       setting key must not be used by another physics.
+    3. Give it a NAME of its own. Each name means one thing: a kind of support or load, a quantity, a penalty
+       or a material property (or an alias of one) that the core or another physics already has may be given
+       again only exactly as that one is, and is then shared. A setting key, and a history key a penalty
+       writes, belong to one place only. No result may be shown as Material, Density or Solid (the views
+       every run has). LSR MMTO refuses to start, naming both places, when one of these is broken.
     4. Add one line to physics/available_physics.py: import your front page and put it in MODULES. Until
-       then a test can register it, as tests/physics/test_thermal_physics.py does with thermal.
-    5. Copy tests/physics/test_thermal_physics.py for your physics: a case whose answer is known, and a short run.
+       then a test can register it with registered (tests/physics/core_lists_for_a_test.py).
+    5. Make tests/physics/test_heat_physics.py: everything about testing your physics goes in that one file.
+       Start from tests/physics/test_structural_physics.py, the smallest one, and give yours a tiny_example,
+       the smallest project of your physics that runs (2 iterations), and a case whose answer is known
+       (tests/physics/test_thermal_physics.py has a fuller set to copy from).
+       tests/runs/test_every_physics_runs.py checks and runs every physics' tiny_example (a run, its save,
+       reading it back, the final check); you add nothing to that file, and it fails, naming your file,
+       until your file has a tiny_example.
 
 The rules of a physics
 ----------------------
