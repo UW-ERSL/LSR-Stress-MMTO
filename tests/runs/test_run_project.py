@@ -119,6 +119,54 @@ def test_progress_and_stop():
     assert "progress" not in json.dumps(captured["config"]["run"], default=str)    # watching is not recorded
 
 
+def test_simp_continuation_raises_each_penalty_of_every_physics():
+    """Each SIMP exponent a physics declares (SIMP_PENALTIES) starts at its start, or at its start with
+    continuation when SIMP continuation is on, and each step of continuation raises it by 0.25 up to its
+    largest; nothing in the core names a physics. A U-bracket run with continuation on for 11 iterations raises
+    the stiffness's once, 1.5 to 1.75, where the structural solve reads it as well as in its record, and records
+    no exponent structural does not use."""
+    from lsr_mmto.pyto_ad_imports import topopt_material_model
+    for module in MODULES:
+        declared = module.SIMP_PENALTIES
+        assert M.simp_penalties_at_start(module, False) == {n: v[0] for n, v in declared.items()}, module.NAME
+        values = M.simp_penalties_at_start(module, True)
+        assert values == {n: v[1] for n, v in declared.items()}, module.NAME
+        for step in range(1, 30):
+            values = M.raised_simp_penalties(module, values)
+            assert values == {n: min(v[1] + M.SIMP_STEP * step, v[2]) for n, v in declared.items()}, (module.NAME,
+                                                                                                    step)
+    p = ubracket_project()
+    p.settings["advanced"]["use_continuation"] = True
+    p.settings["common"]["maxIterations"] = 11
+    saved = topopt_material_model._SIMP_STRUCTURAL_PENALTY
+    try:
+        fixed = _run(p, _run_arguments(p, verbose=False))["config"]["fixed_in_code"]
+        assert topopt_material_model._SIMP_STRUCTURAL_PENALTY == 1.75          # what the solve read last
+    finally:
+        topopt_material_model.set_SIMP_STRUCTURAL_PENALTY(saved)
+    assert fixed["simp_structural_penalty_at_end"] == 1.75, fixed
+    assert not [k for k in fixed if k.startswith("simp_") and k != "simp_structural_penalty_at_end"], fixed
+
+
+def test_the_pnorm_exponent_is_the_runs_own():
+    """The p-norm exponent is the run's setting: the stress quantities read it from the run's settings, and
+    building a project never writes it into PyTO-AD's global, so two projects in one program keep their own."""
+    from types import SimpleNamespace
+    import torch
+    from lsr_mmto.formulation.quantities import find_quantity
+    from lsr_mmto.pyto_ad_imports import topopt_material_model
+    before = topopt_material_model._PNORM_EXPONENT
+    ubracket_project().build(verbose=False)                 # its exponent is 16
+    assert topopt_material_model._PNORM_EXPONENT == before
+    svm = torch.tensor([1.0, 2.0, 3.0], dtype=torch.float64)
+    for p in (6.0, 16.0):
+        m = SimpleNamespace(svm=svm, N=3, settings=SimpleNamespace(pnorm_exponent=p),
+                            props={"Yield_Strength": torch.ones(3, dtype=torch.float64)})
+        assert abs(float(find_quantity("StressPNorm").fn(m, None)) - float(torch.sum(svm ** p) ** (1 / p))) < 1e-12
+        assert abs(float(find_quantity("FailureFactorPNorm").fn(m, None))
+                   - float((torch.sum(svm ** p) / 3) ** (1 / p))) < 1e-12
+
+
 def test_optimizer_failure_names_the_constraint_over_its_limit():
     """When the optimizer fails while a constraint is far over its limit (a limit that cannot be met
     from the starting design), the error says which constraint, by how much, and keeps the

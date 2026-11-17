@@ -434,6 +434,54 @@ def test_a_result_the_physics_does_not_return_stops_the_save_with_a_message(monk
         run(p, save_dir=d, verbose=False)
 
 
+def test_the_simp_exponent_is_the_solvers_own():
+    """Thermal's SIMP exponent goes on its solver (set_simp_penalties), not in PyTO-AD's global: on a grey
+    design the temperature at exponent 3 is that of a solver built with 3, differs from exponent 1, and PyTO-AD's
+    global is left as it was."""
+    from types import SimpleNamespace
+    from lsr_mmto.pyto_ad_imports import linear_solvers, topopt_material_model
+    p = _held_and_heated("simp")
+    p.complete_settings()
+    mesh, mat_prop, bcs, _, _, _ = p.build(verbose=False)
+    n = mesh.num_elems
+    x = torch.full((n,), 0.5, dtype=torch.float64)
+    before = topopt_material_model._SIMP_THERMAL_PENALTY
+
+    def temperature(exponent, given=None):
+        fe = THERMAL.make_solver(mesh, mat_prop, bcs, linear_solvers.Solvers.PARDISO, None, None)
+        if given is not None:
+            fe.conductivity_penalty = given                     # as PyTO-AD's own constructor argument does
+        else:
+            THERMAL.set_simp_penalties(fe, {"thermal": exponent})
+        m = SimpleNamespace(fe=fe, x_phys=x, props={"Conductivity": torch.full((n,), 3.0, dtype=torch.float64)})
+        THERMAL.analyse(m)
+        return m.T.detach().numpy()
+
+    three, one = temperature(3.0), temperature(1.0)
+    assert np.array_equal(three, temperature(None, given=3.0))
+    assert np.max(np.abs(three - one)) > 1e-3 * np.max(np.abs(one))
+    assert topopt_material_model._SIMP_THERMAL_PENALTY == before
+
+
+def test_simp_continuation_raises_the_conductivitys_exponent_on_its_solver(monkeypatch):
+    """With SIMP continuation on, a thermal run starts the conductivity's exponent at 1 and raises it to 1.25 at
+    iteration 10, each time on the run's own solver, which its solves read."""
+    from lsr_mmto.problem.project import run
+    calls, real = [], THERMAL.set_simp_penalties
+
+    def kept(solver, values):
+        real(solver, values)
+        calls.append((solver, dict(values), solver.conductivity_penalty))
+    monkeypatch.setattr(THERMAL, "set_simp_penalties", kept)
+    p = _held_and_heated("continuation")
+    p.settings["advanced"]["use_continuation"] = True
+    p.settings["common"]["maxIterations"] = 11
+    with tempfile.TemporaryDirectory() as d:
+        run(p, save_dir=d, verbose=False)
+    assert [c[1] for c in calls] == [{"thermal": 1.0}, {"thermal": 1.25}], [c[1] for c in calls]
+    assert calls[0][0] is calls[1][0] and calls[1][2] == 1.25
+
+
 def test_a_large_thermal_problem_uses_dpcg_and_gives_the_direct_answer():
     """Above the direct solver's limit thermal uses DPCG on its own deflation space (a constant on each group of
     nodes). On a near-binary design the temperature and its gradient (the adjoint solve) are the direct

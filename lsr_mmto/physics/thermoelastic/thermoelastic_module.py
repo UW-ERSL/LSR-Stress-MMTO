@@ -21,7 +21,8 @@ Each top-level function in the folder has a marker on the line above it:
 It reads thermal's material property and units (Conductivity, temperature) and structural's (Young's
 modulus, Poisson's ratio); the property it brings is the thermal expansion coefficient.
 """
-from lsr_mmto.physics.thermoelastic.thermoelastic_physics import analyse, deflation_space, make_solver  # noqa: F401
+from lsr_mmto.physics.thermoelastic.thermoelastic_physics import (analyse, deflation_space,  # noqa: F401
+                                                                   make_solver, set_simp_penalties)
 from lsr_mmto.physics.thermoelastic.thermoelastic_quantities import QUANTITIES  # noqa: F401
 from lsr_mmto.physics.thermoelastic.thermoelastic_results import (RESULT_FIELDS, SUMMARY_ROWS,  # noqa: F401
                                                                   final_summary, iteration_diagnostics)
@@ -43,6 +44,8 @@ NEW_PROPERTIES = [
 ]
 
 NEEDS = ("support",)                                # heating alone is a problem; a mechanical load is not needed
+SIMP_PENALTIES = {"structural": (3.0, 1.5, 6.0),   # the stiffness's and the conductivity's, as structural's
+                  "thermal": (1.0, 1.0, 3.0)}      # and thermal's: start, start with continuation, largest
 
 _RANKINE = 5.0 / 9.0                                # one degree Rankine in K
 

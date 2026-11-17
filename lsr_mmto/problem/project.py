@@ -174,8 +174,6 @@ class Project:
         Example: p.comment = "U-bracket, fixed on the left"
     physics: the physics the optimization uses, one of those under Physics
         Example: p.physics = "structural"
-    keep_support_elements: True also keeps solid every element touching a fixed node
-        Example: p.keep_support_elements = True
     material_source: where each element's material properties come from: "network" (the material
         network, from the database; Multi material in the Materials window) or "one_database_material" (one
         material of the database, pinned_material, at its database values, with no network; Single material)
@@ -201,7 +199,6 @@ class Project:
     selections: "dict[str, S.Selection]"
     bcs: list[dict[str, Any]]                   # {"kind": should be a name of BC_KINDS, "on": a selection name, values}
     keep_solid_names: list[str]
-    keep_support_elements: bool
     _database: str | None                       # a shipped database's name or a path, behind the database property
     material_source: str                        # one of MATERIAL_SOURCES
     pinned_material: str | None                 # a material's name, or None: see the docstring
@@ -221,7 +218,7 @@ class Project:
         self.selections = {}                    # name -> Selection
         self.bcs = []                           # dicts, see BC_KINDS
         self.keep_solid_names = []
-        self.keep_support_elements = False
+        self._keeps_supports = False        # an older file's "keep_support_elements": true (validate says so)
         self._database = None
         self.material_source = "network"        # or "one_database_material": see the docstring
         self.pinned_material = None             # None, or the material every element is: see the docstring
@@ -334,6 +331,19 @@ class Project:
             if bc.get("on") == old:
                 bc["on"] = new
         self.keep_solid_names = [new if n == old else n for n in self.keep_solid_names]
+
+    @property
+    def keep_support_elements(self) -> bool:
+        """An older project's switch (keep every element at a support solid), no longer offered: True only for
+        an older file that had it on, which validate refuses until the project is saved."""
+        return self._keeps_supports
+
+    @keep_support_elements.setter
+    def keep_support_elements(self, on: bool) -> None:
+        """An older project script's line: off changes nothing; on is an error saying what to use instead."""
+        if on:
+            raise ValueError("keep_support_elements is no longer offered: use p.keep_solid with each support's "
+                             "selection (nearly the same elements, not always exactly)")
 
     def keep_solid(self, *names: "S.Selection | str") -> None:
         """Keeps these selections solid: their elements are always material.
@@ -478,6 +488,11 @@ class Project:
             errors += [Problem("supports and loads", f"{where}: {e}") for e in BC_KINDS[bc["kind"]].errors(bc)]
             if self.physics in PHYSICS and BC_KINDS[bc["kind"]].field not in PHYSICS[self.physics].FIELDS:
                 errors.append(Problem("supports and loads", f"{where}: not a kind of {self.physics} support or load"))
+        if self._keeps_supports:                                  # an older file's switch, no longer offered
+            errors.append(Problem("supports and loads", "this project keeps every element at a support solid, a "
+                                  "switch no longer offered. Tick Keep solid on each support's selection instead "
+                                  "(nearly the same elements, not always exactly); saving the project then drops "
+                                  "the switch"))
         roles = {BC_KINDS[bc["kind"]].role for bc in self.bcs if bc.get("kind") in BC_KINDS}
         needs = PHYSICS[self.physics].NEEDS if self.physics in PHYSICS else ("support", "load")
         for role in needs:                                        # the physics says what a problem must have
@@ -996,7 +1011,7 @@ class Project:
                 for w in shown:
                     print(f"[{self.name}] warning: {w}")
                 self._shown_warnings = shown
-        from lsr_mmto.pyto_ad_imports import mat_lib, find_elements_with_fixedDOF
+        from lsr_mmto.pyto_ad_imports import mat_lib
         from lsr_mmto.optimize.mmto_to_params import MMTOParams
 
         mesh = self.mesh()
@@ -1008,7 +1023,6 @@ class Project:
         # ---- optimization parameters
         to_params = MMTOParams()
         to_params.Comment = self.comment or self.name
-        to_params.KeepFixedElems = self.keep_support_elements
         for e in SETTINGS:                                          # every setting TOParams has a field for
             if e.pyto_ad_field is not None:
                 value = getattr(self, e.key) if e.section == "mesh" else self.settings[e.section][e.key]
@@ -1026,16 +1040,11 @@ class Project:
 
         # ---- keep-solid elements
         to_params.ElemsToKeep = None
-        if self.keep_support_elements:
-            for field, n in PHYSICS[self.physics].FIELDS.items():
-                held = find_elements_with_fixedDOF(mesh, bcs[field], nDOFPerNode=n)
-                to_params.ElemsToKeep = held if to_params.ElemsToKeep is None else np.union1d(to_params.ElemsToKeep,
-                                                                                               held)
         if self.keep_solid_names:
             keep = np.unique(np.concatenate([self.evaluate(n, mesh, "elements")
                                              for n in self.keep_solid_names])).astype(int)
             mesh.nonDesignElems = keep
-            to_params.ElemsToKeep = keep if to_params.ElemsToKeep is None else np.union1d(to_params.ElemsToKeep, keep)
+            to_params.ElemsToKeep = keep
 
         mat_prop = mat_lib.create_material_with_defaults(          # placeholder; the VAE gives the real ones
             "CustomMaterial", youngs_modulus=1.0, poissons_ratio=0.3, mass_density=1.0, yield_strength=1.0)
@@ -1091,7 +1100,6 @@ class Project:
                 "selections": {k: s.to_dict() for k, s in self.selections.items()},
                 "bcs": [dict(bc) for bc in self.bcs],
                 "keep_solid": list(self.keep_solid_names),
-                "keep_support_elements": self.keep_support_elements,
                 "database": self.database,
                 "material_source": self.material_source,
                 "pinned_material": self.pinned_material,
@@ -1124,6 +1132,7 @@ class Project:
         if not path.lower().endswith(".mmto"):
             raise ValueError(f"{path}: an LSR MMTO project is saved as a .mmto file")
         path = os.path.abspath(path)
+        self._keeps_supports = False                # the file it writes has no such switch
         pack(self, os.path.dirname(path))
         self.complete_settings()
         data = self._file_data(path)
@@ -1185,12 +1194,9 @@ class Project:
         if self.bcs:
             lines += [""] + explained("Supports and loads", "p.add_bc and the values of each kind")
             lines += [BC_KINDS[bc["kind"]].script(bc["kind"], bc, repr(bc["on"])) for bc in self.bcs]
-        if self.keep_solid_names or self.keep_support_elements:
-            lines += [""] + explained("Keep solid", "p.keep_solid and p.keep_support_elements")
         if self.keep_solid_names:
+            lines += [""] + explained("Keep solid", "p.keep_solid")
             lines.append(f"p.keep_solid({', '.join(map(repr, self.keep_solid_names))})")
-        if self.keep_support_elements:
-            lines.append("p.keep_support_elements = True")
         lines += [""] + explained("Materials", "p.database and the columns of a database")
         lines.append(f"p.database = {self.database!r}")
         lines.append(f"p.material_source = {self.material_source!r}")     # always, as the physics
@@ -1262,7 +1268,7 @@ class Project:
         p.selections = {k: S.from_dict(v) for k, v in m.get("selections", {}).items()}
         p.bcs = [dict(bc) for bc in m.get("bcs", [])]
         p.keep_solid_names = list(m.get("keep_solid", []))
-        p.keep_support_elements = bool(m.get("keep_support_elements", False))
+        p._keeps_supports = bool(m.get("keep_support_elements", False))    # no longer offered: validate says so
         p._database = m.get("database")                    # as saved: its settings stay as they are
         p.material_source = m.get("material_source", "network")    # older files: the network, not pinned
         p.pinned_material = m.get("pinned_material")

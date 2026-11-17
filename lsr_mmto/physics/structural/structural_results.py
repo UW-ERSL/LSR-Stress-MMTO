@@ -433,6 +433,8 @@ def final_summary(designs: "list[tuple[str, np.ndarray, np.ndarray | torch.Tenso
         E, nu = elastic_constants(props, settings)
         return E, nu, props
 
+    solver.pnorm_exponent = float(settings.pnorm_exponent)       # the run's, for each design's pNormStress
+
     for label, x, z in designs:
         eval_stress_compliance_metrics(
             x_vec=x, z_vec=np.asarray(z).T.reshape(-1), label=label, active_thresh=0.5, latentDim=latent_dim,

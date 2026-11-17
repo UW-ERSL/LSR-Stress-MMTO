@@ -32,7 +32,7 @@ The helpers behind each entry:
 Left out, so the defaults apply (OPTIONAL_ENTRIES): OPTIONAL_PROPERTIES, SETTINGS, PENALTIES.
 """
 from lsr_mmto.physics.thermal.thermal_physics import (CONDUCTIVITY, analyse, deflation_space,  # noqa: F401
-                                                     make_solver)
+                                                     make_solver, set_simp_penalties)
 from lsr_mmto.physics.thermal.thermal_quantities import QUANTITIES  # noqa: F401
 from lsr_mmto.physics.thermal.thermal_results import (RESULT_FIELDS, SUMMARY_ROWS,  # noqa: F401
                                                       final_summary, iteration_diagnostics)
@@ -52,6 +52,7 @@ NEW_PROPERTIES = [
 ]
 
 NEEDS = ("support",)                                # held temperatures alone are a problem; a source is not needed
+SIMP_PENALTIES = {"thermal": (1.0, 1.0, 3.0)}      # the conductivity's: start, start with continuation, largest
 
 _BTU = 1055.05585262                                # one BTU in J
 _RANKINE = 5.0 / 9.0                                # one degree Rankine in K

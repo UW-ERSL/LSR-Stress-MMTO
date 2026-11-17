@@ -15,7 +15,6 @@ A project is an LSR MMTO project file (.mmto): the layout of a PyTO-AD project f
 | `selections` | named regions of the mesh, see Selection types |
 | `bcs` | boundary conditions, each on a named selection, see Boundary conditions |
 | `keep_solid` | names of element selections kept solid |
-| `keep_support_elements` | also keep solid the elements touching fixed dofs |
 | `database` | a database name in data/databases, or a path to an .xlsx |
 | `material_source` | "network" (Multi material) or "one_database_material" (Single material); missing in older files, which read as "network" |
 | `pinned_material` | with "network", the name of the material every element is fixed to, or null |
@@ -573,18 +572,6 @@ Keeps these selections solid: their elements are always material.
 
 ```python
 p.keep_solid(boss)
-```
-
-### p.keep_support_elements
-
-`p.keep_support_elements = value`
-
-| argument | format | default |
-|---|---|---|
-| `value` | True also keeps solid every element touching a fixed node | `False` |
-
-```python
-p.keep_support_elements = True
 ```
 
 ### p.database

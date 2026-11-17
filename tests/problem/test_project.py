@@ -44,6 +44,34 @@ def coded_ubracket(base_dir=UBRACKET):
     return p
 
 
+def test_an_older_file_that_kept_every_support_solid_is_refused_until_saved():
+    """Keeping every element at a support solid is no longer a switch of its own (Keep solid on the support's
+    selection does it). An older file with the switch on still opens, and the project's check refuses it, saying
+    what to do, until it is saved; one with the switch off opens as any other. No file written has the switch. An
+    older project script's line turning it on is an error saying what to use; turning it off changes nothing."""
+    with tempfile.TemporaryDirectory() as d:
+        coded_ubracket().save(os.path.join(d, "u.mmto"))
+        path = os.path.join(d, "u.mmto")
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        assert "keep_support_elements" not in json.dumps(data)
+        for on in (False, True):
+            data["mmto"]["keep_support_elements"] = on
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump(data, fh)
+            p = Project.load(path)
+            said = [str(e) for e in p.validate() if "support" in str(e) and "Keep solid" in str(e)]
+            assert bool(said) == on, said
+        p.save(path)
+        assert not [e for e in p.validate() if "Keep solid" in str(e)]
+        p.keep_support_elements = False
+        try:
+            p.keep_support_elements = True
+            raise AssertionError("an older script's keep_support_elements = True was taken")
+        except ValueError as e:
+            assert "p.keep_solid" in str(e), e
+
+
 def test_round_trip():
     try:
         coded_ubracket().save(os.path.join(tempfile.gettempdir(), "x.pyto"))

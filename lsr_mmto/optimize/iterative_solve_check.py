@@ -15,6 +15,7 @@ physics' solver of another size takes its own with space_for (thermoelastic: the
 temperature's), so every iterative solve is a checked one.
 
     CheckedDeflationSolver       the deflation solver of a run; .solves: [(step, relative residual, converged)]
+    SpaceSolver                  the solver of another of its spaces, keeping the same record (SolveRecord)
     one_value_per_node_space     a deflation space for a system of one unknown per node (temperature)
     short_label(label)           a design's label without its explanation in brackets ("Binarized topology")
 """
@@ -25,19 +26,47 @@ import scipy.sparse.linalg as spla
 from lsr_mmto.pyto_ad_imports import deflation
 
 
-class CheckedDeflationSolver(deflation.DeflationSolver):
-    """PyTO-AD's DeflationSolver, which keeps, for every solve, the step it was for (step), the relative residual
-    of its answer and whether it converged (solves)."""
+class SolveRecord:
+    """A run's record of its iterative solves: the step they are for now (step: None during the iterations, a
+    design's label during the final check or an analysis) and, for each solve, (step, relative residual,
+    converged). One per run, kept by every deflation solver of the run (one per size of system); a copy of a
+    solver keeps writing to the same record."""
 
-    step: "str | None"
-    solves: list[tuple["str | None", float, bool]]
-    spaces: "dict[int, sparse matrix]"            # the deflation spaces besides W, by the size of their system
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self) -> None:
         self.step = None
         self.solves = []
+
+    def __copy__(self) -> "SolveRecord":
+        return self
+
+    def __deepcopy__(self, memo) -> "SolveRecord":
+        return self
+
+
+class CheckedDeflationSolver(deflation.DeflationSolver):
+    """PyTO-AD's DeflationSolver, which keeps, for every solve, the step it was for, the relative residual of its
+    answer and whether it converged, in the run's record (step and solves read and set it)."""
+
+    record: SolveRecord
+    spaces: "dict[int, sparse matrix]"            # the deflation spaces besides W, by the size of their system
+
+    def __init__(self, *args, record: SolveRecord | None = None, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.record = record if record is not None else SolveRecord()
         self.spaces = {}
+        self._solvers = {}                          # space_for's solver of each size, made once
+
+    @property
+    def step(self) -> "str | None":
+        return self.record.step
+
+    @step.setter
+    def step(self, value: "str | None") -> None:
+        self.record.step = value
+
+    @property
+    def solves(self) -> list[tuple["str | None", float, bool]]:
+        return self.record.solves
 
     def deflatedPCG(self, K, f, W, M, rtol=1e-8, maxIters=2000, verbose=False, coarse=None):
         """The solve, then whether it converged and its relative residual |f - K x| / |f| kept in solves. It
@@ -56,34 +85,24 @@ class CheckedDeflationSolver(deflation.DeflationSolver):
         """Another deflation space, for systems of W.shape[0] unknowns. Sets self.spaces."""
         self.spaces[W.shape[0]] = W
 
-    def space_for(self, n: int) -> "CheckedDeflationSolver | _WithSpace":
+    def space_for(self, n: int) -> "CheckedDeflationSolver":
         """The deflation solver to give a solver of n unknowns: this one, or, when another of its spaces is for n
-        unknowns, this one with that space as W, its solves kept in this one's solves."""
+        unknowns, a solver of that space (SpaceSolver) keeping the same record."""
         W = getattr(self, "W", None)
         if n in self.spaces and (W is None or W.shape[0] != n):
-            return _WithSpace(self, self.spaces[n])
+            if n not in self._solvers:
+                self._solvers[n] = SpaceSolver(self.spaces[n], self.record)
+            return self._solvers[n]
         return self
 
 
-class _WithSpace:
-    """A CheckedDeflationSolver with another of its spaces as W: everything else, its solve and its record, is
-    that solver's, read or set (a step set here is the checked solver's step), but for the coarse solve
-    (_coarse_space)."""
+class SpaceSolver(CheckedDeflationSolver):
+    """A checked deflation solver of another of the run's spaces (a temperature's, one value per node), keeping
+    the run's record, whose coarse solve is exact (_coarse_space)."""
 
-    def __init__(self, checked: CheckedDeflationSolver, W) -> None:
-        object.__setattr__(self, "checked", checked)
-        object.__setattr__(self, "W", W)
-
-    def __getattr__(self, name: str):
-        if name == "checked":                     # not set yet (a copy being made): no endless lookup
-            raise AttributeError(name)
-        return getattr(self.checked, name)
-
-    def __setattr__(self, name: str, value) -> None:
-        setattr(self.checked, name, value)        # W and checked are set once, in __init__
-
-    def __deepcopy__(self, memo):
-        return self                               # one record per run: a copy of the solver keeps writing to it
+    def __init__(self, W, record: SolveRecord) -> None:
+        super().__init__(record=record)
+        self.W = W
 
     def _coarse_space(self, K, W):
         """PyTO-AD's coarse space ((KW)^T and a solver of E = W^T K W) without the 1e-10 it adds to E's
@@ -101,7 +120,7 @@ class _WithSpace:
             solve = spla.splu(E, permc_spec="MMD_AT_PLUS_A", diag_pivot_thresh=0.0,
                               options={"SymmetricMode": True}).solve
         except RuntimeError:                      # E singular: "Factor is exactly singular"
-            return self.checked._coarse_space(K, W)
+            return super()._coarse_space(K, W)
         return KW.transpose().tocsr(), solve
 
 

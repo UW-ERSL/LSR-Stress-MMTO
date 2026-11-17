@@ -1,6 +1,6 @@
 # Testing the codebase
 
-Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 353 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
+Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 361 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
 
 Run them all from the repository folder with `python -m pytest tests -q -n 4` (`-n 2` on a computer with less than 16 GB of memory), one folder with `python -m pytest tests/<folder> -q`, or one file with `python -m pytest tests/<folder>/<file> -q`.
 
@@ -23,6 +23,8 @@ The thermal physics (lsr_mmto/physics/thermal/) keeps working: its solver gives 
 - `test_thermal_is_analysed_with_no_file_of_it_changed`: Analyse (optimize/solid_part_analysis.py) on a thermal project: its analyse and final_summary run on the solid part in one material, and the analysis gives its objective and its RESULT_FIELDS. Its iteration_diagnostics runs once too, so the analysis has thermal's Summary row, and Compare shows it beside a run's.
 - `test_result_fields_say_where_and_shape`: A RESULT_FIELDS entry may say where its values live and their shape; one that does not is a number at each element. The final check refuses values of another length or shape than declared.
 - `test_a_result_the_physics_does_not_return_stops_the_save_with_a_message`: final_summary returns the value of every RESULT_FIELDS entry; one left out is a clear error, not a result silently missing or taken from an earlier solve.
+- `test_the_simp_exponent_is_the_solvers_own`: Thermal's SIMP exponent goes on its solver (set_simp_penalties), not in PyTO-AD's global: on a grey design the temperature at exponent 3 is that of a solver built with 3, differs from exponent 1, and PyTO-AD's global is left as it was.
+- `test_simp_continuation_raises_the_conductivitys_exponent_on_its_solver`: With SIMP continuation on, a thermal run starts the conductivity's exponent at 1 and raises it to 1.25 at iteration 10, each time on the run's own solver, which its solves read.
 - `test_a_large_thermal_problem_uses_dpcg_and_gives_the_direct_answer`: Above the direct solver's limit thermal uses DPCG on its own deflation space (a constant on each group of nodes). On a near-binary design the temperature and its gradient (the adjoint solve) are the direct solver's, and every iterative solve, the adjoint's too, is kept by the run's checked solver as converged.
 - `test_a_large_structural_problem_still_uses_dpcg`: The structural physics builds its deflation space, so above the limit it runs DPCG as before.
 - `test_a_physics_penalty_is_added_with_its_gradient`: A penalty of thermal is added after the two every physics has, divided by its first value and times its weight, and the gradient of the objective with it agrees with central differences (the two every physics has are switched off, so the objective is mass plus this penalty).
@@ -39,6 +41,8 @@ The thermoelastic physics (lsr_mmto/physics/thermoelastic/) gives the right answ
 
 - `test_a_bar_heated_evenly_grows_freely`: The bar held at T_ref + dT on two opposite faces with no heat source, so dT everywhere; held only in x on xmin, y on ymin and z on zmin, so nothing stops it growing. Each node moves by alpha * dT times its distance from those three faces, in each direction: the thermal strain with no stress. Trilinear elements give this linear field exactly. A bar that shrinks has H's sign wrong; one that grows (1 - 2 nu) times too little is missing the 1 / (1 - 2 nu).
 - `test_no_heating_gives_the_structural_compliance`: The bar held at T_ref at both ends, so no thermal strain anywhere: clamped on xmin and pulled down on xmax, its thermoelastic compliance (f + f_th) . u equals the structural solver's f . u for the same mesh, supports, load and material, and the thermal force is zero.
+- `test_each_simp_exponent_reaches_its_solver`: Thermoelastic's two SIMP exponents (set_simp_penalties): the stiffness's where PyTO-AD's structural solve reads it (its global), the conductivity's on the temperature's own solver.
+- `test_the_shared_dof_table_is_the_displacements_whatever_the_order`: Each solver keeps its own dof table (.edof); the mesh's shared one, which PyTO-AD's constructors point at their own, is the displacement's once thermoelastic's solver is made.
 - `test_gradients_agree_with_finite_differences`: J = (f + f_th) . u on the bar clamped and held at T_ref on xmin and heated on xmax (no applied force, so all of J is the heating's, and finite differences can see each element's part), at an uneven design (densities, expansion coefficients and conductivities all differ by element). Its autograd gradient for the density, the expansion coefficient and the conductivity of a few elements, each where the gradient is large, agrees with central differences: the whole chain T -> f_th -> u, the thermal solve included. The expansion coefficient and the conductivity reach J only through the heating.
 - `test_a_large_problem_uses_dpcg_and_gives_the_direct_answer`: Above the direct solver's limit the core uses DPCG for a physics with a deflation space; thermoelastic takes structural's for its displacement and thermal's for its temperature (one unknown per node), both on the same checked solver. The bar, heated and pulled down, solved this way (the limit passed by asking for more unknowns than it) gives the direct solver's temperature and displacement, and both solves are kept as converged.
 - `test_a_part_left_free_in_a_rigid_motion_is_refused`: The thermal force pushes in every direction, so the part must be held against all six rigid motions, whatever the applied loads: one left free makes the displacement's matrix singular, and the direct solver then gives a displacement with an arbitrary drift in it. Held in x on xmin and y on ymin only, the bar can still move in z; held in all directions along one edge only, it can still rotate about that edge. Each refusal names the motion left free. Held as in the free-expansion test (x, y and z on three faces), it is held against all six, though it can still grow.
@@ -101,6 +105,7 @@ The voxel mesh's surface: surface_faces gives every element face that belongs to
 
 The Project: saving and loading, the checks made before a run, the translation of objectives and constraints, and the boundary conditions build() puts on the mesh. The meshes are coarse U-brackets, so this runs in well under a minute.
 
+- `test_an_older_file_that_kept_every_support_solid_is_refused_until_saved`: Keeping every element at a support solid is no longer a switch of its own (Keep solid on the support's selection does it). An older file with the switch on still opens, and the project's check refuses it, saying what to do, until it is saved; one with the switch off opens as any other. No file written has the switch. An older project script's line turning it on is an error saying what to use; turning it off changes nothing.
 - `test_round_trip`: Round trip.
 - `test_expressions`: Expressions.
 - `test_validate`: Validate.
@@ -251,6 +256,8 @@ Running a Project: its settings cover every setting of _run_topopt; the run reco
 
 - `test_settings_cover_run_topopt`: The loop reads each setting as s.<name>: every name it reads (anywhere in the loop's file: its setup, the steps of an iteration, the optimizer; and in the penalties' weights) is a setting of SETTINGS, the run gets every one, and _run_topopt has no setting of its own (no default that could differ from SETTINGS).
 - `test_progress_and_stop`: progress() hears every iteration; should_stop() ends the run there, and the design reached so far is still post-processed (the GUI's Run and Stop).
+- `test_simp_continuation_raises_each_penalty_of_every_physics`: Each SIMP exponent a physics declares (SIMP_PENALTIES) starts at its start, or at its start with continuation when SIMP continuation is on, and each step of continuation raises it by 0.25 up to its largest; nothing in the core names a physics. A U-bracket run with continuation on for 11 iterations raises the stiffness's once, 1.5 to 1.75, where the structural solve reads it as well as in its record, and records no exponent structural does not use.
+- `test_the_pnorm_exponent_is_the_runs_own`: The p-norm exponent is the run's setting: the stress quantities read it from the run's settings, and building a project never writes it into PyTO-AD's global, so two projects in one program keep their own.
 - `test_optimizer_failure_names_the_constraint_over_its_limit`: When the optimizer fails while a constraint is far over its limit (a limit that cannot be met from the starting design), the error says which constraint, by how much, and keeps the optimizer's own message.
 - `test_a_run_with_a_mass_fraction_constraint`: A short run with Mass fraction of the lightest <= 0.4 as its constraint goes through: every iteration's constraint is a finite number, the run keeps the constraint with its material word, names it as the app does, and the project it rebuilds from the record is the one that ran.
 - `test_unknown_and_missing_settings`: Unknown and missing settings.
@@ -564,17 +571,18 @@ A new setting is one entry of SETTINGS (lsr_mmto/problem/settings.py), and a new
 - `test_one_entry_makes_a_setting`: One entry makes a setting.
 - `test_one_entry_makes_a_quantity`: One entry makes a quantity.
 - `test_every_quantity_has_its_gradient_checked`: Every quantity of the registry is in the hand list of tests/gradients/test_ad_quantities.py, which checks its gradient against finite differences (that file is slow; this check is not), or named there as not checked, with the reason. A new quantity left out of the list fails here, by its name.
-- `test_a_physics_may_leave_out_its_optional_entries`: _checked gives a physics that leaves out an OPTIONAL_ENTRIES entry its "none" value, and refuses one that leaves out any other entry, naming it.
+- `test_a_physics_may_leave_out_its_optional_entries`: _checked gives a physics that leaves out an OPTIONAL_ENTRIES entry its "none" value, and refuses one that leaves out any other entry, naming it, or gives SIMP_PENALTIES without set_simp_penalties.
 - `test_a_physics_summary_rows_reach_the_summary`: Each SUMMARY_ROWS entry is a row of the Summary with the last value its history key recorded, and a key the run did not record (or recorded as nan) gives no row.
 - `test_a_new_database_starts_with_the_columns_its_physics_reads`: Density, the properties the project needs, then its physics' optional ones, in the property list's order: an L-bracket that limits no stress needs no yield strength.
 
 ### `tests/code_rules/test_layout.py`
 
-Every module of the package lsr_mmto and of the app (gui) imports, so a file moved or renamed without its imports is caught here, before a run or the app trips over it. Also: the old folders are gone, and a script outside the repository folder imports lsr_mmto.
+Every module of the package lsr_mmto and of the app (gui) imports, so a file moved or renamed without its imports is caught here, before a run or the app trips over it. Also: the old folders are gone, a script outside the repository folder imports lsr_mmto, and PyTO-AD's settings that every run in the program shares (its SIMP exponents, its p-norm exponent) are named only inside a physics' own folder, while no code reads the mesh's shared dof table (each solver keeps its own).
 
 - `test_every_module_imports`: Every module imports.
 - `test_old_folders_gone`: Old folders gone.
 - `test_script_imports_from_another_folder`: A script anywhere imports lsr_mmto: installed (pip install -e .), or with the repository on PYTHONPATH.
+- `test_shared_settings_stay_in_the_physics_folders`: Shared settings stay in the physics folders.
 
 ### `tests/code_rules/test_material_source.py`
 

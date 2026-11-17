@@ -17,7 +17,6 @@ import json
 import pickle
 import datetime
 import platform
-import importlib
 import subprocess
 from typing import TYPE_CHECKING, Any, TextIO
 
@@ -112,21 +111,6 @@ def _params_dict(p: Any) -> dict[str, Any]:
             continue
         out[k] = _to_plain(v)
     return out
-
-
-def _read_pnorm_exponent() -> float | None:
-    """The p-norm exponent is a module global on topopt_material_model."""
-    for getter in (
-        lambda: importlib.import_module("topopt_material_model"),
-        lambda: __import__("lsr_mmto.pyto_ad_imports", fromlist=["topopt_material_model"]).topopt_material_model,
-    ):
-        try:
-            m = getter()
-            if hasattr(m, "_PNORM_EXPONENT"):
-                return float(m._PNORM_EXPONENT)
-        except Exception:
-            pass
-    return None
 
 
 def _loading_bc_summary(mesh: "HexMesher", bc: "BC", ndof_per_node: int) -> dict[str, Any]:
@@ -291,8 +275,6 @@ def build_run_config(example_name: str, run_args: dict[str, Any], to_params: "MM
     """Assemble the complete sectioned parameter manifest. Never raises. A run with no latent points records
     the distance penalty and latent smoothing as not used (the run left them out), and a run with no network
     records no network settings (vae_params None)."""
-    if pnorm_exponent is None:
-        pnorm_exponent = _read_pnorm_exponent()
     ra = run_args if isinstance(run_args, dict) else {}
     try:
         latent_points = bool(mat_encoder.latent_dim)

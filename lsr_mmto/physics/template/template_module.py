@@ -57,7 +57,7 @@ from lsr_mmto.physics.template.template_quantities import QUANTITIES  # noqa: F4
 from lsr_mmto.physics.template.template_results import RESULT_FIELDS, final_summary  # noqa: F401
 from lsr_mmto.physics.template.template_supports_and_loads import SUPPORT_AND_LOAD_KINDS  # noqa: F401
 # OPTIONAL entries of the other files, once you uncomment them there:
-#   from lsr_mmto.physics.template.template_physics import deflation_space
+#   from lsr_mmto.physics.template.template_physics import deflation_space, set_simp_penalties
 #   from lsr_mmto.physics.template.template_supports_and_loads import supports_and_loads_error
 #   from lsr_mmto.physics.template.template_results import SUMMARY_ROWS, iteration_diagnostics
 
@@ -116,3 +116,11 @@ NEEDS = ...                                                         # FILL
 #                     fn=lambda m: torch.mean(m.x_phys * (1 - m.x_phys)),
 #                     weight=lambda state, it: 0.0 if state.iteration >= 100 else state.s.heat_greyness_weight,
 #                     scale="first value", key="heat_greyness", reads_latent_points=False)]
+
+# OPTIONAL: SIMP_PENALTIES, the SIMP exponents this physics' solve uses, {name: (start, start with SIMP
+# continuation, largest)}. The run starts each and, with the SIMP continuation setting on, raises it by 0.25
+# every 10 iterations up to its largest, handing the values to set_simp_penalties (in _physics.py), which puts
+# them where the solver reads them; the run's record keeps each as simp_<name>_penalty_at_end. Give both or
+# neither. Left out, the run sets and raises nothing: leave them out only when the solve has no SIMP exponent,
+# since one of PyTO-AD's would keep whatever another run in the same program left in it. Structural:
+#   SIMP_PENALTIES = {"structural": (3.0, 1.5, 6.0)}

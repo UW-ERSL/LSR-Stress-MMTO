@@ -85,6 +85,12 @@ def analyse(m: "MMTOModelAD | _Analysed") -> None:
 #     several fields calls one for each, as thermoelastic does; a field no space fits stops the run above
 #     the limit. Left out, the direct solver runs at every size."""
 
+# OPTIONAL: set_simp_penalties, for SIMP_PENALTIES (the front page)
+# def set_simp_penalties(solver: Any, values: dict[str, float]) -> None:
+#     """Puts each SIMP exponent ({name: value} of SIMP_PENALTIES) where solver reads it, at the start of the
+#     run and at each step of SIMP continuation. Thermal's solver keeps its own (solver.conductivity_penalty);
+#     structural's is PyTO-AD's global, which only PyTO-AD's own setter reaches."""
+
 # ----------------------------------------------------------------------------- Helpers
 # Your solver class goes here: PyTO-AD's solver of the physics subclassed so each element gets its own
 # material values, and any small function analyse or the solver needs. Mark each one

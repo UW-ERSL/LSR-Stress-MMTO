@@ -97,7 +97,8 @@ def test_no_heating_gives_the_structural_compliance():
     s = SimpleNamespace(fe=STRUCTURAL.make_solver(mesh, mat_prop, {"u": bcs["u"]}, linear_solvers.Solvers.PARDISO,
                                                   None, None),
                         x_phys=m.x_phys, props={"Youngs_Modulus": torch.full((n,), E, dtype=torch.float64)},
-                        settings=SimpleNamespace(use_constant_poissons_ratio=True, constant_poissons_ratio=nu))
+                        settings=SimpleNamespace(use_constant_poissons_ratio=True, constant_poissons_ratio=nu,
+                                                 pnorm_exponent=6.0))
     STRUCTURAL.analyse(s)
     f_th = m.f_th.detach().numpy()
     f = s.fe.total_force.detach().numpy()
@@ -105,6 +106,34 @@ def test_no_heating_gives_the_structural_compliance():
     thermoelastic = float(torch.dot(m.fe.total_force, m.u))
     structural = float(torch.dot(s.fe.total_force, s.u))
     assert abs(thermoelastic - structural) < 1e-10 * abs(structural), (thermoelastic, structural)
+
+def test_each_simp_exponent_reaches_its_solver():
+    """Thermoelastic's two SIMP exponents (set_simp_penalties): the stiffness's where PyTO-AD's structural solve
+    reads it (its global), the conductivity's on the temperature's own solver."""
+    from lsr_mmto.pyto_ad_imports import topopt_material_model
+    p = _bar("simp")
+    p.bcs += [{"kind": "fixed_temperature", "on": "xmin", "value": 293.15}]
+    p.add_bc("fixed", "xmin", dofs="xyz")
+    mesh, m = _solved(p, E=200.0, nu=0.3, alpha=1e-5, conductivity=3.0, T_ref=293.15)
+    saved = topopt_material_model._SIMP_STRUCTURAL_PENALTY
+    try:
+        THERMOELASTIC.set_simp_penalties(m.fe, {"structural": 4.25, "thermal": 2.5})
+        assert topopt_material_model._SIMP_STRUCTURAL_PENALTY == 4.25 and m.fe.thermal.conductivity_penalty == 2.5
+    finally:
+        topopt_material_model.set_SIMP_STRUCTURAL_PENALTY(saved)
+
+
+def test_the_shared_dof_table_is_the_displacements_whatever_the_order():
+    """Each solver keeps its own dof table (.edof); the mesh's shared one, which PyTO-AD's constructors point at
+    their own, is the displacement's once thermoelastic's solver is made."""
+    p = _bar("tables")
+    p.bcs += [{"kind": "fixed_temperature", "on": "xmin", "value": 293.15}]
+    p.add_bc("fixed", "xmin", dofs="xyz")
+    mesh, m = _solved(p, E=200.0, nu=0.3, alpha=1e-5, conductivity=3.0, T_ref=293.15)
+    assert mesh.edofMat is mesh.edofMatStructural
+    assert np.array_equal(m.fe.edof.numpy(), mesh.edofMatStructural)
+    assert np.array_equal(m.fe.thermal.edof.numpy(), mesh.edofMatThermal)
+
 
 def test_gradients_agree_with_finite_differences():
     """J = (f + f_th) . u on the bar clamped and held at T_ref on xmin and heated on xmax (no applied force, so

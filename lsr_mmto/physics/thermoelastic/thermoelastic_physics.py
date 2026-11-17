@@ -19,6 +19,8 @@ Who reads it:
     analyse           optimize/design_model.py (MMTOModelAD.evaluate), once per iteration, after the
                       density filter and projection (m.x_phys) and the decode of the latent points (m.props)
     deflation_space   optimize/optimization_loop.py, for a problem above the direct solver's limit
+    set_simp_penalties  optimize/optimization_loop.py, at the start of the run and at each step of SIMP
+                      continuation
 """
 from typing import TYPE_CHECKING
 
@@ -100,6 +102,14 @@ def deflation_space(dsolver: "CheckedDeflationSolver", mesh: "HexMesher") -> Non
     thermal_physics.deflation_space(dsolver, mesh)
 
 
+# OPTIONAL: set_simp_penalties, for SIMP_PENALTIES (the front page)
+def set_simp_penalties(solver: "ThermoelasticHexFEA", values: dict[str, float]) -> None:
+    """Structural's for the displacement (and the thermal force, which scales as the stiffness does) and
+    thermal's for the temperature's solver."""
+    structural_physics.set_simp_penalties(solver, values)
+    thermal_physics.set_simp_penalties(solver.thermal, values)
+
+
 # HELPER: the solver class make_solver builds
 class ThermoelasticHexFEA(MultiMaterialHexFEA):
     """Structural's solver of the displacement, holding thermal's solver of the temperature. The core reads
@@ -112,11 +122,13 @@ class ThermoelasticHexFEA(MultiMaterialHexFEA):
     def __init__(self, mesh: "HexMesher", bcs: "dict[str, BC]", solver: "Solvers",
                  dsolver: "DeflationSolver | None", elem_body_force: np.ndarray | None,
                  mat_prop: "Material | None" = None) -> None:
-        # thermal first: each constructor points the shared mesh.edofMat at its own table, and the
-        # displacement's must be the one left for code that reads the mesh afterwards
+        # each solver keeps its own dof table (.edof); PyTO-AD's constructors also point the mesh's shared
+        # mesh.edofMat at theirs, so it is set to the displacement's (the field the core reads, .bc) at the end,
+        # whichever is built first
         self.thermal = ConductionHexFEA(mesh=mesh, bc=bcs["T"], solver=solver, dsolver=dsolver, rtol=1e-8)
         super().__init__(mesh=mesh, bc=bcs["u"], solver=solver, mat_prop=mat_prop, dsolver=dsolver,
                          rtol=1e-8, elem_body_force=elem_body_force)
+        mesh.edofMat = mesh.edofMatStructural
         # PyTO-AD's matrix carries 1/(1 - 2 nu); at nu = 0 it is the same for every element and material,
         # and the thermal force applies each element's 1/(1 - 2 nu) itself
         self.H = torch.tensor(self.thermal.getHMatrix(*mesh.elem_size, 0.0), dtype=torch.float64)

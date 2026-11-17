@@ -99,7 +99,6 @@
       }
     ],
     "keep_solid": [],
-    "keep_support_elements": false,
     "database": "Beam_8Mats_3Attr_v4_spectrum2D",
     "formulation": {
       "objective": {

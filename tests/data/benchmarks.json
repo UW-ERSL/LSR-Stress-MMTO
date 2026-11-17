@@ -34,7 +34,6 @@
    ]
   ],
   "ExtrudeZ": true,
-  "KeepFixedElems": false,
   "nDOFDesired": 30000,
   "RelativeFilterRadius": 3.5,
   "MaterialFilterRadius": 3.5,
@@ -89,7 +88,6 @@
    ]
   ],
   "ExtrudeZ": true,
-  "KeepFixedElems": false,
   "nDOFDesired": 30000,
   "RelativeFilterRadius": 3.5,
   "MaterialFilterRadius": 2.5,
@@ -144,7 +142,6 @@
    ]
   ],
   "ExtrudeZ": false,
-  "KeepFixedElems": false,
   "nDOFDesired": 80000,
   "RelativeFilterRadius": 7,
   "MaterialFilterRadius": null,
@@ -204,7 +201,6 @@
    ]
   ],
   "ExtrudeZ": false,
-  "KeepFixedElems": false,
   "nDOFDesired": 150000,
   "RelativeFilterRadius": 7.3,
   "MaterialFilterRadius": null,

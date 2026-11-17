@@ -69,6 +69,7 @@ the rest of the code needs. `MODULE_ENTRIES` in `physics/available_physics.py` l
 | `SUPPORT_AND_LOAD_KINDS` | the types of supports and loads supported by this physics, with the field for each type |
 | `NEEDS` | the supports and loads that every project using this physics must provide: a support, and a load if a problem without one has no meaning |
 | `deflation_space` | for DPCG on problems above the direct solver's limit, a space for each field (thermal's for a field of one unknown per node); `None` keeps the direct solver |
+| `SIMP_PENALTIES`, `set_simp_penalties` | the SIMP exponents its solve uses (start, start with SIMP continuation, largest) and where they go on its solver; the run starts them and raises them, naming no physics |
 | `supports_and_loads_error` | an explanation of why the supports and loads make the problem unsolvable, or None if they are valid |
 | `QUANTITIES` | its objectives and constraints |
 | `PENALTIES` | any extra terms this physics adds to the objective, beyond the common terms (may be empty) |

@@ -34,7 +34,6 @@ SECTIONS = [
     ("selections", "named regions of the mesh, see Selection types"),
     ("bcs", "boundary conditions, each on a named selection, see Boundary conditions"),
     ("keep_solid", "names of element selections kept solid"),
-    ("keep_support_elements", "also keep solid the elements touching fixed dofs"),
     ("database", "a database name in data/databases, or a path to an .xlsx"),
     ("material_source", "\"network\" (Multi material) or \"one_database_material\" (Single material); missing in "
                         "older files, which read as \"network\""),
@@ -45,7 +44,7 @@ SECTIONS = [
 
 
 PROJECT_CALLS = ("Project", "units", "comment", "physics", "add_selection", "mesh", "evaluate", "add_bc",
-                 "keep_solid", "keep_support_elements", "database", "material_source", "pinned_material",
+                 "keep_solid", "database", "material_source", "pinned_material",
                  "network_error", "vae_check", "network_check", "confirm_network", "objective",
                  "constraint", "settings",
                  "save", "save_as_script", "load")                  # Project's calls, in the order a script uses them

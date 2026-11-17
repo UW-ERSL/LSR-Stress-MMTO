@@ -24,7 +24,7 @@ WATCHED = {"state", "it", "m", "model"}          # the parameter names of the sh
 READS_LISTED = {"it"}                           # every field read of these is listed
 CHANGING_STATE = {"iteration", "beta", "objective_scale", "penalties", "penalty_scales", "gamma",
                   "objective_history", "gamma_ramp_started", "use_z_smoothing", "use_distance_penalty",
-                  "during_run", "last_zeta"}     # the run state's fields that change during the run
+                  "during_run", "last_zeta", "simp_penalties"}     # the run state's fields that change during the run
 MUTATORS = {"append", "extend", "update", "pop", "insert", "clear", "setdefault", "remove", "add", "fill"}
 NAME = re.compile(r"\b(state|it|m|model)\.([A-Za-z_]\w*)")
 

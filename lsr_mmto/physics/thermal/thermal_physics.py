@@ -18,6 +18,8 @@ structural solver is given E and nu per element.
                   filter and projection (m.x_phys) and the decode of the latent points (m.props)
     deflation_space  optimize/optimization_loop.py (problem_solver), once per run, above the direct
                   solver's limit
+    set_simp_penalties  optimize/optimization_loop.py, at the start of the run and at each step of SIMP
+                  continuation
 """
 from typing import TYPE_CHECKING, Any
 
@@ -104,6 +106,13 @@ def deflation_space(dsolver: "CheckedDeflationSolver", mesh: "HexMesher") -> Non
     """The deflation space of the temperature's system, one value per node: a constant on each group of nodes
     (iterative_solve_check.one_value_per_node_space), kept on dsolver for the solver of one unknown per node."""
     dsolver.add_space(one_value_per_node_space(dsolver, mesh))
+
+
+# OPTIONAL: set_simp_penalties, for SIMP_PENALTIES (the front page)
+def set_simp_penalties(solver: ConductionHexFEA, values: dict[str, float]) -> None:
+    """The conductivity's SIMP exponent (values["thermal"]) on the solver itself (PyTO-AD's
+    conductivity_penalty, read by each solve), not in PyTO-AD's global."""
+    solver.conductivity_penalty = float(values["thermal"])
 
 
 # ESSENTIAL: analyse, one iteration's solve

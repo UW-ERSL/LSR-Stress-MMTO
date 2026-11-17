@@ -84,7 +84,6 @@
     "keep_solid": [
       "attachments"
     ],
-    "keep_support_elements": false,
     "database": "6Materials_AF_3Attr",
     "formulation": {
       "objective": {

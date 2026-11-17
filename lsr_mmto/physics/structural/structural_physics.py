@@ -3,8 +3,8 @@ structural_physics.py
 =====================
 The structural physics of one iteration: PyTO-AD's structural solver with a different (E, nu) in
 each element, as torch tensors in the AD tree, and the element stress, von Mises stress and
-p-norm that the structural quantities read. make_solver and analyse are the module's entries
-of the same names (structural_module.py).
+p-norm that the structural quantities read. make_solver, analyse, deflation_space and
+set_simp_penalties are the module's entries of the same names (structural_module.py).
 
     u      -> K -> x_phys, E, nu             K_e = SIMP(x_phys) * (lam_e K_lam + mu_e K_mu)
 
@@ -57,6 +57,8 @@ class MultiMaterialHexFEA(_HexStructuralFEA_AD):
     lam: torch.Tensor                    # set by set_material_fields, (N,)
     mu: torch.Tensor
     elem_stiff_torch: torch.Tensor       # (N, 24, 24), what PyTO-AD's solve() assembles
+    pnorm_exponent: float                # p of pNormStress (postprocess); the run's setting, set by analyse
+    stress_relaxation: float             # q of the relaxed stress, xb^q * stress; PyTO-AD's, fixed at build
 
     def __init__(self, mesh: "HexMesher", bc: "BC", solver: "Solvers", mat_prop: "Material | None" = None,
                  **kwargs: Any) -> None:
@@ -72,6 +74,9 @@ class MultiMaterialHexFEA(_HexStructuralFEA_AD):
         self.D_mu = torch.tensor(D_mu, dtype=_DTYPE)
         self.B = torch.tensor(structural_B_matrix(es), dtype=_DTYPE)
         self.edof = torch.as_tensor(np.asarray(mesh.edofMatStructural), dtype=torch.long)
+        # this solver's own, so another problem built in the same program never changes them
+        self.pnorm_exponent = float(ad_mm.get_pNorm_exponent())
+        self.stress_relaxation = float(ad_mm.get_stress_relaxation_factor())
 
     def set_material_fields(self, E: torch.Tensor, nu: torch.Tensor) -> None:
         """Per-element E, nu (torch, shape (N,)) -> element stiffness used by solve()."""
@@ -105,8 +110,8 @@ class MultiMaterialHexFEA(_HexStructuralFEA_AD):
         Replaces it rather than calling it, for two reasons:
           - D comes from the per-element lam, mu already held (set_material_fields), vectorized;
             PyTO-AD's version rebuilds D from a list of Material objects, one call per element.
-          - pNormStress uses the CURRENT p-norm exponent: PyTO-AD's FEA module copies
-            _PNORM_EXPONENT at import (from ... import), so a per-problem override never reaches it.
+          - pNormStress uses this solver's p-norm exponent (pnorm_exponent, the run's setting), not
+            PyTO-AD's, which its FEA module copies at import.
         Stress relaxation is xb^q, exactly as element_stress() (the objective) and PyTO's postprocess.
         Reads the last solve's sol, x and elem_thermal_strain, and lam, mu; sets strainComponents,
         stressComponents, vonMisesStress, elemStrainEnergy (numpy, per element) and pNormStress.
@@ -121,10 +126,10 @@ class MultiMaterialHexFEA(_HexStructuralFEA_AD):
             D = (self.lam[:, None, None] * self.D_lam + self.mu[:, None, None] * self.D_mu)
             stress = torch.einsum("eij,ej->ei", D, strain)
             self.stressComponents = stress.numpy()
-            e_stress = stress * (x ** ad_mm.get_stress_relaxation_factor())[:, None]
+            e_stress = stress * (x ** self.stress_relaxation)[:, None]
             self.vonMisesStress = von_mises(e_stress).numpy()
             self.elemStrainEnergy = (0.5 * torch.sum(strain * e_stress, dim=1)).numpy()
-        p = ad_mm.get_pNorm_exponent()
+        p = self.pnorm_exponent
         self.pNormStress = (np.sum(self.vonMisesStress ** p)) ** (1.0 / p)
 
     def element_stress(self, u: torch.Tensor, xb: torch.Tensor) -> torch.Tensor:
@@ -132,7 +137,7 @@ class MultiMaterialHexFEA(_HexStructuralFEA_AD):
         strain = u[self.edof] @ self.B.T                                    # (N, 6)
         D = (self.lam[:, None, None] * self.D_lam + self.mu[:, None, None] * self.D_mu)
         stress = torch.einsum("eij,ej->ei", D, strain)
-        return stress * (xb ** ad_mm.get_stress_relaxation_factor())[:, None]
+        return stress * (xb ** self.stress_relaxation)[:, None]
 
 
 # HELPER: of the solver's postprocess and analyse
@@ -151,10 +156,12 @@ def pnorm(v: torch.Tensor, p: float) -> torch.Tensor:
 
 
 # ----------------------------------------------------------------------------- the module's entries
-# OPTIONAL: the p-norm exponent setting's at_build (SETTINGS)
-def set_pnorm_exponent(p: float) -> None:
-    """The p-norm exponent where PyTO-AD's material model keeps it, read by every p-norm."""
-    ad_mm._PNORM_EXPONENT = float(p)
+# OPTIONAL: set_simp_penalties, for SIMP_PENALTIES (the front page)
+def set_simp_penalties(solver: "MultiMaterialHexFEA", values: dict[str, float]) -> None:
+    """The stiffness's SIMP exponent (values["structural"]) where PyTO-AD's structural solve reads it: its
+    material model's global, which only its own setter reaches (the solve calls the scaling with no exponent of
+    its own, hex_structural_fea.py)."""
+    ad_mm.set_SIMP_STRUCTURAL_PENALTY(float(values["structural"]))
 
 
 # HELPER: of analyse and final_summary
@@ -189,8 +196,10 @@ def analyse(m: "MMTOModelAD | _Analysed") -> None:
     """One iteration's solve, inside the torch tree: E and nu from m.props, the displacement m.u at the
     density m.x_phys, and the relaxed von Mises stress m.svm that the stress quantities read.
 
-    Sets m.u (3 * nodes,), m.svm (N,); and the solver's material fields (set_material_fields)."""
+    Sets m.u (3 * nodes,), m.svm (N,); and the solver's material fields (set_material_fields) and p-norm
+    exponent (the run's setting, for its postprocess)."""
     E, nu = elastic_constants(m.props, m.settings)
     m.fe.set_material_fields(E, nu)
+    m.fe.pnorm_exponent = float(m.settings.pnorm_exponent)
     m.u = m.fe.solve(m.x_phys, ad_mm.MaterialModel.SIMP)
     m.svm = von_mises(m.fe.element_stress(m.u, m.x_phys))

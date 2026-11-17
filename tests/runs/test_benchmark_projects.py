@@ -20,7 +20,6 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
 
-from lsr_mmto.pyto_ad_imports import topopt_material_model  # noqa: E402
 from lsr_mmto.problem.project import Project, _run_arguments  # noqa: E402
 from lsr_mmto.problem.settings import VAE_PARAMS  # noqa: E402
 
@@ -73,10 +72,10 @@ def compare_problem(example):
 
     assert _paper_objective(tp.Objective) == ref["objective"], "objective"
     assert [_paper_constraint(c) for c in tp.Constraints] == ref["constraints"], "constraints"
-    for f in ("ExtrudeZ", "KeepFixedElems", "nDOFDesired", "RelativeFilterRadius", "MaterialFilterRadius"):
+    for f in ("ExtrudeZ", "nDOFDesired", "RelativeFilterRadius", "MaterialFilterRadius"):
         assert getattr(tp, f) == ref[f], (f, getattr(tp, f), ref[f])
     assert os.path.basename(tp.MaterialsExcelFile) == ref["database"]
-    assert float(topopt_material_model._PNORM_EXPONENT) == ref["pnorm_exponent"], "p-norm exponent"
+    assert float(p.settings["common"]["pnorm_exponent"]) == ref["pnorm_exponent"], "p-norm exponent"
     for f in VAE_PARAMS:
         assert getattr(vae, f) == ref["vae"][f], ("VAE", f)
 

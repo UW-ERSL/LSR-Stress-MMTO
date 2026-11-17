@@ -31,7 +31,7 @@ The helpers behind each entry:
                              compute_stress_violation_diagnostics, print_stress_violation_diagnostics
 """
 from lsr_mmto.physics.structural.structural_physics import (analyse, deflation_space, make_solver,  # noqa: F401
-                                                             set_pnorm_exponent)
+                                                             set_simp_penalties)
 from lsr_mmto.physics.structural.structural_quantities import QUANTITIES  # noqa: F401
 from lsr_mmto.physics.structural.structural_results import (RESULT_FIELDS, SUMMARY_ROWS,  # noqa: F401
                                                             final_summary, iteration_diagnostics)
@@ -61,6 +61,7 @@ NEW_PROPERTIES = [
 ]
 NEEDS = ("support", "load")                         # a structural problem with no load has nothing to solve
 PENALTIES = []                                      # none besides those every physics has
+SIMP_PENALTIES = {"structural": (3.0, 1.5, 6.0)}   # the stiffness's: start, start with continuation, largest
 
 # the kinds of quantity of its own values and quantities (forces, stresses), with their units' values in SI
 # and each unit system's unit; the core has length, density, mass and cost per mass already
@@ -76,7 +77,7 @@ UNIT_KINDS = {
 SETTINGS = [
     dict(section="common", key="pnorm_exponent", default=6.0, label="p-norm exponent",
          help="How closely the single stress value follows the highest stress in the part. Larger is closer, "
-              "but harder to optimize.", group="Main", at_build=set_pnorm_exponent),
+              "but harder to optimize.", group="Main"),
     dict(section="advanced", key="use_constant_poissons_ratio", default=False, label="Constant Poisson's ratio",
          help="One Poisson's ratio for every material, instead of each material's own.", group="Material model"),
     dict(section="advanced", key="constant_poissons_ratio", default=0.3, label="Poisson's ratio value",

@@ -104,7 +104,6 @@
       "collar",
       "bores"
     ],
-    "keep_support_elements": false,
     "database": "CustomAlloys20_3D",
     "formulation": {
       "objective": {

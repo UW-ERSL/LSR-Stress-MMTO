@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 import torch
 
 import lsr_mmto.pyto_ad_imports  # noqa: F401  puts PyTO-AD on sys.path
-from lsr_mmto.pyto_ad_imports import topopt_material_model as ad_mm
 from lsr_mmto.physics.structural.structural_physics import pnorm
 
 if TYPE_CHECKING:
@@ -25,14 +24,14 @@ def _compliance(m: "MMTOModelAD | _Analysed", opt: dict[str, int | float | str] 
 
 # ESSENTIAL: the fn of the StressPNorm quantity (QUANTITIES)
 def _stress_pnorm(m: "MMTOModelAD | _Analysed", opt: dict[str, int | float | str] | None) -> torch.Tensor:
-    """(sum svm^p)^(1/p) of the relaxed von Mises stress m.svm, p the current p-norm exponent."""
-    return pnorm(m.svm, ad_mm.get_pNorm_exponent())     # no 1/N, as PyTO's pNormStress
+    """(sum svm^p)^(1/p) of the relaxed von Mises stress m.svm, p the run's p-norm exponent (its setting)."""
+    return pnorm(m.svm, float(m.settings.pnorm_exponent))     # no 1/N, as PyTO's pNormStress
 
 
 # ESSENTIAL: the fn of the FailureFactorPNorm quantity (QUANTITIES)
 def _failure_factor_pnorm(m: "MMTOModelAD | _Analysed", opt: dict[str, int | float | str] | None) -> torch.Tensor:
     """((1/N) sum (svm / Y)^p)^(1/p), Y each element's yield strength (at least 1e-12)."""
-    p = ad_mm.get_pNorm_exponent()                      # mean form (1/N), as the manual code on main
+    p = float(m.settings.pnorm_exponent)                # mean form (1/N), as the manual code on main
     Y = torch.clamp(m.props["Yield_Strength"], min=1e-12)
     return (torch.sum((m.svm / Y) ** p) / m.N) ** (1.0 / p)
 

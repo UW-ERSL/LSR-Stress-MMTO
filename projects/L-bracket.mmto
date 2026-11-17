@@ -48,7 +48,6 @@
       }
     ],
     "keep_solid": [],
-    "keep_support_elements": false,
     "database": "BM1_3Mats_2Attr",
     "formulation": {
       "objective": {

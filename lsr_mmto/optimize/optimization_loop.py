@@ -48,16 +48,11 @@ import sys
 from lsr_mmto.materials.databases import in_shipped_folder, material_display
 from lsr_mmto.pyto_ad_imports import (
     linear_solvers,
-    hex_structural_fea,
     hex_element_stiffness,
     createFilters,
     mat_lib,
     MaterialModel,
     runMMA,
-    initialize_SIMP_STRUCTURAL_PENALTY,
-    initialize_SIMP_THERMAL_PENALTY,
-    increment_SIMP_STRUCTURAL_PENALTY,
-    increment_SIMP_THERMAL_PENALTY,
 )
 from lsr_mmto.materials.encoder import MaterialEncoder, NetworkRunCancelled, network_warning
 from lsr_mmto.physics.available_physics import physics_module
@@ -196,6 +191,7 @@ class RunState:
     # what changes from one iteration to the next
     iteration: int
     beta: float
+    simp_penalties: dict[str, float]              # each SIMP exponent of the physics (SIMP_PENALTIES), as now
     objective_scale: float | None
     penalties: "list[Penalty]"
     penalty_scales: dict[str, float]
@@ -243,6 +239,22 @@ def _run_topopt(*, s: "RunSettings", project: "Project", save_dir: str, verbose:
     if state is None:
         return
     return optimize(state)
+
+
+SIMP_STEP, SIMP_EVERY = 0.25, 10              # SIMP continuation: raised by this, every this many iterations
+
+
+def simp_penalties_at_start(physics: "ModuleType", continuation: bool) -> dict[str, float]:
+    """{name: value}: each SIMP exponent of the physics (its SIMP_PENALTIES) at the start of a run, the start
+    with SIMP continuation when it is on."""
+    return {name: float(with_continuation if continuation else start)
+            for name, (start, with_continuation, _) in physics.SIMP_PENALTIES.items()}
+
+
+def raised_simp_penalties(physics: "ModuleType", values: dict[str, float]) -> dict[str, float]:
+    """One step of SIMP continuation: each exponent raised by SIMP_STEP, up to its largest (SIMP_PENALTIES)."""
+    return {name: min(values[name] + SIMP_STEP, float(largest))
+            for name, (_, _, largest) in physics.SIMP_PENALTIES.items()}
 
 
 def problem_solver(physics: "ModuleType", mesh: "HexMesher", mat_prop: "Material", bcs: "dict[str, BC]",
@@ -393,8 +405,7 @@ def setup(*, s: "RunSettings", project: "Project", save_dir: str, verbose: bool,
     mesh, mat_prop, bcs, elem_body_force, to_params, vae_params = project.build()
     print(f"[SWEEP] nDOFDesired={to_params.nDOFDesired}  "
           f"RelativeFilterRadius={to_params.RelativeFilterRadius}  "
-          f"MaterialFilterRadius={to_params.MaterialFilterRadius}  "
-          f"P={s.pnorm_exponent}")
+          f"MaterialFilterRadius={to_params.MaterialFilterRadius}")
 
     if to_params.MaterialsExcelFile is None:
         print("Please provide a valid MaterialsExcelFile in to_params.")
@@ -453,12 +464,8 @@ def setup(*, s: "RunSettings", project: "Project", save_dir: str, verbose: bool,
 
     beta_schedule = get_beta_schedule(s.beta_schedule_scheme)
 
-    if s.use_continuation:
-        initialize_SIMP_STRUCTURAL_PENALTY(1.5)
-        initialize_SIMP_THERMAL_PENALTY(1)
-    else:
-        initialize_SIMP_STRUCTURAL_PENALTY(3)
-        initialize_SIMP_THERMAL_PENALTY(1)
+    simp_penalties = simp_penalties_at_start(physics, s.use_continuation)
+    physics.set_simp_penalties(solver, simp_penalties)
 
     initialDensity = 0.5                       # or the bound of the first constraint that sets it
     for c in to_params.Constraints:
@@ -515,6 +522,7 @@ def setup(*, s: "RunSettings", project: "Project", save_dir: str, verbose: bool,
         # what changes from one iteration to the next
         iteration=0,                        # designs evaluated so far
         beta=float(beta_schedule["beta_init"]),
+        simp_penalties=simp_penalties,      # raised by SIMP continuation
         objective_scale=None,               # the first objective; later ones are divided by it
         penalties=penalties,                # the penalties of the run's physics, in the order they are added
         penalty_scales={},                  # the first value of each penalty scaled by it, by name
@@ -671,17 +679,17 @@ def record(state: RunState, it: Iteration) -> None:
 
 
 def continuation(state: RunState, it: Iteration) -> None:
-    """The next iteration's count, SIMP penalty and Heaviside beta.
+    """The next iteration's count, SIMP penalties and Heaviside beta.
 
-    Reads state.iteration, state.beta. Sets state.iteration (one more), state.beta (when the Heaviside
-    projection is on and the schedule raises it). The SIMP penalties are PyTO-AD's module-level values,
-    raised by 0.25, up to PyTO-AD's maximum, whenever the new count is a multiple of 10 and continuation
+    Reads state.iteration, state.beta, state.simp_penalties. Sets state.iteration (one more), state.beta (when
+    the Heaviside projection is on and the schedule raises it), state.simp_penalties (raised_simp_penalties,
+    then handed to the physics' set_simp_penalties) whenever the new count is a multiple of 10 and continuation
     is on."""
     s = state.s
     state.iteration += 1
-    if s.use_continuation and (state.iteration % 10 == 0):
-        increment_SIMP_THERMAL_PENALTY(0.25)
-        increment_SIMP_STRUCTURAL_PENALTY(0.25)
+    if s.use_continuation and (state.iteration % SIMP_EVERY == 0):
+        state.simp_penalties = raised_simp_penalties(state.physics, state.simp_penalties)
+        state.physics.set_simp_penalties(state.solver, state.simp_penalties)
     if state.to_params.HeavisideProjection:
         beta_new, beta_updated = update_beta(
             beta_proj=state.beta,
@@ -724,7 +732,7 @@ def optimize(state: RunState) -> None:
     another error of the method becomes a RuntimeError naming the constraints over their limit when some
     are, and is raised as it is otherwise.
 
-    Reads state.iteration, state.last_zeta, state.beta, state.during_run. Sets state.during_run
+    Reads state.iteration, state.last_zeta, state.beta, state.during_run, state.simp_penalties. Sets state.during_run
     (stopped_at_iter, when stopped)."""
     s, to_params, history = state.s, state.to_params, state.history
     method = CONSTRAINT_METHODS[CONSTRAINT_METHOD]
@@ -765,7 +773,8 @@ def optimize(state: RunState) -> None:
         material_colors=state.material_colors, material_labels=state.material_labels,
         mma_settings=method_settings,
         runtime_sec=(tEnd - tStart), iterations=_iters,
-        comment=getattr(to_params, "Comment", ""))
+        comment=getattr(to_params, "Comment", ""),
+        pnorm_exponent=float(s.pnorm_exponent) if getattr(s, "pnorm_exponent", None) is not None else None)
     run_config["during_run"] = dict(state.during_run)
     run_config["network_errors_percent"] = state.network_errors   # what the run's materials were off by, per property
     run_config["network_reconstruction"] = state.encoder.reconstruction()   # and per material: database vs network
@@ -777,8 +786,7 @@ def optimize(state: RunState) -> None:
         "mma_move_limit": MMA_MOVE_LIMIT, "mma_kkt_tol": MMA_KKT_TOL,
         "apply_latent_sensitivity_filter": APPLY_LATENT_SENS_FILTER,
         "initial_density": float(state.initial_density),
-        "simp_structural_penalty_at_end": float(topopt_material_model._SIMP_STRUCTURAL_PENALTY),
-        "simp_thermal_penalty_at_end": float(topopt_material_model._SIMP_THERMAL_PENALTY),
+        **{f"simp_{name}_penalty_at_end": float(v) for name, v in state.simp_penalties.items()},
         "stress_relaxation_exponent": float(topopt_material_model._SIMP_STRESS_RELAXATION),
         "void_stiffness_relative": float(topopt_material_model._EVOID_RELATIVE),
     }

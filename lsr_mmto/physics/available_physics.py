@@ -55,6 +55,12 @@ MODULE_ENTRIES = {
     "deflation_space": "deflation_space(dsolver, mesh): builds the deflation space of each of its systems on "
                        "dsolver (one per field), so problems above the direct solver's limit use DPCG; None for a "
                        "physics without one, which then keeps the direct solver at every size",
+    "SIMP_PENALTIES": "the SIMP exponents its solve uses, {name: (start, start with SIMP continuation, largest)}: "
+                      "the run starts each and, with SIMP continuation on, raises it by 0.25 every 10 "
+                      "iterations up to its largest, handing them to set_simp_penalties; the record keeps each "
+                      "at the end as simp_<name>_penalty_at_end; may be empty",
+    "set_simp_penalties": "set_simp_penalties(solver, values): puts each SIMP exponent ({name: value} of "
+                          "SIMP_PENALTIES) where its solver reads it",
     "supports_and_loads_error": "supports_and_loads_error(mesh, bcs): why the supports and loads leave the "
                                 "problem without a solution (the part free to move), or None",
     "QUANTITIES": "its objectives and constraints, each as the arguments of a Quantity",
@@ -91,6 +97,12 @@ def _records_nothing(*args: Any, **kwargs: Any) -> None:
     return None
 
 
+def _sets_nothing(solver: Any, values: dict[str, float]) -> None:
+    """set_simp_penalties of a physics that gives none: nothing is set, so a solver that reads one of PyTO-AD's
+    penalties reads whatever it holds, which another run in the same program may have changed."""
+    return None
+
+
 # the entries a front page may leave out, and the value it then has: "none" of each
 OPTIONAL_ENTRIES = {
     "OPTIONAL_PROPERTIES": lambda: [],
@@ -99,6 +111,8 @@ OPTIONAL_ENTRIES = {
     "PENALTIES": lambda: [],
     "SUMMARY_ROWS": lambda: {},
     "deflation_space": lambda: None,
+    "SIMP_PENALTIES": lambda: {},
+    "set_simp_penalties": lambda: _sets_nothing,
     "supports_and_loads_error": lambda: _always_held,
     "iteration_diagnostics": lambda: _records_nothing,
 }
@@ -110,6 +124,9 @@ def _checked(module: "ModuleType") -> "ModuleType":
     missing = [k for k in MODULE_ENTRIES if not hasattr(module, k) and k not in OPTIONAL_ENTRIES]
     if missing:
         raise TypeError(f"physics module {module.__name__} does not give {', '.join(missing)}")
+    if hasattr(module, "SIMP_PENALTIES") != hasattr(module, "set_simp_penalties"):    # one is no use alone
+        raise TypeError(f"physics module {module.__name__} gives one of SIMP_PENALTIES and set_simp_penalties: "
+                        f"give both, or neither")
     for k, none in OPTIONAL_ENTRIES.items():
         if not hasattr(module, k):
             setattr(module, k, none())

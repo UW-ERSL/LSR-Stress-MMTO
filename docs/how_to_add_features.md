@@ -188,8 +188,9 @@ The entry holds its section (`common`, `advanced` or `vae`), the value a new pro
 Settings panel it sits in; `none_means`, `integer` and `choices` when it needs them;
 `reads_latent_points=True` when it acts only on the latent points (the Settings panel greys it out
 with one material in the design);
-`pyto_ad_field` when PyTO-AD's parameters have a field for it, `at_build` when PyTO-AD keeps it
-somewhere else (the p-norm exponent). The defaults, the Settings panel, the reference page and the
+`pyto_ad_field` when PyTO-AD's parameters have a field for it, `at_build` when something must be done
+with the value as the project is built. A value the physics' own code reads is read from the run's
+settings (`m.settings.<key>`, as the p-norm exponent is), never put in a global of PyTO-AD's. The defaults, the Settings panel, the reference page and the
 settings a run gets are made from it. `test_settings_cover_run_topopt` in
 `tests/runs/test_run_project.py` fails when the loop reads a name that is not a setting;
 `tests/code_rules/test_extending.py` shows one entry reaching every place. What else to run: both generators
@@ -278,8 +279,11 @@ attributes it reads that the core does not have (Density and Cost) are its own, 
 quantities, kinds and attributes join their lists.
 
 The entries in `OPTIONAL_ENTRIES` (`available_physics.py`) may be left out: no optional properties,
-unit kinds, settings, penalties or Summary rows, no deflation space, every problem held, nothing recorded
-each iteration. A physics gives them only when it has something to say.
+unit kinds, settings, penalties or Summary rows, no deflation space, no SIMP exponents (only for a solve
+that has none: one of PyTO-AD's would keep whatever another run left in it), every problem held, nothing
+recorded each iteration. A physics gives them only
+when it has something to say. A SIMP exponent (`SIMP_PENALTIES`) goes on the physics' own solver in
+`set_simp_penalties` where the solver allows it, as thermal's does; the run starts and raises it.
 
 `PROPERTIES` are the database columns every problem of the physics reads; `OPTIONAL_PROPERTIES` those it
 reads when the database has them (structural: `Poissons_Ratio`, else the one value in its settings). A

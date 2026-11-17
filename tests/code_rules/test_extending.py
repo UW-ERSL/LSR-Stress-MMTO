@@ -99,7 +99,7 @@ def test_every_quantity_has_its_gradient_checked():
 
 def test_a_physics_may_leave_out_its_optional_entries():
     """_checked gives a physics that leaves out an OPTIONAL_ENTRIES entry its "none" value, and refuses one
-    that leaves out any other entry, naming it."""
+    that leaves out any other entry, naming it, or gives SIMP_PENALTIES without set_simp_penalties."""
     import types
 
     from lsr_mmto.physics import available_physics as ap
@@ -112,6 +112,15 @@ def test_a_physics_may_leave_out_its_optional_entries():
     assert bare.OPTIONAL_PROPERTIES == [] and bare.SUMMARY_ROWS == {} and bare.deflation_space is None
     assert bare.supports_and_loads_error(None, None) is None
     assert bare.iteration_diagnostics({}, 0) is None
+    half = types.ModuleType("half")                         # the SIMP entries: both or neither
+    for k in required:
+        setattr(half, k, getattr(structural_module, k))
+    half.SIMP_PENALTIES = {"structural": (3.0, 1.5, 6.0)}
+    try:
+        ap._checked(half)
+        raise AssertionError("SIMP_PENALTIES without set_simp_penalties was taken")
+    except TypeError as e:
+        assert "give both, or neither" in str(e)
     del bare.analyse
     try:
         ap._checked(bare)
