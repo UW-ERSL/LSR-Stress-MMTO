@@ -726,7 +726,7 @@ p.save("my bracket/my bracket.mmto")
 
 `p.save_as_script(path)`
 
-Write a Python script that rebuilds this project with the same calls, next to it. Settings that differ from a new project's are written; the rest are the defaults.
+Write a Python script that rebuilds this project with the same calls, next to it. The physics and the material source are always written, since they say what problem this is; settings that differ from a new project's are written, and the rest are the defaults.
 
 | argument | format | default |
 |---|---|---|

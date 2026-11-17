@@ -12,7 +12,8 @@ from PyQt5 import QtCore, QtWidgets
 
 from lsr_mmto.problem.settings import BY_KEY, MESH_DEFAULTS, SETTINGS, VAE_PARAMS as VAE_KEYS
 
-from .panel_widgets import GREY, Info, NumberEdit, database_choice, database_errors, ok_cancel, same, with_info
+from .panel_widgets import (GREY, Info, NumberEdit, database_choice, database_errors, ok_cancel, same, set_style,
+                            with_info)
 
 
 def setting_groups(physics=None):
@@ -188,7 +189,7 @@ class SettingsPanel(QtWidgets.QDialog):
                     header.setCheckable(True)
                     header.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
                     header.setArrowType(QtCore.Qt.RightArrow)
-                    header.setStyleSheet("QToolButton { border: none; font-weight: bold; }")
+                    set_style(header, "QToolButton { border: none; font-weight: bold; }")
                     advanced = QtWidgets.QWidget()
                     advanced_layout = QtWidgets.QVBoxLayout(advanced)
                     advanced_layout.setContentsMargins(12, 0, 0, 0)
@@ -199,7 +200,7 @@ class SettingsPanel(QtWidgets.QDialog):
                     pages[tab].addWidget(advanced)
                     self.rows[("group", "Advanced")] = (header, [])
                 title = QtWidgets.QLabel(group)
-                title.setStyleSheet(GREY)
+                set_style(title, GREY)
                 advanced_layout.addWidget(title)
                 advanced_layout.addWidget(box)
                 self.rows[("group", "Advanced")][1].extend(keys)

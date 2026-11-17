@@ -42,7 +42,9 @@ def final_summary(designs: "list[tuple[str, np.ndarray, np.ndarray | torch.Tenso
     """Once, at the end. designs is [(label, x, z)] for the final designs (x per element, z per element and
     latent dimension); properties_of(z) decodes latent points to properties. Solve each design with the
     solver, print its numbers, and return the results a run saves, {name: numpy array}, one for each
-    RESULT_FIELDS entry, of the last design."""
+    RESULT_FIELDS entry, of the last design. Go through them with "for label, x, z in designs", solving each
+    in its pass (a design taken by index, designs[-1], is fine too): the run then knows which design each
+    iterative solve is for, to say which did not converge (tests/code_rules/test_physics_folders.py)."""
     raise NotImplementedError("FILL: final_summary, the final check of this physics")
 
 

@@ -1105,7 +1105,8 @@ class Project:
     def save_as_script(self, path: str) -> str:
         """Write a Python script that rebuilds this project with the same calls, next to it.
 
-        Settings that differ from a new project's are written; the rest are the defaults.
+        The physics and the material source are always written, since they say what problem this is; settings
+        that differ from a new project's are written, and the rest are the defaults.
 
         path: the .py file, in the project's folder
         Example: p.save_as_script("my bracket/my bracket_setup.py")
@@ -1146,8 +1147,7 @@ class Project:
                  "            base_dir=HERE)"]
         if self.comment:
             lines.append(f"p.comment = {self.comment!r}")
-        if self.physics != DEFAULT_PHYSICS:
-            lines.append(f"p.physics = {self.physics!r}")
+        lines.append(f"p.physics = {self.physics!r}")                 # always: it says what problem this is
         if self.units != "none":
             lines.append(f"p.units = {self.units!r}")
         if self.selections:
@@ -1164,8 +1164,7 @@ class Project:
             lines.append("p.keep_support_elements = True")
         lines += [""] + explained("Materials", "p.database and the columns of a database")
         lines.append(f"p.database = {self.database!r}")
-        if self.material_source != "network":
-            lines.append(f"p.material_source = {self.material_source!r}")
+        lines.append(f"p.material_source = {self.material_source!r}")     # always, as the physics
         if self.pinned_material is not None:
             lines.append(f"p.pinned_material = {self.pinned_material!r}")
         obj = self.formulation.get("objective")

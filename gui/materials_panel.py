@@ -17,7 +17,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 from lsr_mmto.problem.settings import BY_KEY, VAE_PARAMS as VAE_KEYS
 
-from .panel_widgets import Info, database_choice, fit_columns, ok_cancel, same, spread_columns, swatch
+from .panel_widgets import Info, centre_cells, database_choice, fit_columns, ok_cancel, same, spread_columns, swatch
 
 
 CONVERT_HELP = ("The database is written again as the project's own copy, in its materials folder, with these "
@@ -269,6 +269,7 @@ class MaterialsPanel(QtWidgets.QDialog):
         switch.addStretch()
         shown.addLayout(switch)
         self.table = QtWidgets.QTableWidget()
+        centre_cells(self.table)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         shown.addWidget(self.table, stretch=1)
         layout.addLayout(shown, stretch=1)
@@ -645,10 +646,7 @@ class MaterialsPanel(QtWidgets.QDialog):
                                     f"Difference: {r['difference']:+.3g}{unit}")
                 else:
                     cell = QtWidgets.QTableWidgetItem("" if errors else format(values[i, j], ".6g"))
-                cell.setTextAlignment(int(QtCore.Qt.AlignCenter))
-                self.table.setItem(i, 2 + j, cell)
-        for j in range(len(attributes)):
-            self.table.horizontalHeaderItem(2 + j).setTextAlignment(int(QtCore.Qt.AlignCenter))
+                self.table.setItem(i, 2 + j, cell)                     # centred, as every cell (centre_cells)
         self.table.verticalHeader().setVisible(False)
         self.table.setColumnHidden(1, list(labels) == list(names))      # Material: only when the labels differ
         fit_columns(self.table)

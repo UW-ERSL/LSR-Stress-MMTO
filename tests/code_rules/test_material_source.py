@@ -88,13 +88,140 @@ def test_the_database_decodes_to_each_elements_own_material():
     assert source.network_weights() is None
 
 
+LATENT = {"z", "z_real"}                       # the model's latent points, as its code names them
+OURS = [os.path.normcase(os.path.join(ROOT, d)) for d in ("lsr_mmto", "tests")]   # code this check follows
+
+
+def _ours(fn):
+    """fn is a plain function, or a module, written in LSR MMTO (its package or its tests), not a library's."""
+    import types
+    if isinstance(fn, types.FunctionType):
+        path = fn.__code__.co_filename
+    elif isinstance(fn, types.ModuleType):
+        path = getattr(fn, "__file__", None) or ""
+    else:
+        return False
+    path = os.path.normcase(os.path.abspath(path))
+    return any(_inside(path, base) for base in OURS)
+
+
+def _inside(path, folder):
+    """path is folder or inside it; False for a path on another drive (Windows), which commonpath refuses."""
+    try:
+        return os.path.commonpath([path, folder]) == folder
+    except ValueError:
+        return False
+
+
+def _unwrapped(g):
+    """The plain function behind g: a method's, a partial's, a decorated function's, a callable object's."""
+    import functools
+    for _ in range(10):
+        if isinstance(g, functools.partial):
+            g = g.func
+        elif hasattr(g, "__wrapped__"):
+            g = g.__wrapped__
+        elif hasattr(g, "__func__"):
+            g = g.__func__
+        elif not callable(g) or isinstance(g, type) or hasattr(g, "__code__"):
+            return g
+        else:
+            g = type(g).__call__
+    return g
+
+
+def reaches_the_latent_points(fn, seen=None):
+    """The chain of functions by which fn reads the latent points (z, z_real), or None: read from the names in
+    its code (an attribute, or the text "z" as getattr reads it), and in the code of every function of LSR MMTO
+    it calls, however deep: by name, as a module's function (module.helper), as a method of the model
+    (m.<method>), imported inside it, held in a closure or a default, through a partial or a decorator; lambdas
+    and functions defined inside included. Not followed: a method of a class other than the model. It errs on
+    the side of a read: any attribute named z counts (and the text "z" where getattr is called), and any name
+    of a model method is followed into it."""
+    import types
+    from lsr_mmto.optimize.design_model import MMTOModelAD
+    seen = set() if seen is None else seen
+    f = _unwrapped(fn)
+    if not isinstance(f, types.FunctionType) or f.__code__ in seen:
+        return None
+    seen.add(f.__code__)
+    called = [c.cell_contents for c in (f.__closure__ or ()) if _cell_full(c)] + list(f.__defaults__ or ())
+    stack = [f.__code__]
+    while stack:
+        code = stack.pop()
+        stack += [c for c in code.co_consts if isinstance(c, types.CodeType)]
+        texts = {c for c in code.co_consts if isinstance(c, str)} if "getattr" in code.co_names else set()
+        if LATENT & (set(code.co_names) | texts):
+            return [f.__qualname__]
+        for name in code.co_names:
+            g = f.__globals__.get(name, sys.modules.get(name))     # a module imported inside: by its full name
+            called += [g, getattr(MMTOModelAD, name, None)]
+            called += [getattr(g, other, None) for other in code.co_names if _ours(g)]
+    for g in called:
+        chain = reaches_the_latent_points(g, seen) if _ours(_unwrapped(g)) else None
+        if chain:
+            return [f.__qualname__] + chain
+    return None
+
+
+def _cell_full(cell):
+    try:
+        cell.cell_contents
+        return True
+    except ValueError:                          # a closure variable not yet given a value
+        return False
+
+
 def test_every_quantity_and_penalty_says_truly_whether_it_reads_the_latent_points():
     """A quantity or a penalty whose own function reads the model's latent points (m.z, m.z_real) says so
     (reads_latent_points), and one that does not says it does not: a single-material project refuses the first
     kind of quantity, and a run with no latent points leaves out the first kind of penalty, so a wrong word would
-    let a value of no meaning into a run. Read from the names the function's own code uses."""
+    let a value of no meaning into a run. Read from the names the function's code uses, and the code of every
+    function of LSR MMTO it calls, however deep (reaches_the_latent_points), so a quantity of any physics that
+    reads them through a helper is caught too."""
     from lsr_mmto.design.latent_penalties import PENALTIES
     from lsr_mmto.formulation.quantities import QUANTITIES
-    wrong = [f"{q.name}: says {q.reads_latent_points}" for q in list(QUANTITIES) + list(PENALTIES)
-             if bool({"z", "z_real"} & set(q.fn.__code__.co_names)) != q.reads_latent_points]
+    wrong = [f"{q.name}: says {q.reads_latent_points}, but " + (" -> ".join(chain) + " reads them" if chain else
+                                                                  "nothing it calls reads them")
+             for q in list(QUANTITIES) + list(PENALTIES)
+             for chain in [reaches_the_latent_points(q.fn)] if bool(chain) != q.reads_latent_points]
     assert not wrong, wrong
+
+
+def _reads_through_a_helper(m, opt):
+    return _helper_of_a_helper(m) * m.elem_volume
+
+
+def _helper_of_a_helper(m):
+    return m.z.sum()
+
+
+def test_the_check_follows_a_function_into_its_helpers():
+    """reaches_the_latent_points finds the latent points read two helpers down, in a lambda, through a module's
+    function, a closure, a partial, a decorator, a callable object and getattr(m, "z"); a quantity's own
+    function that reads none (Mass) gives None."""
+    import functools
+    import sys as system
+    from lsr_mmto.formulation.quantities import QUANTITIES
+    here = system.modules[__name__]
+    assert reaches_the_latent_points(_reads_through_a_helper) == ["_reads_through_a_helper", "_helper_of_a_helper"]
+    assert reaches_the_latent_points(lambda m: _helper_of_a_helper(m)) is not None
+    assert reaches_the_latent_points(lambda m: here._helper_of_a_helper(m)) is not None
+    held = _helper_of_a_helper
+    assert reaches_the_latent_points(lambda m: held(m)) is not None
+    assert reaches_the_latent_points(functools.partial(_reads_through_a_helper, opt=None)) is not None
+    assert reaches_the_latent_points(functools.wraps(_helper_of_a_helper)(lambda m: 0)) is not None
+
+    class Reader:
+        def __call__(self, m):
+            return m.z_real.sum()
+    assert reaches_the_latent_points(Reader()) is not None
+    assert reaches_the_latent_points(lambda m: getattr(m, "z").sum()) is not None
+    assert reaches_the_latent_points(lambda m, read=_helper_of_a_helper: read(m)) is not None
+
+    def imports_it_inside(m):
+        import tests.code_rules.test_material_source as here_too
+        return here_too._helper_of_a_helper(m)
+    assert reaches_the_latent_points(imports_it_inside) is not None
+    assert reaches_the_latent_points(lambda m: m.mesh.coordinates(axis="z")) is None
+    assert reaches_the_latent_points(next(q for q in QUANTITIES if q.name == "Mass").fn) is None

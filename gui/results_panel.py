@@ -22,7 +22,7 @@ import os
 from PyQt5 import QtCore, QtWidgets
 
 from . import draw_design
-from .panel_widgets import GREY, Info
+from .panel_widgets import GREY, Info, set_style
 from .run_panel import ask_delete_run, open_folder, plot_canvas, result_tabs, summary_view, table_view
 
 RESULTS_HELP = ("Each run of the project is listed here, newest first. Click one to see its design on the part "
@@ -229,7 +229,7 @@ class ResultsWindow(QtWidgets.QDialog):
         self.list.itemChanged.connect(lambda _: self._update_buttons())
         layout.addWidget(self.list)
         self.empty = QtWidgets.QLabel("No runs yet. Press Run at the top to make one.")
-        self.empty.setStyleSheet(GREY)
+        set_style(self.empty, GREY)
         layout.addWidget(self.empty)
 
         buttons = QtWidgets.QHBoxLayout()
@@ -279,7 +279,7 @@ class ResultsWindow(QtWidgets.QDialog):
         layout.addWidget(self.deform_row)
         self.status = QtWidgets.QLabel("")
         self.status.setWordWrap(True)
-        self.status.setStyleSheet(GREY)
+        set_style(self.status, GREY)
         layout.addWidget(self.status)
 
         self.tabs = QtWidgets.QTabWidget()

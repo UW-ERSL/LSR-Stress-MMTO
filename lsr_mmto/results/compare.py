@@ -66,9 +66,11 @@ def table(runs: dict[str, Run]) -> Tables:
     """The runs side by side, one column each, in the sections of a run's summary (tables.summary):
     the result with each constraint met or not, the design, the materials and the run. Only the rows every
     run has: with an analysis among them (one solve, no optimization), a constraint it cannot give and what
-    only an optimization has (grey elements, the latent dimension, iterations) are left out."""
+    only an optimization has (grey elements, the latent dimension, iterations) are left out. The exception: a
+    run whose solver did not converge (tables.solver_rows) keeps that row, blank for the runs without it, so a
+    number that is not reliable is never compared unmarked."""
     from .tables import (Heading, Table, Tables, _unit, constraint_name, given, latent_dimension_text, met, met_cell,
-                         physics_rows)
+                         physics_rows, solver_rows)
     names = list(runs)
     rs = [runs[n] for n in names]
     r0 = rs[0]
@@ -97,6 +99,9 @@ def table(runs: dict[str, Run]) -> Tables:
     if optimized:
         run_rows = [["Iterations"] + [f"{_iterations(r)}" for r in rs]] + run_rows + \
             [["Time per iteration"] + [f"{_runtime(r) / max(_iterations(r), 1):.2f} s" for r in rs]]
+    solver = [dict(solver_rows(r)) for r in rs]
+    for label in dict.fromkeys(label for each in solver for label in each):
+        run_rows.append([label] + [each.get(label, "") for each in solver])
     return Tables(
         Heading(f"{r0.example}: the runs side by side"),
         Table(result, headers=[""] + names, title="Result", right_cols=right),

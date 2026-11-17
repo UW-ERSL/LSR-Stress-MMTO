@@ -192,7 +192,7 @@ def test_the_network_pinned_to_one_material():
 
 def test_the_choice_is_saved_and_an_older_file_reads_as_the_network():
     """material_source and pinned_material are saved and read back; a file saved before them reads as the network
-    with no pin; the project script sets them only when they are not a new project's."""
+    with no pin; the project script always sets the material source, and the pin when there is one."""
     from lsr_mmto.problem.project import Project
     with tempfile.TemporaryDirectory() as d:
         p = _ubracket()
@@ -202,7 +202,7 @@ def test_the_choice_is_saved_and_an_older_file_reads_as_the_network():
         q = Project.load(path)
         assert (q.material_source, q.pinned_material) == ("network", "anything")
         script = open(q.save_as_script(os.path.join(d, "u_setup.py"))).read()
-        assert "p.pinned_material = 'anything'" in script and "p.material_source" not in script
+        assert "p.pinned_material = 'anything'" in script and "p.material_source = 'network'" in script
         data = json.load(open(path))
         del data["mmto"]["material_source"], data["mmto"]["pinned_material"]
         json.dump(data, open(path, "w"))

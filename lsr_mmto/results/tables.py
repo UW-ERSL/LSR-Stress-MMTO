@@ -412,6 +412,7 @@ def summary(run: "Run") -> Tables:
         own = list(PHYSICS[run.physics].UNIT_KINDS) if run.physics in PHYSICS else []
         shown_units = [units[k] for k in ["length"] + own + ["mass"] if k in units]  # the physics' kinds between
         run_rows.append(["Units", f"{units['system']}: {', '.join(shown_units)}"])
+    run_rows += solver_rows(run)
     design = [["Elements", f"{run.n_elems:,}", ""],
               ["Solid", f"{int(run.solid.sum()):,}", f"{100 * run.solid.mean():.1f} % of the elements"]]
     if analysis is None:
@@ -428,6 +429,47 @@ def summary(run: "Run") -> Tables:
         Table(design, title="Design", right_cols=(1,)),
         Table(materials, title="Materials", right_cols=(1,)),
         Table(run_rows, title="Run", right_cols=(1,)) if run_rows else None)
+
+
+def solver_rows(run: "Run") -> list[list[str]]:
+    """The Summary's and Compare's rows about the run's iterative solves that did not converge (the run record's
+    solver_check, optimize/iterative_solve_check.py); none when every solve converged, or none was iterative.
+    For an analysis, one row: its one design is all it solved."""
+    from lsr_mmto.optimize.iterative_solve_check import short_label
+    check = (run.config or {}).get("solver_check") or {}
+    failed = check.get("final_check_not_converged") or {}
+    if run.analysed_material is not None:
+        return [["Solver", "did not converge: not reliable"]] if failed else []
+    rows = []
+    n = check.get("iterations_not_converged")
+    if n:
+        rows.append(["Solver", f"did not converge in {n} solve{'s' if n > 1 else ''} of the iterations"])
+    if failed:
+        rows.append(["Final check", "solver did not converge for " + ", ".join(short_label(k) for k in failed)
+                     + ": not reliable"])
+    return rows
+
+
+def solver_details(run: "Run") -> str:
+    """What the Solver and Final check rows mean, with the relative error (residual) of each solve named: the
+    text behind the Summary's (i) when a run has them."""
+    from lsr_mmto.optimize.iterative_solve_check import short_label
+    check = (run.config or {}).get("solver_check") or {}
+    failed = check.get("final_check_not_converged") or {}
+    saved = ", ".join(info.get("view") or name for name, info in run.result_info.items())
+    text = ("Solver" + ("" if run.analysed_material is not None else ", Final check") + ": on a large part the "
+            "solve is iterative, and it stops after a set number of steps. A solve that stopped before it reached "
+            "the answer gives numbers that are not reliable")
+    shown = f", and its {saved}" if saved else ""
+    if run.analysed_material is not None:
+        return text + f": every number of this analysis{shown}."
+    errors = "; ".join(f"{short_label(k)}, {v:.3g}" for k, v in failed.items())
+    source = check.get("results_from")
+    return (text + ": during the iterations, the design they reached may not be the best one; in the final check "
+            "(the finished design solved three ways at the end of the run), the numbers of each design named"
+            + (f", and the {saved} the run shows, which are those of {short_label(source)}"
+               if saved and source in failed else "") + ". "
+            + (f"Relative error of each design's solve (0 is exact): {errors}." if failed else ""))
 
 
 def summary_details(run: "Run") -> str:
@@ -453,6 +495,8 @@ def summary_details(run: "Run") -> str:
         lines.append("Grey (in between): how much of the design is neither solid nor empty; 0 % is a clean design.")
         lines.append("Latent dimension: the number of coordinates of the learned material space; None when every "
                      "element is one material, which needs no material space.")
+    if solver_rows(run):
+        lines.append(solver_details(run))
     return "\n".join(lines)
 
 

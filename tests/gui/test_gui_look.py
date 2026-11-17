@@ -185,7 +185,7 @@ def test_display_options():
     shown = [x.text() for x in d.findChildren((QtWidgets.QLabel, QtWidgets.QCheckBox, QtWidgets.QPushButton))
              if x.isVisible()]
     assert shown == ["Cut along x (%)", "Cut along y (%)", "Cut along z (%)",
-                     "Show the part's triangles", "See-through part", "Hide Selected Part", "Save Image", "Close"]
+                     "Show the part's triangles", "See-through part", "Save Image", "Close"]
     assert d.windowTitle() == "View" and w.view_button.isEnabled() and "Display Options" not in G.SIDEBAR
     part = w.part_actor()
     whole = part.GetMapper().GetInput().GetNumberOfCells()
@@ -249,6 +249,142 @@ def test_no_window_has_the_help_button():
     for path in glob.glob(os.path.join(ROOT, "gui", "*.py")):
         with open(path, encoding="utf-8") as f:
             assert "WindowContextHelpButtonHint" not in f.read(), path
+
+
+def test_a_control_that_is_off_looks_off():
+    """With the app's style, every kind of control the panels use looks different when it is off (greyed) from
+    when it is on, a ticked checkbox and a chosen round button too (they once looked the same, blue, with dark
+    text): the style greys any control that is off, whatever its kind. The Materials table and the database
+    editor draw every cell and header centred, cells made later too."""
+    from gui import database_editor, materials_panel, panel_widgets
+    makers = {"checkbox": lambda: QtWidgets.QCheckBox("Distance penalty"),
+              "round button": lambda: QtWidgets.QRadioButton("Single material"),
+              "text box": lambda: QtWidgets.QLineEdit("0.5"), "number box": lambda: QtWidgets.QSpinBox(),
+              "list": lambda: QtWidgets.QComboBox(), "button": lambda: QtWidgets.QPushButton("Reset"),
+              "label": lambda: QtWidgets.QLabel("Weight"), "tool button": lambda: QtWidgets.QToolButton()}
+    G.apply_style(APP)
+    try:
+        for kind, make in makers.items():
+            pictures = []
+            for on in (True, False):
+                widget = make()
+                if isinstance(widget, (QtWidgets.QCheckBox, QtWidgets.QRadioButton)):
+                    widget.setChecked(True)
+                if isinstance(widget, QtWidgets.QComboBox):
+                    widget.addItem("ORIGIN")
+                if isinstance(widget, QtWidgets.QToolButton):
+                    widget.setText("Reset")
+                widget.setEnabled(on)
+                widget.resize(160, 30)
+                widget.show()
+                settle(0.05)
+                pictures.append(widget.grab().toImage())
+                widget.close()
+            assert pictures[0] != pictures[1], f"a {kind} looks the same off as on"
+        for make in (lambda: QtWidgets.QCheckBox("Distance penalty"), lambda: QtWidgets.QRadioButton("One")):
+            boxes = []                                  # the tick box or round button alone, without its text
+            for on in (True, False):
+                widget = make()
+                widget.setChecked(True)
+                widget.setEnabled(on)
+                widget.resize(160, 30)
+                widget.show()
+                settle(0.05)
+                option = QtWidgets.QStyleOptionButton()
+                widget.initStyleOption(option)
+                box = widget.style().subElementRect(QtWidgets.QStyle.SE_CheckBoxIndicator if
+                                                    isinstance(widget, QtWidgets.QCheckBox) else
+                                                    QtWidgets.QStyle.SE_RadioButtonIndicator, option, widget)
+                boxes.append(widget.grab(box).toImage())
+                widget.close()
+            assert boxes[0] != boxes[1], f"a ticked {type(widget).__name__}'s box looks the same off as on"
+    finally:
+        APP.setStyleSheet("")
+    w = window()
+    m = materials_panel.MaterialsPanel(w, w.project)
+    e = database_editor.DatabaseEditor(None, w.project.base_dir)
+    for view in (m.table, e.table, e.table.frozen):
+        assert isinstance(view.itemDelegate(), panel_widgets._Centred), view
+        assert view.horizontalHeader().defaultAlignment() == QtCore.Qt.AlignCenter
+    index = e.table.model().index(0, 1)                 # a value cell: typed in the middle too
+    editor = e.table.itemDelegate().createEditor(e.table.viewport(), QtWidgets.QStyleOptionViewItem(), index)
+    assert isinstance(editor, QtWidgets.QLineEdit) and editor.alignment() & QtCore.Qt.AlignHCenter, editor
+    e.done(0)
+
+
+def test_every_look_has_a_greyed_look():
+    """Every rule of the window's style sheet that colours text or a border has a greyed version for a control
+    that is off, in the same states: written by hand, or added by panel_widgets.with_off_look (rules added later
+    too). A widget's own sheet gets the same (panel_widgets.set_style), a bare "color: ..." too."""
+    from gui import panel_widgets as P
+    with open(G.STYLE, encoding="utf-8") as fh:
+        sheet = P.with_off_look(fh.read())
+    rules = P._rules(sheet)
+    off = {P._look(sel) for selectors, _ in rules for sel in selectors if "disabled" in re.findall(P._STATE, sel)}
+    for selectors, body in rules:
+        if re.search(P._TEXT, body) or re.search(P._BORDER, body):
+            for sel in selectors:
+                what, states = P._look(sel)
+                assert "disabled" in re.findall(P._STATE, sel) or (what, states) in off or \
+                    states & P._POINTER and any(w == what for w, _ in off), f"{sel} has no greyed look"
+    assert "QLabel#x:disabled { color: %s; border-color: %s; }" % (P.OFF_TEXT, P.OFF_BORDER) in \
+        P.with_off_look("QLabel#x { color: red; border: 1px solid #ff0000; }")
+    assert "hover:disabled" not in P.with_off_look("QCheckBox::indicator:disabled { border-color: #dfe3e8; }\n"
+                                                   "QCheckBox::indicator:hover { border-color: #3b5bdb; }")
+    assert P.with_off_look("color: #b00000;").endswith("*:disabled { color: %s; }" % P.OFF_TEXT)
+    assert P.with_off_look("background: #ffd6d6;") == "background: #ffd6d6;"
+
+
+def test_every_style_sheet_gets_its_greyed_look():
+    """The window's code sets a style sheet only through panel_widgets.set_style (a widget's) and
+    main_window.apply_style (the app's), which both add the greyed looks: a widget given its own look later gets
+    its greyed look too."""
+    import ast
+    allowed = {("panel_widgets.py", "set_style"), ("main_window.py", "apply_style")}
+    for path in glob.glob(os.path.join(ROOT, "gui", "**", "*.py"), recursive=True):
+        tree = ast.parse(open(path, encoding="utf-8").read())
+        inside = {}                                     # each node: the function it is written in
+        for fn in ast.walk(tree):
+            if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for node in ast.walk(fn):
+                    inside[node] = fn.name              # walked outer first, so the innermost name stays
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Attribute) and node.attr == "setStyleSheet":
+                assert (os.path.basename(path), inside.get(node)) in allowed, \
+                    f"{os.path.relpath(path, ROOT)}:{node.lineno} sets a style sheet itself: use set_style"
+
+
+def test_stop_and_the_info_button_look_off_when_off():
+    """Stop, once pressed, is off and grey, no longer red; an "i" button that is off is grey too. Both have their
+    own look, which the general greyed look alone did not reach."""
+    from gui import panel_widgets as P
+    styled()
+    try:
+        row = QtWidgets.QWidget()                       # the top row as the window names it (its timer keeps
+        row.setObjectName("topButtons")                 # turning the window's own button back on)
+        b = QtWidgets.QToolButton(row)
+        b.setObjectName("stopButton")
+        b.setText("Stop")
+        row.show()
+        for on in (True, False):
+            b.setEnabled(on)
+            settle(0.05)
+            image = b.grab().toImage()
+            red = sum(1 for x in range(image.width()) for y in range(image.height())
+                      if (lambda c: c.red() > 150 and c.green() < 110 and c.blue() < 110)(image.pixelColor(x, y)))
+            assert (red > 0) == on, f"Stop {'on' if on else 'off'}: {red} red pixels"
+        pictures = []
+        for on in (True, False):
+            info = P.Info("text")
+            info.setEnabled(on)
+            info.show()
+            settle(0.05)
+            pictures.append(info.grab().toImage())
+            info.close()
+        assert pictures[0] != pictures[1], "an i button looks the same off as on"
+        row.close()
+    finally:
+        APP.setStyleSheet("")
 
 
 def styled():

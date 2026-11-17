@@ -1,5 +1,9 @@
 /* The LSR MMTO window: light, white cards, one blue accent. ICONS/ is the icons folder (gui/assets/icons). */
 * { font-family: "Inter", "Segoe UI", sans-serif; font-size: 10pt; color: #1f2933; }
+/* a control that is off (greyed): grey text, whatever its kind, a kind added later too. A rule below that
+   colours text or a border gets its own greyed version when the sheet is loaded (gui/panel_widgets.py,
+   with_off_look); write a "...:disabled" rule by hand only for a greyed look of its own */
+*:disabled { color: #a0a7b2; }
 QMainWindow, QWidget#centralwidget { background: #f4f6f9; }
 QDialog { background: #f7f8fa; }
 
@@ -143,6 +147,10 @@ QCheckBox::indicator:hover, QRadioButton::indicator:hover { border-color: #3b5bd
 QRadioButton::indicator { border: 1px solid #b8c0cc; border-radius: 8px; background: #ffffff; }
 QRadioButton::indicator:checked { border-color: #2f5fe0; background: qradialgradient(cx: 0.5, cy: 0.5, radius: 0.5,
     fx: 0.5, fy: 0.5, stop: 0 #2f5fe0, stop: 0.5 #2f5fe0, stop: 0.56 #ffffff, stop: 1 #ffffff); }
+QCheckBox::indicator:disabled, QRadioButton::indicator:disabled { border-color: #dfe3e8; background: #f3f4f6; }
+QCheckBox::indicator:checked:disabled { background: #b9c1cc; border-color: #b9c1cc; image: url(ICONS/check_white.svg); }
+QRadioButton::indicator:checked:disabled { border-color: #b9c1cc; background: qradialgradient(cx: 0.5, cy: 0.5,
+    radius: 0.5, fx: 0.5, fy: 0.5, stop: 0 #b9c1cc, stop: 0.5 #b9c1cc, stop: 0.56 #f3f4f6, stop: 1 #f3f4f6); }
 
 /* groups */
 QGroupBox { background: #ffffff; border: 1px solid #dfe4ec; border-radius: 8px; margin-top: 14px; padding: 12px 10px 8px 10px; }

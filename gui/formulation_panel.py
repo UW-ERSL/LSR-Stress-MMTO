@@ -6,7 +6,7 @@ OK and Cancel work as in every panel (see materials_panel.py).
 """
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-from .panel_widgets import GREY, Info, NumberEdit, database_choice, ok_cancel, same, swatch
+from .panel_widgets import GREY, Info, NumberEdit, database_choice, ok_cancel, same, set_style, swatch
 
 
 TAU_DOC = ("How sharply each element counts as its nearest material when a material's volume is measured: "
@@ -78,7 +78,7 @@ class FormulationPanel(QtWidgets.QDialog):
         layout.addWidget(add, alignment=QtCore.Qt.AlignLeft)
         if self.columns is None:
             note = QtWidgets.QLabel("The database cannot be read, so no quantity is greyed out for missing columns.")
-            note.setStyleSheet(GREY)
+            set_style(note, GREY)
             layout.addWidget(note)
         layout.addStretch()
         self._show_tau()
@@ -156,8 +156,8 @@ class FormulationPanel(QtWidgets.QDialog):
         for i in range(n):
             widgets["material"].addItem(swatch(self.colours[i]), self.labels[i], i)
         widgets["bound"].setFixedWidth(150)
-        widgets["unit"].setStyleSheet(GREY)
-        widgets["why"].setStyleSheet("color: #b00000;")
+        set_style(widgets["unit"], GREY)
+        set_style(widgets["why"], "color: #b00000;")
         for key in ("quantity", "of", "material", "<=", "bound", "unit", "info", "why"):
             row.addWidget(QtWidgets.QLabel("<=") if key == "<=" else widgets[key])
         row.addStretch()

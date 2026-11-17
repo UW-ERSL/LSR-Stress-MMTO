@@ -7,6 +7,7 @@ the "i" button, OK and Cancel, colour swatches, and the project's database and i
 import ast
 import math
 import os
+import re
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
@@ -14,6 +15,66 @@ from lsr_mmto.problem.selections import plain_value  # noqa: F401  (the one safe
 
 
 GREY = "color: #666666;"
+OFF_TEXT = "#a0a7b2"            # the text of a control that is off (greyed)
+OFF_BORDER = "#e6e9ef"          # its border, when its look has a coloured one
+
+
+def _rules(css):
+    """The rules of a style sheet, comments left out: [([selector, ...], body)]."""
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    return [([" ".join(one.split()) for one in sel.split(",")], body.strip())
+            for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css)]
+
+
+_STATE = r"(?<!:):(?!:)([!\w-]+)"           # a state of a selector (":hover", ":!checked"; not "::indicator")
+
+
+def _look(selector):
+    """What a selector styles, and in which states besides "disabled": (selector without states, states)."""
+    return re.sub(_STATE, "", selector), frozenset(re.findall(_STATE, selector)) - {"disabled"}
+
+
+_TEXT = r"(?<![-\w])color\s*:"                                                  # a text colour
+_BORDER = r"(?<![-\w])border(-(top|right|bottom|left))?(-color)?\s*:[^;]*(#|rgb)"   # a coloured border
+_POINTER = {"hover", "pressed", "focus"}     # states of the pointer and the keyboard, which an off control
+                                            # does not take
+
+
+def with_off_look(css):
+    """The style sheet with a greyed look added for every look it gives: each rule that colours text or a border
+    gets a rule, ":disabled" added, with grey text and a pale border. A rule of a higher rank (an object name,
+    a state) beats the general "*:disabled", so each needs its own; making them here covers every rule, one
+    added later too. A look whose greyed version is written by hand (a "...:disabled" rule for what it styles)
+    keeps that, in the same states; and its pointer states (hover, pressed, focus) get none added, so a rule
+    added for them never covers it. A sheet of bare declarations (a widget's own "color: ...") is made a rule
+    for the widget, as Qt reads it."""
+    if "{" not in css:
+        if not (re.search(_TEXT, css) or re.search(_BORDER, css)):
+            return css
+        css = "* { " + css + " }"
+    rules = _rules(css)
+    by_hand = {_look(sel) for selectors, _ in rules for sel in selectors if "disabled" in re.findall(_STATE, sel)}
+    by_hand_of = {what for what, _ in by_hand}
+    added = []
+    for selectors, body in rules:
+        text, border = re.search(_TEXT, body), re.search(_BORDER, body)
+        if not (text or border):
+            continue
+        for sel in selectors:
+            what, states = _look(sel)
+            if "disabled" in re.findall(_STATE, sel) or (what, states) in by_hand or \
+                    (states & _POINTER and what in by_hand_of):
+                continue
+            added.append(f"{sel}:disabled {{ " + (f"color: {OFF_TEXT}; " if text else "")
+                         + (f"border-color: {OFF_BORDER}; " if border else "") + "}")
+    return css + ("\n/* the greyed look of each look above (panel_widgets.with_off_look) */\n" + "\n".join(added)
+                  if added else "")
+
+
+def set_style(widget, css):
+    """The widget's own style sheet: css, with its greyed look (with_off_look). Every widget's own sheet is set
+    here, so a control that is off looks off whatever look it was given (tests/gui/test_gui_look.py checks it)."""
+    widget.setStyleSheet(with_off_look(css))
 
 
 def number(text):
@@ -38,7 +99,7 @@ class NumberEdit(QtWidgets.QLineEdit):
         super().__init__(parent)
         self.integer, self.arithmetic = integer, arithmetic
         self.set_value(value)
-        self.textChanged.connect(lambda _: self.setStyleSheet("" if self.ok() else "background: #ffd6d6;"))
+        self.textChanged.connect(lambda _: set_style(self, "" if self.ok() else "background: #ffd6d6;"))
 
     def set_value(self, value):
         self._exact = int(value) if self.integer else float(value)
@@ -156,9 +217,9 @@ class Info(QtWidgets.QToolButton):
         self.setToolTip(text)
         self.setCursor(QtCore.Qt.PointingHandCursor)
         self.setFixedSize(18, 18)
-        self.setStyleSheet("QToolButton { border: 1px solid #8a8a8a; border-radius: 9px; color: #555555; "
-                           "font: bold italic 9pt 'Georgia'; background: transparent; } "
-                           "QToolButton:hover { background: #e6eefc; }")
+        set_style(self, "QToolButton { border: 1px solid #8a8a8a; border-radius: 9px; color: #555555; "
+                        "font: bold italic 9pt 'Georgia'; background: transparent; } "
+                        "QToolButton:hover { background: #e6eefc; }")
         self.card = None
         self.clicked.connect(self.open_card)
 
@@ -226,6 +287,29 @@ class _Spread(QtCore.QObject):
         spare = max(t.viewport().width() - sum(self.fitted[c] for c in shown), 0)
         for c in shown:
             t.setColumnWidth(c, self.fitted[c] + (spare // len(spread) if c in spread else 0))
+
+
+class _Centred(QtWidgets.QStyledItemDelegate):
+    """Draws every cell's text in the middle of the cell, whatever the cell's own alignment; typed in the middle
+    too, so the text does not jump to the left while it is edited."""
+
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        option.displayAlignment = QtCore.Qt.AlignCenter
+
+    def createEditor(self, parent, option, index):
+        editor = super().createEditor(parent, option, index)
+        if isinstance(editor, QtWidgets.QLineEdit):
+            editor.setAlignment(QtCore.Qt.AlignCenter)
+        return editor
+
+
+def centre_cells(*views):
+    """Every cell and header of each table view drawn centred: one rule for the whole table, so a cell made
+    later (a new row, a pasted block) is centred too."""
+    for view in views:
+        view.setItemDelegate(_Centred(view))
+        view.horizontalHeader().setDefaultAlignment(QtCore.Qt.AlignCenter)
 
 
 def spread_columns(table, start):

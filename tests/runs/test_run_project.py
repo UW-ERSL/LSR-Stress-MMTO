@@ -17,6 +17,8 @@ import sys
 import tempfile
 
 import numpy as np
+import scipy.sparse
+import scipy.sparse.linalg
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
@@ -423,6 +425,105 @@ def test_training_stop():
         except TrainingStopped as e:
             assert e.epoch == 0
         assert not os.path.exists(os.path.join(d, "stopped.nt"))                # nothing saved
+
+
+def test_a_solve_converged_unless_it_used_up_its_iterations():
+    """CheckedDeflationSolver's verdict is DPCG's own: a solve converged unless it used up its iterations, and one
+    that used them up but landed within its tolerance on the last step converged too. Its error is kept either
+    way, a NaN one as NaN (a breakdown is never shown as exact)."""
+    import lsr_mmto.pyto_ad_imports as imports
+    from lsr_mmto.optimize.final_design_analysis import solver_check
+    from lsr_mmto.optimize.iterative_solve_check import CheckedDeflationSolver
+    K, f = scipy.sparse.identity(4, format="csr"), np.ones(4)
+    real = imports.deflation.DeflationSolver.deflatedPCG
+    cases = [("few steps, off", 5, np.zeros(4), True), ("all steps, on", 2000, np.ones(4), True),
+             ("all steps, off", 2000, np.zeros(4), False), ("broke down", 2000, np.full(4, np.nan), False)]
+    checked = CheckedDeflationSolver()
+    try:
+        for step, used, answer, _ in cases:
+            def solve(self, K, f, W, M, rtol=1e-8, maxIters=2000, verbose=False, coarse=None, used=used, x=answer):
+                self.last_iterations = used
+                return x
+            imports.deflation.DeflationSolver.deflatedPCG = solve
+            checked.step = step
+            checked.deflatedPCG(K, f, None, None)
+    finally:
+        imports.deflation.DeflationSolver.deflatedPCG = real
+    assert [ok for _, _, ok in checked.solves] == [ok for *_, ok in cases]
+    assert [r for _, r, _ in checked.solves][:3] == [1.0, 0.0, 1.0] and np.isnan(checked.solves[3][1])
+    failed = solver_check(checked, [c[0] for c in cases], ["Stress"])["final_check_not_converged"]
+    assert failed["all steps, off"] == 1.0 and np.isnan(failed["broke down"]), failed
+
+
+def test_a_solve_that_does_not_converge_is_marked():
+    """The iterative solver (DPCG, forced here by lowering the direct solver's limit) records whether each solve
+    converged: a run whose solves all converge records none that failed and its Summary says nothing of it. When
+    the final check's solves of the binarized designs stop at their limit (here: returning zero), their numbers
+    are still printed and saved, but the run record names them with their error, the log says they and the
+    results the run saves are not reliable, the Summary has a Final check row naming them, its (i) gives each
+    error, and Compare keeps the row beside a run without it. An analysis whose solve stops short has a Solver
+    row. The solve inside is replaced by an exact one, so the test checks the record, not DPCG itself."""
+    import contextlib
+    import io
+    import lsr_mmto.pyto_ad_imports as imports
+    from lsr_mmto.optimize.solid_part_analysis import analyse_solid_part
+    from lsr_mmto.problem.project import run
+    from lsr_mmto.results import compare
+    from lsr_mmto.results.load_results import load
+    from lsr_mmto.results.tables import Table, solver_details, solver_rows
+
+    def exact(self, K, f, W, M, rtol=1e-8, maxIters=2000, verbose=False, coarse=None):
+        self.last_iterations = 1
+        return scipy.sparse.linalg.spsolve(scipy.sparse.csc_matrix(K), np.asarray(f, dtype=float).ravel())
+
+    def stops_short(which):
+        def solve(self, K, f, W, M, rtol=1e-8, maxIters=2000, verbose=False, coarse=None):
+            x = exact(self, K, f, W, M, rtol, maxIters)
+            if which(self.step):                            # stopped at its limit, far from the answer
+                self.last_iterations = maxIters
+                return np.zeros_like(x)
+            return x
+        return solve
+
+    cutoff, real = imports.DIRECT_SOLVER_DOF_CUTOFF, imports.deflation.DeflationSolver.deflatedPCG
+    imports.DIRECT_SOLVER_DOF_CUTOFF = 100
+    p = Project.load(UBRACKET)
+    p.n_dof = N_DOF
+    p.settings["common"]["maxIterations"] = 2
+    out = io.StringIO()
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            imports.deflation.DeflationSolver.deflatedPCG = exact
+            fine = load(run(p, save_dir=os.path.join(d, "fine"), verbose=False))
+            imports.deflation.DeflationSolver.deflatedPCG = stops_short(lambda step: str(step).startswith("Binarized"))
+            with contextlib.redirect_stdout(out):
+                r = load(run(p, save_dir=os.path.join(d, "short"), verbose=False))
+            imports.deflation.DeflationSolver.deflatedPCG = stops_short(lambda step: True)
+            analysis = analyse_solid_part(p, 0)
+    finally:
+        imports.DIRECT_SOLVER_DOF_CUTOFF = cutoff
+        imports.deflation.DeflationSolver.deflatedPCG = real
+    assert fine.config["solver_check"] == {"iterations_not_converged": 0, "final_check_not_converged": {},
+                                           "results_from": "Binarized + snapped materials (x binarized, snapped z)"}
+    assert solver_rows(fine) == []
+    failed = r.config["solver_check"]["final_check_not_converged"]
+    assert sorted(failed) == ["Binarized + snapped materials (x binarized, snapped z)",
+                              "Binarized topology (x projected -> binarized, raw z)"], failed
+    assert all(v == 1.0 for v in failed.values()) and r.config["solver_check"]["iterations_not_converged"] == 0
+    log = out.getvalue()
+    assert "did not converge in the final check for: Binarized topology (relative residual 1)" in log
+    assert "nor are the results saved (Stress, Displacement), which are those of the last design" in log
+    assert solver_rows(r) == [["Final check", "solver did not converge for Binarized topology, Binarized + snapped "
+                                              "materials: not reliable"]]
+    assert "Binarized topology, 1" in solver_details(r)
+    assert "the Stress, Displacement the run shows, which are those of Binarized + snapped materials" in \
+        solver_details(r), solver_details(r)
+    rows = [row for t in compare.table({"fine": fine, "short": r}) if isinstance(t, Table)
+            for row in t.rows]
+    assert ["Final check", "", solver_rows(r)[0][1]] in rows, rows
+    assert analysis.config["solver_check"]["final_check_not_converged"], analysis.config["solver_check"]
+    assert solver_rows(analysis) == [["Solver", "did not converge: not reliable"]]
+
 
 if __name__ == "__main__":
     failed = 0

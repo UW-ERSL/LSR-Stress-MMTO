@@ -43,7 +43,7 @@ from . import dark_and_light_3d_view as view_mode
 
 from .formulation_panel import FormulationPanel
 from .materials_panel import MaterialsPanel
-from .panel_widgets import GREY, Info, NumberEdit, ok_cancel, with_info
+from .panel_widgets import GREY, Info, NumberEdit, ok_cancel, set_style, with_info, with_off_look
 from .settings_panel import SettingsPanel
 from .supports_and_loads_panel import (KEEP_COLOUR, LOAD_COLOUR, OTHER_COLOUR, SUPPORT_COLOUR, RegionDialog, SupportsPanel,
                                        bc_name, bc_value)
@@ -89,7 +89,7 @@ def apply_style(app):
     Windows' "?" help button, which has no help to show."""
     QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_DisableWindowContextHelpButton)
     with open(STYLE, encoding="utf-8") as f:
-        app.setStyleSheet(f.read().replace("ICONS/", ICONS.replace("\\", "/") + "/"))
+        app.setStyleSheet(with_off_look(f.read().replace("ICONS/", ICONS.replace("\\", "/") + "/")))
 
 
 def without_minus_zero(text):
@@ -515,7 +515,9 @@ class DisplayOptions(DisplayOptionsWindow):
     controls that have nothing to act on here: the geometry, field and display choices and the eigen number
     (for PyTO-AD's own analyses), the thermal, optimization-option and structural load drawings (LSR MMTO
     draws supports and loads in the Supports and loads panel), the text over the 3D view and the bounding box
-    (the part's facts and size are behind the (i) in the status bar), and the animation.
+    (the part's facts and size are behind the (i) in the status bar), the animation, and Hide Selected Part,
+    which took the red of picked faces off the view while they stayed picked, so Apply still used faces the
+    view no longer showed.
 
     The bounding box is left out for a second reason: drawn through pyvista's add_bounding_box and taken
     away by name, it left pyvista's own box behind, which pyvista drew again around an empty scene, from -1
@@ -541,6 +543,9 @@ class DisplayOptions(DisplayOptionsWindow):
         hidden += [b for b in self.findChildren(QtWidgets.QPushButton) if b.text().startswith("Animate")]
         for widget in hidden:
             self._hide_row(widget)
+        for b in self.findChildren(QtWidgets.QPushButton):          # in the column of Save Image and Close
+            if b.text() == "Hide Selected Part":
+                b.setVisible(False)
 
     def _hide_row(self, widget):
         """widget hidden, with the label on its row."""
@@ -722,7 +727,7 @@ class ProjectFolderDialog(QtWidgets.QDialog):
         layout.addLayout(form)
         row = QtWidgets.QHBoxLayout()
         self.where = QtWidgets.QLabel("")
-        self.where.setStyleSheet(GREY)
+        set_style(self.where, GREY)
         self.where.setWordWrap(True)
         row.addWidget(self.where, stretch=1)
         row.addWidget(Info(FOLDER_HELP))
@@ -814,7 +819,7 @@ class ScalePartDialog(QtWidgets.QDialog):
         form.addRow("Scale by", with_info(self.by, SCALE_HELP))
         layout.addLayout(form)
         self.will_be = QtWidgets.QLabel("")
-        self.will_be.setStyleSheet(GREY)
+        set_style(self.will_be, GREY)
         layout.addWidget(self.will_be)
         self.buttons = ok_cancel(self, layout)
         self.by.textChanged.connect(self._show_size)
@@ -1282,7 +1287,7 @@ class MMTOWindow(MainWindow):
         self.facts.setVisible(False)
         self.statusBar().addWidget(self.facts)
         self.coords = QtWidgets.QLabel("")
-        self.coords.setStyleSheet("color: #666666;")
+        set_style(self.coords, "color: #666666;")
         self.coords.setMinimumWidth(240)
         self.snap = QtWidgets.QComboBox()
         self.snap.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToContents)   # its steps follow the part

@@ -18,6 +18,8 @@ It takes from the physics only its front page's entries, as a run does:
     analyse          the solve the project's objective and constraints (QUANTITIES) read; their values
                      are printed as the final check prints its numbers
     final_summary    the final check of the design analysed, printed, and its results (RESULT_FIELDS)
+When its solves are iterative, the record keeps whether they converged ("solver_check"), as a run's does
+(iterative_solve_check.py), and the Summary says so when one did not.
 
 Saved (save_dir), it is a results folder like a run's, its record marked as an analysis ("analysis" in
 run_data.config.json; for a design, the run it analysed too). Not saved, nothing is written: the record is
@@ -205,7 +207,8 @@ def _analyse(project: "Project",
     from lsr_mmto.materials.databases import material_display
     from lsr_mmto.materials.material_source import DatabaseMaterials
     from lsr_mmto.optimize import save_results
-    from lsr_mmto.optimize.final_design_analysis import checked_results
+    from lsr_mmto.optimize.final_design_analysis import checked_results, saved_names, solver_check
+    from lsr_mmto.optimize.iterative_solve_check import CheckedDeflationSolver
     from lsr_mmto.optimize.history import compute_domain_volume
     from lsr_mmto.optimize.optimization_loop import problem_solver
     from lsr_mmto.physics.available_physics import physics_module
@@ -227,7 +230,9 @@ def _analyse(project: "Project",
     colours, labels = material_display(xlsx)
     stop_if_asked()
 
-    solver = problem_solver(physics, mesh, mat_prop, bcs, elem_body_force, to_params)
+    checked = CheckedDeflationSolver()              # keeps whether each iterative solve converged
+    checked.step = title                            # every solve of an analysis is of its one design
+    solver = problem_solver(physics, mesh, mat_prop, bcs, elem_body_force, to_params, checked)
     elem_volume = float(np.prod(solver.mesh.elem_size))
     domain_volume = compute_domain_volume(solver)
     m = _Analysed(solver, physics, materials, s, elem_volume, x)
@@ -245,6 +250,7 @@ def _analyse(project: "Project",
     results = physics.final_summary(
         [(title, x, z)], solver, materials.decode, s, materials, materials.latent_dim, elem_volume, domain_volume)
     checked_results(physics, results, m.N, int(mesh.num_nodes))
+    check = solver_check(checked, [title], saved_names(physics))
     stop_if_asked()
 
     nan = float("nan")
@@ -267,6 +273,8 @@ def _analyse(project: "Project",
         "units": project.unit_record(),
         "provenance": save_results.provenance(),
     }
+    if check is not None:
+        config["solver_check"] = check
     data = save_results.run_data(
         config=config,
         fields={"x_cont": x, "x_bin": x, "z_elem": np.zeros((m.N, 0)), "material_indices": np.asarray(rows)},

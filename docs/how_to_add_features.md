@@ -65,7 +65,7 @@ as torch from the model's state; autograd gives the gradient.
 - `reads_latent_points` (optional, `False` by default): `True` when its function reads the latent
   points (`m.z`, `m.z_real`), as `MaterialVolumeFraction` does. With one material in the design there
   are none, so the project's check refuses it and the Formulation panel greys it out.
-  `tests/code_rules/test_material_source.py` checks the flag against the function.
+  `tests/code_rules/test_material_source.py` checks the flag against the function, and the functions it calls.
 - Add it to `QUANTITIES` in `tests/gradients/test_ad_quantities.py`, which checks the gradient against
   finite differences. What else to run: both generators above (the reference page and the user
   guide list every quantity).

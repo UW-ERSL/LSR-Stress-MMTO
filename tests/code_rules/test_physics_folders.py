@@ -10,6 +10,10 @@ Every physics folder keeps the shape of the form (lsr_mmto/physics/template/):
                          on the line above it
     the front page only  no file outside a physics' folder (the core, the GUI) imports any of its files but
                          its front page
+    the final check      final_summary reads its designs only with "for ... in designs" or by an index
+                         (designs[-1]), so the run knows which design each solve is for and labels it
+                         (optimize/final_design_analysis.py): never list(designs), sorted(designs), or designs
+                         handed to another function
 
 A test for each check shows it catches what it is for.
 
@@ -88,6 +92,26 @@ def private_imports(source, name):
     return out
 
 
+def designs_misread(source, name):
+    """'name:line' for each place final_summary reads its designs (its first argument, whatever its name) other
+    than "for ... in designs" or designs[<an index>]."""
+    out = []
+    for fn in ast.walk(ast.parse(source)):
+        if not (isinstance(fn, ast.FunctionDef) and fn.name == "final_summary" and fn.args.args):
+            continue
+        designs = fn.args.args[0].arg
+        allowed = set()
+        for node in ast.walk(fn):
+            if isinstance(node, (ast.For, ast.AsyncFor)) and isinstance(node.iter, ast.Name):
+                allowed.add(id(node.iter))
+            if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name) and \
+                    not isinstance(node.slice, ast.Slice):
+                allowed.add(id(node.value))
+        out += [f"{name}:{node.lineno}" for node in ast.walk(fn) if isinstance(node, ast.Name)
+                and node.id == designs and isinstance(node.ctx, ast.Load) and id(node) not in allowed]
+    return out
+
+
 def test_every_physics_has_the_five_files():
     missing = [f"{d}/{d}_{job}.py" for d in FOLDERS for job in JOBS
                if not os.path.isfile(os.path.join(PHYSICS_DIR, d, f"{d}_{job}.py"))]
@@ -117,6 +141,12 @@ def test_outside_a_physics_only_its_front_page_is_imported():
     assert not wrong, "\n".join(wrong)
 
 
+def test_the_final_check_reads_its_designs_one_by_one():
+    wrong = [w for d in FOLDERS for w in designs_misread(
+        open(os.path.join(PHYSICS_DIR, d, f"{d}_results.py"), encoding="utf-8").read(), f"{d}_results.py")]
+    assert not wrong, "final_summary reads designs other than one by one:\n" + "\n".join(wrong)
+
+
 def test_the_checks_catch_what_they_are_for():
     assert unmarked("def f():\n    pass\n", "a.py") == ["a.py:1 f"]
     assert unmarked("# HELPER: of g\n@staticmethod\ndef f():\n    pass\n", "a.py") == []
@@ -131,6 +161,13 @@ def test_the_checks_catch_what_they_are_for():
         ["c.py:1 lsr_mmto.physics.thermal.thermal_results"]
     assert private_imports("from lsr_mmto.physics.thermal import thermal_module\n"
                            "from lsr_mmto.physics.available_physics import PHYSICS\n", "c.py") == []
+    one_by_one = "def final_summary(designs):\n    for l, x, z in designs:\n        pass\n    _, x, z = designs[-1]\n"
+    assert designs_misread(one_by_one, "r.py") == []
+    assert designs_misread("def final_summary(designs):\n    all = list(designs)\n", "r.py") == ["r.py:2"]
+    assert designs_misread("def final_summary(designs):\n    return [d for d in designs]\n", "r.py") == ["r.py:2"]
+    assert designs_misread("def final_summary(cases):\n    return sorted(cases)\n", "r.py") == ["r.py:2"]
+    assert designs_misread("def final_summary(d):\n    for i in range(3):\n        d[i]\n    d[1:]\n", "r.py") \
+        == ["r.py:4"]
 
 
 if __name__ == "__main__":
@@ -138,5 +175,6 @@ if __name__ == "__main__":
     test_the_form_lists_every_entry_and_each_physics_puts_them_where_it_does()
     test_every_function_of_a_physics_is_marked()
     test_outside_a_physics_only_its_front_page_is_imported()
+    test_the_final_check_reads_its_designs_one_by_one()
     test_the_checks_catch_what_they_are_for()
     print("ok")

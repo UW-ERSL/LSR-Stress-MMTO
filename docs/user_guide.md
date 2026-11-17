@@ -629,7 +629,7 @@ The Summary is divided into these sections:
 - **Result**: the objective, with its value and unit. Then a table of the constraints: each one's name, its **Value**, its **Limit**, how much of the limit it **Used**, and **✓ met** in green or **✗ not met** in red. A constraint counts as met when it is at most 0.1 % over its limit.
 - **Design**: the number of **Elements**, how many are **Solid** (density 0.5 or more) and what share of the elements that is, and **Grey (in between)**: how much of the design is neither solid nor empty. 0 % is a clean design.
 - **Materials**: how many of the database's materials the design **Used**, and the **Latent dimension**.
-- **Run**: the number of **Iterations**, and the **Units**.
+- **Run**: the number of **Iterations**, and the **Units**. On a large part the solve is iterative; if some of its solves did not converge, one or two more rows say so: **Solver**, for solves during the iterations, and **Final check**, naming the designs whose numbers are not reliable (section 14.5). The final check is what a run does at its end: it solves the finished design three ways, **Continuous**, **Binarized topology** and **Binarized + snapped materials**, and the **Log** tab of the Current run panel gives each one's numbers while the run is open there. For an analysis, a **Solver** row says its numbers are not reliable. Compare shows these rows too.
 
 The (i) at the top of the Summary says what each word means, and gives each constraint's exact value and limit.
 
@@ -663,7 +663,6 @@ After an export, Results shows the smooth pieces on the part, each in its materi
 - **Cut along x (%)**, **Cut along y (%)** and **Cut along z (%)**: cut away that share of the part, along x, y or z, to see inside it. 0 shows it whole. The cut works on the design too.
 - **Show the part's triangles**: the edges of the STL's triangles.
 - **See-through part**: the part drawn half transparent, to see supports, loads and selections behind it.
-- **Hide Selected Part**: takes the highlight of picked faces off the view.
 - **Save Image**: saves the 3D view as a picture (PNG or JPEG).
 
 ## 14. When something goes wrong
@@ -715,6 +714,7 @@ These appear in the messages as **Error:** lines, and under *Cannot start:* in t
 - **Not run: cancelled at the material network warning. No design was made.**: Cancel was chosen at the network warning.
 - **This run cannot be shown: ... was saved by an earlier version of LSR MMTO; run the project again to see it here**: the run is from an older version. Run the project again.
 - **The STL export failed: ...**: the export stopped with an error, given after the colon.
+- **Final check: solver did not converge for ...: not reliable**, in the Summary: on a large part the solve is iterative, and for the designs named it stopped before reaching the answer. Their numbers are still shown, but do not trust them. If **Binarized + snapped materials** is named, the results the run shows (Stress and Displacement, for a structural run) are not reliable either, since they come from it. The (i) gives each solve's error. **Solver: did not converge in N solves of the iterations** means the same for solves during the optimization: the design it reached may not be the best one. **Solver: did not converge: not reliable**, for an analysis, means none of its numbers can be trusted.
 
 ### 14.6 Opening and saving
 

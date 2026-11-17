@@ -272,6 +272,16 @@ def test_project_script_says_where_each_block_is_explained():
         assert lines[i + 2].startswith(("p.", "p = ", "# settings that differ")), lines[i + 2]
 
 
+def test_project_script_names_its_physics_and_material_source():
+    """A project script always says which physics and which material source the project has, the usual ones too
+    (a structural project of several materials), so the script alone tells what problem it is."""
+    p = Project.load(os.path.join(ROOT, "projects", "U-bracket.mmto"))
+    with tempfile.TemporaryDirectory() as d:
+        p.save(os.path.join(d, "u.mmto"))
+        text = open(p.save_as_script(os.path.join(d, "u_setup.py"))).read()
+    assert "p.physics = 'structural'" in text and "p.material_source = 'network'" in text
+
+
 def test_window_picks_become_the_project():
     """Supports and loads picked on the part in the window (faces, a clicked node, a box) become
     selections and boundary conditions with the picking tools' own rules: the same fixed dofs and

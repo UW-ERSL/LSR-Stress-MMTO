@@ -211,6 +211,7 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad_imp
 | `filters.py` | the density and material filters |
 | `history.py` | the information recorded and printed at every iteration |
 | `final_design_analysis.py` | the final design analysed three ways, and the run saved |
+| `iterative_solve_check.py` | the iterative solver, keeping each solve's residual so a run records the solves that did not converge |
 | `solid_part_analysis.py` | Analyse: the entire part treated as solid in one material, solved once without optimizing |
 | `save_results.py` | saves a finished run to disk |
 | `gradient_check.py` | the autodiff gradient against central finite differences |

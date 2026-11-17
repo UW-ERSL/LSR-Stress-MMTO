@@ -16,7 +16,7 @@ import os
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-from .panel_widgets import GREY, Info, fit_columns, ok_cancel
+from .panel_widgets import GREY, Info, centre_cells, fit_columns, ok_cancel, set_style
 
 # the properties a new database starts with when no project is open (with one, Project.starting_properties);
 # Add property offers every property of the registry (databases.ATTRIBUTES)
@@ -86,7 +86,7 @@ class FrozenFirstColumn(QtWidgets.QTableView):
         for bar in (self.setHorizontalScrollBarPolicy, self.setVerticalScrollBarPolicy):
             bar(QtCore.Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollMode(table.verticalScrollMode())
-        self.setStyleSheet("QTableView#frozenColumn { border: none; }")
+        set_style(self, "QTableView#frozenColumn { border: none; }")
         table.viewport().stackUnder(self)
         table.verticalScrollBar().valueChanged.connect(self.verticalScrollBar().setValue)
         self.verticalScrollBar().valueChanged.connect(table.verticalScrollBar().setValue)
@@ -133,6 +133,7 @@ class _Table(QtWidgets.QTableWidget):
     def __init__(self):
         super().__init__()
         self.frozen = FrozenFirstColumn(self)
+        centre_cells(self, self.frozen)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -216,7 +217,7 @@ class AddPropertiesDialog(QtWidgets.QDialog):
         self.tree.expandAll()
         self.tree.itemChanged.connect(lambda *_: self._count())
         note = QtWidgets.QLabel("Properties already in the table are ticked. Tick the ones to add.")
-        note.setStyleSheet(GREY)
+        set_style(note, GREY)
         note.setWordWrap(True)
         layout.addWidget(note)
         self.in_table = set(in_table)
@@ -290,13 +291,13 @@ class DatabaseEditor(QtWidgets.QDialog):
         self.name = QtWidgets.QLineEdit()
         top.addWidget(self.name, stretch=1)
         self.where = QtWidgets.QLabel()
-        self.where.setStyleSheet(GREY)
+        set_style(self.where, GREY)
         top.addWidget(self.where, stretch=2)
         top.addWidget(Info(HELP))
         layout.addLayout(top)
         self.left_out_note = QtWidgets.QLabel()                     # columns of the file it does not know
         self.left_out_note.setWordWrap(True)
-        self.left_out_note.setStyleSheet(GREY)
+        set_style(self.left_out_note, GREY)
         self.left_out_note.setVisible(False)
         layout.addWidget(self.left_out_note)
 
@@ -322,7 +323,7 @@ class DatabaseEditor(QtWidgets.QDialog):
         layout.addLayout(rows)
         self.problems_text = QtWidgets.QLabel()
         self.problems_text.setWordWrap(True)
-        self.problems_text.setStyleSheet("color: #b00000;")
+        set_style(self.problems_text, "color: #b00000;")
         layout.addWidget(self.problems_text)
         self.buttons = ok_cancel(self, layout)
         self.save_button = self.buttons.button(QtWidgets.QDialogButtonBox.Ok)
@@ -481,13 +482,13 @@ class DatabaseEditor(QtWidgets.QDialog):
         """Row 0's cell of a property: its unit's drop-down, slim, with an even margin on the headers' colour;
         "no unit" in grey for a property without units."""
         holder = QtWidgets.QWidget()
-        holder.setStyleSheet(f"background: {HEADER_SHADE};")
+        set_style(holder, f"background: {HEADER_SHADE};")
         box = QtWidgets.QHBoxLayout(holder)
         box.setContentsMargins(3 * UNIT_MARGIN, UNIT_MARGIN, 3 * UNIT_MARGIN, UNIT_MARGIN)
         if a.measures == "ratio":
             label = QtWidgets.QLabel(NO_UNIT)
             label.setAlignment(QtCore.Qt.AlignCenter)
-            label.setStyleSheet("color: #6b7280;")
+            set_style(label, "color: #6b7280;")
             box.addWidget(label)
             return holder
         combo = CentredCombo()
@@ -495,7 +496,7 @@ class DatabaseEditor(QtWidgets.QDialog):
         if combo.findText(unit) < 0:
             combo.addItem(unit)
         combo.setCurrentText(unit)
-        combo.setStyleSheet("QComboBox { background: #ffffff; padding: 0px 6px; min-height: 0px; }")
+        set_style(combo, "QComboBox { background: #ffffff; padding: 0px 6px; min-height: 0px; }")
         combo.setFixedHeight(self.table.verticalHeader().defaultSectionSize() - 2 * UNIT_MARGIN)
         combo.currentTextChanged.connect(lambda _: self.check())
         box.addWidget(combo)

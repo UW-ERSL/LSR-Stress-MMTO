@@ -20,7 +20,7 @@ import os
 import numpy as np
 from PyQt5 import QtCore, QtWidgets
 
-from .panel_widgets import GREY, Info, NumberEdit, plain_value
+from .panel_widgets import GREY, Info, NumberEdit, plain_value, set_style
 
 SUPPORT_COLOUR, LOAD_COLOUR, KEEP_COLOUR, OTHER_COLOUR = "#1f5fd6", "#d62020", "#808080", "#e08a00"
 
@@ -363,7 +363,7 @@ class RegionDialog(QtWidgets.QDialog):
         self.main = main
         self.on_click = None                                        # a click on the part it waits for
         self.extent = QtWidgets.QLabel("")
-        self.extent.setStyleSheet(GREY)
+        set_style(self.extent, GREY)
         self.show_extent()
         form_layout.addWidget(self.extent)
         self.form = QtWidgets.QFormLayout()
@@ -377,7 +377,7 @@ class RegionDialog(QtWidgets.QDialog):
         code_layout.addWidget(self.code)
         hint = QtWidgets.QLabel("For example rows(face=\"xmax\", axis=\"y\", n=8, end=\"max\"), or selections "
                                 "combined: union(face(\"xmin\"), box(lo=[0, 0, 0], hi=[2, 10, 1]))")
-        hint.setStyleSheet(GREY)
+        set_style(hint, GREY)
         hint.setWordWrap(True)
         code_layout.addWidget(hint)
         code_layout.addStretch()
@@ -464,7 +464,7 @@ class RegionDialog(QtWidgets.QDialog):
                         row_layout.addWidget(b)
                     if self.length_unit:
                         unit = QtWidgets.QLabel(self.length_unit)
-                        unit.setStyleSheet(GREY)
+                        set_style(unit, GREY)
                         row_layout.addWidget(unit)
                     self.form.addRow(f"{a} from / to", row)
                     box[a] = (pair, row)
@@ -602,7 +602,7 @@ class RegionDialog(QtWidgets.QDialog):
         row.addWidget(widget, stretch=1)
         if unit:
             label = QtWidgets.QLabel(unit)
-            label.setStyleSheet(GREY)
+            set_style(label, GREY)
             row.addWidget(label)
         if info:
             row.addWidget(Info(info))
@@ -937,7 +937,7 @@ class BCDialog(QtWidgets.QDialog):
                 row.addWidget(widget)
             if unit:
                 u = QtWidgets.QLabel(unit)
-                u.setStyleSheet(GREY)
+                set_style(u, GREY)
                 row.addWidget(u)
             label = QtWidgets.QLabel(v.label)
             self.form.addRow(label, row)
@@ -1100,7 +1100,7 @@ class SupportsPanel(QtWidgets.QDialog):
         self.bcs.itemSelectionChanged.connect(self.show_selected_bc)
         self.bcs.setMinimumHeight(120)
         self.empty = QtWidgets.QLabel("Nothing yet. Use Add to put a support or load on the part.")
-        self.empty.setStyleSheet(GREY)
+        set_style(self.empty, GREY)
         self.empty.setWordWrap(True)
         self.empty.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Maximum)
         layout.addWidget(self.empty)
@@ -1113,7 +1113,7 @@ class SupportsPanel(QtWidgets.QDialog):
         self.places_header.setCheckable(True)
         self.places_header.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
         self.places_header.setArrowType(QtCore.Qt.RightArrow)
-        self.places_header.setStyleSheet("QToolButton { border: none; font-weight: bold; }")
+        set_style(self.places_header, "QToolButton { border: none; font-weight: bold; }")
         places = QtWidgets.QWidget()
         places_layout = QtWidgets.QVBoxLayout(places)
         places_layout.setContentsMargins(0, 0, 0, 0)
@@ -1161,9 +1161,9 @@ class SupportsPanel(QtWidgets.QDialog):
         box = QtWidgets.QVBoxLayout(page)
         title = QtWidgets.QLabel(f"<b>{dialog.windowTitle()}</b>")
         page.mouse = QtWidgets.QLabel(MOUSE_HINT)                   # the point under the mouse, while here
-        page.mouse.setStyleSheet(GREY)
+        set_style(page.mouse, GREY)
         page.copied = QtWidgets.QLabel("")                          # a point copied by a click, for a while
-        page.copied.setStyleSheet("color: #1a7f37;")
+        set_style(page.copied, "color: #1a7f37;")
         dialog.setWindowFlags(QtCore.Qt.Widget)
         for widget in (title, dialog, page.mouse, page.copied):
             box.addWidget(widget)

@@ -47,7 +47,6 @@ import sys
 
 from lsr_mmto.materials.databases import in_shipped_folder, material_display
 from lsr_mmto.pyto_ad_imports import (
-    deflation,
     linear_solvers,
     hex_structural_fea,
     hex_element_stiffness,
@@ -89,6 +88,7 @@ if TYPE_CHECKING:
     from lsr_mmto.design.latent_penalties import Penalty
     from lsr_mmto.materials.databases import VAEParams
     from lsr_mmto.materials.material_source import MaterialSource
+    from lsr_mmto.optimize.iterative_solve_check import CheckedDeflationSolver
     from lsr_mmto.optimize.mmto_to_params import MMTOParams
     from lsr_mmto.problem.project import Project
     from lsr_mmto.problem.settings import RunSettings
@@ -172,6 +172,7 @@ class RunState:
     to_params: "MMTOParams"
     vae_params: "VAEParams"
     solver: Any                                   # the physics' solver, whatever its make_solver returns
+    checked: "CheckedDeflationSolver"             # its deflation solver: whether each iterative solve converged
     encoder: "MaterialSource"                     # the run's material source (materials/material_source.py)
     network_errors: dict[str, float]              # {attribute: % of its range}
     database_record: dict[str, Any]               # network_stamp.database_stamp: the database as the run read it
@@ -245,7 +246,8 @@ def _run_topopt(*, s: "RunSettings", project: "Project", save_dir: str, verbose:
 
 
 def problem_solver(physics: "ModuleType", mesh: "HexMesher", mat_prop: "Material", bcs: "dict[str, BC]",
-                   elem_body_force: np.ndarray | None, to_params: "MMTOParams") -> Any:
+                   elem_body_force: np.ndarray | None, to_params: "MMTOParams",
+                   dsolver: "CheckedDeflationSolver | None" = None) -> Any:
     """The physics' solver of the problem (its make_solver), with the linear solver chosen by size.
 
     Direct (PARDISO) for small problems; iterative (DPCG + deflation) beyond the DOF cutoff, for a
@@ -253,11 +255,15 @@ def problem_solver(physics: "ModuleType", mesh: "HexMesher", mat_prop: "Material
     direct solver at every size. Mirrors topopt_mma.py so the MMTO driver uses the same tested
     iterative path as single-material. The adjoint solve in PyTO-AD's differentiable solve reuses
     fe_solver.solver and fe_solver.dsolver, so it follows this choice automatically. elem_body_force: one
-    per element, or None (Project.build always gives None). Prints the solver chosen."""
+    per element, or None (Project.build always gives None). dsolver: the deflation solver, which keeps whether
+    each solve converged (iterative_solve_check.py); the caller makes it and keeps it, to read those solves
+    whatever the physics' solver keeps (a new one when not given). Prints the solver chosen."""
+    from lsr_mmto.optimize.iterative_solve_check import CheckedDeflationSolver
     from lsr_mmto.pyto_ad_imports import DIRECT_SOLVER_DOF_CUTOFF    # dof limit for the direct solver; above it, DPCG
 
     linear_solver = linear_solvers.Solvers.PARDISO
-    dsolver = deflation.DeflationSolver()
+    if dsolver is None:
+        dsolver = CheckedDeflationSolver()
     if to_params.nDOFDesired > DIRECT_SOLVER_DOF_CUTOFF and physics.deflation_space is not None:
         linear_solver = linear_solvers.Solvers.DPCG
         physics.deflation_space(dsolver, mesh)
@@ -394,7 +400,9 @@ def setup(*, s: "RunSettings", project: "Project", save_dir: str, verbose: bool,
         database_stamp(to_params.MaterialsExcelFile)        # every cell, as the network read them, for the record
     zRealPoints_np = zRealPoints.detach().cpu().numpy().astype(float)
 
-    solver = problem_solver(physics, mesh, mat_prop, bcs, elem_body_force, to_params)
+    from lsr_mmto.optimize.iterative_solve_check import CheckedDeflationSolver
+    checked = CheckedDeflationSolver()                # keeps whether each iterative solve converged
+    solver = problem_solver(physics, mesh, mat_prop, bcs, elem_body_force, to_params, checked)
 
     num_dof = solver.bc.num_dofs
     print(f"Number of DOF: {num_dof}")
@@ -488,7 +496,7 @@ def setup(*, s: "RunSettings", project: "Project", save_dir: str, verbose: bool,
         plotter=plotter, progress=progress, should_stop=should_stop,
         args_at_start=_args_at_start, provenance=_provenance, save_net=saveNet,
         # what it built
-        physics=physics, mesh=mesh, bcs=bcs, to_params=to_params, vae_params=vae_params, solver=solver,
+        physics=physics, mesh=mesh, bcs=bcs, to_params=to_params, vae_params=vae_params, solver=solver, checked=checked,
         encoder=matEncoder, network_errors=network_errors, database_record=database_record, model=ad_model, history=history,
         material_colors=material_colors, material_labels=material_labels,
         z_real=zRealPoints, num_elems=num_elems, latent_dim=latentDim, num_design_var=num_design_var,
@@ -772,6 +780,7 @@ def optimize(state: RunState) -> None:
         history=history,
         zetaOptimal=zetaOptimal,
         fe_solver=state.solver,
+        checked=state.checked,
         matEncoder=matEncoder,
         mat_lib=mat_lib,
         MaterialModel=MaterialModel,
