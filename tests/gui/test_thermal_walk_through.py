@@ -176,6 +176,90 @@ def test_a_thermal_project_through_the_window(monkeypatch):
         shutil.rmtree(d, ignore_errors=True)
 
 
+
+def test_temperatures_and_heat_are_picked_on_the_part():
+    """Click on the part, on a thermal project, opens the Pick window of temperatures and heat: Type offers
+    what thermal's kinds take (Temperature, Total Heat; not Heat Flux, which no kind takes), each value in the
+    project's units. A click on the part selects its face, a right click clears it, and Apply adds the pick to
+    the project at once, saying so in the project's units and leaving no label behind. A thermoelastic project
+    offers both picking windows, one line each, each opening its own; a project switch or a change of units
+    closes them."""
+    from types import SimpleNamespace
+    from gui import main_window as G
+    d = tempfile.mkdtemp(prefix="_test_thermal_", dir=ROOT)
+    try:
+        p = _held_and_heated("Picked bracket")
+        p.units = "mmKS"
+        path = os.path.join(d, "T", "Picked bracket.mmto")
+        p.save(path)
+        w = G.MMTOWindow()
+        w.show()
+        assert w.open_project(path)
+        panel = w.open_supports_and_loads_panel()
+        menu = [b for b in panel.findChildren(QtWidgets.QPushButton) if b.text() == "Add"][0].menu()
+        panel.fill_add_menu(menu)
+        assert [a.text() for a in menu.actions()] == ["Click on the part...", "Enter by hand..."]
+        assert w.pick_windows() == [G.ThermalPickWindow]
+        panel.pick()
+        pick = w.thermal_loads_window
+        assert isinstance(pick, G.ThermalPickWindow) and pick.windowTitle() == "Pick"
+        assert w.picking_window() is pick
+        assert [pick.thermal_type.itemText(i) for i in range(pick.thermal_type.count())] == ["Temperature",
+                                                                                           "Total Heat"]
+        labels = [label.text() for label in pick.findChildren(QtWidgets.QLabel)]
+        assert "Temperature (K)" in labels and "Total Heat (mW)" in labels, labels
+
+        def click(cell):                                                    # as the mouse on the part does
+            w.on_left_button_press(None, SimpleNamespace(GetCellId=lambda: cell, GetActor=lambda: w.part_actor()))
+
+        def selected():
+            return sum(bool(t) for t in w.stl_geom.tri_highlight)
+
+        click(10)
+        assert selected() > 0
+        w.on_right_button_press(None, None)                                 # a right click clears it
+        assert selected() == 0
+        before = len(w.project.bcs)
+        for kind, value, spin in (("Temperature", 310.0, "temp_value_spin"), ("Total Heat", 4.0,
+                                                                              "total_heat_value_spin")):
+            if not in_open_strip(w, "thermal_loads_window"):
+                panel.pick()
+            pick = w.thermal_loads_window
+            click(10)
+            pick.thermal_type.setCurrentText(kind)
+            getattr(pick, spin).setValue(value)
+            pick.on_apply_clicked()
+            for _ in range(5):
+                APP.processEvents()
+        assert [(bc["kind"], bc.get("value", bc.get("total"))) for bc in w.project.bcs[before:]] == \
+            [("fixed_temperature", 310.0), ("heat_source", 4.0)], w.project.bcs[before:]
+        text = w.message_text.toPlainText()
+        assert "(4 mW)" in text and " W to " not in text, text[-300:]
+        assert not [n for n in w.plotter.actors if "_text_" in str(n)]       # no label left behind as a dot
+
+        w.project.physics = "thermoelastic"                                   # both windows, one line each
+        panel.fill_add_menu(menu)
+        sub = menu.actions()[0].menu()
+        assert menu.actions()[0].text() == "Click on the part" and sub is not None
+        assert [a.text() for a in sub.actions()] == ["Supports and forces...", "Temperatures and heat..."]
+        for action, attr in zip(sub.actions(), ("structural_loads_window", "thermal_loads_window")):
+            action.trigger()
+            assert in_open_strip(w, attr), attr
+        w.close_picking_windows()
+        panel.pick()
+        assert w.save_project()                                               # so the switch asks nothing
+        w.open_project(path)                                                  # a project switch closes it
+        assert not in_open_strip(w, "thermal_loads_window")
+        w.close()
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def in_open_strip(w, attr):
+    """Whether the window keeps an open picking window under attr."""
+    from gui.main_window import in_open_strip as open_
+    return open_(getattr(w, attr, None))
+
 if __name__ == "__main__":
     import pytest
     sys.exit(pytest.main([__file__, "-q"]))

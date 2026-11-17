@@ -50,12 +50,14 @@ SUPPORT_AND_LOAD_KINDS = {
         field="T", role="support", apply=_apply_fixed_temperature, shown="Fixed temperature",
         help="Holds the selection at a set temperature.",
         values=[dict(name="value", kind="number", measures="temperature", label="Temperature",
-                     doc="the temperature held")]),
+                     doc="the temperature held")],
+        picks={"fixed_temperature": lambda e: {"value": float(e["temperature"])}}),   # the window's Temperature
     "heat_source": dict(
         field="T", role="load", apply=_apply_heat_source, check=_check_total, shown="Heat source",
         help="Puts heat into the selection, shared equally by its nodes.",
         values=[dict(name="total", kind="number", measures="heat", label="Total heat",
-                     doc="the heat put in, split equally over the nodes")]),
+                     doc="the heat put in, split equally over the nodes")],
+        picks={"total_heat": lambda e: {"total": float(e["total_heat"])}}),          # the window's Total heat
 }
 
 

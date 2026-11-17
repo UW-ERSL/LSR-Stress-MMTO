@@ -1072,8 +1072,9 @@ class SupportsPanel(QtWidgets.QDialog):
         top = QtWidgets.QHBoxLayout()
         add = QtWidgets.QPushButton("Add")
         menu = QtWidgets.QMenu(add)                                 # both ways, at the moment of adding
-        menu.addAction("Click on the part...", self.pick)
-        menu.addAction("Enter by hand...", self.add_bc)
+        menu.setToolTipsVisible(True)
+        menu.aboutToShow.connect(lambda: self.fill_add_menu(menu))
+        self.fill_add_menu(menu)
         add.setMenu(menu)
         top.addWidget(add)
         for text, slot, tip in (("Preview", self.preview, "Show every support and load on the part"),
@@ -1355,9 +1356,34 @@ class SupportsPanel(QtWidgets.QDialog):
             self.after_change()
 
     # ------------------------------------------------------------------ picking and preview
+    def fill_add_menu(self, menu):
+        """Add's choices, made again each time it opens: Click on the part opens the picking window that makes
+        what the project's physics takes (MMTOWindow.pick_windows), one line per window when there are several;
+        greyed, saying why, when there is none. Enter by hand always."""
+        for action in menu.actions():                               # the last open's submenu, gone for good
+            if action.menu() is not None:
+                action.menu().deleteLater()
+        menu.clear()
+        windows = self.window.pick_windows() if self.window.project is not None else []
+        if len(windows) == 1:
+            menu.addAction("Click on the part...", self.pick)
+        elif windows:
+            choose = menu.addMenu("Click on the part")
+            for cls in windows:
+                choose.addAction(f"{cls.LABEL}...", lambda c=cls: self.window.open_pick_window(c))
+        else:
+            off = menu.addAction("Click on the part...")
+            off.setEnabled(False)
+            off.setToolTip("Nothing this project's supports and loads hold or put in can be picked on the part. "
+                           "Use Enter by hand.")
+        menu.addAction("Enter by hand...", self.add_bc)
+
     def pick(self):
-        """The Pick window, in place of this list until its Apply adds the pick to the project."""
-        self.window.open_structural_loads_window()
+        """The first picking window the project's physics can use (MMTOWindow.pick_windows), in place of this
+        list until its Apply adds the pick to the project."""
+        windows = self.window.pick_windows()
+        if windows:
+            self.window.open_pick_window(windows[0])
 
     def show_selected_bc(self):
         """Only the support or load clicked, on the part."""

@@ -11,17 +11,19 @@ the GUI.
     STLGeom            an STL read in: its triangles, normals, areas and neighbours
     MATERIAL_COLOR     the colour a part is drawn in
     StructuralLoadsWindow   picking supports and loads with the mouse
+    ThermalLoadsWindow      picking temperatures and heat with the mouse
     DisplayOptionsWindow    cuts through the part, its triangles, bounding box and see-through view
     StructuralTopOptWindow  running an optimization: its worker thread, signals, live plot and log
     FILE_DIALOG_OPTIONS
 
 Also used, as MainWindow's own methods: update_LivVar (told when a pick is applied) and
-_raise_if_open; and the Structural Loads window's redraw_loads and refresh_applied_list.
+_raise_if_open; the Structural Loads window's redraw_loads and refresh_applied_list; and the Thermal
+Loads window's thermal_loads and redraw_thermal_loads.
 """
 import lsr_mmto.pyto_ad_imports  # noqa: F401  # puts PyTO-AD on sys.path
 from pyto.gui.PyTOGUI import (FILE_DIALOG_OPTIONS, MATERIAL_COLOR, DisplayOptionsWindow,  # noqa: F401
                               MainWindow, ProjectsWindow, StructuralLoadsWindow, StructuralTopOptWindow,
-                              UnitsWindow)
+                              ThermalLoadsWindow, UnitsWindow)
 from pyto.io.stl_reader import STLGeom  # noqa: F401  # type: ignore
 
 UNIT_SYSTEMS = ("MKS", "mmKS", "IPS")          # the choices of UnitsWindow

@@ -1,6 +1,6 @@
 # Testing the codebase
 
-Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 361 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
+Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 363 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
 
 Run them all from the repository folder with `python -m pytest tests -q -n 4` (`-n 2` on a computer with less than 16 GB of memory), one folder with `python -m pytest tests/<folder> -q`, or one file with `python -m pytest tests/<folder>/<file> -q`.
 
@@ -489,6 +489,12 @@ The record a trained network keeps of its database (materials/network_stamp.py) 
 - `test_the_editor_keeps_every_digit_and_sets_the_network_aside_after_a_rename`: A value with 16 significant digits shows and saves as it is: a label changed keeps the network (the next run asks once). A material renamed sets the network aside, as a number changed does.
 - `test_open_in_excel_leaves_an_included_database_alone`: Nothing is opened; the report says to make a copy with Edit... first.
 
+### `tests/gui/test_new_physics_in_the_gui.py`
+
+A new physics needs no GUI code: a made-up one (one field, phi; one property; one kind of support; one objective; one setting; one result), registered as its line in available_physics.MODULES would register it, shows in each panel that shows a physics' pieces, opened on a project of it: its kinds in Supports and loads, its objective in Formulation, its setting in Settings, its property among a new database's columns, its result in the Results (i); Materials, which shows nothing of a physics, opens on it. It has nothing to pick on the part, so Click on the part is greyed, saying why. Nothing of it is written in gui/: what the panels show comes from its entries alone.
+
+- `test_a_new_physics_shows_in_every_panel_with_no_gui_code`: A new physics shows in every panel with no gui code.
+
 ### `tests/gui/test_single_material_gui.py`
 
 The window with one material in the design, off-screen. Materials: Single material or Multi material, the database that fits each (a misfit is an error in the report), Fix every element to with multi material, and OK handing back exactly what was chosen. Settings: every setting of the latent points greyed out with one material, the VAE settings too with single material, their values kept. Formulation: Material volume fraction greyed out, with the reason beside a row that has it. The database editor saves a database of one material. A run of one material: no Latent space tab, None for its latent dimension, and Compare says why it has no latent space to compare.
@@ -506,6 +512,7 @@ The window with one material in the design, off-screen. Materials: Single materi
 A thermal project, the physics the window has never shown, taken through the window the way a user would: saved and opened again, Run, its Results views and Summary, Analyse, Analyse this design, Compare, Export STL, and a new database in the editor. A physics that is not structural must go through every step with nothing of structural's showing: no stress, no failure factor, no force or stress units. A run and an analysis whose solver did not converge say so in red under Current run (the lines themselves stood in for here). About ten seconds.
 
 - `test_a_thermal_project_through_the_window`: A thermal project through the window.
+- `test_temperatures_and_heat_are_picked_on_the_part`: Click on the part, on a thermal project, opens the Pick window of temperatures and heat: Type offers what thermal's kinds take (Temperature, Total Heat; not Heat Flux, which no kind takes), each value in the project's units. A click on the part selects its face, a right click clears it, and Apply adds the pick to the project at once, saying so in the project's units and leaving no label behind. A thermoelastic project offers both picking windows, one line each, each opening its own; a project switch or a change of units closes them.
 
 ### `tests/gui/gui_soak.py` (a script, not collected by pytest)
 

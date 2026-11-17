@@ -137,22 +137,26 @@ def upgrade(m: dict[str, Any], name: str = "project") -> dict[str, Any]:
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))     # the repository folder
 
 
-def _supports_and_loads(picks: dict[str, list[dict[str, Any]]]) -> tuple[list[tuple], list[tuple]]:
-    """Supports and loads as (kind, values, triangles, points, regions), from the window's
-    constraint_data (supports) and force_data (loads) lists, each made a kind of BC_KINDS by the
-    kind's picks."""
-    found = {}
-    for role, key in (("load", "force_data"), ("support", "constraint_data")):
-        found[role] = []
+def _supports_and_loads(picks: dict[str, list[dict[str, Any]]],
+                        fields: "dict[str, int] | None" = None) -> tuple[list[tuple], list[tuple]]:
+    """Supports and loads as (kind, values, triangles, points, regions), from the picking windows' lists:
+    constraint_data (supports) and force_data (loads) of the structural one, and picked (either, the kind
+    saying which) of the others, each entry made a kind of BC_KINDS by the kind's picks (its "type"), among
+    the kinds acting on fields (the project's physics' FIELDS; None: every kind)."""
+    found = {"support": [], "load": []}
+    for role, key in (("load", "force_data"), ("support", "constraint_data"), (None, "picked")):
         for entry in picks.get(key, []):
             t = entry.get("type")
-            kinds = [(name, k.picks[t]) for name, k in BC_KINDS.items() if k.role == role and t in k.picks]
+            kinds = [(name, k) for name, k in BC_KINDS.items() if (role is None or k.role == role) and t in k.picks
+                     and (fields is None or k.field in fields)]
             if not kinds:
-                known = [p for k in BC_KINDS.values() if k.role == role for p in k.picks if p is not None]
-                raise NotImplementedError(f"{role} type {t!r} is not supported; use one of {', '.join(known)}")
-            name, values = kinds[0]
-            found[role].append((name, values(entry), entry.get("triangles") or [], entry.get("points") or [],
-                                entry.get("regions") or []))
+                known = [p for k in BC_KINDS.values() if role is None or k.role == role for p in k.picks
+                         if p is not None]
+                raise NotImplementedError(f"{role or 'picked'} type {t!r} is not supported; use one of "
+                                          f"{', '.join(known)}")
+            name, kind = kinds[0]
+            found[kind.role].append((name, kind.picks[t](entry), entry.get("triangles") or [],
+                                     entry.get("points") or [], entry.get("regions") or []))
     return found["support"], found["load"]
 
 
@@ -257,7 +261,8 @@ class Project:
         lists) as selections and boundary conditions of this project, with the picking tools' own
         rules: faces as stl_faces (tol 0.8), a clicked node as its nearest boundary node, a dragged
         box as halfspaces. Returns the names of the new selections."""
-        supports, loads = _supports_and_loads(gui)
+        fields = PHYSICS[self.physics].FIELDS if self.physics in PHYSICS else None
+        supports, loads = _supports_and_loads(gui, fields)
         if not supports and not loads:
             return []
 

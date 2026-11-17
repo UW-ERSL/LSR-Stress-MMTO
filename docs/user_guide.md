@@ -293,7 +293,7 @@ Your changes are applied to the project immediately. Use File > Save to keep the
 
 Click **Add** and choose one of:
 
-- **Click on the part...** opens the **Pick** window. You click faces on the part, choose what they are, and press **Apply**. This is the quickest way for a face you can see.
+- **Click on the part...** opens the **Pick** window. You click faces on the part, choose what they are, and press **Apply**. This is the quickest way for a face you can see. A project with both supports and forces and temperatures and heat (thermoelastic) has one line for each. When nothing of the project's physics can be picked, it is greyed, and resting the mouse on it says why.
 - **Enter by hand...** opens a form. You choose the **Type**, choose the selection under **Where** (or make one there with **New selection...**), and fill in the values. **Preview**, or Enter, checks the values and shows the selection on the part (with an arrow for a load), and the form stays open; **OK** keeps it. Use this when a face is hard to click, when you need exact numbers, or when the place is not a face at all (a hole, a patch, a point).
 
 Both methods add a support or load to the same list. You can edit either one later by double-clicking it.
@@ -307,7 +307,9 @@ Click **Add**, then **Click on the part...**. The Pick window opens beside the p
    - **Triangle**: only the single triangle you click. The edges of the triangles show, so you can see them. Use it for a small area.
    - **Node**: the point of the part nearest to your click. Click again for each node you want.
 2. Click the part. Each click adds to what is selected; clicking a selected face again takes it off. **Clear picks**, or a right click on the part, clears everything selected so far.
-3. Under **Type**, choose **Fixed XYZ**, **Fixed X**, **Fixed Y** or **Fixed Z** for a support, or **Force** for a load. For a force, give its X, Y and Z under **Force Components**: this is the total force on everything you selected.
+3. Under **Type**, choose what it is. Type offers only what the project's physics takes:
+   - supports and forces: **Fixed XYZ**, **Fixed X**, **Fixed Y** or **Fixed Z** for a support, or **Force** for a load. For a force, give its X, Y and Z under **Force Components**: this is the total force on everything you selected.
+   - temperatures and heat (Facet and Triangle only): **Temperature** holds the faces at a temperature (a Fixed temperature), and **Total Heat** puts heat in, shared by everything you selected (a Heat source). Each value is in the project's units.
 4. Press **Apply**.
 
 The pick becomes a support or load in the list, on a new selection named gui_support1, gui_load1 and so on. Rename the selection under Selections if you like.

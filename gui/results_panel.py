@@ -27,12 +27,20 @@ from .run_panel import ask_delete_run, open_folder, plot_canvas, result_tabs, su
 
 RESULTS_HELP = ("Each run of the project is listed here, newest first. Click one to see its design on the part "
                 "and its convergence, latent space and summary in the tabs.\n\nShow chooses what the part shows: "
-                "each element's material, its density, its stress, how far it moves (Displacement), only which "
-                "elements are solid, or the smooth STL files Export STL wrote for the run.\n\n"
+                "each element's material, its density, {results}only which elements are solid, or the smooth STL "
+                "files Export STL wrote for the run.\n\n"
                 "Tick two runs and press Compare to see them side by side. Open other results... shows a run "
                 "from anywhere, another project's too; it changes nothing in your project.\n\n"
                 "An analysis (Analyse, at the top) is listed as Analysis: and its material. One not saved is "
                 "listed first until the next analysis, and is gone once Results or the project is closed.")
+def results_help(project):
+    """RESULTS_HELP with the results the project's physics saves (its RESULT_FIELDS' views) in it."""
+    from lsr_mmto.physics.available_physics import PHYSICS
+    physics = PHYSICS.get(getattr(project, "physics", None))
+    views = list(dict.fromkeys(f["view"] for f in physics.RESULT_FIELDS.values())) if physics is not None else []
+    return RESULTS_HELP.format(results=f"each result the run saved ({', '.join(views)}), " if views else "")
+
+
 OTHER = "Other: "
 STL_HELP = ("Export STL, at the top, writes the design shown as two kinds of smooth STL into the run's folder.\n\n"
             "design.stl is the whole part, for printing in one material. Faces the optimization did not touch keep "
@@ -45,10 +53,11 @@ STL_HELP = ("Export STL, at the top, writes the design shown as two kinds of smo
             "volume compares with the design.\n\n"
             "Show > Smooth (exported) draws the files of a run that has been exported, each piece in its "
             "material's colour. Pull the material pieces apart sets them side by side, so each can be seen alone.")
-VECTOR_HELP = ("magnitude shows the size at each point, for Displacement how far it moves. x, y and z show the "
-               "part along each axis, which can be below zero. These values belong to the corners of the elements, "
-               "so the colours blend smoothly over the faces.\n\n"
-               "Deformed shape draws the part moved by its displacement times Scale. The first Scale makes the "
+VECTOR_HELP = ("magnitude shows the size at each point, and x, y and z the part along each axis, which can be "
+               "below zero. These values belong to the corners of the elements, so the colours blend smoothly over "
+               "the faces.\n\n"
+               "Deformed shape, for a result that is how far the part moves, draws the part moved by it times Scale. "
+               "The first Scale makes the "
                "largest movement about 5% of the part's largest size, so that the shape can be seen; the real "
                "movement is usually far smaller.")
 DESIGN_HELP = ("Analyse this design solves the run's design once more, as it would be built, with the supports and "
@@ -224,7 +233,8 @@ class ResultsWindow(QtWidgets.QDialog):
         head = QtWidgets.QHBoxLayout()
         head.addWidget(QtWidgets.QLabel("Runs of this project"))
         head.addStretch()
-        head.addWidget(Info(RESULTS_HELP))
+        self.help = Info(results_help(window.project))
+        head.addWidget(self.help)
         layout.addLayout(head)
         self.list = QtWidgets.QListWidget()
         self.list.setMinimumHeight(120)
@@ -307,6 +317,7 @@ class ResultsWindow(QtWidgets.QDialog):
     # ------------------------------------------------------------------ the list
     def refresh(self):
         """The list again: this project's runs, newest first, then the other results opened."""
+        self.help.setToolTip(results_help(self.window.project))             # the project's results may change
         from lsr_mmto.problem.project_folder import analysed_material, is_run, run_facts, run_name, runs
         keep = self.current
         self.others = [f for f in self.others if is_run(f)]

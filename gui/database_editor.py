@@ -18,9 +18,6 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 from .panel_widgets import GREY, Info, centre_cells, fit_columns, ok_cancel, set_style
 
-# the properties a new database starts with when no project is open (with one, Project.starting_properties);
-# Add property offers every property of the registry (databases.ATTRIBUTES)
-STARTING = ["Density", "Youngs_Modulus", "Poissons_Ratio"]
 FIXED = ["Material", "Shown as", "Colour"]                  # the columns before the properties
 FIXED_WIDTHS = [160, 100, 80]                               # their least widths
 BAD = QtGui.QColor("#ffd6d6")
@@ -32,6 +29,19 @@ HELP = ("One row per material. Shown as is optional: a shorter name for legends 
         "property's unit. Add property opens the list of properties to add, a column each; Remove property removes "
         "the column you are in.\n\n"
         "You can paste a block copied from Excel into the table.")
+
+
+def starting_columns(project):
+    """The properties a new database starts with: the project's (Project.starting_properties), or, with no
+    project open, Density and the properties of the first physics (its PROPERTIES and OPTIONAL_PROPERTIES), in
+    the order of the property list. Add property offers every property of the list (databases.ATTRIBUTES)."""
+    if project is not None:
+        return project.starting_properties()
+    from lsr_mmto.materials.databases import ATTRIBUTES
+    from lsr_mmto.problem.project import DEFAULT_PHYSICS, PHYSICS
+    physics = PHYSICS[DEFAULT_PHYSICS]
+    wanted = set(physics.PROPERTIES) | set(physics.OPTIONAL_PROPERTIES)
+    return ["Density"] + [k for k in ATTRIBUTES if k in wanted and k != "Density"]
 
 
 def ask(parent, title, text, buttons, default, words=None):
@@ -334,7 +344,7 @@ class DatabaseEditor(QtWidgets.QDialog):
             self._fill(imported)
         elif path is None:
             self.name.setText(self._free_name("my_materials"))
-            self._columns(order=self.project.starting_properties() if self.project is not None else STARTING)
+            self._columns(order=starting_columns(self.project))
             for _ in range(3):
                 self.add_material()
         else:

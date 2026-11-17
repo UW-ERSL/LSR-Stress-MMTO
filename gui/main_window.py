@@ -48,7 +48,8 @@ from .settings_panel import SettingsPanel
 from .supports_and_loads_panel import (KEEP_COLOUR, LOAD_COLOUR, OTHER_COLOUR, SUPPORT_COLOUR, RegionDialog, SupportsPanel,
                                        bc_name, bc_value)
 from .pyto_ad_imports import (FILE_DIALOG_OPTIONS, MATERIAL_COLOR, UNIT_SYSTEMS, DisplayOptionsWindow,
-                              MainWindow, ProjectsWindow, STLGeom, StructuralLoadsWindow, UnitsWindow)
+                              MainWindow, ProjectsWindow, STLGeom, StructuralLoadsWindow, ThermalLoadsWindow,
+                              UnitsWindow)
 from .user_guide_window import open_researcher_guide, open_user_guide
 
 APP = "LSR MMTO"
@@ -447,11 +448,33 @@ def place_outline(selection, mesh, base_dir=None):
     return pv.Box(bounds=(a[0], b[0], a[1], b[1], a[2], b[2]))
 
 
+def picked_types(project):
+    """The types of pick (a picking window's entry "type") that a kind of support or load of the project's
+    physics takes (BCKind.picks): what "Click on the part..." can add to this project."""
+    from lsr_mmto.physics.available_physics import PHYSICS
+    from lsr_mmto.problem.boundary_conditions import BC_KINDS
+    if project is None or project.physics not in PHYSICS:
+        return set()
+    fields = PHYSICS[project.physics].FIELDS
+    return {t for k in BC_KINDS.values() if k.field in fields for t in k.picks if t is not None}
+
+
 class PickWindow(StructuralLoadsWindow):
     """Picking supports and loads with the mouse: Selection, Type, the force, Apply, Clear picks. Each Apply
     goes straight into the project (MMTOWindow.adopt_picks), so there is no list of applied loads here, no
     load set (one load case) and no torque (not one of LSR MMTO's loads). Nodes are picked one click at a
-    time (no box select); picks not applied are cleared when the window closes."""
+    time (no box select); picks not applied are cleared when the window closes. Type offers only what a kind
+    of the project's physics takes (picked_types)."""
+
+    ATTR = "structural_loads_window"                                # where the main window keeps it
+    LABEL = "Supports and forces"                                   # its line under Click on the part
+
+    @classmethod
+    def makes(cls, name=None):
+        """The type of pick each Type of the window makes ({type}), or that of one Type (name)."""
+        made = {n: c.get("constraint_type") or ("force_xyz" if n == "Force" else n.lower())
+                for n, c in cls.LOAD_TYPES.items()}
+        return made[name] if name is not None else set(made.values())
 
     def init_window(self):
         super().init_window()
@@ -486,7 +509,8 @@ class PickWindow(StructuralLoadsWindow):
         layout = QtWidgets.QHBoxLayout()
         layout.addWidget(QtWidgets.QLabel("Type"))
         self.load_type = QtWidgets.QComboBox()
-        self.load_type.addItems([k for k in self.LOAD_TYPES if k != "Torque"])
+        wanted = picked_types(self.parent.project)
+        self.load_type.addItems([k for k in self.LOAD_TYPES if self.makes(k) in wanted])
         layout.addWidget(self.load_type)
         parent_layout.addLayout(layout)
 
@@ -508,6 +532,128 @@ class PickWindow(StructuralLoadsWindow):
         hint.setWordWrap(True)
         self.layout().insertWidget(0, hint)
         self.layout().addStretch()
+
+
+class ThermalPickWindow(ThermalLoadsWindow):
+    """Picking temperatures and heat with the mouse, as PickWindow picks supports and forces: Selection, Type,
+    the value, Apply, Clear picks. Each Apply goes straight into the project (MMTOWindow.adopt_picks, through
+    picked_entries and forget_picks), so there is no list of applied loads here; picks not applied are cleared
+    when the window closes. Type offers only what a kind of the project's physics takes (picked_types); the
+    values are in the project's units."""
+
+    ATTR = "thermal_loads_window"
+    LABEL = "Temperatures and heat"
+
+    @classmethod
+    def makes(cls, name=None):
+        made = {n: c["type_name"] for n, c in cls.THERMAL_TYPES.items()}
+        return made[name] if name is not None else set(made.values())
+
+    def init_window(self):
+        super().init_window()
+        self.setWindowTitle("Pick")
+
+    def create_thermal_type_control(self, parent_layout):
+        layout = QtWidgets.QHBoxLayout()
+        layout.addWidget(QtWidgets.QLabel("Type"))
+        self.thermal_type = QtWidgets.QComboBox()
+        wanted = picked_types(self.parent.project)
+        self.thermal_type.addItems([k for k in self.THERMAL_TYPES if self.makes(k) in wanted])
+        layout.addWidget(self.thermal_type)
+        parent_layout.addLayout(layout)
+
+    def _unit(self, measures):
+        """The unit of what measures is in, in the project's units ("" for none)."""
+        from .supports_and_loads_panel import field_unit
+        return field_unit(measures, self.parent.project.units if self.parent.project is not None else None)
+
+    def _group(self, name, measures):
+        """A value's group, labelled with its unit in the project's units. A temperature starts at room
+        temperature in that unit (300 K, 540 °R); a heat takes 4 decimals, so that a small one in a large unit
+        (BTU/s) can be written."""
+        unit = self._unit(measures)
+        group = QtWidgets.QGroupBox(name)
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(QtWidgets.QLabel(f"{name} ({unit})" if unit else name))
+        spin = self.create_spinbox(self.THERMAL_TYPES[name])
+        if measures == "temperature" and unit == "°R":
+            spin.setRange(0, 3600)
+            spin.setValue(540)
+        elif measures == "heat":
+            spin.setDecimals(4)
+        row.addWidget(spin)
+        QtWidgets.QVBoxLayout(group).addLayout(row)
+        return group, spin
+
+    def format_thermal_text(self, value, config):
+        """The label beside a picked load's arrows: its value in the project's units."""
+        unit = self._unit("temperature" if config["label"] == "Temp" else "heat")
+        return f"{value:.4g} {unit}".strip()
+
+    def show_success_message(self, thermal_type, value, triangle_count):
+        pass                                                        # the main window says what was added
+
+    def update_units(self):
+        pass                                                        # the window closes when the units change
+
+    def get_selected_triangles(self):
+        selected = self.parent.stl_geom.store_selected_triangles()
+        if not selected:
+            QtWidgets.QMessageBox.warning(self, "No Selection", "Nothing is selected. Click faces on the part "
+                                                                "first.")
+            return None
+        return selected
+
+    def create_temperature_group(self):
+        group, self.temp_value_spin = self._group("Temperature", "temperature")
+        return group
+
+    def create_total_heat_group(self):
+        group, self.total_heat_value_spin = self._group("Total Heat", "heat")
+        return group
+
+    def create_buttons(self, parent_layout):
+        row = QtWidgets.QHBoxLayout()
+        apply_button = QtWidgets.QPushButton("Apply")
+        apply_button.clicked.connect(self.on_apply_clicked)
+        row.addWidget(apply_button)
+        clear_button = QtWidgets.QPushButton("Clear picks")
+        clear_button.setToolTip("Remove every face picked and not applied yet. A right click on the part does the "
+                                "same.")
+        clear_button.clicked.connect(lambda: self.parent.clear_picks())
+        row.addWidget(clear_button)
+        parent_layout.addLayout(row)
+
+    def init_ui(self):
+        super().init_ui()
+        self.update_group_visibility(self.thermal_type.currentText())   # the first type offered
+        self.applied_list.parent().setVisible(False)                # always empty: Apply adds to the project
+        hint = QtWidgets.QLabel("Click faces on the part, choose the type and value, then Apply.")
+        hint.setWordWrap(True)
+        self.layout().insertWidget(0, hint)
+        self.layout().addStretch()
+
+    def refresh_applied_list(self):
+        pass                                                        # no list: the project is the only list
+
+    def picked_entries(self):
+        """The picks applied and not yet taken by the project, as entries of PickWindow's lists: each with its
+        type, its value and its triangles."""
+        return [{k: v for k, v in entry.items() if k != "triangle_data"}
+                for entries in self.thermal_loads.values() for entry in entries]
+
+    def forget_picks(self):
+        """The picks taken by the project leave the window, and their arrows the part."""
+        for entries in self.thermal_loads.values():
+            entries.clear()
+        self.redraw_thermal_loads()
+
+    def closeEvent(self, event):
+        self.parent.clear_picks()                                   # picks not applied go with the window
+        super().closeEvent(event)
+
+
+PICK_WINDOWS = (PickWindow, ThermalPickWindow)                     # the windows Click on the part may open
 
 
 class DisplayOptions(DisplayOptionsWindow):
@@ -1540,7 +1686,7 @@ class MMTOWindow(MainWindow):
         panel = getattr(self, "supports_panel", None)
         if not self.measure.isChecked():
             form_open = in_open_strip(panel) and panel.stack.currentIndex() > 0
-            if form_open and not in_open_strip(getattr(self, "structural_loads_window", None)):
+            if form_open and self.picking_window() is None:
                 actor = picker.GetActor() if hasattr(picker, "GetActor") else None
                 if picker is not None and picker.GetCellId() >= 0 and actor in (None, self.part_actor()) and \
                         panel.take_click(picker.GetCellId()):                # a form waiting for a click: its
@@ -1550,7 +1696,7 @@ class MMTOWindow(MainWindow):
                     QtWidgets.QApplication.clipboard().setText(text)
                     panel.show_copied(text)
                 return None
-            if in_open_strip(getattr(self, "structural_loads_window", None)):
+            if self.picking_window() is not None:
                 self.pick_faces(picked_point, picker)
             return None
         if picker is None or picker.GetCellId() < 0:
@@ -1611,7 +1757,7 @@ class MMTOWindow(MainWindow):
     def on_right_button_press(self, obj, event):
         """A right click with the Pick strip open clears what is selected in it (as its Clear picks does);
         otherwise it does nothing."""
-        if in_open_strip(getattr(self, "structural_loads_window", None)) and self.stl_geom:
+        if self.picking_window() is not None and self.stl_geom:
             self.clear_picks()
 
     def _draw_measure(self):
@@ -1929,7 +2075,7 @@ class MMTOWindow(MainWindow):
 
     def _show(self, project, path):
         """Make project the one in the window: PyTO-AD's state reset, units synced, the STL drawn."""
-        for attr in ("supports_panel", "structural_loads_window", "run_window", "results_window"):
+        for attr in ("supports_panel", "run_window", "results_window") + tuple(c.ATTR for c in PICK_WINDOWS):
             w = getattr(self, attr, None)                           # windows on the previous project
             if w is not None:
                 try:
@@ -1990,6 +2136,7 @@ class MMTOWindow(MainWindow):
         dialog = UnitsWindow(self, self.settings)
         if dialog.exec_() and self.project is not None and self.project.units != self.settings.unit_system:
             self.project.units = self.settings.unit_system
+            self.close_picking_windows()                            # their values are in the units they opened in
             self.draw_ruler()
             self.message_text.append(f"Project units: {self.project.units}. Numbers are not converted.")
             self._refresh_title()
@@ -2149,16 +2296,48 @@ class MMTOWindow(MainWindow):
                 break
         strip.raise_()
 
-    def open_structural_loads_window(self):
-        """The Pick window, docked (in place of MainWindow.open_structural_loads_window)."""
+    def picking_window(self):
+        """The picking window open in front, or None: clicks on the part pick for it. With several open
+        (thermoelastic, as tabs), the one whose tab is in front."""
+        open_ = [getattr(self, c.ATTR, None) for c in PICK_WINDOWS]
+        open_ = [w for w in open_ if in_open_strip(w)]
+        front = [w for w in open_ if not w.visibleRegion().isEmpty()]
+        return (front or open_ or [None])[0]
+
+    def close_picking_windows(self, keep=None):
+        """Every picking window open, but keep; picks not applied go with each."""
+        for cls in PICK_WINDOWS:
+            w = getattr(self, cls.ATTR, None)
+            if w is not keep and in_open_strip(w):
+                w.close()
+
+    def pick_windows(self):
+        """The picking windows (PICK_WINDOWS) that make a pick a kind of the project's physics takes: what Click
+        on the part offers; none for a physics with nothing to pick."""
+        wanted = picked_types(self.project)
+        return [cls for cls in PICK_WINDOWS if cls.makes() & wanted]
+
+    def open_pick_window(self, cls):
+        """A picking window (one of PICK_WINDOWS), docked in the list's place, as a tab beside it."""
         self.show_setup_view()
-        if not self._raise_if_open("structural_loads_window"):
-            self.structural_loads_window = PickWindow(self)
-            strip = Strip(self.structural_loads_window, self, "structural_loads_window")
+        if not self._raise_if_open(cls.ATTR):
+            window = cls(self)
+            setattr(self, cls.ATTR, window)
+            strip = Strip(window, self, cls.ATTR)
+            strip.visibilityChanged.connect(                        # its tab in front: its Selection mode
+                lambda shown, w=window: shown and in_open_strip(w) and w.on_selection_mode_changed(0))
             panel = getattr(self, "supports_panel", None)
-            if in_open_strip(panel):                                # in the list's place, as a tab beside it
+            if in_open_strip(panel):
                 self.tabifyDockWidget(panel.parentWidget(), strip)
             strip.raise_()
+
+    def open_structural_loads_window(self):
+        """The Pick window of supports and forces (in place of MainWindow's)."""
+        self.open_pick_window(PickWindow)
+
+    def open_thermal_loads_window(self):
+        """The Pick window of temperatures and heat (in place of MainWindow's)."""
+        self.open_pick_window(ThermalPickWindow)
 
     def _raise_if_open(self, attr):
         """A docked window that is open, also behind a tab, comes to the front: no second copy."""
@@ -2176,22 +2355,31 @@ class MMTOWindow(MainWindow):
         into the project (once the Apply has finished)."""
         super().update_LivVar(key, value)
         if self.project is not None and key in ("structural_loads.forces_applied",
-                                                "structural_loads.fixed_constraints"):
+                                                "structural_loads.fixed_constraints", "thermal_loads.applied"):
             QtCore.QTimer.singleShot(0, self.adopt_picks)
 
     def adopt_picks(self):
-        """The supports and loads applied in PyTO-AD's Structural Loads window become regions and
-        supports and loads of the project, and leave PyTO-AD's lists: the project is the only list."""
+        """The supports and loads applied in a picking window (PICK_WINDOWS) become regions and supports and loads
+        of the project, and leave the window's lists: the project is the only list. The Structural Loads
+        window keeps its picks in this window's constraint_data and force_data; the others give theirs
+        (picked_entries) and forget them (forget_picks)."""
         torques = [f for f in self.force_data if f.get("type") == "torque"]
         forces = [f for f in self.force_data if f.get("type", "force_xyz") == "force_xyz"]
         sets = sorted({f.get("load_set", 0) for f in forces} - {0})
+        others = [w for w in (getattr(self, cls.ATTR, None) for cls in PICK_WINDOWS) if hasattr(w, "picked_entries")]
+        picked = [entry for w in others for entry in w.picked_entries()]
         names, before = [], len(self.project.bcs)
-        if self.constraint_data or forces:
+        if self.constraint_data or forces or picked:
             try:
                 names = self.project.adopt_picks({"constraint_data": list(self.constraint_data),
-                                                  "force_data": forces})
+                                                  "force_data": forces, "picked": picked})
             except (NotImplementedError, ValueError) as e:
                 self.message_text.append(f"Not added: {e}")
+        for w in others:
+            try:
+                w.forget_picks()
+            except RuntimeError:                                    # the window was already deleted
+                pass
         for bc in self.project.bcs[before:]:                        # say what each pick became
             self.message_text.append(f"Added: {bc_name(bc['kind'])} on {bc['on']} "
                                      f"({bc_value(bc, self.project.units)})")
@@ -2210,14 +2398,15 @@ class MMTOWindow(MainWindow):
         except RuntimeError:                                        # the window was already deleted
             pass
         for name in list(self.plotter.actors):     # a load's label is two actors; the redraw leaves the
-            if re.search(r"(force|torque)_text_\d+(-points)?$", str(name)):          # point: a stray dot
+            if re.search(r"(force|torque|temp|total_heat|heat_flux)_text_\d+(-points)?$", str(name)):   # a dot
                 self.plotter.remove_actor(name, reset_camera=False)
         panel = getattr(self, "supports_panel", None)
         if in_open_strip(panel):
             panel.after_change()
             if len(self.project.bcs) > before:                      # the round trip: back to the list,
-                if in_open_strip(w):                                # the new entry selected
-                    w.close()
+                picking = self.picking_window()                     # the new entry selected; another
+                if picking is not None:                             # picking window (a tab) stays as it is
+                    picking.close()
                 panel.parentWidget().raise_()
                 panel.bcs.selectRow(len(self.project.bcs) - 1)
             return names

@@ -39,17 +39,29 @@ When extending the core, follow these four rules:
 
 - **Check PyTO-AD first.** If PyTO-AD already provides what you need, import it through `lsr_mmto/pyto_ad_imports.py`, or
   subclass it where that code needs a different material in each element. PyTO-AD is pinned to one commit
-  and never edited.
+  and never edited. What LSR MMTO takes from it is LSR MMTO's own code all the same: a bug found there is
+  fixed here, by subclassing or wrapping it, never left as PyTO-AD's.
 - **One way to do each thing.** A project runs only through `run(p)`. A second way of doing
   something that already has one is removed, not kept beside it.
 - **Generic code.** Nothing is special-cased by name (`if name == "Mass"`): what differs between
-  entries is declared by the entry, in its list.
+  entries is declared by the entry, in its list. The GUI names no physics: what a panel shows comes from
+  the physics' entries (`tests/gui/test_new_physics_in_the_gui.py` opens each panel that shows a physics' pieces with a
+  made-up one).
 
 ## Names
 
 A filename should tell you what the file does. The test: from the name alone, a person who has never seen the code can explain
 in one line what is in the file. `structural_supports_and_loads.py` passes; `loop.py` and
 `utils.py` do not.
+
+## Writing
+
+These hold for everything committed: code, comments, docstrings, docs, tests and commit messages.
+
+- No em dashes. Use a comma, a colon, or two sentences.
+- No mention of any tool that helped write a change.
+- The GUI shows only what a user needs at that moment; anything longer goes behind an (i). Its words are
+  plain, use the labels the form itself shows, and never name PyTO-AD or a name from the code.
 
 ## Checking a change
 
@@ -118,13 +130,20 @@ Run every test once before committing. To find the lines of code that are not co
   (the two commands in `docs/how_to_add_features.md`), and expect a test that types such a list out by hand
   to fail. Such a test should work its list out from the physics instead.
 - Text the GUI shows is written for someone who has never seen the code: plain words, the labels
-  the form itself shows, and the details behind an (i).
+  the form itself shows, and the details behind an (i) (see Writing).
 - After a change to a list (settings, quantities, supports and loads, selection types, material
   attributes) or to a docstring the reference reads, run `python docs/make_reference.py` and
   `python -m gui.user_guide_window --write`; the reference page and the user guide's lists are made
   from the code.
 - The versions in requirements.txt are the ones every test passes with. A newer version of a package
   is a change like any other: change its pin, run every test, and commit both.
+
+## How a change gets in
+
+1. Make the change on a branch of its own.
+2. Run every test on your computer (`python -m pytest tests -q -n 4`). Every one passes, with no warnings.
+3. Only then merge it and push. A change is never pushed with a test failing.
+4. Delete the branch once it is merged, so no stray branches are left.
 
 ## What is not committed
 
