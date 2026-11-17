@@ -1,9 +1,10 @@
 """
 database_versions_window.py
 ===========================
-Versions... in the Materials panel: the older versions kept of the project's database
-(lsr_mmto/materials/database_versions.py), newest first. Restore puts one back in the database's place,
-after asking whether to keep the current version first; Delete deletes one, after a confirmation.
+Versions... in the Materials panel: the versions of the project's database (lsr_mmto/materials/
+database_versions.py), newest first, "(in use)" beside the one the database is now. Restore puts the chosen
+one back as the database, without asking (every version stays, the one replaced too), and closes the window;
+Rename... changes a version's note; Delete deletes one after a confirmation, never the one in use.
 """
 import os
 import time
@@ -13,90 +14,126 @@ from PyQt5 import QtWidgets
 from . import database_editor                              # its ask: one place for the questions
 
 
-def version_text(version):
-    """A version as the list shows it: when it was kept, whether it is the first, how many materials."""
-    when = time.strftime("%d %b %Y, %H:%M:%S", time.localtime(version.when))
-    first = ", first version" if version.first else ""
+def version_text(stem, version, in_use):
+    """A version as the list shows it: its name ("steels v3 softer"), "(in use)" for the one in use, when its
+    contents were saved, how many materials."""
+    when = time.strftime("%d %b %Y, %H:%M", time.localtime(version.when))
     count = "cannot be read" if version.materials < 0 else \
         f"{version.materials} material{'' if version.materials == 1 else 's'}"
-    return f"{when}{first}    {count}"
+    return f"{stem} {version.name}{' (in use)' if in_use else ''}    {when}    {count}"
 
 
 class VersionsWindow(QtWidgets.QDialog):
-    """The versions of the database xlsx. restored is True once one was put back."""
+    """The versions of the database xlsx. restored is the version put back, None until one is."""
 
     def __init__(self, parent, xlsx):
         super().__init__(parent)
-        self.xlsx, self.stem, self.restored = xlsx, os.path.splitext(os.path.basename(xlsx))[0], False
+        self.xlsx, self.stem, self.restored = xlsx, os.path.splitext(os.path.basename(xlsx))[0], None
         self.setWindowTitle(f"Versions of {self.stem}")
-        self.resize(460, 320)
+        self.resize(520, 320)
         layout = QtWidgets.QVBoxLayout(self)
         self.list = QtWidgets.QListWidget()
         layout.addWidget(self.list, stretch=1)
-        self.empty = QtWidgets.QLabel(f"No older versions of {self.stem} yet.")
+        self.empty = QtWidgets.QLabel(f"No versions of {self.stem} yet.")
         layout.addWidget(self.empty)
         buttons = QtWidgets.QHBoxLayout()
+        self.rename_button = QtWidgets.QPushButton("Rename...")
+        buttons.addWidget(self.rename_button)
         buttons.addStretch()
         self.delete_button = QtWidgets.QPushButton("Delete")
         self.restore_button = QtWidgets.QPushButton("Restore")
         close = QtWidgets.QPushButton("Close")
-        for button, slot in ((self.delete_button, self.delete), (self.restore_button, self.restore),
-                             (close, self.accept)):
+        for button, slot in ((self.rename_button, self.rename), (self.delete_button, self.delete),
+                             (self.restore_button, self.restore), (close, self.accept)):
             button.clicked.connect(lambda _=False, s=slot: s())
-            buttons.addWidget(button)
+            if button is not self.rename_button:
+                buttons.addWidget(button)
         layout.addLayout(buttons)
         self.list.currentRowChanged.connect(lambda _: self._buttons())
         self.fill()
 
-    def fill(self):
-        from lsr_mmto.materials.database_versions import versions
+    def fill(self, chosen=None):
+        """The list read again; chosen (a version's number) chosen in it, else the newest."""
+        from lsr_mmto.materials.database_versions import in_use, versions
         self.versions = versions(self.xlsx)
+        current = in_use(self.xlsx, self.versions)
+        self.current = None if current is None else current.path
         self.list.clear()
         for v in self.versions:
-            self.list.addItem(version_text(v))
+            self.list.addItem(version_text(self.stem, v, v.path == self.current))
         self.list.setVisible(bool(self.versions))
         self.empty.setVisible(not self.versions)
         if self.versions:
-            self.list.setCurrentRow(0)
+            rows = [i for i, v in enumerate(self.versions) if v.number == chosen]
+            self.list.setCurrentRow(rows[0] if rows else 0)
         self._buttons()
 
     def _buttons(self):
-        chosen = self.list.currentRow() >= 0 and bool(self.versions)
-        self.delete_button.setEnabled(chosen)
-        self.restore_button.setEnabled(chosen)
+        version = self.chosen()
+        used = version is not None and version.path == self.current
+        self.rename_button.setEnabled(version is not None)
+        self.delete_button.setEnabled(version is not None and not used)
+        self.restore_button.setEnabled(version is not None and not used and version.materials >= 0)
+        self.delete_button.setToolTip("The version in use is the database as it is now: it can't be deleted."
+                                      if used else "")
 
     def chosen(self):
         row = self.list.currentRow()
         return self.versions[row] if 0 <= row < len(self.versions) else None
 
     def restore(self):
-        """The chosen version back as the database, after Yes or No to keeping the current one. True when done."""
+        """The chosen version back as the database, without asking (the database as it is now is kept first if
+        no version has it: a change made in Excel while this window was open, say); the window closes. True when
+        done."""
         from lsr_mmto.materials import database_versions as V
-        version, Box = self.chosen(), QtWidgets.QMessageBox
+        version = self.chosen()
+        if version is None or version.path == self.current:
+            return False
+        try:
+            V.restore(version, self.xlsx)
+        except (OSError, ValueError) as e:
+            QtWidgets.QMessageBox.warning(self, "Restore", f"Not restored: {e}. If the database is open in Excel, "
+                                                           f"close it there and try again.")
+            self.fill(version.number)
+            return False
+        self.restored = version
+        self.accept()
+        return True
+
+    def rename(self, note=None):
+        """The chosen version's note changed, asked for when note is None ("" takes it away). True when done."""
+        from lsr_mmto.materials import database_versions as V
+        version = self.chosen()
         if version is None:
             return False
-        answer = database_editor.ask(self, f"Restore {self.stem}", "Keep the current version?", Box.Yes | Box.No | Box.Cancel,
-                     Box.Yes)
-        if answer not in (Box.Yes, Box.No):
+        if note is None:
+            note, ok = QtWidgets.QInputDialog.getText(
+                self, "Rename version", f"A note after {self.stem} v{version.number} (empty for none):",
+                text=version.note)
+            if not ok:
+                return False
+        try:
+            V.set_note(version, note)
+        except (ValueError, OSError) as e:
+            QtWidgets.QMessageBox.warning(self, "Rename version", f"Not renamed: {e}.")
             return False
-        if answer == Box.Yes:
-            V.keep(self.xlsx)
-        V.restore(version, self.xlsx)
-        self.restored = True
-        self.fill()
+        self.fill(version.number)
         return True
 
     def delete(self):
-        """The chosen version deleted, after a yes. True when done."""
+        """The chosen version deleted, after a yes; never the one in use. True when done."""
         from lsr_mmto.materials import database_versions as V
         version, Box = self.chosen(), QtWidgets.QMessageBox
-        if version is None:
+        if version is None or version.path == self.current:
             return False
-        text = (f"This is the first version of {self.stem}. Delete it? This can't be undone." if version.first
-                else f"Delete this version of {self.stem}? This can't be undone.")
+        text = f"Delete {self.stem} {version.name}? This can't be undone."
         if database_editor.ask(self, "Delete version", text, Box.Yes | Box.No, Box.No) != Box.Yes:
             return False
-        V.delete(version)
+        try:
+            V.delete(version, self.xlsx)
+        except (OSError, ValueError) as e:
+            QtWidgets.QMessageBox.warning(self, "Delete version", f"Not deleted: {e}.")
+            self.fill()
+            return False
         self.fill()
         return True
-

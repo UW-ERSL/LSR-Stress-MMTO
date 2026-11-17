@@ -179,8 +179,11 @@ def analyse_design(project: "Project", run_folder: str, save_dir: str | None = N
         if int(mesh.num_elems) != int(run.n_elems):
             raise ValueError(f"the run was made on another mesh than the project's now: {run.n_elems} elements, "
                              f"the project's mesh {int(mesh.num_elems)}")
+        names = [str(n).strip() for n in run.material_names]
         used = ran.database_paths()[0]
-        if not os.path.isfile(used) or database_table(used)[0] != [str(n).strip() for n in run.material_names]:
+        if not os.path.isfile(used) and project.database is not None:
+            used = project.database_paths()[0]          # the same database renamed since (Rename... in Materials)
+        if not os.path.isfile(used) or database_table(used)[0] != names:
             raise ValueError(f"the database the run used ({os.path.basename(used)}) is not there as it was, so its "
                              f"materials are not known")
         then = (run.config or {}).get("database")

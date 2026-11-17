@@ -26,7 +26,7 @@ LSR MMTO
 │   ├── materials/                material databases and the material network
 │   │   ├── databases.py          slot: a material attribute (ATTRIBUTES), a kind of quantity every
 │   │   │                         problem has (UNITS); the database check
-│   │   ├── database_versions.py  the older versions kept of a database, in a folder beside it
+│   │   ├── database_versions.py  every state of a database kept as v1, v2, ..., in a folder beside it
 │   │   ├── encoder.py            reads a database, trains or loads the network; decode(z)
 │   │   ├── material_source.py    where a run gets each element's properties: the network, the
 │   │   │                         network fixed to one material, or the database's own values

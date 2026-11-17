@@ -1774,6 +1774,7 @@ class MMTOWindow(MainWindow):
             QtWidgets.QMessageBox.warning(self, "Open project", error)
             self.message_text.append(error)
             return False
+        p.keep_database_version()                   # a change made to its database outside the app, kept
         self._show(p, os.path.abspath(path))
         return True
 
@@ -2014,6 +2015,8 @@ class MMTOWindow(MainWindow):
                 copied, lines = None, lines + [f"The database could not be copied into the project: {e}"]
             if copied:
                 lines.append(f"Copied into the project folder: {copied}, with its trained network if it has one")
+        if isinstance(panel, MaterialsPanel):
+            self.project.keep_database_version()    # the database the project uses now has its version
         self.update_part_facts()
         for line in lines:
             self.message_text.append(line)
@@ -2050,6 +2053,33 @@ class MMTOWindow(MainWindow):
         self._write(self.path)                                      # the project file matches the database
         self._refresh_title()
         return lines
+
+    def rename_database(self, name, parent=None):
+        """Rename... (Materials): the project's own database renamed name, with its network and all its versions
+        (database_versions.rename_database), the project pointed at the new name and saved, so that its file and
+        the database always go together (as Convert units does). Returns the line said, or None when nothing was
+        renamed (why, in a message)."""
+        from lsr_mmto.materials.database_versions import rename_database
+        from lsr_mmto.materials.databases import in_shipped_folder
+        from lsr_mmto.problem.project_folder import inside
+        if self.project is None or self.project.database is None or not self.own_folder() or self.run_going():
+            return None
+        xlsx = self.project.database_paths()[0]
+        if in_shipped_folder(xlsx) or not inside(xlsx, self.project.base_dir):
+            return None
+        old = self.project.database
+        try:
+            path = rename_database(xlsx, name)
+        except (OSError, ValueError) as e:
+            QtWidgets.QMessageBox.warning(parent or self, "Rename database", f"Not renamed: {e}.")
+            return None
+        self.project.database = os.path.relpath(path, self.project.base_dir).replace("\\", "/")
+        with_network = os.path.isfile(os.path.splitext(path)[0] + ".nt")
+        line = (f"Database renamed: {os.path.splitext(os.path.basename(old))[0]} is now {name.strip()}"
+                + (", with its trained network and its versions" if with_network else ", with its versions"))
+        self.message_text.append(line)
+        self._write(self.path)                                      # the project file matches the database
+        return line
 
     def database_folder(self):
         """Where New database... writes by default: the project's materials folder; for an example,

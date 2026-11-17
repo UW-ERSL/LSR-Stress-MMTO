@@ -8,9 +8,9 @@ open it. A database that comes with LSR MMTO is never changed: it is saved as a 
 project's folder. When the numbers change, the network trained on the old numbers no longer
 fits: it is set aside as <name>.previous.nt and the next run trains a new one.
 
-Older versions (materials/database_versions.py): the first version of a database is always kept, and a Save
-over a database that has one asks whether to keep the version before the changes. The title says (modified)
-while there are changes not saved, and closing with them asks first.
+Versions (materials/database_versions.py): every Save keeps the database as saved as a new version, without
+asking, and the state it had before is one already. The title says (modified) while there are changes not
+saved, and closing with them asks first.
 """
 import os
 
@@ -349,12 +349,11 @@ class DatabaseEditor(QtWidgets.QDialog):
 
     # ------------------------------------------------------------------ reading
     def _free_name(self, stem):
-        """stem, or stem 2, stem 3, ...: a name no database in the folder has, nor had (its older versions are
-        still there), so a new database never takes on another's versions."""
-        from lsr_mmto.materials.database_versions import versions
+        """stem, or stem 2, stem 3, ...: a name no database in the folder has, nor had (its versions are still
+        there), so a new database never takes on another's versions."""
+        from lsr_mmto.materials.database_versions import name_taken
         name, k = stem, 2
-        while os.path.exists(os.path.join(self.folder, name + ".xlsx")) or \
-                versions(os.path.join(self.folder, name + ".xlsx")):
+        while name_taken(self.folder, name):
             name, k = f"{stem} {k}", k + 1
         return name
 
@@ -673,31 +672,20 @@ class DatabaseEditor(QtWidgets.QDialog):
         return path
 
     def accept(self):
-        """Save. Over a database that has changed: its first version kept first if it has none (without asking),
-        else after a yes to keeping the older version; a database new here, or copied from an included one,
-        gets its first version: itself as saved, or the included one as it came."""
+        """Save, and keep the database as saved as a version (database_versions.record), without asking. Over a
+        database of the project's: the state it had before is kept first, if no version has it (a change made in
+        Excel, say). A copy of an included database has the included one as it came for its v1."""
         from lsr_mmto.materials import database_versions as V
         if self.check():
             return
-        Box = QtWidgets.QMessageBox
-        name = self.name.text().strip()
         in_place = self.path is not None and not self.copy and os.path.isfile(self.path)
         try:
-            if in_place and self.modified():
-                if not V.has_first(self.path):
-                    V.keep(self.path, first=True)
-                else:
-                    answer = ask(self, f"Save {name}", "Keep the older version?", Box.Yes | Box.No | Box.Cancel,
-                                 Box.Yes)
-                    if answer not in (Box.Yes, Box.No):
-                        return
-                    if answer == Box.Yes:
-                        V.keep(self.path)
+            if in_place:
+                V.record(self.path)
             path = self.save()
-            if self.path is None:
-                V.keep(path, first=True)
-            elif self.copy:
-                V.keep(path, first=True, source=self.path)
+            if self.copy and not V.versions(path):
+                V.keep(path, source=self.path)
+            V.record(path)
         except OSError as e:
             QtWidgets.QMessageBox.warning(self, "Database", f"Not saved: {e}")
             return

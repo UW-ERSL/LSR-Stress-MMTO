@@ -356,7 +356,8 @@ def test_analyse_this_design():
     materials, written into the run's database), it gives the run's own final check: the stress and the
     displacement of every element and node, to 1 part in 10,000 of the largest. Twice the load gives twice the displacement; a project whose mesh
     is not the run's is refused, saying what differs, and so is a database changed since the run, naming the cell;
-    saved, its record says which run it analysed."""
+    saved, its record says which run it analysed. A database renamed since the run (Rename... in Materials) is
+    found under its new name when its contents are the run's."""
     import openpyxl
     from lsr_mmto.results.load_results import load
     with tempfile.TemporaryDirectory() as d:
@@ -408,3 +409,10 @@ def test_analyse_this_design():
             A.analyse_design(other, folder)
         with pytest.raises(ValueError, match="this is an analysis, not a run"):
             A.analyse_design(p, os.path.join(d, "results", "design check"))
+
+        from lsr_mmto.materials.database_versions import rename_database
+        renamed = p.copy()
+        renamed.database = os.path.relpath(rename_database(os.path.join(d, "materials", "BM1_3Mats_2Attr.xlsx"),
+                                                           "alloys"), d).replace("\\", "/")
+        c = A.analyse_design(renamed, folder)
+        assert np.array_equal(c.results["von_mises"], a.results["von_mises"])

@@ -194,13 +194,14 @@ The following buttons appear beside the database list:
 
 - **New database...** opens the database editor (section 6.3) on an empty database, to type or paste your materials in.
 - **Edit...** opens the database in the editor. One of your own is changed in place. One that comes with LSR MMTO is saved as a copy in your project's folder, and the project then uses the copy. A column that is not a property LSR MMTO knows is left out, and a note over the table names it; Save writes the database without it.
-- **Open in Excel** opens the database file in Excel, or whatever opens .xlsx files on your computer. When you come back to the Materials window after saving it there, the window reads the database again by itself. A change made in Excel keeps no older version (section 6.5). A database that comes with LSR MMTO is not opened: a change there would change it for every project, so make your own copy with **Edit...** first.
-- **Versions...** lists the older versions kept of one of your own databases (section 6.5).
-- **Import...**, at the right, brings in a table of materials you already have, in Excel (.xlsx or .xls) or CSV. A database made by LSR MMTO (one whose check finds nothing wrong) is used where it is, with its trained network if it has one next to it. Any other table becomes a new database: the first column holds the material names and the first row the properties. A property can be written under any of the names LSR MMTO knows it by (for example Young's modulus as Youngs_Modulus, Youngs Modulus or E), and a unit may follow in brackets, as in *Density [kg/m^3]*. A second row of units, as in an LSR MMTO database, is read too. Columns that are not a property LSR MMTO knows are left out, and one message lists them. The database editor then opens with what was read, for you to check and save.
+- **Open in Excel** opens the database file in Excel, or whatever opens .xlsx files on your computer. When you come back to the Materials window after saving it there, the window reads the database again by itself, and keeps the changed database as a new version (section 6.5). A database that comes with LSR MMTO is not opened: a change there would change it for every project, so make your own copy with **Edit...** first.
+- **Versions...** lists the versions of one of your own databases (section 6.5).
+- **Rename...** renames one of your own databases, in your project's folder. Its trained network and all its versions are renamed with it, and the project is saved with the new name (with any other change you made to it). Earlier runs still find it for **Analyse this design**. A name another database in the folder has, or had, is refused. A database renamed outside LSR MMTO (in File Explorer) is a new database to it, with a new v1.
+- **Import...**, at the right, brings in a table of materials you already have, in Excel (.xlsx or .xls) or CSV. A database made by LSR MMTO (one whose check finds nothing wrong) is copied into your project's folder as it is, with its trained network if it has one next to it, and the project uses the copy. Your original file is never changed. Any other table becomes a new database: the first column holds the material names and the first row the properties. A property can be written under any of the names LSR MMTO knows it by (for example Young's modulus as Youngs_Modulus, Youngs Modulus or E), and a unit may follow in brackets, as in *Density [kg/m^3]*. A second row of units, as in an LSR MMTO database, is read too. Columns that are not a property LSR MMTO knows are left out, and one message lists them. The database editor then opens with what was read, for you to check and save.
 
-Creating a new database or importing a table that is not already a database saves it in the project folder. Because of this, you must save the project first; LSR MMTO says so if it is not.
+Creating a new database or importing a table saves it in the project folder. Because of this, you must save the project first; LSR MMTO says so if it is not.
 
-When some columns of the database are in other units than the project's (section 4), a button **Convert to mmKS units...** (with the project's unit system) shows under the report. It opens a window that lists each of those columns with what its numbers are multiplied by, for example *Young's modulus: Pa -> MPa, x 1e-06*, and the limits of the formulation written for the old numbers with what they become, for example *Mass <= 4e+07 -> 4e-05 t*. **Convert these limits too** is ticked, so each limit keeps its meaning. **OK** writes the converted database as the project's own copy, in its materials folder (one that comes with LSR MMTO is never changed), keeps its trained network, which still fits up to rounding in the last digit (the next run asks once before using it, section 6.4), converts the ticked limits, saves the project and says in the messages what was converted.
+When some columns of the database are in other units than the project's (section 4), a button **Convert to mmKS units...** (with the project's unit system) shows under the report. It opens a window that lists each of those columns with what its numbers are multiplied by, for example *Young's modulus: Pa -> MPa, x 1e-06*, and the limits of the formulation written for the old numbers with what they become, for example *Mass <= 4e+07 -> 4e-05 t*. **Convert these limits too** is ticked, so each limit keeps its meaning. **OK** writes the converted database as the project's own copy, in its materials folder (one that comes with LSR MMTO is never changed), keeps the database as it was and as converted as versions (section 6.5), keeps its trained network, which still fits up to rounding in the last digit (the next run asks once before using it, section 6.4), converts the ticked limits, saves the project and says in the messages what was converted.
 
 ### 6.2 Values and Network error
 
@@ -224,7 +225,7 @@ The database editor displays the materials in a table:
 
 You can copy several cells from Excel and paste them directly into the table. Problems show in red once you have typed in a row, and are listed under the table (a missing value, a value outside what the property allows, two materials with the same name); a new, empty form shows none. **Save** keeps the database in the project's folder and the project then uses it.
 
-While there are changes not saved, the editor's title says *(modified)*. Saving changes to a database that already has its first version kept (section 6.5) asks *Keep the older version?*: **Yes** keeps the database as it was before your changes, **No** saves without keeping it, **Cancel** goes back to editing. Closing the editor with changes not saved asks first: **Save...** saves them, **Discard changes** closes without them, **Cancel** goes back to editing. A database with columns LSR MMTO does not know shows *(modified)* from the start, since Save writes it without them.
+While there are changes not saved, the editor's title says *(modified)*. **Save** keeps the database as saved as a new version (section 6.5), without asking. Closing the editor with changes not saved asks first: **Save...** saves them, **Discard changes** closes without them, **Cancel** goes back to editing. A database with columns LSR MMTO does not know shows *(modified)* from the start, since Save writes it without them.
 
 If you change the materials (a name, or a material added or taken away) or the numbers of a database that already has a trained network, the trained network no longer matches the database: LSR MMTO sets the old network aside, and the next run trains a new one.
 
@@ -257,11 +258,24 @@ A material database can contain these attributes:
 
 <!-- end of list -->
 
-### 6.5 Older versions
+### 6.5 Versions
 
-The first version of a database is always kept: a database you make or import in the editor as it was first saved, an included database you edit as it came, and any other database (one made before LSR MMTO kept versions, one imported as it is) as it was before your first change in the editor or before **Convert to ... units**. Later versions are kept when you answer **Yes** to *Keep the older version?*. Each saved version also includes its trained network. This means you can restore that version without training a new network.
+Every state of one of your own databases (one in your project's folder) is kept as a version, numbered **v1**, **v2**, **v3**, and so on, with nothing to answer. A new version is kept whenever the database has changed in any way, even only a colour or a label:
 
-**Versions...** in the Materials window lists them, newest first, each with when it was kept and how many materials it has. **Restore** puts the chosen version back in the database's place; it first asks *Keep the current version?*, so a restore can be undone too. **Delete** deletes the chosen version, after you confirm; that cannot be undone. The versions are kept in a **versions** folder beside the database (for your own databases, inside the project's materials folder), out of the Database list, and **File > Save As** takes them with the project. An included database has none: it is never changed.
+- when you save it in the editor, make it, import it or convert its units;
+- when you change it outside LSR MMTO, in Excel for example. LSR MMTO finds the change and keeps it when the project opens, when the Materials window opens or comes back into view, and when a run starts.
+
+The first version, **v1**, is the database as the project first used it. For an included database you edit, v1 is the included database as it came.
+
+Each version also keeps the trained network that goes with it, when it has one, so you can restore a version without training a new network.
+
+**Versions...** in the Materials window lists them, newest first, each with when it was saved and how many materials it has. **(in use)** marks the version the database is now.
+
+- **Restore** puts the chosen version back as the database, without asking. The database as it was is kept first if no version has it yet (a change you made in Excel while the window was open, say), and every version stays, so a restore can always be undone by restoring again. The window closes and the report says which version is now used, for example *Now using steels v2*.
+- **Rename...** gives the chosen version a note after its number, for example *steels v3 softer*. Leave it empty to take the note away. The name before the note never changes.
+- **Delete** deletes the chosen version, after you confirm; that cannot be undone. The version in use can't be deleted, since it is the database as it is now. A deleted version's number is never given again.
+
+The versions are kept in a **versions** folder beside the database (for your own databases, inside the project's materials folder), out of the Database list, and **File > Save As** takes them with the project. An included database has none: it is never changed.
 
 ## 7. Supports and loads
 
@@ -690,7 +704,7 @@ These appear in the messages as **Error:** lines, and under *Cannot start:* in t
 
 - **my_materials.nt takes 3 attributes, but my_materials.xlsx has 4: it was trained on another database**: the trained network does not fit the database. In Settings, on the VAE tab, untick **Use the trained network**; the next run trains a new one.
 - **latentDim is 3, but my_materials.nt was trained with 2: set it to 2, or switch off use_pretrained_vae to train a new network**: a network setting differs from the trained network's. latentDim is **Latent dimension**, and use_pretrained_vae is **Use the trained network**, both in Settings on the VAE tab.
-- **my_materials.xlsx: the database has changed since its network was trained: cell B4 is 210000.0, was 200000.0**: the network learned from other numbers. Train a new one (untick **Use the trained network** in Settings), or bring back the version it was trained on with **Versions...** in Materials (section 6.4).
+- **my_materials.xlsx: the database has changed since its network was trained: cell B4 is 210000.0, was 200000.0**: the network learned from other numbers. Train a new one (untick **Use the trained network** in Settings), or bring back the version it was trained on with **Versions...** in Materials (section 6.5).
 - **... which comes with the app, does not match ...**: a database that comes with LSR MMTO was changed outside LSR MMTO. Put the file back as it came, or make your own copy with **Edit...** and let its first run train a network.
 - **a run would train a new VAE and save it over the shipped ...**: a database that comes with LSR MMTO would have its network replaced. Copy the database into your project with Edit... (section 6.1) and use the copy.
 - Warning **my_materials.nt exists: the next run trains a new network and replaces it**: Use the trained network is off, so the next run trains again. The old network is kept beside it, ending in .previous.nt.

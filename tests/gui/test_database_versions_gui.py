@@ -1,10 +1,11 @@
 """
 test_database_versions_gui.py
 =============================
-Older versions of a database in the window, off-screen: the editor's (modified) title and its two questions
-(keeping the older version on Save, changes not saved on closing), the first version kept for a database
-made, imported or copied from an included one, and Versions... in Materials with Restore and Delete. The
-questions are answered by the test (database_editor.ask), never shown.
+The versions of a database in the window, off-screen: the editor's (modified) title and its one question
+(changes not saved, on closing); every Save kept as a version without asking, for a database made, imported or
+copied from an included one too; Versions... with "(in use)", Restore without a question, Rename... of a note
+and Delete (never the one in use); and in Materials: Rename..., Import copying a database in, and a change made
+in Excel kept as Materials opens. The questions are answered by the test (database_editor.ask), never shown.
 
     python -m pytest tests/gui/test_database_versions_gui.py
 """
@@ -69,7 +70,8 @@ def _value(xlsx):
 
 def test_changes_are_marked_and_closing_with_them_asks(folder, answers):
     """Opened: no (modified). A value changed: (modified) in the title. Closing then asks: Cancel keeps the
-    editor open, Discard changes closes it with the file as it was; Save... saves."""
+    editor open, Discard changes closes it with the file as it was; Save... saves, keeping v1 (as it was) and v2
+    (as saved)."""
     asked, given = answers
     xlsx = _own(folder)
     e = DE.DatabaseEditor(None, folder, path=xlsx)
@@ -84,86 +86,85 @@ def test_changes_are_marked_and_closing_with_them_asks(folder, answers):
     assert e.result() == QtWidgets.QDialog.Rejected and _value(xlsx) == 1
     e = DE.DatabaseEditor(None, folder, path=xlsx)
     e.table.item(1, 3).setText("7")
-    given.append(Box.Save)                                     # Save...: as Save, its first version kept
+    given.append(Box.Save)
     e.reject()
-    assert e.result() == QtWidgets.QDialog.Accepted and _value(xlsx) == 7 and V.has_first(xlsx)
+    assert e.result() == QtWidgets.QDialog.Accepted and _value(xlsx) == 7
+    assert [(v.number, _value(v.path)) for v in V.versions(xlsx)] == [(2, 7), (1, 1)]
     e = DE.DatabaseEditor(None, folder, path=xlsx)
     e.reject()                                                 # nothing changed: nothing asked
     assert len(asked) == 3 and e.result() == QtWidgets.QDialog.Rejected
 
 
-def test_save_keeps_the_first_version_then_asks(folder, answers):
-    """A database with no versions: its first Save keeps it as it was as the first version, without asking.
-    Later Saves ask "Keep the older version?": Yes keeps it, No does not, Cancel does not save. A Save with
-    nothing changed asks nothing."""
+def test_every_save_is_a_version_without_asking(folder, answers):
+    """Each Save that changes the database keeps it as saved as the next version, asking nothing; the state it
+    had before is v1. A Save with nothing changed keeps nothing new."""
     asked, given = answers
     xlsx = _own(folder)
-    for value, answer in ((7, None), (8, Box.Yes), (9, Box.No), (10, Box.Cancel)):
+    for value in (7, 8, 9):
         e = DE.DatabaseEditor(None, folder, path=xlsx)
         e.table.item(1, 3).setText(str(value))
-        if answer is not None:
-            given.append(answer)
         e.accept()
-    assert asked == [("Save steels", "Keep the older version?")] * 3
-    kept = V.versions(xlsx)
-    assert [v.first for v in kept] == [False, True] and [_value(v.path) for v in kept] == [7, 1]
-    assert _value(xlsx) == 9                                    # Cancel saved nothing
+    assert asked == [] and _value(xlsx) == 9
+    assert [(v.number, _value(v.path)) for v in V.versions(xlsx)] == [(4, 9), (3, 8), (2, 7), (1, 1)]
+    assert V.in_use(xlsx).number == 4
     e = DE.DatabaseEditor(None, folder, path=xlsx)
     e.accept()
-    assert len(asked) == 3 and len(V.versions(xlsx)) == 2
+    assert len(V.versions(xlsx)) == 4
 
 
-def test_a_new_database_and_a_copy_of_an_included_one_get_their_first_version(folder, answers):
-    """Saved as new (imported here), its first version is itself; an included database edited, saved as a copy
-    in the folder: the copy's first version is the included database as it came."""
+def test_a_new_database_and_a_copy_of_an_included_one_get_their_versions(folder, answers):
+    """Saved as new (imported here), its v1 is itself; an included database edited, saved as a copy in the
+    folder: the copy's v1 is the included database as it came, with its network, and v2 the copy as saved."""
     asked, given = answers
     imported = {"stem": "mine", "names": ["a", "b"], "attributes": ["Density", "Youngs_Modulus"],
                 "units": ["kg/m^3", "Pa"], "rows": [["1", "100"], ["2", "200"]]}
     e = DE.DatabaseEditor(None, folder, imported=imported)
     e.accept()
     path = os.path.join(folder, "mine.xlsx")
-    assert e.result() == QtWidgets.QDialog.Accepted and [v.first for v in V.versions(path)] == [True]
+    assert e.result() == QtWidgets.QDialog.Accepted and [v.number for v in V.versions(path)] == [1]
     e = DE.DatabaseEditor(None, folder, path=DATABASE + ".xlsx")
     e.table.item(1, 3).setText("7")
     e.accept()
     copy = e.saved_path
     assert os.path.dirname(copy) == folder and _value(copy) == 7
-    first, = V.versions(copy)
-    assert first.first and _value(first.path) == 1 and os.path.isfile(first.network)
-    assert asked == []
+    v2, v1 = V.versions(copy)
+    assert _value(v1.path) == 1 and os.path.isfile(v1.network) and _value(v2.path) == 7
+    assert V.in_use(copy) == v2 and asked == []
+    assert not os.path.isdir(os.path.join(os.path.dirname(DATABASE), "versions"))   # the included one: untouched
 
 
-def test_versions_restores_and_deletes(folder, answers):
-    """Versions...: the versions, newest first. Restore asks "Keep the current version?" (Yes keeps it) and puts
-    the chosen one back; Delete asks first, in words that say when it is the first version, and No keeps it."""
+def test_versions_marks_the_one_in_use_restores_renames_and_deletes(folder, answers):
+    """Versions...: the versions newest first, "(in use)" beside the database's own. Restore asks nothing, keeps
+    every version and closes the window, the restored one now in use; the one in use can't be deleted or
+    restored; Rename... gives a note; Delete asks first, and No keeps the version."""
     from gui.database_versions_window import VersionsWindow
     asked, given = answers
     xlsx = _own(folder)
-    V.keep(xlsx, first=True)
     e = DE.DatabaseEditor(None, folder, path=xlsx)
     e.table.item(1, 3).setText("7")
-    given.append(Box.No)
     e.accept()
     w = VersionsWindow(None, xlsx)
-    assert w.list.count() == 1 and "first version" in w.list.item(0).text() and "6 materials" in w.list.item(0).text()
-    given.append(Box.Yes)
-    assert w.restore() and _value(xlsx) == 1 and w.list.count() == 2   # the current (7) kept first
-    assert asked[-1] == ("Restore steels", "Keep the current version?")
-    w.list.setCurrentRow(1)                                    # the first version
+    assert w.list.count() == 2 and w.list.item(0).text().startswith("steels v2 (in use)")
+    assert "6 materials" in w.list.item(1).text() and "(in use)" not in w.list.item(1).text()
+    assert not w.delete_button.isEnabled() and not w.restore_button.isEnabled()
+    assert w.rename("softer") and w.list.item(0).text().startswith("steels v2 softer (in use)")
+    w.list.setCurrentRow(1)
+    assert w.restore() and w.result() == QtWidgets.QDialog.Accepted and w.restored.number == 1
+    assert _value(xlsx) == 1 and asked == [] and len(V.versions(xlsx)) == 2
+    w = VersionsWindow(None, xlsx)
+    assert w.list.item(1).text().startswith("steels v1 (in use)")
+    w.list.setCurrentRow(0)
     given.append(Box.No)
     assert not w.delete() and w.list.count() == 2
-    assert asked[-1][1] == "This is the first version of steels. Delete it? This can't be undone."
+    assert asked[-1] == ("Delete version", "Delete steels v2 softer? This can't be undone.")
     given.append(Box.Yes)
-    assert w.delete() and w.list.count() == 1 and not V.has_first(xlsx)
-    w.list.setCurrentRow(0)
-    given.append(Box.Yes)
-    assert w.delete() and w.list.count() == 0 and w.empty.isVisibleTo(w)
+    assert w.delete() and w.list.count() == 1
 
 
-def test_a_save_that_changes_the_file_keeps_its_first_version(folder, answers):
+def test_a_save_that_changes_the_file_keeps_it_as_it_was_first(folder, answers):
     """A database with a column LSR MMTO does not know: the editor shows (modified) from the start, since Save
-    writes it without that column, and that Save keeps the file as it was as the first version. Save... from
-    the close question, then Cancel on "Keep the older version?": nothing saved, the editor still open."""
+    writes it without that column, and that Save keeps the file as it was (v1, with the column) and as saved
+    (v2). Save... from the close question saves at once."""
     from openpyxl import load_workbook
     asked, given = answers
     xlsx = _own(folder)
@@ -176,19 +177,18 @@ def test_a_save_that_changes_the_file_keeps_its_first_version(folder, answers):
     e = DE.DatabaseEditor(None, folder, path=xlsx)
     assert e.left_out == ["E0"] and e.modified() and e.windowTitle() == "Database (modified)"
     e.accept()
-    first, = V.versions(xlsx)
-    assert first.first and "E0" in load_workbook(first.path).worksheets[0][1][column - 1].value
-    assert asked == []
+    v2, v1 = V.versions(xlsx)
+    assert "E0" in load_workbook(v1.path).worksheets[0][1][column - 1].value and asked == []
     e = DE.DatabaseEditor(None, folder, path=xlsx)
     e.table.item(1, 3).setText("7")
-    given += [Box.Save, Box.Cancel]
+    given.append(Box.Save)
     e.reject()
-    assert [t for t, _ in asked] == ["Close the editor", "Save steels"] and e.result() == 0 and _value(xlsx) == 1
+    assert [t for t, _ in asked] == ["Close the editor"] and _value(xlsx) == 7 and len(V.versions(xlsx)) == 3
 
 
 def test_an_import_asks_before_it_is_thrown_away_and_a_new_name_skips_old_versions(folder, answers):
-    """An imported table not yet saved: closing asks first. A new database's name skips one whose older versions
-    are still there after its file was deleted, so it does not take them on."""
+    """An imported table not yet saved: closing asks first. A new database's name skips one whose versions are
+    still there after its file was deleted, so it does not take them on."""
     asked, given = answers
     imported = {"stem": "mine", "names": ["a"], "attributes": ["Density"], "units": ["kg/m^3"], "rows": [["1"]]}
     e = DE.DatabaseEditor(None, folder, imported=imported)
@@ -196,24 +196,60 @@ def test_an_import_asks_before_it_is_thrown_away_and_a_new_name_skips_old_versio
     e.reject()
     assert asked == [("Close the editor", "mine has changes that aren't saved.")]
     gone = _own(folder)
-    V.keep(gone, first=True)
+    V.record(gone)
     os.remove(gone)
     os.remove(os.path.splitext(gone)[0] + ".nt")
     imported["stem"] = "steels"
     assert DE.DatabaseEditor(None, folder, imported=imported).name.text() == "steels 2"
 
 
-def test_materials_offers_versions_for_the_projects_own_database():
-    """Versions... in Materials is offered for a database of the project's own, not for an included one, which
-    is never changed and so has none."""
+def test_materials_keeps_versions_renames_imports_and_says_what_was_restored(answers):
+    """In Materials: Versions... and Rename... only for a database of the project's own; opening it keeps the
+    database as a version, and a change made in Excel since as the next; Rename... renames the database, its
+    network and versions, and saves the project with the new name; Import copies a database of LSR MMTO into the
+    project's folder; a restore says which version is now used."""
     from gui import main_window as G, materials_panel
+    from gui.database_versions_window import VersionsWindow
+    from lsr_mmto.problem.project import Project
     d = tempfile.mkdtemp(prefix="_test_gui_", dir=ROOT)
     try:
         w = G.MMTOWindow()
         assert w.open_project(shutil.copy(os.path.join(ROOT, "projects", "U-bracket.mmto"), d))
-        assert not materials_panel.MaterialsPanel(w, w.project).versions_button.isEnabled()
-        os.makedirs(os.path.join(d, "materials"))
-        w.project.database = os.path.relpath(_own(os.path.join(d, "materials")), w.project.base_dir)
-        assert materials_panel.MaterialsPanel(w, w.project).versions_button.isEnabled()
+        panel = materials_panel.MaterialsPanel(w, w.project)
+        assert not panel.versions_button.isEnabled() and not panel.rename_button.isEnabled()
+        assert w.save_project_as(os.path.join(d, "mine", "mine.mmto"))
+        materials = os.path.join(w.project.base_dir, "materials")
+        os.makedirs(materials, exist_ok=True)
+        w.project.database = os.path.relpath(_own(materials), w.project.base_dir).replace("\\", "/")
+        w._write(w.path)
+        panel = materials_panel.MaterialsPanel(w, w.project)
+        assert panel.versions_button.isEnabled() and panel.rename_button.isEnabled()
+        xlsx = os.path.join(materials, "steels.xlsx")
+        assert [v.number for v in V.versions(xlsx)] == [1]
+        from lsr_mmto.materials.databases import database_table, material_display, write_database
+        names, attributes, units, values = database_table(xlsx)
+        values[0, 0] = 7.0
+        write_database(xlsx, attributes, units, names, material_display(xlsx)[1], material_display(xlsx)[0],
+                       values.tolist())                         # as Excel would change it
+        panel = materials_panel.MaterialsPanel(w, w.project)
+        assert [v.number for v in V.versions(xlsx)] == [2, 1] and V.in_use(xlsx).number == 2
+        assert panel.rename_database("alloys") == "materials/alloys.xlsx"
+        renamed = os.path.join(materials, "alloys.xlsx")
+        assert os.path.isfile(renamed) and not os.path.exists(xlsx) and [v.number for v in V.versions(renamed)] == [2, 1]
+        assert Project.load(w.path).database == "materials/alloys.xlsx"
+        real = VersionsWindow.exec_
+        VersionsWindow.exec_ = lambda self: (self.list.setCurrentRow(1), self.restore())
+        try:
+            panel.open_versions()
+        finally:
+            VersionsWindow.exec_ = real
+        assert panel.report.toPlainText().startswith("Now using alloys v1.") and _value(renamed) == 1
+        outside = tempfile.mkdtemp()
+        try:
+            shutil.copy(DATABASE + ".xlsx", os.path.join(outside, "alloys.xlsx"))
+            copied = panel.import_database(os.path.join(outside, "alloys.xlsx"))
+        finally:
+            shutil.rmtree(outside, ignore_errors=True)
+        assert copied == os.path.join(materials, "alloys 2.xlsx") and os.path.isfile(copied)
     finally:
         shutil.rmtree(d, ignore_errors=True)

@@ -67,6 +67,7 @@ if TYPE_CHECKING:
     from pyto.core.hex_mesher import HexMesher
     from pyto.core.mat_lib import Material
     from lsr_mmto.formulation.quantities import Quantity
+    from lsr_mmto.materials.database_versions import Version
     from lsr_mmto.materials.network_stamp import Comparison
     from lsr_mmto.optimize.mmto_to_params import MMTOParams
 
@@ -895,6 +896,26 @@ class Project:
             raise ValueError(f"{os.path.basename(nt)} comes with LSR MMTO and is never changed")
         stamp(nt, self.database_paths()[0])
 
+    def keep_database_version(self) -> "Version | None":
+        """The project's database kept as a version when it is in a state no version has, a change made in Excel
+        say, and its trained network kept with the version in use when it was trained on it
+        (database_versions.record). Called as a project opens in the window and as a run starts and ends, never
+        by validate. Only a database in the project's folder: one elsewhere (a shared folder, another project) is
+        never written beside. The version in use, or None (no database, one that comes with LSR MMTO, one outside
+        the project's folder, one that cannot be read just now).
+
+        Example: p.keep_database_version()
+        """
+        from lsr_mmto.materials.database_versions import record
+        from lsr_mmto.problem.project_folder import inside
+        if self._database is None:
+            return None
+        try:
+            xlsx = self.database_paths()[0]
+        except Exception:                                                              # noqa: BLE001
+            return None
+        return record(xlsx) if inside(xlsx, self.base_dir) else None
+
     def network_error(self) -> tuple[list[dict[str, Any]], str] | tuple[None, None]:
         """How closely the database's trained network gives back its materials: (rows, line). rows: one for
         each material and property, the database's value and the network's; line: the same in one sentence,
@@ -1307,6 +1328,8 @@ def run(project: Project, save_dir: str | None = None, **run_options: Any) -> st
     """
     from lsr_mmto.optimize.optimization_loop import _run_topopt
     from lsr_mmto.problem.project_folder import is_run
+    project.keep_database_version()                 # the database as this run reads it, kept as a version
     arguments = _run_arguments(_ready_to_run(project), save_dir, **run_options)
     _run_topopt(**arguments)
+    project.keep_database_version()                 # with the network the run trained on it, if it trained one
     return arguments["save_dir"] if is_run(arguments["save_dir"]) else None

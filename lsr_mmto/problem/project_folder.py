@@ -115,7 +115,7 @@ def _database_files(project: "Project") -> tuple[str | None, str | None]:
 
 
 def _copy_database(project: "Project", xlsx: str, nt: str | None, folder: str) -> str | None:
-    """The database file, its network and its older versions into folder/materials; project.database names
+    """The database file, its network and its versions into folder/materials; project.database names
     the copy. A network already beside a copy is kept: it may have been retrained there."""
     if not os.path.isfile(xlsx):                                # the same database moved: its settings stay
         project._database = xlsx                                # its error stays readable: the full path
@@ -123,7 +123,7 @@ def _copy_database(project: "Project", xlsx: str, nt: str | None, folder: str) -
     from lsr_mmto.materials.database_versions import copy_versions
     rel = copy_in(xlsx, folder, MATERIALS)
     project._database = rel
-    copy_versions(xlsx, os.path.join(folder, rel))              # its older versions go with it
+    copy_versions(xlsx, os.path.join(folder, rel))              # its versions go with it
     if nt is not None and os.path.isfile(nt):
         dest = os.path.splitext(os.path.join(folder, rel))[0] + ".nt"
         if not os.path.exists(dest):
@@ -232,7 +232,7 @@ def convert_database_units(project: "Project", limits: bool = True) \
     """The project's database in the project's units (Project.unit_conversion): each column in other units
     multiplied by its factor, written over the project's own copy in its folder. A database from elsewhere
     (a shipped one too) is first copied in with its network (bring_in_database), and only the copy is
-    written; a database with no first version kept (database_versions) keeps it first, as it was. The trained
+    written; the database before and after is each kept as a version (database_versions.record). The trained
     network is kept: it learns each column scaled to 0 to 1, which a change of unit leaves as it was, up to
     rounding in the last digit. A network that matched the database, or differed from it only in what a yes
     settles (colours or labels, an earlier conversion), is stamped with the converted one and a note of the
@@ -253,8 +253,7 @@ def convert_database_units(project: "Project", limits: bool = True) \
     if not inside(xlsx, project.base_dir):
         raise ValueError(f"{xlsx} is not in the project's folder")
     from lsr_mmto.materials import database_versions
-    if not database_versions.has_first(xlsx):                   # the database before its first change, kept
-        database_versions.keep(xlsx, first=True)
+    database_versions.record(xlsx)                              # the database before the conversion, kept
     nt = project.network_path()
     try:
         before = compare(xlsx, nt) if os.path.isfile(nt) and os.path.getsize(nt) > 0 and not in_shipped_folder(nt) \
@@ -276,6 +275,7 @@ def convert_database_units(project: "Project", limits: bool = True) \
                "); the network learns each column scaled to 0 to 1, so it still fits them up to rounding in the " \
                "last digit"
         stamp(nt, xlsx, note + ("" if before.state == SAME else f"; before that, {before.text}"))
+    database_versions.record(xlsx)                              # and after it: a version of its own
     if not limits:
         return columns, []
     for i, _, _, bound in bounds:

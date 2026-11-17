@@ -1067,7 +1067,9 @@ def test_import_database():
     property LSR MMTO knows are read (a unit in brackets after the name too), the others are listed in one
     message, and the editor opens with what was read, a value that is not a number shown as a cell to
     correct; once saved in the project's folder the project uses it. A file that is already a database of
-    LSR MMTO is used where it is, with its trained network, and no editor opens."""
+    LSR MMTO is copied into the project's folder with its trained network, under a name no database there has
+    (here BM1_3Mats_2Attr 2: the project's own copy of the included one is there), and no editor opens; the
+    file itself is not changed."""
     from lsr_mmto.materials.databases import check_database, database_table
     from gui import database_editor as DE
     with scratch() as d:
@@ -1107,16 +1109,18 @@ def test_import_database():
             assert m.import_database(table) is None
 
         from lsr_mmto.materials.databases import DATABASE_DIR                 # a database of LSR MMTO already:
-        os.makedirs(os.path.join(d, "elsewhere"))                             # used where it is, with its network
+        os.makedirs(os.path.join(d, "elsewhere"))                             # copied in, with its network
         own = shutil.copy(os.path.join(ROOT, DATABASE_DIR, "BM1_3Mats_2Attr.xlsx"), os.path.join(d, "elsewhere"))
         shutil.copy(os.path.join(ROOT, DATABASE_DIR, "BM1_3Mats_2Attr.nt"), os.path.join(d, "elsewhere"))
         try:
             DE.DatabaseEditor.exec_ = lambda e: pytest.fail("the editor opened for a database of LSR MMTO")
-            assert m.import_database(own) == own
+            copied = m.import_database(own)
         finally:
             DE.DatabaseEditor.exec_ = real_exec
-        assert m.project.database == "../elsewhere/BM1_3Mats_2Attr.xlsx" and m.combo.currentText() == "BM1_3Mats_2Attr"
-        assert os.path.samefile(m.project.network_path(), os.path.join(d, "elsewhere", "BM1_3Mats_2Attr.nt"))
+        assert copied == os.path.join(d, "P", "materials", "BM1_3Mats_2Attr 2.xlsx")
+        assert m.project.database == "materials/BM1_3Mats_2Attr 2.xlsx" and m.combo.currentText() == "BM1_3Mats_2Attr 2"
+        assert os.path.samefile(m.project.network_path(), os.path.join(d, "P", "materials", "BM1_3Mats_2Attr 2.nt"))
+        assert sorted(os.listdir(os.path.join(d, "elsewhere"))) == ["BM1_3Mats_2Attr.nt", "BM1_3Mats_2Attr.xlsx"]
         assert m.tabs.isTabEnabled(1) and "gives back every material" in m.report.toPlainText()
 
 
@@ -2330,8 +2334,8 @@ def test_convert_units():
     """Convert to <units> units (Materials), on a copy of the Airplane bracket project (mmKS, its database in
     kg/m^3, Pa and USD/kg): the button shows only while the units differ; the window lists each column with its
     factor and the limits; OK writes the project's own copy with the values times the factors exactly and the
-    limits converted, saves the project, and leaves no unit warning, the copy as it was before kept as its first
-    version; the network keeps its weights, still gives the materials back as closely, and is asked about once
+    limits converted, saves the project, and leaves no unit warning, the copy as it was before kept as v1 and as
+    converted as v2, the one in use; the network keeps its weights, still gives the materials back as closely, and is asked about once
     before the next run, the conversion named; the shipped database is untouched. Unticked, the limits stay."""
     from lsr_mmto.materials import database_versions
     from lsr_mmto.materials.databases import DATABASE_DIR, database_table
@@ -2368,8 +2372,9 @@ def test_convert_units():
             p, folder = w.project, os.path.join(d, "A", "materials")
             assert p.database == "materials/CustomAlloys20_3D.xlsx" and sorted(os.listdir(folder)) == \
                 ["CustomAlloys20_3D.nt", "CustomAlloys20_3D.xlsx", "versions"]
-            first, = database_versions.versions(os.path.join(folder, "CustomAlloys20_3D.xlsx"))
-            assert first.first and np.array_equal(database_table(first.path)[3], old)
+            converted, first = database_versions.versions(os.path.join(folder, "CustomAlloys20_3D.xlsx"))
+            assert first.number == 1 and np.array_equal(database_table(first.path)[3], old)
+            assert database_versions.in_use(os.path.join(folder, "CustomAlloys20_3D.xlsx")) == converted
             _, _, units, new = database_table(os.path.join(folder, "CustomAlloys20_3D.xlsx"))
             stored = np.vectorize(lambda v: float("%.16g" % v))(old * factors)   # as an Excel file keeps them
             assert units == ["t/mm^3", "MPa", "USD/t", "MPa"] and np.array_equal(new, stored)

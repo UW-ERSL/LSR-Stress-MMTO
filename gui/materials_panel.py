@@ -124,7 +124,7 @@ def import_help():
             "**The file:** material names in the first column, property names in the first row, each with its "
             "unit in brackets, e.g. Density [kg/m^3]. The units may go in a second row instead.\n\n"
             "**What happens:**\n\n"
-            "1. A database made by LSR MMTO is used as it is.\n"
+            "1. A database made by LSR MMTO is copied into the project's folder as it is, with its trained network.\n"
             f"2. Any other table: only columns named after a property LSR MMTO knows are read: {names}. A message "
             "lists the columns left out. To keep one, rename it in your file and import again.\n"
             "3. The editor opens. Check every value, choose any unit it could not read, then Save. The database "
@@ -239,10 +239,11 @@ class MaterialsPanel(QtWidgets.QDialog):
         self.edit_button = QtWidgets.QPushButton("Edit...")
         self.excel_button = QtWidgets.QPushButton("Open in Excel")
         self.versions_button = QtWidgets.QPushButton("Versions...")
+        self.rename_button = QtWidgets.QPushButton("Rename...")
         self.import_button = QtWidgets.QPushButton("Import...")
         for button, slot in ((self.new_button, self.new_database), (self.edit_button, self.edit_database),
                              (self.excel_button, self._open_in_excel), (self.versions_button, self.open_versions),
-                             (self.import_button, self.import_database)):
+                             (self.rename_button, self.rename_database), (self.import_button, self.import_database)):
             button.clicked.connect(lambda _=False, s=slot: s())     # not s(checked): Qt's checked is no path
             if button is self.import_button:
                 actions.addStretch()
@@ -398,8 +399,8 @@ class MaterialsPanel(QtWidgets.QDialog):
 
     def import_database(self, path=None):
         """A table of materials made elsewhere (an Excel or CSV file). One that is already a database of LSR
-        MMTO (its check finds nothing wrong) is used where it is, with its trained network beside it if it has
-        one. Any other: the columns that are properties LSR MMTO knows are read, the others listed in one
+        MMTO (its check finds nothing wrong) is copied into the project's folder with its trained network if it
+        has one (copy_into), and the project uses the copy. Any other: the columns that are properties LSR MMTO knows are read, the others listed in one
         message; the database editor then opens with what was read, to be checked and saved in the project's
         folder, which the project then uses. Returns the database's path, or None."""
         from lsr_mmto.materials.databases import check_database, import_table
@@ -413,12 +414,17 @@ class MaterialsPanel(QtWidgets.QDialog):
                                                             "Tables (*.xlsx *.xls *.csv)", options=FILE_DIALOG_OPTIONS)
             if not path:
                 return None
-        if path.lower().endswith(".xlsx") and not check_database(path)[0]:
-            self.set_database(path)                                 # a database of LSR MMTO: used where it is
-            return path
         folder = self._own_folder("Import a database")
         if folder is None:
             return None
+        if path.lower().endswith(".xlsx") and not check_database(path)[0]:
+            copied = self.copy_into(path, folder)                   # a database of LSR MMTO: copied in as it is
+            self.set_database(copied)
+            self.report.setText(f"{os.path.basename(copied)} copied into the project's folder"
+                                + (", with its trained network." if os.path.isfile(os.path.splitext(copied)[0]
+                                                                                    + ".nt") else ".")
+                                + "\n" + self.report.toPlainText())
+            return copied
         try:
             table = import_table(path)
         except Exception as e:                                      # noqa: BLE001
@@ -438,6 +444,26 @@ class MaterialsPanel(QtWidgets.QDialog):
         return saved
 
     @staticmethod
+    def copy_into(path, folder):
+        """A database of LSR MMTO copied into the project's materials folder with its trained network, under a
+        name no database there has or had (database_versions.name_taken); one already in that folder is used
+        where it is. The copy's path."""
+        import shutil
+        from lsr_mmto.materials.database_versions import name_taken
+        if os.path.normcase(os.path.dirname(os.path.abspath(path))) == os.path.normcase(os.path.abspath(folder)):
+            return path
+        stem = os.path.splitext(os.path.basename(path))[0]
+        name, k = stem, 2
+        while name_taken(folder, name):
+            name, k = f"{stem} {k}", k + 1
+        dest = os.path.join(folder, name + ".xlsx")
+        shutil.copy2(path, dest)
+        network = os.path.splitext(path)[0] + ".nt"
+        if os.path.isfile(network):
+            shutil.copy2(network, os.path.splitext(dest)[0] + ".nt")
+        return dest
+
+    @staticmethod
     def import_note(table):
         """What an import read and what it left out, in plain words; None when it took every column."""
         from lsr_mmto.materials.databases import SHOWN
@@ -454,26 +480,55 @@ class MaterialsPanel(QtWidgets.QDialog):
         return "\n".join(lines)
 
     def _own_database(self):
-        """The database's file when it is the project's own (an included one has no versions), else None."""
+        """The database's file when it is the project's own: in the project's folder (an included one has no
+        versions, and one elsewhere, a shared folder or another project's, is never written beside), else None."""
         from lsr_mmto.materials.databases import in_shipped_folder
+        from lsr_mmto.problem.project_folder import inside
         if self.project.database is None:
             return None
         xlsx, error = database_choice(self.project)
-        return None if error or in_shipped_folder(xlsx) else xlsx
+        return None if error or in_shipped_folder(xlsx) or not inside(xlsx, self.project.base_dir) else xlsx
 
     def open_versions(self):
-        """Versions...: the older versions of the project's own database; the panel read again after a restore.
-        The window, or None."""
+        """Versions...: the versions of the project's own database; the panel read again after a restore, which
+        it says ("Now using steels v2"). The window, or None."""
         from .database_versions_window import VersionsWindow
         xlsx = self._own_database()
         if xlsx is None:
             return None
         window = VersionsWindow(self, xlsx)
         window.exec_()
-        if window.restored:
+        if window.restored is not None:
             self._refresh()
-            self.report.setText("An older version was restored.\n" + self.report.toPlainText())
+            self.report.setText(f"Now using {window.stem} {window.restored.name}.\n" + self.report.toPlainText())
         return window
+
+    def rename_database(self, name=None):
+        """Rename...: the project's own database renamed, with its network and all its versions, and the project
+        saved with the new name (the window's rename_database); name asked for when None. The new name of the
+        database as the project holds it, or None."""
+        window = self.parent()
+        xlsx = self._own_database()
+        if xlsx is None or not hasattr(window, "rename_database"):
+            return None
+        stem = os.path.splitext(os.path.basename(xlsx))[0]
+        if name is None:
+            name, ok = QtWidgets.QInputDialog.getText(self, "Rename database", "New name:", text=stem)
+            if not ok:
+                return None
+        line = window.rename_database(name, self)
+        if line is None:
+            return None
+        self.original = self.project.database = window.project.database
+        self.combo.blockSignals(True)
+        self.combo.clear()
+        for value, text, where in database_choices(self.project):
+            self._add_choice(value, text, where)
+        self.choose(self.project.database)
+        self.combo.blockSignals(False)
+        self._refresh()
+        self.report.setText(line + "\n" + self.report.toPlainText())
+        return self.project.database
 
     def edit_database(self):
         """The database in the editor: one of the project's own is changed in place; one that comes with
@@ -569,7 +624,17 @@ class MaterialsPanel(QtWidgets.QDialog):
                                        bool(self.project.unit_conversion()[0]))
         for button in (self.edit_button, self.excel_button):
             button.setEnabled(self.project.database is not None)
-        self.versions_button.setEnabled(self._own_database() is not None)
+        own = self._own_database()
+        self.versions_button.setEnabled(own is not None)
+        window = self.parent()
+        self.rename_button.setEnabled(own is not None and self.project.database == self.original and
+                                      hasattr(window, "rename_database") and window.own_folder())
+        self.rename_button.setToolTip("" if self.rename_button.isEnabled() else
+                                      "Only a database of your own in the project's folder, once the project is "
+                                      "saved and its database chosen with OK, can be renamed.")
+        if own is not None:
+            from lsr_mmto.materials.database_versions import record
+            record(own)                     # a state not kept yet (a change made in Excel, say) kept as a version
         if self.project.database is None:
             self.report.setText(NO_DATABASE)
             return
