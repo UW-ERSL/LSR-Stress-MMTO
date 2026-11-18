@@ -8,7 +8,8 @@ up and run with:
     p = Project.load("my project.mmto")
     run(p)
 
-    problem/      a project: the part, its selections, supports and loads, settings, run(p)
+    problem/      a project: the part (an STL, or shapes: lsr_mmto.shapes), its selections, supports and
+                  loads, settings, run(p)
     materials/    material databases and the material network
     elements/     the finite element: strain matrix and Lame parameters
     design/       density filter and projection, latent space to properties, latent penalties
@@ -18,6 +19,7 @@ up and run with:
     results/      a saved run read back: tables, figures, 3D views, STL export
     pyto_ad_imports.py   every name taken from PyTO-AD
 """
+from lsr_mmto.problem import shapes
 from lsr_mmto.problem.project import Project, run
 from lsr_mmto.problem.selections import (box, cylinder, difference, face, function, halfspaces, ids, inside_stl,
                                          intersect, near_face, nearest, plane, rows, selection, sphere, stl_faces,

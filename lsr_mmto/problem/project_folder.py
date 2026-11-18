@@ -100,7 +100,10 @@ def copy_in(path: str, folder: str, sub: str) -> str:
 
 
 def has_own_folder(project: "Project") -> bool:
-    """True when the project lives in a project folder: its STL is in the folder's part/."""
+    """True when the project lives in a project folder: its STL is in the folder's part/. A part made of shapes
+    is always built there, so for one the project's own file must be in the folder too (<name>.mmto)."""
+    if project.part_shapes is not None:
+        return os.path.isfile(os.path.join(project.base_dir, f"{project.name}.mmto"))
     return inside(project.stl_path(), os.path.join(project.base_dir, PART))
 
 
@@ -145,16 +148,18 @@ def bring_in_database(project: "Project") -> str | None:
 def pack(project: "Project", folder: str) -> "Project":
     """Everything the project uses copied into folder, which becomes the project's folder: the
     STL, and any file a region names, into part/, the database and its network into materials/.
-    Results stay where they are. Changes the project itself (base_dir, stl, database, the regions'
-    file paths, and its settings completed) and returns it."""
+    Results stay where they are. A part made of shapes is not copied: it is built in folder when it is
+    next needed. Changes the project itself (base_dir, stl, database, the regions' file paths, and its
+    settings completed) and returns it."""
     folder = os.path.abspath(folder)
     os.makedirs(folder, exist_ok=True)
     project.complete_settings()             # a shipped database's network settings, while it is named
-    stl = os.path.abspath(project.stl_path())
+    stl = None if project.part_shapes is not None else os.path.abspath(project.stl_path())
     xlsx, nt = _database_files(project)
     old_base = project.base_dir
     project.base_dir = folder
-    project.stl = copy_in(stl, folder, PART) if os.path.isfile(stl) else stl
+    if stl is not None:
+        project.stl = copy_in(stl, folder, PART) if os.path.isfile(stl) else stl
     for selection in project.selections.values():
         _bring_in_files(selection, old_base, folder)
     if xlsx is not None:
@@ -207,13 +212,19 @@ def scale_part(project: "Project", factor: float) -> str:
     part of a project in a folder of its own is written; an STL anywhere else (an example's, the one
     the part came from) never is. Nothing else changes: the units, the loads, the limits and the
     database stay as they are. Returns the STL's path; ValueError for a project not in a folder of its
-    own or a factor that is not a finite number above 0."""
+    own or a factor that is not a finite number above 0. A part made of shapes has every length in its steps
+    scaled (shapes.scaled) and is built again from them; nothing is written to the project file until it is
+    saved."""
     from stl import mesh as stl_mesh
     from stl import Mode
+    from lsr_mmto.problem.shapes import scaled
     if not has_own_folder(project):
         raise ValueError("only the part of a project in a folder of its own is scaled; save the project first")
     if isinstance(factor, bool) or not isinstance(factor, (int, float)) or not math.isfinite(factor) or factor <= 0:
         raise ValueError(f"the part is scaled by a number above 0, not {factor!r}")
+    if project.part_shapes is not None:
+        project.part_shapes = scaled(project.part_shapes, factor)
+        return os.path.abspath(project.stl_path())
     path = os.path.abspath(project.stl_path())
     part = stl_mesh.Mesh.from_file(path)
     part.vectors *= factor                                  # the triangles' normals keep their direction

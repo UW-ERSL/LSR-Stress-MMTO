@@ -1528,7 +1528,9 @@ class MMTOWindow(MainWindow):
         unit = self.length_unit()
         size = b[1] - b[0]
         f = self.length_format(float(np.max(size)))
-        lines = [f"Part: {os.path.basename(self.project.stl_path())}"]
+        shapes = self.project.part_shapes
+        lines = [f"Part: made of shapes ({len(shapes)} step{'s' if len(shapes) != 1 else ''})" if shapes is not None
+                 else f"Part: {os.path.basename(self.project.stl_path())}"]
         try:
             volume = part_mass_properties(self.stl_geom)[1]
             lines.append(f"Volume: {volume:.4g} {unit}³".rstrip())
@@ -2114,7 +2116,8 @@ class MMTOWindow(MainWindow):
             self.message_text.append("This is an example. Save makes a copy in a project folder of your own; the "
                                      "example itself stays as it is.")
         if not os.path.isfile(project.stl_path()):
-            self.message_text.append(f"STL not found: {project.stl_path()}")
+            said = [str(e) for e in project.validate(network=False) if e.gui_step == "part"]
+            self.message_text.append(said[0] if said else f"STL not found: {project.stl_path()}")
         if filled:
             self.message_text.append(f"{len(filled)} settings missing from the file were set to their defaults; "
                                      f"Save writes them.")
@@ -2697,7 +2700,7 @@ class MMTOWindow(MainWindow):
         if self.own_folder():                                       # the new part goes into the project folder
             from lsr_mmto.problem.project_folder import PART, copy_in
             stl = copy_in(stl, self.project.base_dir, PART)
-        self.project.stl = stl
+        self.project.stl, self.project.part_shapes = stl, None      # an STL now, no longer made of shapes
         lines = [f"Part replaced: {os.path.basename(self.project.stl_path())}"]
         if names:
             lines.append(f"Check the selections {', '.join(names)}: they are triangle numbers of the old STL.")
@@ -2728,6 +2731,15 @@ class MMTOWindow(MainWindow):
             answer = QtWidgets.QMessageBox.question(
                 self, "Scale part", f"These selections were typed for the old size and are not scaled: "
                                     f"{', '.join(typed)}.", QtWidgets.QMessageBox.Ok | QtWidgets.QMessageBox.Cancel)
+            if answer != QtWidgets.QMessageBox.Ok:
+                return False
+        picked = triangle_selections(self.project) if self.project.part_shapes is not None else []
+        if picked:                                                  # the part is built again, its triangles anew
+            answer = QtWidgets.QMessageBox.question(
+                self, "Scale part", f"These selections are triangle numbers of the part: {', '.join(picked)}. The "
+                                    f"scaled part is made again from its shapes, so the same numbers may be other "
+                                    f"triangles. Scale the part anyway?",
+                QtWidgets.QMessageBox.Ok | QtWidgets.QMessageBox.Cancel)
             if answer != QtWidgets.QMessageBox.Ok:
                 return False
         if not self.own_folder():

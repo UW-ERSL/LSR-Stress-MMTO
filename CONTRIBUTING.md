@@ -80,14 +80,14 @@ tests needs its line in `FOLDERS` there. While developing, run only the tests fo
 
 | What you changed | The tests that cover it |
 |---|---|
-| `lsr_mmto/problem/` (the project, selections, mesh, supports and loads, settings, the project folder) | `problem/test_project.py`, `problem/test_selections.py`, `problem/test_mesh.py`, `problem/test_project_folder.py` |
+| `lsr_mmto/problem/` (the project, selections, mesh, supports and loads, settings, the project folder, parts made of shapes) | `problem/test_project.py`, `problem/test_selections.py`, `problem/test_mesh.py`, `problem/test_project_folder.py`, `problem/test_part_shapes.py` |
 | `lsr_mmto/materials/` (databases, the material network) | `materials/test_databases.py` |
 | `lsr_mmto/formulation/` (quantities, the formula text) | `code_rules/test_extending.py`, `problem/test_project.py`, `gradients/test_ad_quantities.py` |
 | `lsr_mmto/physics/` | `runs/test_every_physics_runs.py`, `physics/test_structural_physics.py`, `physics/test_thermal_physics.py`, `physics/test_thermoelastic_physics.py`, `code_rules/test_physics_folders.py`, `code_rules/test_extending.py`, `gui/test_thermal_walk_through.py`, `runs/test_final_check.py`, `runs/test_solid_part_analysis.py` |
 | `lsr_mmto/optimize/`, `lsr_mmto/design/`, `lsr_mmto/elements/` (what happens during an optimization run) | `runs/test_run_project.py`, `code_rules/test_extending.py`, `gradients/test_gradcheck.py`, `runs/test_regression.py`, `runs/test_solid_part_analysis.py` |
 | `lsr_mmto/results/` (reading runs back, tables, figures, STL export) | `runs/test_stl_export.py`, `problem/test_project_folder.py`, `runs/test_solid_part_analysis.py` |
 | `gui/` | `gui/test_gui.py`, `gui/test_gui_look.py`, `docs/test_user_guide.py`, `gui/test_thermal_walk_through.py` |
-| a docstring, or anything under `docs/` | `docs/test_reference.py`, `docs/test_user_guide.py`, `docs/test_code_map.py`, `docs/test_testing_doc.py`, `code_rules/test_docstring_reads_and_sets.py` |
+| a docstring, or anything under `docs/` | `docs/test_reference.py`, `docs/test_user_guide.py`, `docs/test_code_map.py`, `docs/test_testing_doc.py`, `code_rules/test_docstring_reads_and_sets.py`, `problem/test_part_shapes.py` (docs/part_shapes.md) |
 | a test | `docs/test_testing_doc.py` |
 | `setup_environment.py`, `make_shortcut.py`, `uninstall_lsr_mmto.py` | `gui/test_launcher.py` |
 | `Python_walkthrough.ipynb` | `docs/test_python_walkthrough.py` |

@@ -134,6 +134,17 @@ def analyse_solid_part(project: "Project", material: int, save_dir: str | None =
     return _analyse(project, design, save_dir, should_stop)
 
 
+def _same_part(a: "Project", b: "Project") -> bool:
+    """Whether two projects have the same part: the same shapes for parts made of shapes, the same STL file
+    content otherwise."""
+    import filecmp
+    from lsr_mmto.problem.shapes import plain
+    if a.part_shapes is not None or b.part_shapes is not None:
+        return a.part_shapes is not None and b.part_shapes is not None and plain(a.part_shapes) == plain(b.part_shapes)
+    return os.path.isfile(a.stl_path()) and os.path.isfile(b.stl_path()) and \
+        filecmp.cmp(a.stl_path(), b.stl_path(), shallow=False)
+
+
 def analyse_design(project: "Project", run_folder: str, save_dir: str | None = None,
                    should_stop: Callable[[], bool] | None = None) -> "Run":
     """Analyses a saved run's design as built, solved once under the project's supports and loads as they are
@@ -152,7 +163,6 @@ def analyse_design(project: "Project", run_folder: str, save_dir: str | None = N
         nothing; or None
     Example: a = analyse_design(p, folder, save_dir=folder + " design")
     """
-    import filecmp
     from lsr_mmto.problem.project import Project
     from lsr_mmto.problem.project_folder import run_facts
     from lsr_mmto.materials.databases import database_table
@@ -167,8 +177,7 @@ def analyse_design(project: "Project", run_folder: str, save_dir: str | None = N
         raise ValueError("this is an analysis, not a run: analyse the run it came from")
     differ = [what for what, same in (("mesh dofs", ran.n_dof == project.n_dof),
                                       ("single element layer", ran.single_layer == project.single_layer),
-                                      ("part", os.path.isfile(ran.stl_path()) and os.path.isfile(project.stl_path())
-                                       and filecmp.cmp(ran.stl_path(), project.stl_path(), shallow=False)))
+                                      ("part", _same_part(ran, project)))
               if not same]
     if differ:
         raise ValueError(f"the run was made on another mesh than the project's now ({', '.join(differ)} changed "

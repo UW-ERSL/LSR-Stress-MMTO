@@ -12,6 +12,7 @@ A project is an LSR MMTO project file (.mmto): the layout of a PyTO-AD project f
 | `name, comment` | the project's name (also the run's name) and a description |
 | `physics` | the physics the project uses, see Physics |
 | `mesh` | n_dof (degrees of freedom asked for) and single_layer (one element through the thickness) |
+| `part_shapes` | the part as a list of shape steps (docs/part_shapes.md), built into the STL; null for an imported STL |
 | `selections` | named regions of the mesh, see Selection types |
 | `bcs` | boundary conditions, each on a named selection, see Boundary conditions |
 | `keep_solid` | names of element selections kept solid |
@@ -449,17 +450,18 @@ link = selection("left")
 
 ### Project
 
-`Project(name, stl, n_dof=None, single_layer=None, base_dir=None)`, after `from lsr_mmto import Project`
+`Project(name, stl=None, n_dof=None, single_layer=None, base_dir=None, part_shapes=None)`, after `from lsr_mmto import Project`
 
 One problem: the part, its selections, supports and loads, keep-solid regions, material database, objective and constraints, and settings.
 
 | argument | format | default |
 |---|---|---|
 | `name` | the project's name, text; its runs are named after it | required |
-| `stl` | the part, an STL file: its path, absolute or relative to base_dir | required |
+| `stl` | the part, an STL file: its path, absolute or relative to base_dir; None when part_shapes is given | `None` |
 | `n_dof` | how fine the mesh is, a whole number of unknowns (see Settings, mesh); None is the default there | `None` |
 | `single_layer` | True for one element through the thickness (a flat part such as a plate), False for a solid part; None is the default under Settings, mesh | `None` |
 | `base_dir` | the folder relative paths start from; None is the folder Python runs in | `None` |
+| `part_shapes` | the part as a list of shape steps (lsr_mmto.shapes, docs/part_shapes.md), built into an STL in part/ of base_dir when it is needed; None when stl is given. A project has one of the two | `None` |
 
 ```python
 p = Project("my bracket", stl="data/models/UBracket/UBracket.STL", n_dof=8000)
@@ -526,6 +528,16 @@ The voxel mesh of the part, made from the mesh settings (n_dof, single_layer) as
 
 ```python
 mesh = p.mesh()
+```
+
+### p.part_warnings
+
+`p.part_warnings()`
+
+What may not come out as meant in a part made of shapes: a cut that misses the part, a part in pieces, a feature under 2 elements across at the mesh settings. An empty list for an imported STL. ShapeError for a part that cannot be made. Part of warnings, which a run prints.
+
+```python
+print(p.part_warnings())
 ```
 
 ### p.evaluate

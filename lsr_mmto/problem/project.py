@@ -44,6 +44,7 @@ Objective and constraints are written as PyTO-AD stores them: an expression, a s
 An expression is exactly one quantity, e.g. "Mass()"
 or "MaterialVolumeFraction(2, tau=0.5)"; every quantity is listed in docs/reference.md.
 """
+import copy
 import json
 import os
 from typing import TYPE_CHECKING, Any, Callable
@@ -51,6 +52,8 @@ from typing import TYPE_CHECKING, Any, Callable
 import numpy as np
 
 from lsr_mmto.problem import selections as S
+from lsr_mmto.problem.project_folder import PART
+from lsr_mmto.problem.shapes import ShapeError, check, plain, to_script
 from lsr_mmto.materials.databases import (ATTRIBUTES, DATABASE_DIR, DATABASE_VAE, UNIT_SYSTEMS, UNITS, VAEParams,
                                          check_database, database_attributes, database_units, in_shipped_folder,
                                          recommended_latent_dim, unit_ratio)
@@ -165,7 +168,9 @@ class Project:
     objective and constraints, and settings.
 
     name: the project's name, text; its runs are named after it
-    stl: the part, an STL file: its path, absolute or relative to base_dir
+    stl: the part, an STL file: its path, absolute or relative to base_dir; None when part_shapes is given
+    part_shapes: the part as a list of shape steps (lsr_mmto.shapes, docs/part_shapes.md), built into an STL in
+        part/ of base_dir when it is needed; None when stl is given. A project has one of the two
     n_dof: how fine the mesh is, a whole number of unknowns (see Settings, mesh); None is the default there
     single_layer: True for one element through the thickness (a flat part such as a plate), False for a
         solid part; None is the default under Settings, mesh
@@ -194,7 +199,8 @@ class Project:
     """
 
     name: str
-    stl: str                                    # as given; relative paths are relative to base_dir
+    stl: str | None                             # as given; relative paths are relative to base_dir
+    part_shapes: "list[dict[str, Any]] | None"  # the shape steps, or None for an imported STL
     base_dir: str                               # absolute
     n_dof: int
     single_layer: bool
@@ -209,11 +215,19 @@ class Project:
     formulation: dict[str, Any]                 # {"objective": {"expression", "sense"} or None, "constraints": [...]}
     settings: dict[str, dict[str, Any]]         # {section: {key: value}}
     _gui: dict[str, Any]                        # everything else in the file, kept for the GUI
+    _from_record: bool                          # a run's project (from_record): its built part removes no other
 
-    def __init__(self, name: str, stl: str, n_dof: int | None = None, single_layer: bool | None = None,
-                 base_dir: str | None = None) -> None:
+    def __init__(self, name: str, stl: str | None = None, n_dof: int | None = None, single_layer: bool | None = None,
+                 base_dir: str | None = None, part_shapes: "list[dict[str, Any]] | None" = None) -> None:
+        if (stl is None) == (part_shapes is None):
+            raise ValueError("a project's part is an STL file (stl=...) or a list of shapes (part_shapes=...): "
+                             "give one of the two")
         self.name = name
-        self.stl = stl                          # as given; relative paths are relative to base_dir
+        if part_shapes is not None:
+            check(part_shapes)
+            part_shapes = plain(part_shapes)
+        self.part_shapes = part_shapes
+        self.stl = stl                          # relative paths: to base_dir
         self.base_dir = os.path.abspath(base_dir or os.getcwd())
         self.n_dof = int(MESH_DEFAULTS["n_dof"] if n_dof is None else n_dof)
         self.single_layer = bool(MESH_DEFAULTS["single_layer"] if single_layer is None else single_layer)
@@ -229,6 +243,7 @@ class Project:
         self.formulation = {"objective": None, "constraints": []}
         self.settings = {k: dict(v) for k, v in DEFAULT_SETTINGS.items()}
         self._gui = {}                          # everything else in the file, kept for the GUI
+        self._from_record = False
 
     # ------------------------------------------------------------------ building it up
     def add_selection(self, name: str, selection: "S.Selection") -> str:
@@ -383,7 +398,30 @@ class Project:
 
     # ------------------------------------------------------------------ checks without a mesh
     def stl_path(self) -> str:
+        """The part's STL. A part made of shapes is built into part/ first when no STL of these shapes is there
+        (part_from_shapes.part_stl); for one that cannot be made or written, a path where no file is (validate
+        says why)."""
+        if self.part_shapes is not None:
+            from lsr_mmto.problem.part_from_shapes import part_stl
+            try:
+                return part_stl(self)
+            except (ShapeError, OSError):
+                return os.path.join(self.base_dir, PART, "shapes_not_built.stl")
+        if self.stl is None:                                # neither: validate says so
+            return os.path.join(self.base_dir, PART, "no_part.stl")
         return self.stl if os.path.isabs(self.stl) else os.path.join(self.base_dir, self.stl)
+
+    def part_warnings(self) -> list[str]:
+        """What may not come out as meant in a part made of shapes: a cut that misses the part, a part in pieces,
+        a feature under 2 elements across at the mesh settings. An empty list for an imported STL. ShapeError for
+        a part that cannot be made. Part of warnings, which a run prints.
+
+        Example: print(p.part_warnings())
+        """
+        if self.part_shapes is None:
+            return []
+        from lsr_mmto.problem.part_from_shapes import build_warnings, small_feature_warnings
+        return build_warnings(self) + small_feature_warnings(self)
 
     def unknowns_per_node(self) -> int:
         """How many unknowns the project's physics solves for at each node (3 for structural: the
@@ -477,7 +515,18 @@ class Project:
         Problem: its text, and the step of the setup it is about (Problem.gui_step). network False leaves out
         the checks of the trained network (vae_check), for an analysis, which uses the database's own values."""
         errors = []
-        if not os.path.isfile(self.stl_path()):
+        if self.part_shapes is not None:
+            from lsr_mmto.problem.part_from_shapes import part_stl
+            try:
+                part_stl(self)
+            except ShapeError as e:
+                errors.append(Problem("part", f"the part's shapes: {e}"))
+            except OSError as e:
+                errors.append(Problem("part", f"the part made of shapes could not be written in "
+                                              f"{os.path.join(self.base_dir, PART)}: {e}"))
+        elif self.stl is None:
+            errors.append(Problem("part", "no part: give an STL file (stl) or a list of shapes (part_shapes)"))
+        elif not os.path.isfile(self.stl_path()):
             errors.append(Problem("part", f"STL file {self.stl_path()} does not exist"))
         if self.physics not in PHYSICS:
             errors.append(Problem("part", f"physics {self.physics!r}: one of {', '.join(PHYSICS)}"))
@@ -764,10 +813,14 @@ class Project:
         return out
 
     def warnings(self) -> list[str]:
-        """What is allowed but deserves a look before a run: the database's warnings, a
-        database in units other than the project's, a latent dimension other than the
-        one recommended for the database, and what a constraint's quantity says about its limit."""
-        out = []
+        """What is allowed but deserves a look before a run: what may not come out as meant in a part made of
+        shapes (part_warnings), the database's warnings, a database in units other than the project's, a latent
+        dimension other than the one recommended for the database, and what a constraint's quantity says about
+        its limit."""
+        try:
+            out = [f"part: {w}" for w in self.part_warnings()]
+        except (ShapeError, OSError):
+            out = []                                        # a part that cannot be made: validate says why
         if self.database is None:
             return out
         xlsx, _ = self.database_paths()
@@ -1102,6 +1155,7 @@ class Project:
         return {"schema_version": SCHEMA_VERSION, "name": self.name, "physics": self.physics,
                 "comment": self.comment,
                 "mesh": {"n_dof": self.n_dof, "single_layer": self.single_layer},
+                "part_shapes": None if self.part_shapes is None else plain(self.part_shapes),
                 "selections": {k: s.to_dict() for k, s in self.selections.items()},
                 "bcs": [dict(bc) for bc in self.bcs],
                 "keep_solid": list(self.keep_solid_names),
@@ -1115,12 +1169,15 @@ class Project:
     def _file_data(self, path: str) -> dict[str, Any]:
         """The JSON a project file at path holds, with the STL path relative to it."""
         data = dict(self._gui)
-        stl = self.stl_path()
-        try:
-            stl = os.path.relpath(stl, os.path.dirname(path))
-        except ValueError:                                      # another drive on Windows
-            pass
-        data["stl_file_path"] = stl.replace("\\", "/")
+        if self.part_shapes is not None:
+            data["stl_file_path"] = None                        # the part is its shapes, under mmto
+        else:
+            stl = self.stl_path()
+            try:
+                stl = os.path.relpath(stl, os.path.dirname(path))
+            except ValueError:                                  # another drive on Windows
+                pass
+            data["stl_file_path"] = stl.replace("\\", "/")
         data["mmto"] = self.to_dict()
         return data
 
@@ -1143,7 +1200,7 @@ class Project:
         data = self._file_data(path)
         with open(path, "w") as fh:
             json.dump(data, fh, indent=2)
-        self.base_dir, self.stl = os.path.dirname(path), data["stl_file_path"]
+        self.base_dir, self.stl = os.path.dirname(path), data["stl_file_path"]      # None for shapes
 
     def save_as_script(self, path: str) -> str:
         """Write a Python script that rebuilds this project with the same calls, next to it.
@@ -1158,9 +1215,15 @@ class Project:
         if os.path.normcase(os.path.dirname(path)) != os.path.normcase(self.base_dir):
             raise ValueError(f"save the script in {self.base_dir}, next to the project, so that the "
                              "relative paths in it stay valid")
-        stl = self.stl if not os.path.isabs(self.stl) else os.path.relpath(self.stl, self.base_dir)
-        stl = stl.replace("\\", "/")
-        reference = Project(self.name, stl, base_dir=self.base_dir)
+        shapes = self.part_shapes is not None
+        if shapes:
+            check(self.part_shapes)                             # ShapeError: a script of these could not run
+            stl = None
+        else:
+            stl = self.stl if not os.path.isabs(self.stl) else os.path.relpath(self.stl, self.base_dir)
+            stl = stl.replace("\\", "/")
+        reference = Project(self.name, stl, base_dir=self.base_dir,                  # its settings: a new project's
+                            part_shapes=self.part_shapes if shapes else None)
         reference.database = self.database
         reference.complete_settings()
         mine = self.copy()
@@ -1182,12 +1245,20 @@ class Project:
                  '"""',
                  "import os",
                  "",
-                 f"from lsr_mmto import {', '.join(['Project'] + types)}",
+                 f"from lsr_mmto import {', '.join(['Project'] + types + (['shapes as S'] if shapes else []))}",
                  "",
                  "HERE = os.path.dirname(os.path.abspath(__file__))",
-                 ""] + explained("Part and mesh", "Project, its arguments and the units") + [
-                 f"p = Project({self.name!r}, stl={stl!r}, n_dof={self.n_dof}, single_layer={self.single_layer},",
-                 "            base_dir=HERE)"]
+                 ""] + explained("Part and mesh", "Project, its arguments and the units")
+        if shapes:
+            lines += ["# the part, made of shapes: every shape and step is in docs/part_shapes.md",
+                      "part_shapes = ["] + to_script(self.part_shapes) + [
+                      "]",
+                      f"p = Project({self.name!r}, part_shapes=part_shapes, n_dof={self.n_dof}, "
+                      f"single_layer={self.single_layer},",
+                      "            base_dir=HERE)"]
+        else:
+            lines += [f"p = Project({self.name!r}, stl={stl!r}, n_dof={self.n_dof}, single_layer={self.single_layer},",
+                      "            base_dir=HERE)"]
         if self.comment:
             lines.append(f"p.comment = {self.comment!r}")
         lines.append(f"p.physics = {self.physics!r}")                 # always: it says what problem this is
@@ -1242,7 +1313,9 @@ class Project:
         """The project a run record stores, its paths as load gives them (absolute, in the project folder
         where it is now: load_results.absolute_paths)."""
         data = dict(record.get("gui") or {}, mmto=record["project"], stl_file_path=record["stl_file_path"])
-        return cls._from_data(data, record["base_dir"], record["project"].get("name", "project"))
+        p = cls._from_data(data, record["base_dir"], record["project"].get("name", "project"))
+        p._from_record = True                       # its built part removes no other (part_from_shapes.part_stl)
+        return p
 
     @classmethod
     def load(cls, path: str) -> "Project":
@@ -1266,9 +1339,10 @@ class Project:
         its relative paths start from, default_name its name when the data gives none."""
         m = upgrade(data.get("mmto") or {}, default_name)
         mesh = m.get("mesh", {})
-        p = cls(m.get("name") or default_name, data.get("stl_file_path", ""),
-                n_dof=mesh.get("n_dof"), single_layer=mesh.get("single_layer"),
-                base_dir=base_dir)
+        p = cls(m.get("name") or default_name, data.get("stl_file_path") or "",
+                n_dof=mesh.get("n_dof"), single_layer=mesh.get("single_layer"), base_dir=base_dir)
+        if m.get("part_shapes") is not None:                # a part made of shapes, checked by validate as loaded
+            p.stl, p.part_shapes = None, plain(m["part_shapes"])
         p.comment, p.physics = m.get("comment", ""), m.get("physics", DEFAULT_PHYSICS)
         p.selections = {k: S.from_dict(v) for k, v in m.get("selections", {}).items()}
         p.bcs = [dict(bc) for bc in m.get("bcs", [])]

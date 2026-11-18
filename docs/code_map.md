@@ -18,6 +18,8 @@ LSR MMTO
 ├── the core (lsr_mmto/)          no physics in it: it asks the physics for what it needs
 │   ├── problem/                  what the user sets up
 │   │   ├── project.py            the project: load, save, check, build, run(p)
+│   │   ├── shapes.py             a part as a list of shape steps (docs/part_shapes.md), as plain data
+│   │   ├── part_from_shapes.py   those steps built into the STL a run meshes
 │   │   ├── settings.py           slot: a setting every physics has (one entry of CORE_SETTINGS)
 │   │   ├── selections.py         slot: a selection type (one class)
 │   │   ├── boundary_conditions.py   the kinds of support and load, made from every physics' kinds

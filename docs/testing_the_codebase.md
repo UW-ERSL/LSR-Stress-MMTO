@@ -1,6 +1,6 @@
 # Testing the codebase
 
-Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 368 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
+Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 376 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
 
 Run them all from the repository folder with `python -m pytest tests -q -n 4` (`-n 2` on a computer with less than 16 GB of memory), one folder with `python -m pytest tests/<folder> -q`, or one file with `python -m pytest tests/<folder>/<file> -q`.
 
@@ -109,6 +109,19 @@ The voxel mesh's surface: surface_faces gives every element face that belongs to
 
 - `test_surface_faces_of_a_box`: Surface faces of a box.
 - `test_a_box_has_the_faces_of_its_grid`: A box meshed as an nx by ny by nz grid of elements has 2 (nx ny + ny nz + nz nx) surface faces, each side's faces with that side's normal.
+
+### `tests/problem/test_part_shapes.py`
+
+A part made of shapes (lsr_mmto/problem/shapes.py, built by part_from_shapes.py): every shape comes out closed with the volume it should have; every block of Python in docs/part_shapes.md runs and its parts build; the L-bracket, U-bracket and rectangular beam made from shapes mesh exactly as their STL files do; the element size worked out for the warnings is the mesher's; the STL's triangles depend on the steps alone, not on Mesh dofs; parts that cannot be made are refused naming the step, and parts that may not come out as meant are warned about; each change of the steps is built into a file of its own, so an older run's part and the project's never share one; a project made of shapes saves, loads, writes a script that rebuilds it, and scales. A few seconds.
+
+- `test_every_shape_has_the_volume_it_should`: Every shape has the volume it should.
+- `test_every_block_of_the_docs_page_runs`: Every block of the docs page runs.
+- `test_three_examples_made_of_shapes_mesh_as_their_stl_files`: Three examples made of shapes mesh as their stl files.
+- `test_the_triangles_depend_on_the_steps_alone`: The triangles depend on the steps alone.
+- `test_parts_that_cannot_be_made_are_refused_naming_the_step`: Parts that cannot be made are refused naming the step.
+- `test_parts_that_may_not_come_out_as_meant_are_warned_about`: Parts that may not come out as meant are warned about.
+- `test_each_change_of_the_steps_is_built_into_a_file_of_its_own`: Each change of the steps is built into a file of its own.
+- `test_a_project_made_of_shapes_saves_loads_scripts_and_scales`: A project made of shapes saves loads scripts and scales.
 
 ### `tests/problem/test_project.py`
 

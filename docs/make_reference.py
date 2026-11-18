@@ -31,6 +31,8 @@ SECTIONS = [
     ("name, comment", "the project's name (also the run's name) and a description"),
     ("physics", "the physics the project uses, see Physics"),
     ("mesh", "n_dof (degrees of freedom asked for) and single_layer (one element through the thickness)"),
+    ("part_shapes", "the part as a list of shape steps (docs/part_shapes.md), built into the STL; null for an "
+                    "imported STL"),
     ("selections", "named regions of the mesh, see Selection types"),
     ("bcs", "boundary conditions, each on a named selection, see Boundary conditions"),
     ("keep_solid", "names of element selections kept solid"),
@@ -43,7 +45,7 @@ SECTIONS = [
 ]
 
 
-PROJECT_CALLS = ("Project", "units", "comment", "physics", "add_selection", "mesh", "evaluate", "add_bc",
+PROJECT_CALLS = ("Project", "units", "comment", "physics", "add_selection", "mesh", "part_warnings", "evaluate", "add_bc",
                  "keep_solid", "database", "material_source", "pinned_material",
                  "network_error", "vae_check", "network_check", "confirm_network", "objective",
                  "constraint", "settings",
