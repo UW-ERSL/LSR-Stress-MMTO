@@ -39,3 +39,7 @@ desktop.ini
 
 # soak test output and its working copies (tests/gui/gui_soak.py)
 soak_results/
+
+# scratch folders the tests make in the repository folder and remove when they finish; one left by a test
+# that was stopped is never tracked
+/_test_*/
