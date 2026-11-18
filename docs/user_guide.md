@@ -10,7 +10,7 @@ LSR MMTO helps you design a part using several materials. First, you tell it the
 
 You always follow the same steps. The buttons on the right side of the window are arranged in that order, from top to bottom:
 
-1. **The part.** Use File > New to create a project from an STL file. This file defines the space the part is allowed to occupy. See The part, section 5.
+1. **The part.** Use **Geometry**, the first button, to give the project its part: an STL file made in a CAD program, or a part made in LSR MMTO from shapes. The part is the space the design is allowed to occupy. See The part, section 5.
 2. **The units.** Choose the unit system used for all the numbers in your project. See Units, section 4.
 3. **The materials.** Choose a material database. It has one row for each material, along with its properties. See Materials, section 6.
 4. **Supports and loads.** Tell the software where the part is held in place, where forces act, and how large those forces are. See section 7.
@@ -27,7 +27,7 @@ If you want to try LSR MMTO before creating your own project, start with one of 
 
 ## 2. The window
 
-When no project is open, the 3D view shows the start page. It has **New project from an STL...**, which does the same thing as File > New, and **Open a project...**, which does the same thing as File > Open. It also shows four examples under **Try an example**. Until you open a project, the buttons on the right are greyed out, and so are Run, Analyse, Export STL and Part / Design.
+When no project is open, the 3D view shows the start page. It has **New project...**, which does the same thing as File > New, and **Open a project...**, which does the same thing as File > Open. It also shows four examples under **Try an example**. Until you open a project, the buttons on the right are greyed out, and so are Run, Analyse, Export STL and Part / Design.
 
 ### 2.1 The top row
 
@@ -43,9 +43,9 @@ The top row contains the following controls, from left to right:
 
 ### 2.2 The buttons on the right
 
-The buttons on the right are **Units**, **Materials**, **Supports and loads**, **Formulation**, **Settings**, **Current run** and **Results**. They are arranged in the order you normally use them.
+The buttons on the right are **Geometry**, **Units**, **Materials**, **Supports and loads**, **Formulation**, **Settings**, **Current run** and **Results**. They are arranged in the order you normally use them. Supports and loads is greyed out until the project has a part, since there is nothing yet to put supports and loads on.
 
-The first four buttons, Units, Materials, Supports and loads, and Formulation, also show whether each step is ready:
+The first five buttons, Geometry, Units, Materials, Supports and loads, and Formulation, also show whether each step is ready:
 
 - A green tick means that step has been set up and has no problems that would prevent a run.
 - A red mark means there is a problem that would prevent a run. The messages explain what is wrong and label it as an **Error**.
@@ -55,7 +55,7 @@ Warnings do not change these marks.
 
 Units, Materials, Formulation and Settings open in separate windows. These windows have OK and Cancel buttons, or Apply and Close. When you press OK, your changes are applied to the project. When you press Cancel, the project stays as it was before you opened the window.
 
-Supports and loads, Current run and Results work differently. They open as panels beside the 3D view, so you can still interact with the part while using them. If you open more than one panel, they share the same space using tabs. You can drag the edge of a panel to make it wider or narrower.
+Geometry, Supports and loads, Current run and Results work differently. They open as panels beside the 3D view, so you can still interact with the part while using them. If you open more than one panel, they share the same space using tabs. You can drag the edge of a panel to make it wider or narrower.
 
 While a run or an analysis is going, the buttons on the right are temporarily hidden. The Current run panel then takes up half the window, beside the 3D view where you can watch the design develop. You can still drag the divider to change how much space each side uses. When the run finishes or you stop it, the buttons return and the panel goes back to its previous width.
 
@@ -103,12 +103,10 @@ The bottom bar shows information about the part and provides tools for measuring
 
 The File menu contains the following options:
 
-- **New...** creates a new project. You enter a **Name**, choose a **Location**, provide the **Part (STL)**, and choose the **Physics**. Structural is the only physics option currently available. LSR MMTO then creates a folder with the project name at the location you chose. It copies the STL file into that folder and saves the project there. All settings start with their default values.
+- **New...** creates a new project. You enter a **Name**, choose a **Location**, and choose the **Physics**. LSR MMTO then creates a folder with the project name at the location you chose and saves the project there, with no part yet. All settings start with their default values. Geometry opens, so you can give the project its part (section 5).
 - **Open...** opens an existing project. Project files have the .mmto extension. This option only opens LSR MMTO projects.
 - **Save** saves the project to its existing file. If the project has never been saved, or if it is an example, LSR MMTO uses Save As instead.
 - **Save As...** creates a new copy of the project in a new folder. Everything the project uses is copied into that folder. The new project gets the new name, but any runs you already completed remain with the original project.
-- **Replace part...** replaces the STL file used by the project with another STL file. See section 5.
-- **Scale part...** multiplies all the part's coordinates by a number. This is useful when the part was created using a different unit. See section 5.
 - **Export as script** creates a short Python script representing the project. It is named *name*_setup.py and saved in the project's folder. Every time you save the project, the script is written again so it stays consistent with the project. If necessary, this menu option saves the project first. It also tells you where the script was saved. You can open the script in any text editor to see the entire project written out or to make changes to it.
 - **Run script...** runs a Python script. For example, you can run a script created using Export as script after making changes to it. Anything the script prints appears in the messages area. If the script saves a project in its folder, LSR MMTO opens that project in the window.
 - **Exit** closes LSR MMTO.
@@ -152,15 +150,43 @@ The material database has its own units, shown in its second row. These may not 
 
 ## 5. The part
 
-The part is defined by an STL file. This file describes the space the part is allowed to occupy, called the design domain. The optimization decides where to put material inside that space. The STL surface defines its outer boundary.
+The part is the space the design is allowed to occupy, called the design domain. The optimization decides where to put material inside it. You give the project its part in **Geometry**, the first button on the right. Geometry opens as a panel beside the 3D view. At its top you choose **From an STL file** or **From shapes**.
 
-You provide the STL file when you create the project (File > New). If you want to use a different STL, choose File > **Replace part...** and choose the new STL. If you picked faces on the old STL to make selections, LSR MMTO warns you first. Picked faces are saved using their triangle numbers. Those numbers can refer to different faces in another STL, so you need to pick the faces again afterwards. In a project folder of its own, the new STL is copied into the part folder.
+A new project has no part yet. Until it has one, the 3D view is empty and Supports and loads is greyed out.
+
+### 5.1 From an STL file
+
+An STL file made in a CAD program. Press **Browse...** and choose the file. In a project folder of its own, the file is copied into the part folder. If you choose another STL later and you picked faces on the old one to make selections, LSR MMTO warns you first. Picked faces are saved using their triangle numbers. Those numbers can refer to different faces in another STL, so you need to pick the faces again afterwards. If the part was made of shapes, LSR MMTO asks first, since the shapes are removed.
 
 The STL should describe a closed (watertight) surface and use the project's length unit. You can check the part's size in the bottom bar (section 2.5): a part that should be 200 mm long and reads *x 0 to 0.2 mm* was drawn in metres.
 
-To fix that, choose File > **Scale part...** and type in **Scale by** the number every coordinate is multiplied by: 1000 from metres to millimetres, 1/1000 back, 25.4 from inches to millimetres. The window previews the new size of the part. OK changes the project's own copy of the part, in its part folder, so scaling again multiplies again (by 2, then by 3, is by 6). An example, or a project whose part is not in a folder of its own, is first saved as a project of your own: the STL the part came from never changes. Scaling changes only the part. It does not change the units, loads, limits or materials. Faces you picked stay picked. Selections with coordinates or lengths you typed (a Box, a Cylinder, ...) are not scaled, so LSR MMTO names them first: check them afterwards. A length in element sizes, such as 1.5h, follows the mesh by itself. Earlier runs keep their original size: Results shows them, and Export STL exports them, at the size they were run at.
+To fix that, press **Scale...** and type in **Scale by** the number every coordinate is multiplied by: 1000 from metres to millimetres, 1/1000 back, 25.4 from inches to millimetres. The window previews the new size of the part. OK changes the project's own copy of the part, in its part folder, so scaling again multiplies again (by 2, then by 3, is by 6). An example, or a project whose part is not in a folder of its own, is first saved as a project of your own: the STL the part came from never changes. Scaling changes only the part. It does not change the units, loads, limits or materials. Faces you picked stay picked. Selections with coordinates or lengths you typed (a Box, a Cylinder, ...) are not scaled, so LSR MMTO names them first: check them afterwards. A length in element sizes, such as 1.5h, follows the mesh by itself. Earlier runs keep their original size: Results shows them, and Export STL exports them, at the size they were run at.
 
-### 5.1 The mesh
+### 5.2 From shapes
+
+A part made in LSR MMTO from simple shapes: boxes, cylinders, spheres, and outlines pushed up (an **Extrusion**) or spun around (a **Revolution**). The part is a list of steps, done in order. Each step **Adds** a shape to the part, **Cuts** it out of the part, or keeps only the **Overlap** of the two. The first step adds.
+
+- **New step** shows the shapes as tiles. Click one to add a step with that shape. For a step after the first, choose Add, Cut or Overlap above the tiles. In an example, LSR MMTO first asks to save it as a project of your own.
+- Click a step in the list to see its boxes below. Every change goes into the project at once. Its shape is drawn see-through in blue over the part, so you can see where it is, even a cut that misses.
+- Click the shape's name (for example *Cylinder: change*) to give the step another shape.
+- **At** is where the shape's origin goes: a box's lowest corner, the centre of a cylinder's base, a sphere's centre.
+- A **Box** has its **Size** along x, y and z. A **Cylinder** has a **Radius** and a **Height** and stands along z; **+ Cone** gives it a **Top radius** (0 for a point), and **Remove cone** makes it a cylinder again. A **Sphere** has a **Radius**.
+- An **Extrusion** is an **Outline** drawn flat and pushed up along z by its **Height**. A **Revolution** is an outline spun around the z axis by its **Angle** (360 for a full turn): for a Rectangle, **Width** is how far out from the axis it reaches and **Depth** is its height.
+- The outline is a **Rectangle** (from its corner at the origin), a **Circle** (centred on the origin; not for a Revolution), or a **Polygon**, whose corner points are in a table: **Add point** and **Remove point** change it, and **Paste points** takes two columns of numbers (x and y) copied from Excel or a text file. **Corner radius** rounds the corners of a Rectangle or a Polygon.
+- A **Wrap** is the tightest shape around two or more shapes, like a sheet stretched over them: two cylinders make a lug. **Shapes wrapped** lists them; **+ Shape** and **Remove shape** change the list, and the shape chosen in it has its own boxes, **At** and **Turn**.
+- **+ Turn** turns the shape about the x, y and z axes through its origin, in that order, before it is moved.
+- **+ Repeat** makes copies of the shape. **Along a line**: **Count** copies (the first one included), each moved by the **Spacing** from the one before. **Around a circle**: Count copies spread evenly over a full turn about the line through the **Centre** along the **Axis** (x, y or z), for a ring of bolt holes. **Remove repeat** goes back to one.
+- **Up**, **Down**, **Copy** and **Delete** change the order of the steps, copy the step chosen (for a second hole like the first), or remove it. The first step must stay an Add.
+
+The 3D view does not change while you edit, so typing never slows down. **Update part** builds the part from the steps and draws it. Until you press it, the button is highlighted and Geometry says *The view shows the part before your last changes.* Closing Geometry, opening Supports and loads, Analyse and Run update the part first if needed.
+
+If a step cannot be made (a size of 0, a cut that removes the whole part, a polygon whose edges cross), Update part says which step and why, in red, and the view keeps the last part built. If the part can be made but may not come out as meant, Geometry lists it: a cut that misses the part, a part in separate pieces, or a feature less than 2 elements across, which may vanish in the mesh (the message says what Mesh dofs would show it).
+
+A changed part numbers its triangles anew, so faces picked on it may land elsewhere: after Update part, LSR MMTO names the selections to check. **Scale...** multiplies every length in the steps and asks first when you have picked faces.
+
+The steps are saved in the project file and written in the project's script, so the same part can also be written in a script: docs/part_shapes.md, in the LSR MMTO folder, shows how.
+
+### 5.3 The mesh
 
 A run does not work directly on the STL. Instead, it fills the part with a grid of equally sized blocks called elements. It then decides what material each element should contain. The corners of these blocks are called nodes. Supports and loads act on these nodes.
 
@@ -706,7 +732,9 @@ These appear in the messages as **Error:** lines, and under *Cannot start:* in t
 - **constraint 1: the bound must be a nonzero number**: a constraint's limit is 0 or empty. Give it a limit under Formulation.
 - Warning **constraint 1 (Mass <= 0.0035): This limit allows at most 0.027% of the part even in the lightest material.**: the mass limit is less than 1 % of what the whole part weighs solid in the design's material (with a mix, the lightest material of the database), so almost no material can be used. Often the limit is in another unit than meant (g for kg, say). Check it under Formulation, and the project's units (section 4).
 - **the material volume fraction constraints use different tau (0.5, 1)**: give them all the same Material sharpness.
-- **STL file ... does not exist**: the part's file has moved or been deleted. Choose it again with File > Replace part... (section 5).
+- **STL file ... does not exist**: the part's file has moved or been deleted. Choose it again in Geometry with Browse... (section 5.1).
+- **no part yet: give the project its part in Geometry**: the project has no part. Give it one in Geometry (section 5).
+- **the part's shapes: step 3: ...**: a step of a part made of shapes cannot be made, for the reason given. Correct it in Geometry (section 5.2).
 
 ### 14.2 The material network
 
@@ -740,7 +768,7 @@ These appear in the messages as **Error:** lines, and under *Cannot start:* in t
 
 ### 14.6 Opening and saving
 
-- **STL not found: ...**, when a project opens: the part's file is not where the project says. Choose it again with File > Replace part... (section 5).
+- **STL not found: ...**, when a project opens: the part's file is not where the project says. Choose it again in Geometry with Browse... (section 5.1).
 - **3 settings missing from the file were set to their defaults; Save writes them.**: the project was made by an older version. You do not need to fix anything. Save the project to keep these values.
 - **Not saved: ...**: the project could not be written, for example the folder is read-only or the file is open elsewhere. Save it somewhere else with Save As.
 - **Start a project first: File > New or File > Open.**: the panel needs a project. Make or open one.

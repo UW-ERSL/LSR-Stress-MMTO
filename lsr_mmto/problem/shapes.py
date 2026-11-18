@@ -168,7 +168,7 @@ def _check_placement(placed: dict[str, Any], where: str) -> None:
     for key in ("at", "rotate"):
         value = placed.get(key)
         if not _numbers(value, 3):
-            raise ShapeError(f"{where}: {key} is three numbers (x, y, z)")
+            raise ShapeError(f"{where}: {key} must be three numbers (x, y, z)")
 
 
 def _check_shape(shape: Any, where: str) -> None:
@@ -178,9 +178,9 @@ def _check_shape(shape: Any, where: str) -> None:
     if kind == "box":
         size = shape.get("size")
         if not _numbers(size, 3):
-            raise ShapeError(f"{where}: a box's size is three numbers (x, y, z), in a list")
+            raise ShapeError(f"{where}: a box's size must be three numbers (x, y, z), in a list")
         if not all(_positive(v) for v in size):
-            raise ShapeError(f"{where}: a box's three sizes are above 0")
+            raise ShapeError(f"{where}: a box's three sizes must be above 0")
     elif kind == "cylinder":
         _positive_fields(shape, ("radius", "height"), where, "cylinder")
         top = shape.get("top_radius")
@@ -193,7 +193,7 @@ def _check_shape(shape: Any, where: str) -> None:
         if kind == "extrusion":
             _positive_fields(shape, ("height",), where, "extrusion")
         elif not (_number(shape.get("angle")) and 0 < shape["angle"] <= 360):
-            raise ShapeError(f"{where}: a revolution's angle is above 0 and at most 360 degrees")
+            raise ShapeError(f"{where}: a revolution's angle must be above 0 and at most 360 degrees")
     else:                                                   # wrap
         members = shape.get("shapes")
         if not isinstance(members, list) or len(members) < 2:
@@ -233,11 +233,11 @@ def _check_repeat(repeat: Any, where: str) -> None:
         raise ShapeError(f"{where}: a repeat is along_line or around_circle")
     count = repeat.get("count")
     if isinstance(count, bool) or not isinstance(count, numbers.Integral) or count < 1:
-        raise ShapeError(f"{where}: a repeat's count is a whole number, 1 or more")
+        raise ShapeError(f"{where}: a repeat's count must be a whole number, 1 or more")
     key = "step" if repeat["kind"] == "along_line" else "centre"
     value = repeat.get(key)
     if not _numbers(value, 3):
-        raise ShapeError(f"{where}: a repeat's {key} is three numbers (x, y, z)")
+        raise ShapeError(f"{where}: a repeat's {key} must be three numbers (x, y, z)")
     if repeat["kind"] == "around_circle" and repeat.get("axis") not in AXES:
         raise ShapeError(f"{where}: a repeat around a circle turns about the x, y or z axis")
 
@@ -246,7 +246,7 @@ def _positive_fields(shape: dict[str, Any], keys: tuple, where: str, what: str) 
     for key in keys:
         if not _positive(shape.get(key)):
             article = "an" if what[0] in "aeiou" else "a"
-            raise ShapeError(f"{where}: {article} {what}'s {key.replace('_', ' ')} is above 0")
+            raise ShapeError(f"{where}: {article} {what}'s {key.replace('_', ' ')} must be above 0")
 
 
 def _number(value: Any) -> bool:
@@ -315,7 +315,7 @@ def _positive(value: Any) -> bool:
 # ---------------------------------------------------------------------- whole parts
 def scaled(steps: list[Step], factor: float) -> list[Step]:
     """The steps with every length (sizes, radii, heights, corner points, rounding, positions, repeat steps
-    and centres) times factor; angles and counts stay. File > Scale part scales a part made of shapes so."""
+    and centres) times factor; angles and counts stay. Scale... in Geometry scales a part made of shapes so."""
     out = plain(steps)
 
     def placement(placed):

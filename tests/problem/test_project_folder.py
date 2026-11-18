@@ -53,6 +53,32 @@ def test_create():
         shutil.rmtree(d, ignore_errors=True)
 
 
+def test_a_project_starts_with_no_part():
+    """A project made with no part (the window's New project): it saves, loads, writes a script that runs,
+    and packs into another folder with no part still; its check says so; a part given later is its part."""
+    import runpy
+    d = _scratch()
+    try:
+        p, path = F.create(os.path.join(d, "blank"))
+        assert not p.has_part() and p.stl is None and F.has_own_folder(p)
+        assert any(e.startswith("no part yet") and e.gui_step == "part" for e in p.validate(False))
+        assert not p.gui_step_started("part") and p.warnings() == []
+        assert Project.load(path).to_dict() == p.to_dict() and Project.load(path).stl is None
+        script = os.path.join(d, "blank", "blank_setup.py")
+        p.save_as_script(script)
+        os.remove(path)
+        runpy.run_path(script, run_name="__main__")
+        assert not Project.load(path).has_part()
+        F.pack(p, os.path.join(d, "moved"))
+        assert p.stl is None and not p.has_part()
+        p.part_shapes = []                                  # no steps yet: still no part
+        assert not p.has_part()
+        p.part_shapes, p.stl = None, os.path.abspath(STL)
+        assert p.has_part() and not [e for e in p.validate(False) if e.gui_step == "part"]
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def test_pack_an_example():
     """Save As: the STL into part/, the shipped database and its network into materials/; the example's
     file is unchanged; the copy has the same settings, the same checks and builds the same problem. Saved
@@ -338,7 +364,7 @@ def test_new_project_dialog_offers_every_physics():
     from gui import main_window as G
     from lsr_mmto.physics.available_physics import PHYSICS
     w = G.MMTOWindow()
-    d = G.ProjectFolderDialog(w, "New project", ROOT, stl="")
+    d = G.ProjectFolderDialog(w, "New project", ROOT, new=True)
     assert [d.physics.itemData(i) for i in range(d.physics.count())] == list(PHYSICS)
     assert d.physics_name() == next(iter(PHYSICS)) and d.physics.currentText().startswith("Structural: ")
     assert G.ProjectFolderDialog(w, "Save As", ROOT).physics_name() is None      # only a new project asks

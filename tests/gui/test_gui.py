@@ -257,13 +257,13 @@ def test_triangle_selections():
 
 
 def test_replace_part():
-    """File > Replace part changes the project's STL (copied into the part folder of a project of its own),
-    draws the new part and drops the design of the old one. There is no Geometry button."""
-    assert "Geometry" not in G.SIDEBAR
+    """Geometry, From an STL file, Browse... changes the project's STL (copied into the part folder of a project
+    of its own), draws the new part and drops the design of the old one. Geometry is the first step; the File
+    menu no longer has Replace part or Scale part."""
+    assert G.SIDEBAR[0] == "Geometry"
     w = G.MMTOWindow()
-    entry = [a for m in w.menuBar().actions() if m.menu() for a in m.menu().actions()
-             if a.text().replace("&", "") == "Replace part..."]
-    assert len(entry) == 1
+    assert not [a for m in w.menuBar().actions() if m.menu() for a in m.menu().actions()
+                if a.text().replace("&", "") in ("Replace part...", "Scale part...")]
     other = os.path.join(ROOT, "data", "models", "Beam_Liao", "Ex1_Beam_design.stl")
     with scratch() as d:
         assert w.open_project(shutil.copy(os.path.join(PROJECTS, "L-bracket.mmto"), d))
@@ -292,7 +292,7 @@ def answered_in_turn(*replies):
 
 
 def test_scale_part():
-    """File > Scale part: the window shows the size the part will have; the selections typed for the old size
+    """Geometry, Scale...: the window shows the size the part will have; the selections typed for the old size
     (a Box, a Cylinder) are named first, not picked faces or a length in element sizes; a project not in a
     folder of its own is saved as one first and only its part/ is written, every coordinate exactly times the
     factor; scaling again multiplies again, one STL in part/; the extent follows; Cancel changes nothing."""
@@ -302,9 +302,6 @@ def test_scale_part():
     def vectors(path):
         return stl_mesh.Mesh.from_file(path).vectors
 
-    entry = [a for m in G.MMTOWindow().menuBar().actions() if m.menu() for a in m.menu().actions()
-             if a.text().replace("&", "") == "Scale part..."]
-    assert len(entry) == 1
     shipped = os.path.join(ROOT, "data", "models", "LBracket_BM1", "LBracket_BM1.STL")
     before, original = open(shipped, "rb").read(), vectors(shipped).copy()
     with scratch() as d:
@@ -407,7 +404,7 @@ def test_start_page():
 
 
 def test_side_marks():
-    """Units, Materials, Supports and loads and Formulation: a tick once set up and the run's check finds nothing
+    """Geometry, Units, Materials, Supports and loads and Formulation: a tick once set up and the run's check finds nothing
     wrong there, a red mark for an error of that step, plain while not set up (never red then); a warning marks
     nothing; the other buttons have no mark. The marks follow every change."""
     from lsr_mmto.problem.project import Project as P
@@ -418,7 +415,7 @@ def test_side_marks():
         assert w.open_project(shutil.copy(os.path.join(PROJECTS, "L-bracket.mmto"), d))
         assert w.project.validate() == [] and w.project.warnings()                # warnings: still ticked
         APP.processEvents()                                                    # the marks, once the part is drawn
-        assert marks(w) == {"Units": "check", "Materials": "check", "Supports and loads": "check",
+        assert marks(w) == {"Geometry": "check", "Units": "check", "Materials": "check", "Supports and loads": "check",
                             "Formulation": "check", "Settings": None, "Run": None, "Results": None}
         w.project.bcs.append({"kind": "fixed", "on": "nowhere", "dofs": "xyz"})
         w.project_changed()                                                    # as Supports and loads says
@@ -441,7 +438,8 @@ def test_side_marks():
         with answers(Box.Discard):
             w._show(empty, None)
         APP.processEvents()
-        assert {n: marks(w)[n] for n in G.SIDEBAR_STEPS} == dict.fromkeys(G.SIDEBAR_STEPS, "plain")
+        assert {n: marks(w)[n] for n in G.SIDEBAR_STEPS} == dict(dict.fromkeys(G.SIDEBAR_STEPS, "plain"),
+                                                                 Geometry="check")      # it has its part
         empty.bcs.append({"kind": "fixed", "on": "nowhere", "dofs": "xyz"})       # begun, and wrong: red
         w.project_changed()
         assert marks(w)["Supports and loads"] == "error"
@@ -2497,7 +2495,7 @@ def test_examples_open_as_templates():
     with scratch() as d:
         try:
             def fill(dialog):
-                assert dialog.stl is None and dialog.name.text() == "L-bracket"       # Save As: no STL asked
+                assert dialog.physics is None and dialog.name.text() == "L-bracket"   # Save As: no physics asked
                 dialog.location.setText(d)
                 dialog.name.setText("My bracket")
                 return 1

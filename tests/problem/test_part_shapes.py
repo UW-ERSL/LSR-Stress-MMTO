@@ -152,7 +152,7 @@ def test_parts_that_cannot_be_made_are_refused_naming_the_step():
                         ([S.add(S.extrusion({"kind": "circle", "radius": 2, "round": 1}, 1))], "no corners to round"),
                         ([{"action": "add", "shape": {"kind": "box", "size": np.ones(3)}, "at": [0, 0, 0],
                            "rotate": [0, 0, 0]}], "three numbers (x, y, z), in a list"),
-                        ([S.add(S.extrusion(S.rectangle(1, 1), 0))], "an extrusion's height is above 0"),
+                        ([S.add(S.extrusion(S.rectangle(1, 1), 0))], "an extrusion's height must be above 0"),
                         ([S.add(S.wrap(S.place(S.box(1, 1, 1)), S.box(1, 1, 1)))], "S.place(shape"),
                         ([S.add(S.box(1, 1, 1), repeat=S.along_line(2.5, (1, 0, 0)))], "whole number"),
                         ((S.add(S.box(1, 1, 1)),), "a list of steps"),
@@ -164,13 +164,13 @@ def test_parts_that_cannot_be_made_are_refused_naming_the_step():
             assert says in str(e), (says, str(e))
         else:
             raise AssertionError(f"built, but should say: {says}")
-    for kwargs in ({}, {"stl": "a.stl", "part_shapes": [S.add(S.box(1, 1, 1))]}):
-        try:
-            Project("p", **kwargs)
-        except ValueError as e:
-            assert "give one of the two" in str(e)
-        else:
-            raise AssertionError(kwargs)
+    try:
+        Project("p", stl="a.stl", part_shapes=[S.add(S.box(1, 1, 1))])
+    except ValueError as e:
+        assert "give one of the two" in str(e)
+    else:
+        raise AssertionError("an STL and shapes both")
+    assert not Project("p").has_part()                      # neither: the part comes later
     folder = _scratch()
     try:
         p = Project("p", part_shapes=[S.add(S.box(1, 1, 1))], base_dir=folder)

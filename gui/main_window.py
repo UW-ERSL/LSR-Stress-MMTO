@@ -64,18 +64,21 @@ ICON = os.path.join(ASSETS, "lsr_mmto.ico")
 STYLE = os.path.join(ASSETS, "app_style.qss")           # the window's colours and shapes
 ICONS = os.path.join(ASSETS, "icons")                    # the buttons' pictures
 SIDEBAR_WORDS = {"Run": "Current run"}                   # a sidebar button's text, where not its name
-SIDEBAR_STEPS = {"Units": "units", "Materials": "materials", "Supports and loads": "supports and loads",
+SIDEBAR_STEPS = {"Geometry": "part", "Units": "units", "Materials": "materials",
+                 "Supports and loads": "supports and loads",
                  "Formulation": "formulation"}           # the buttons marked by their step's check (Project.GUI_STEPS)
-SIDEBAR_ICONS = {"Units": "units", "Materials": "materials", "Supports and loads": "supports",
-                 "Formulation": "formulation", "Settings": "settings", "Run": "run", "Results": "results"}
+SIDEBAR_ICONS = {"Geometry": "geometry_step", "Units": "units", "Materials": "materials",
+                 "Supports and loads": "supports", "Formulation": "formulation", "Settings": "settings",
+                 "Run": "run", "Results": "results"}
 MESSAGE_LINES = 3                                        # the message panel starts three lines high
-SIDEBAR = ("Units", "Materials", "Supports and loads", "Formulation", "Settings", "Run",
+SIDEBAR = ("Geometry", "Units", "Materials", "Supports and loads", "Formulation", "Settings", "Run",
            "Results")                                    # the steps, in order; View is in the top row
 FOLDER_HELP = ("A project keeps everything it uses in its own folder: the project file, the part (in part), "
                "the material database and its trained network (in materials), and the results of every run "
                "(in results).\n\nZip the folder to send the whole project.")
 PANELS = {"Materials": MaterialsPanel, "Formulation": FormulationPanel, "Settings": SettingsPanel}
 NO_PROJECT = "Open or start a project first"            # the tip of what waits for a project
+NO_PART = "Add a part first: Geometry"                   # the tip of what waits for the project's part
 START_EXAMPLES = (("L-bracket", "L-bracket.mmto"), ("U-bracket", "U-bracket.mmto"), ("Beam", "beam.mmto"),
                   ("Airplane bracket", "Airplane bracket.mmto"))        # the start page's examples, in projects/
 
@@ -277,7 +280,7 @@ class StartPage(QtWidgets.QFrame):
         sub.setWordWrap(True)
         col.addWidget(sub)
         col.addSpacing(24)
-        self.new_button = self._button("New project from an STL...", "primary", window.new_project)
+        self.new_button = self._button("New project...", "primary", window.new_project)
         self.open_button = self._button("Open a project...", "secondary", window.open_project)
         col.addWidget(self.new_button)
         col.addSpacing(10)
@@ -851,9 +854,10 @@ def is_example(path):
 
 
 class ProjectFolderDialog(QtWidgets.QDialog):
-    """Name and location of a new project folder, and for a new project its part (STL)."""
+    """Name and location of a new project folder, and for a new project (new=True) its physics. The part
+    comes later, in the Geometry step."""
 
-    def __init__(self, parent, title, location, name="", stl=None):
+    def __init__(self, parent, title, location, name="", new=False):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.resize(560, 0)
@@ -863,11 +867,8 @@ class ProjectFolderDialog(QtWidgets.QDialog):
         self.location = QtWidgets.QLineEdit(location)
         form.addRow("Name", self.name)
         form.addRow("Location", self._with_browse(self.location, self._browse_location))
-        self.stl = None
         self.physics = None
-        if stl is not None:
-            self.stl = QtWidgets.QLineEdit(stl)
-            form.addRow("Part (STL)", self._with_browse(self.stl, self._browse_stl))
+        if new:
             self.physics = physics_choice()
             form.addRow("Physics", self.physics)
         layout.addLayout(form)
@@ -900,19 +901,8 @@ class ProjectFolderDialog(QtWidgets.QDialog):
         if folder:
             self.location.setText(folder)
 
-    def _browse_stl(self):
-        stl, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Part (STL)", self.location.text(),
-                                                       "STL Files (*.stl *.STL)", options=FILE_DIALOG_OPTIONS)
-        if stl:
-            self.stl.setText(stl)
-            if not self.name.text().strip():
-                self.name.setText(os.path.splitext(os.path.basename(stl))[0])
-
     def folder(self):
         return os.path.join(self.location.text().strip(), self.name.text().strip())
-
-    def stl_path(self):
-        return self.stl.text().strip() if self.stl is not None else None
 
     def physics_name(self):
         """The physics chosen for a new project (its name in the project file), or None."""
@@ -933,8 +923,6 @@ class ProjectFolderDialog(QtWidgets.QDialog):
             problem = folder_problem(self.folder())
             if problem:
                 out.append(f"Name: {problem}")
-        if self.stl is not None and not os.path.isfile(self.stl_path()):
-            out.append("Part (STL): choose the STL file")
         return out
 
     def accept(self):
@@ -951,7 +939,7 @@ SCALE_HELP = ("Every coordinate of the part is multiplied by this number: 1/1000
 
 
 class ScalePartDialog(QtWidgets.QDialog):
-    """File > Scale part: the number every coordinate of the part is multiplied by, and the size the part
+    """Geometry, Scale...: the number every coordinate of the part is multiplied by, and the size the part
     will then have. size: the part's size along x, y and z now; unit: the length unit."""
 
     def __init__(self, parent, size, unit):
@@ -1008,6 +996,7 @@ class MMTOWindow(MainWindow):
                            "handler": f"open_{name.lower().replace(' ', '_')}_panel"}) for name in SIDEBAR]
     stl_done = QtCore.pyqtSignal(object, object, str)       # Export STL: folder, report or None, error
     template = False                        # an example project: Save asks for a folder of one's own
+    part_waiting = False                    # the part's shapes changed in Geometry, not built yet (Update part)
     view = "setup"                          # what the 3D view shows: "setup" (the part) or "design"
     _design = None                          # draws the design kept for the Design view, or None
 
@@ -1047,7 +1036,7 @@ class MMTOWindow(MainWindow):
         mark when it finds an error in it, and the button's own picture while the step is not set up yet.
         Warnings mark nothing. While a project is being shown (_show), the marks wait until it is drawn: the check
         reads the material database, and PyTO-AD asks for the marks several times while the part loads."""
-        if errors is None and getattr(self, "_marks_later", False):
+        if errors is None and (getattr(self, "_marks_later", False) or self.part_waiting):
             return
         p = getattr(self, "project", None)                          # (PyTO-AD may ask before there is one)
         wrong = {e.gui_step for e in (p.validate() if errors is None else errors)} if p is not None else set()
@@ -1058,6 +1047,15 @@ class MMTOWindow(MainWindow):
             mark = "plain" if p is None or not p.gui_step_started(step) else "error" if step in wrong else "check"
             btn.setIcon(icon(SIDEBAR_ICONS[name] if mark == "plain" else mark))
             btn.setProperty("mark", mark)
+        self._supports_need_a_part()
+
+    def _supports_need_a_part(self):
+        """Supports and loads greyed while the project has no part: there is nothing to pick on yet."""
+        supports = getattr(self, "sidebar_buttons", {}).get("Supports and loads")
+        p = getattr(self, "project", None)
+        if supports is not None and p is not None:
+            supports.setEnabled(p.has_part())
+            supports.setToolTip("" if p.has_part() else NO_PART)
 
     def _project_or_not(self):
         """With no project open, the start page over the 3D view, and the side buttons, Run, Export STL and
@@ -1070,6 +1068,7 @@ class MMTOWindow(MainWindow):
         for b in self.sidebar_buttons.values():
             b.setEnabled(not none)
             b.setToolTip(NO_PROJECT if none else "")
+        self._supports_need_a_part()
         self.update_top_row()
         self._view_changed()
 
@@ -1263,6 +1262,7 @@ class MMTOWindow(MainWindow):
         if self.run_going_now():
             self.run_window.stop_optimization()
             return
+        self.part_up_to_date()
         rw = self.open_run_panel()
         if rw is not None:
             rw.start_optimization()
@@ -1271,6 +1271,7 @@ class MMTOWindow(MainWindow):
         """Analyse: the solid part analysed once in one material, in the Current run panel (run_panel.py)."""
         if self.run_going_now():
             return False
+        self.part_up_to_date()
         rw = self.open_run_panel()
         return rw is not None and rw.analyse()
 
@@ -1790,9 +1791,6 @@ class MMTOWindow(MainWindow):
             action.setShortcut(key)
             action.triggered.connect(lambda _=False, s=slot: s())
         file_menu.addSeparator()
-        file_menu.addAction("Replace &part...").triggered.connect(lambda: self.replace_part())
-        file_menu.addAction("Sca&le part...").triggered.connect(lambda: self.scale_part())
-        file_menu.addSeparator()
         file_menu.addAction("&Export as script").triggered.connect(lambda: self.export_script())
         file_menu.addAction("&Run script...").triggered.connect(lambda: self.run_script())
         file_menu.addSeparator()
@@ -1812,7 +1810,8 @@ class MMTOWindow(MainWindow):
     # ------------------------------------------------------------------ unsaved changes
     def _state(self):
         p = self.project
-        return json.dumps([p.to_dict(), p.units, os.path.abspath(p.stl_path())], sort_keys=True, default=str)
+        stl = os.path.abspath(p.stl_path()) if p.stl is not None else None     # shapes are in to_dict: none built
+        return json.dumps([p.to_dict(), p.units, stl], sort_keys=True, default=str)
 
     def is_dirty(self):
         """True when the project has changes not in its file (always, for a project never saved)."""
@@ -1821,9 +1820,10 @@ class MMTOWindow(MainWindow):
     def _refresh_title(self):
         """The title, the side buttons' marks and the errors and warnings in the message panel, after any
         change of the project."""
-        errors = self.project.validate() if self.project is not None else []
-        self.update_side_marks(errors)
-        self.show_problems(errors)
+        if not self.part_waiting:                                   # (the checks build a part made of shapes)
+            errors = self.project.validate() if self.project is not None else []
+            self.update_side_marks(errors)
+            self.show_problems(errors)
         if self.project is None:
             self.setWindowTitle(APP)
             return
@@ -1845,6 +1845,7 @@ class MMTOWindow(MainWindow):
 
     def closeEvent(self, event):
         if not self.run_going() and self._ask_to_save():
+            self.part_waiting = False                               # unsaved shapes, discarded: not built
             event.accept()
         else:
             event.ignore()
@@ -1879,17 +1880,17 @@ class MMTOWindow(MainWindow):
         return False
 
     def new_project(self, stl=None, folder=None):
-        """A project in a new folder of its own, every setting at its default: the folder is made, the STL
-        copied into it and the project saved there. With no folder given, a dialog asks for the name,
-        the location and the STL."""
+        """A project in a new folder of its own, every setting at its default: the folder is made, and the
+        project saved there with no part yet (or with stl copied into it). With no folder given, a dialog asks
+        for the name, the location and the physics; a project with no part opens the Geometry step."""
         from lsr_mmto.problem import project_folder
         if self.run_going() or not self._ask_to_save():
             return False
-        if folder is None or stl is None:
-            dialog = ProjectFolderDialog(self, "New project", self._location(), stl=stl or "")
+        if folder is None:
+            dialog = ProjectFolderDialog(self, "New project", self._location(), new=True)
             if not dialog.exec_():
                 return False
-            folder, stl, physics = dialog.folder(), dialog.stl_path(), dialog.physics_name()
+            folder, physics = dialog.folder(), dialog.physics_name()
         else:
             physics = None
         try:
@@ -1899,6 +1900,8 @@ class MMTOWindow(MainWindow):
             QtWidgets.QMessageBox.warning(self, "New project", f"The project was not made: {e}")
             return False
         self._show(p, path)
+        if not p.has_part():
+            self.open_geometry_panel()
         return True
 
     def open_project(self, path=None):
@@ -2077,7 +2080,9 @@ class MMTOWindow(MainWindow):
 
     def _show(self, project, path):
         """Make project the one in the window: PyTO-AD's state reset, units synced, the STL drawn."""
-        for attr in ("supports_panel", "run_window", "results_window") + tuple(c.ATTR for c in PICK_WINDOWS):
+        self.part_waiting = False                                   # the last project's shape edits: not built
+        for attr in ("geometry_panel", "supports_panel", "run_window", "results_window") + \
+                tuple(c.ATTR for c in PICK_WINDOWS):
             w = getattr(self, attr, None)                           # windows on the previous project
             if w is not None:
                 try:
@@ -2085,6 +2090,7 @@ class MMTOWindow(MainWindow):
                 except RuntimeError:
                     pass
         self.preview_on = False
+        self.part_waiting = False
         self.project, self.path = project, path
         self.template = is_example(path)
         self._design, self.view, self._shown_wide = None, "setup", False    # the previous project's design goes
@@ -2115,7 +2121,9 @@ class MMTOWindow(MainWindow):
         if self.template:
             self.message_text.append("This is an example. Save makes a copy in a project folder of your own; the "
                                      "example itself stays as it is.")
-        if not os.path.isfile(project.stl_path()):
+        if not project.has_part():
+            self.message_text.append("No part yet: add one in Geometry, the first button on the right.")
+        elif not os.path.isfile(project.stl_path()):
             said = [str(e) for e in project.validate(network=False) if e.gui_step == "part"]
             self.message_text.append(said[0] if said else f"STL not found: {project.stl_path()}")
         if filled:
@@ -2253,9 +2261,94 @@ class MMTOWindow(MainWindow):
         return self.open_panel("Settings")
 
     # ------------------------------------------------------------------ supports and loads
+    def open_geometry_panel(self):
+        """The Geometry strip: the project's part, from an STL file or from shapes, beside the 3D view."""
+        if self.project is None:
+            QtWidgets.QMessageBox.information(self, APP, "Start a project first: File > New or File > Open.")
+            return None
+        self.show_setup_view()
+        if not self._raise_if_open("geometry_panel"):
+            from .geometry_panel import GeometryPanel
+            self.geometry_panel = GeometryPanel(self)
+            Strip(self.geometry_panel, self, "geometry_panel")
+        return self.geometry_panel
+
+    def open_geometry_window(self):
+        """PyTO-AD's Geometry button (its handler, which BUTTON_CONFIG takes for a button of PyTO-AD's name) opens
+        our Geometry strip, never PyTO-AD's own Load STL window."""
+        return self.open_geometry_panel()
+
+    def part_up_to_date(self):
+        """The part built and drawn from its shapes when Geometry changed them and Update part was not pressed
+        (before Supports and loads and a run, which work on the part as drawn)."""
+        if self.part_waiting and self.project is not None:
+            panel = getattr(self, "geometry_panel", None)
+            if in_open_strip(panel):
+                panel.update_part()
+            else:
+                self.update_part_from_shapes()
+
+    def part_steps_changed(self):
+        """The part's shapes were changed in Geometry: the project shows as changed, and the checks and the
+        drawing wait for Update part (they would build the part on every change)."""
+        self.part_waiting = True
+        self._supports_need_a_part()
+        self._refresh_title()
+
+    def update_part_from_shapes(self):
+        """Update part: the project's part built from its shapes and drawn; the checks follow. Returns the
+        message of a part that cannot be made (the drawing then keeps the last part built), or None."""
+        from lsr_mmto.problem.part_from_shapes import part_stl
+        from lsr_mmto.problem.shapes import ShapeError
+        self.part_waiting = False
+        if not self.project.has_part():                             # every step deleted: no part to draw
+            self._part_gone()
+            return None
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
+        try:
+            part_stl(self.project)
+        except (ShapeError, OSError) as e:
+            self._refresh_title()
+            return str(e)
+        finally:
+            QtWidgets.QApplication.restoreOverrideCursor()
+        names = triangle_selections(self.project)
+        lines = ["Part updated"]
+        if names:
+            lines.append(f"Check the selections {', '.join(names)}: they are triangle numbers, and a changed part "
+                         f"numbers its triangles anew.")
+        self._mesh, self._mesh_key = None, None
+        self._part_changed(lines)
+        return None
+
+    def _part_gone(self):
+        """The drawing of the part taken away (its last step deleted); the checks follow."""
+        self.plotter.clear_actors()
+        for actor in self._rulers:
+            self.plotter.remove_actor(actor, reset_camera=False)
+        self._rulers = []
+        self.stl_geom = None
+        self._mesh, self._mesh_key = None, None
+        self.update_part_facts()
+        self._refresh_title()
+
+    def show_step_shape(self, surface):
+        """One step's shape drawn see-through over the part (the step chosen in Geometry); None takes it away."""
+        import pyvista as pv
+        self.plotter.remove_actor("step_shape", reset_camera=False)
+        if surface is not None:
+            faces = np.hstack([np.full((len(surface.faces), 1), 3), surface.faces]).ravel()
+            self.plotter.add_mesh(pv.PolyData(np.asarray(surface.vertices), faces), name="step_shape",
+                                  color="#2f5fe0", opacity=0.35, pickable=False, reset_camera=False)
+        self.plotter.render()
+
     def open_supports_and_loads_panel(self):
         if self.project is None:
             QtWidgets.QMessageBox.information(self, APP, "Start a project first: File > New or File > Open.")
+            return None
+        self.part_up_to_date()
+        if not self.project.has_part():
+            QtWidgets.QMessageBox.information(self, APP, "Add a part first, in Geometry.")
             return None
         self.show_setup_view()
         if not self._raise_if_open("supports_panel"):
@@ -2674,9 +2767,10 @@ class MMTOWindow(MainWindow):
 
     # ------------------------------------------------------------------ the part
     def replace_part(self, stl=None):
-        """File > Replace part: the project's STL changed to another one, after a warning when selections are
-        triangle numbers of the current one. stl: the new STL, or None to choose it in a dialog. In a
-        project folder of its own, the new STL is copied into its part folder. True when it was replaced."""
+        """Geometry, From an STL file, Browse...: the project's part made this STL, after a warning when selections
+        are triangle numbers of the current part, and after asking when it would drop the part's shapes. stl: the
+        new STL, or None to choose it in a dialog. In a project folder of its own, the new STL is copied into its
+        part folder. True when it was replaced."""
         if self.project is None:
             return False
         self.show_setup_view()
@@ -2688,14 +2782,20 @@ class MMTOWindow(MainWindow):
                 f"STL the same numbers are other triangles. Replace the part anyway?")
             if answer != QtWidgets.QMessageBox.Yes:
                 return False
+        steps = len(self.project.part_shapes or [])
+        if steps and QtWidgets.QMessageBox.question(
+                self, "Replace part", f"The part is made of {steps} shape step{'s' if steps != 1 else ''}. Use an STL "
+                                      f"file instead? The steps are removed.") != QtWidgets.QMessageBox.Yes:
+            return False
         if stl is None:
-            here = os.path.dirname(self.project.stl_path())
+            here = os.path.dirname(self.project.stl_path()) if self.project.stl is not None else self.project.base_dir
             stl, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Replace part", here, "STL Files (*.stl *.STL)",
                                                            options=FILE_DIALOG_OPTIONS)
             if not stl:
                 return False
         stl = os.path.abspath(stl)
-        if os.path.normcase(stl) == os.path.normcase(os.path.abspath(self.project.stl_path())):
+        if self.project.stl is not None and \
+                os.path.normcase(stl) == os.path.normcase(os.path.abspath(self.project.stl_path())):
             return False
         if self.own_folder():                                       # the new part goes into the project folder
             from lsr_mmto.problem.project_folder import PART, copy_in
@@ -2708,7 +2808,7 @@ class MMTOWindow(MainWindow):
         return True
 
     def scale_part(self, factor=None):
-        """File > Scale part: every coordinate of the project's part multiplied by factor (None: asked in a
+        """Geometry, Scale...: every coordinate of the project's part multiplied by factor (None: asked in a
         window), in the project's own copy of the part (project_folder.scale_part). The selections typed in
         lengths are named first, since they are not scaled. A project not in a folder of its own (an example)
         is saved as one first, so no STL outside the project's folder is ever written. True when scaled."""
@@ -2760,9 +2860,13 @@ class MMTOWindow(MainWindow):
         return True
 
     def _part_changed(self, lines):
-        """The part drawn again after its STL changed (Replace part, Scale part): the picks and drawings on the
-        old part go, and a design of it; the extent, the ruler and the checks follow; lines go to the
+        """The part drawn again after it changed (Replace part, Scale part, Update part): the picks and drawings
+        on the old part go, and a design of it; the extent, the ruler and the checks follow; lines go to the
         messages."""
+        self.part_waiting = False
+        if not os.path.isfile(self.project.stl_path()):             # a part of shapes that cannot be made
+            self._refresh_title()
+            return
         self.constrained_triangles.clear()                          # picks on the old part
         self.constraint_data, self.force_data, self.selected_points, self.selected_regions = [], [], [], []
         loader = PartLoader(self)                                   # draws the new STL, picking on

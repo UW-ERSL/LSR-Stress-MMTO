@@ -187,3 +187,9 @@ QMessageBox QLabel { color: #1f2933; }
 QProgressBar { background: #e6e9ef; border: none; border-radius: 3px; text-align: center; }
 QProgressBar::chunk { background: #2f5fe0; border-radius: 3px; }
 QSplitter::handle { background: #e3e7ee; }
+QToolButton#segment { background: #ffffff; color: #1f2933; border: 1px solid #d7dde6; padding: 4px 10px; border-radius: 0px; }
+QToolButton#segment:checked { background: #e8eeff; color: #2f5fe0; border-color: #2f5fe0; }
+QToolButton#tile { background: #f6f8fb; color: #1f2933; border: 1px solid #e3e8ef; border-radius: 8px; padding: 8px 4px; }
+QToolButton#tile:hover { border-color: #2f5fe0; background: #f5f7ff; }
+QToolButton#link { background: transparent; color: #2f5fe0; border: none; padding: 2px 0px; }
+QPushButton#updatePart[waiting="true"] { background: #2f5fe0; color: #ffffff; border: 1px solid #2f5fe0; border-radius: 4px; padding: 4px 12px; }

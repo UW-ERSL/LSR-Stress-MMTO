@@ -101,8 +101,9 @@ def copy_in(path: str, folder: str, sub: str) -> str:
 
 def has_own_folder(project: "Project") -> bool:
     """True when the project lives in a project folder: its STL is in the folder's part/. A part made of shapes
-    is always built there, so for one the project's own file must be in the folder too (<name>.mmto)."""
-    if project.part_shapes is not None:
+    is always built there, so for one, and for a project with no part yet, the project's own file must be in the
+    folder too (<name>.mmto)."""
+    if project.part_shapes is not None or project.stl is None:
         return os.path.isfile(os.path.join(project.base_dir, f"{project.name}.mmto"))
     return inside(project.stl_path(), os.path.join(project.base_dir, PART))
 
@@ -154,7 +155,7 @@ def pack(project: "Project", folder: str) -> "Project":
     folder = os.path.abspath(folder)
     os.makedirs(folder, exist_ok=True)
     project.complete_settings()             # a shipped database's network settings, while it is named
-    stl = None if project.part_shapes is not None else os.path.abspath(project.stl_path())
+    stl = None if project.part_shapes is not None or project.stl is None else os.path.abspath(project.stl_path())
     xlsx, nt = _database_files(project)
     old_base = project.base_dir
     project.base_dir = folder
@@ -184,20 +185,20 @@ def _bring_in_files(selection: "Selection", old_base: str | None, folder: str) -
             selection.ref = f"{copy_in(os.path.abspath(path), folder, PART)}:{name}"
 
 
-def create(folder: str, stl: str, physics: str | None = None) -> tuple["Project", str]:
-    """A new project in a new folder, named after the folder, with the STL copied into it, the physics
-    given (the first of the list when None) and every setting at its default; saved as
-    folder/<name>.mmto. Returns (project, its path)."""
+def create(folder: str, stl: str | None = None, physics: str | None = None) -> tuple["Project", str]:
+    """A new project in a new folder, named after the folder, with the STL copied into it (no part yet when
+    stl is None), the physics given (the first of the list when None) and every setting at its default; saved
+    as folder/<name>.mmto. Returns (project, its path)."""
     from lsr_mmto.problem.project import Project
     problem = folder_problem(folder)
     if problem:
         raise ValueError(problem)
-    if not os.path.isfile(stl):
+    if stl is not None and not os.path.isfile(stl):
         raise ValueError(f"{stl} is not a file")
     folder = os.path.abspath(folder)
     name = os.path.basename(folder)
     os.makedirs(folder, exist_ok=True)
-    p = Project(name, stl=copy_in(os.path.abspath(stl), folder, PART), base_dir=folder)
+    p = Project(name, stl=None if stl is None else copy_in(os.path.abspath(stl), folder, PART), base_dir=folder)
     if physics is not None:
         p.physics = physics
     p.complete_settings()

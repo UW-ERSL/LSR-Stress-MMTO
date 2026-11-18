@@ -88,7 +88,7 @@ _UPGRADES = {}
 # The steps of a project's setup in the GUI, one per sidebar button, each with what makes it begun: an error
 # Project.validate finds names its step (Problem.gui_step), so the window can mark the step it is about; a step
 # not begun is never marked wrong.
-GUI_STEPS = {"part": lambda p: True,
+GUI_STEPS = {"part": lambda p: p.has_part(),
          "units": lambda p: p.units != "none",
          "materials": lambda p: p.database is not None,
          "supports and loads": lambda p: bool(p.bcs),
@@ -170,7 +170,8 @@ class Project:
     name: the project's name, text; its runs are named after it
     stl: the part, an STL file: its path, absolute or relative to base_dir; None when part_shapes is given
     part_shapes: the part as a list of shape steps (lsr_mmto.shapes, docs/part_shapes.md), built into an STL in
-        part/ of base_dir when it is needed; None when stl is given. A project has one of the two
+        part/ of base_dir when it is needed; None when stl is given. A project has one of the two, or neither
+        while its part is still to come (has_part; validate says "no part")
     n_dof: how fine the mesh is, a whole number of unknowns (see Settings, mesh); None is the default there
     single_layer: True for one element through the thickness (a flat part such as a plate), False for a
         solid part; None is the default under Settings, mesh
@@ -219,9 +220,9 @@ class Project:
 
     def __init__(self, name: str, stl: str | None = None, n_dof: int | None = None, single_layer: bool | None = None,
                  base_dir: str | None = None, part_shapes: "list[dict[str, Any]] | None" = None) -> None:
-        if (stl is None) == (part_shapes is None):
+        if stl is not None and part_shapes is not None:
             raise ValueError("a project's part is an STL file (stl=...) or a list of shapes (part_shapes=...): "
-                             "give one of the two")
+                             "give one of the two, or neither for a project whose part comes later")
         self.name = name
         if part_shapes is not None:
             check(part_shapes)
@@ -397,6 +398,10 @@ class Project:
         self.formulation["constraints"].append({"expression": expression, "op": op, "bound": float(bound)})
 
     # ------------------------------------------------------------------ checks without a mesh
+    def has_part(self) -> bool:
+        """Whether the project has its part: an STL file or at least one shape step (built or not)."""
+        return self.stl is not None or bool(self.part_shapes)
+
     def stl_path(self) -> str:
         """The part's STL. A part made of shapes is built into part/ first when no STL of these shapes is there
         (part_from_shapes.part_stl); for one that cannot be made or written, a path where no file is (validate
@@ -525,7 +530,7 @@ class Project:
                 errors.append(Problem("part", f"the part made of shapes could not be written in "
                                               f"{os.path.join(self.base_dir, PART)}: {e}"))
         elif self.stl is None:
-            errors.append(Problem("part", "no part: give an STL file (stl) or a list of shapes (part_shapes)"))
+            errors.append(Problem("part", "no part yet: give the project its part in Geometry"))
         elif not os.path.isfile(self.stl_path()):
             errors.append(Problem("part", f"STL file {self.stl_path()} does not exist"))
         if self.physics not in PHYSICS:
@@ -1169,8 +1174,8 @@ class Project:
     def _file_data(self, path: str) -> dict[str, Any]:
         """The JSON a project file at path holds, with the STL path relative to it."""
         data = dict(self._gui)
-        if self.part_shapes is not None:
-            data["stl_file_path"] = None                        # the part is its shapes, under mmto
+        if not self.has_part() or self.part_shapes is not None:
+            data["stl_file_path"] = None                        # no part yet, or its shapes, under mmto
         else:
             stl = self.stl_path()
             try:
@@ -1219,6 +1224,8 @@ class Project:
         if shapes:
             check(self.part_shapes)                             # ShapeError: a script of these could not run
             stl = None
+        elif self.stl is None:                                  # no part yet
+            stl = None
         else:
             stl = self.stl if not os.path.isabs(self.stl) else os.path.relpath(self.stl, self.base_dir)
             stl = stl.replace("\\", "/")
@@ -1256,6 +1263,9 @@ class Project:
                       f"p = Project({self.name!r}, part_shapes=part_shapes, n_dof={self.n_dof}, "
                       f"single_layer={self.single_layer},",
                       "            base_dir=HERE)"]
+        elif stl is None:
+            lines += ["# no part yet: give it stl=... or part_shapes=... (docs/part_shapes.md)",
+                      f"p = Project({self.name!r}, n_dof={self.n_dof}, single_layer={self.single_layer}, base_dir=HERE)"]
         else:
             lines += [f"p = Project({self.name!r}, stl={stl!r}, n_dof={self.n_dof}, single_layer={self.single_layer},",
                       "            base_dir=HERE)"]
@@ -1339,7 +1349,7 @@ class Project:
         its relative paths start from, default_name its name when the data gives none."""
         m = upgrade(data.get("mmto") or {}, default_name)
         mesh = m.get("mesh", {})
-        p = cls(m.get("name") or default_name, data.get("stl_file_path") or "",
+        p = cls(m.get("name") or default_name, data.get("stl_file_path") or None,      # None: no part yet
                 n_dof=mesh.get("n_dof"), single_layer=mesh.get("single_layer"), base_dir=base_dir)
         if m.get("part_shapes") is not None:                # a part made of shapes, checked by validate as loaded
             p.stl, p.part_shapes = None, plain(m["part_shapes"])

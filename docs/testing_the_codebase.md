@@ -1,6 +1,6 @@
 # Testing the codebase
 
-Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 376 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
+Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 382 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
 
 Run them all from the repository folder with `python -m pytest tests -q -n 4` (`-n 2` on a computer with less than 16 GB of memory), one folder with `python -m pytest tests/<folder> -q`, or one file with `python -m pytest tests/<folder>/<file> -q`.
 
@@ -151,6 +151,7 @@ The Project: saving and loading, the checks made before a run, the translation o
 A project folder holds everything its project uses: create makes one with the STL copied in; pack copies an example's STL, database and network into a new folder, leaving the example as it was, and the copy checks and builds exactly as the example does; copy_in keeps a different file of the same name and never copies the same file twice; runs are listed newest first and only a run's folder can be deleted; a save from a script makes the same folder as the window, and leaves the project script alone. A few seconds.
 
 - `test_create`: Create.
+- `test_a_project_starts_with_no_part`: A project made with no part (the window's New project): it saves, loads, writes a script that runs, and packs into another folder with no part still; its check says so; a part given later is its part.
 - `test_pack_an_example`: Save As: the STL into part/, the shipped database and its network into materials/; the example's file is unchanged; the copy has the same settings, the same checks and builds the same problem. Saved As again, its database's versions go with it.
 - `test_copy_in`: Copy in.
 - `test_runs_listed_and_deleted`: Runs listed and deleted.
@@ -373,6 +374,16 @@ The versions of a database in the window, off-screen: the editor's (modified) ti
 - `test_an_import_asks_before_it_is_thrown_away_and_a_new_name_skips_old_versions`: An imported table not yet saved: closing asks first. A new database's name skips one whose versions are still there after its file was deleted, so it does not take them on.
 - `test_materials_keeps_versions_renames_imports_and_says_what_was_restored`: In Materials: Versions... and Rename... only for a database of the project's own; opening it keeps the database as a version, and a change made in Excel since as the next; Rename... renames the database, its network and versions, and saves the project with the new name; Import copies a database of LSR MMTO into the project's folder; a restore says which version is now used.
 
+### `tests/gui/test_geometry_panel.py`
+
+The Geometry step (gui/geometry_panel.py): a new project has no part, Supports and loads is greyed and Geometry opens; the steps made in the strip are the steps a script makes with the same calls; the part is built and drawn only on Update part (and on closing the strip), the button and a line saying the view waits until then; a step that cannot be made is said in red and the view keeps the last part; making a part of an STL from shapes, or choosing an STL for a part of shapes, asks first; Paste points takes two columns of numbers and names a row that is not.
+
+- `test_a_new_project_starts_with_no_part`: New project: no part, Supports and loads greyed saying why, Geometry open, the check saying so.
+- `test_steps_made_in_the_strip_are_the_scripts_and_wait_for_update_part`: Steps typed in the strip equal the script's calls; drawn on Update part only; a step that cannot be made is said in red and the last part kept; closing builds; the file saves the steps.
+- `test_switching_between_an_stl_and_shapes_asks_first`: An STL part made from shapes, or a part of shapes given an STL, only after asking.
+- `test_paste_points`: Paste points: two columns of numbers, a header skipped; a row that is not two numbers named.
+- `test_slips_that_could_lose_work`: A box with other text is not taken and crashes nothing; a choice clicked again changes nothing; the first step stays an Add; deleting every step leaves no part and no waiting; an example asks to be saved as a project of one's own before a step goes in; a wrap's boxes are those of the shape chosen only.
+
 ### `tests/gui/test_gui.py`
 
 The LSR MMTO window, off-screen: the names it takes from PyTO-AD exist; each project opened and saved with no edits is written back unchanged (line endings aside: Windows writes CRLF, which git does not count as a change); only .mmto projects open; New, Save and Project.load agree; the title marks unsaved changes and closing asks; the unit system goes both ways between the project and the Units dialog; selections made of triangle numbers are found before the STL is changed. The Materials, Formulation and Settings panels: OK with no edits changes nothing, Cancel drops edits, every setting has a row, quantities the database cannot give are greyed out with the reason, a new database brings its VAE settings. Supports and loads: a region typed or filled in is the selection a script makes, a code line is never run, picks applied in PyTO-AD's Structural Loads window are adopted, the preview counts the run's nodes and runs the rigid-body check. About a minute.
@@ -387,10 +398,10 @@ The LSR MMTO window, off-screen: the names it takes from PyTO-AD exist; each pro
 - `test_unsaved_changes`: Unsaved changes.
 - `test_units_both_ways`: Units go from the project to the dialog and back; Apply writes the part's extent, the ruler and the Snap steps again in the new length unit.
 - `test_triangle_selections`: Triangle selections.
-- `test_replace_part`: File > Replace part changes the project's STL (copied into the part folder of a project of its own), draws the new part and drops the design of the old one. There is no Geometry button.
-- `test_scale_part`: File > Scale part: the window shows the size the part will have; the selections typed for the old size (a Box, a Cylinder) are named first, not picked faces or a length in element sizes; a project not in a folder of its own is saved as one first and only its part/ is written, every coordinate exactly times the factor; scaling again multiplies again, one STL in part/; the extent follows; Cancel changes nothing.
+- `test_replace_part`: Geometry, From an STL file, Browse... changes the project's STL (copied into the part folder of a project of its own), draws the new part and drops the design of the old one. Geometry is the first step; the File menu no longer has Replace part or Scale part.
+- `test_scale_part`: Geometry, Scale...: the window shows the size the part will have; the selections typed for the old size (a Box, a Cylinder) are named first, not picked faces or a length in element sizes; a project not in a folder of its own is saved as one first and only its part/ is written, every coordinate exactly times the factor; scaling again multiplies again, one STL in part/; the extent follows; Cancel changes nothing.
 - `test_start_page`: With no project open the start page covers the 3D view, and the side buttons, Run, Export STL and Part / Design are greyed with a tip; opening a project hides the page and they work. On a laptop screen (1366 x 768) the page stays whole: nothing in it cut short, overlapping or outside the 3D view.
-- `test_side_marks`: Units, Materials, Supports and loads and Formulation: a tick once set up and the run's check finds nothing wrong there, a red mark for an error of that step, plain while not set up (never red then); a warning marks nothing; the other buttons have no mark. The marks follow every change.
+- `test_side_marks`: Geometry, Units, Materials, Supports and loads and Formulation: a tick once set up and the run's check finds nothing wrong there, a red mark for an error of that step, plain while not set up (never red then); a warning marks nothing; the other buttons have no mark. The marks follow every change.
 - `test_the_materials_window_works_out_the_database_pca_once_and_prints_nothing`: Opening the Materials window: the PCA of the database (its effective dimension) is worked out once, for the recommended latent dimension and the network's check alike, and nothing goes to the terminal. It was worked out by each of them and printed by the encoder, once more for each project check.
 - `test_panels_with_no_edits_change_nothing`: OK with no edits, on every project and every panel: the project is as it was, to the last digit (the U-bracket's mass bound is 0.0035000000000000005).
 - `test_cancel_changes_nothing`: Cancel changes nothing.

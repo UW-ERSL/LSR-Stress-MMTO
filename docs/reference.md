@@ -461,7 +461,7 @@ One problem: the part, its selections, supports and loads, keep-solid regions, m
 | `n_dof` | how fine the mesh is, a whole number of unknowns (see Settings, mesh); None is the default there | `None` |
 | `single_layer` | True for one element through the thickness (a flat part such as a plate), False for a solid part; None is the default under Settings, mesh | `None` |
 | `base_dir` | the folder relative paths start from; None is the folder Python runs in | `None` |
-| `part_shapes` | the part as a list of shape steps (lsr_mmto.shapes, docs/part_shapes.md), built into an STL in part/ of base_dir when it is needed; None when stl is given. A project has one of the two | `None` |
+| `part_shapes` | the part as a list of shape steps (lsr_mmto.shapes, docs/part_shapes.md), built into an STL in part/ of base_dir when it is needed; None when stl is given. A project has one of the two, or neither while its part is still to come (has_part; validate says "no part") | `None` |
 
 ```python
 p = Project("my bracket", stl="data/models/UBracket/UBracket.STL", n_dof=8000)

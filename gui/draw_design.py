@@ -308,7 +308,7 @@ def mesh_of(window, project):
 
 
 def forget_meshes(stl):
-    """The meshes kept for the STL at stl dropped, after its file changed (File > Scale part)."""
+    """The meshes kept for the STL at stl dropped, after its file changed (Geometry, Scale...)."""
     for key in [k for k in _MESHES if os.path.normcase(k[0]) == os.path.normcase(os.path.abspath(stl))]:
         del _MESHES[key]
 
@@ -327,7 +327,7 @@ def _scaled(mesh, factor):
 
 def run_mesh(window, run):
     """The mesh a saved run was made on, rebuilt from the project its record keeps (the window's own
-    mesh when it is the same one). A part scaled since the run (File > Scale part: the same elements, each
+    mesh when it is the same one). A part scaled since the run (Geometry, Scale...: the same elements, each
     larger or smaller by one factor in x, y and z than the run recorded) gives a copy of the mesh scaled back
     to the run's own size. MeshError when it cannot match the run."""
     from lsr_mmto.results.load_results import RecordError

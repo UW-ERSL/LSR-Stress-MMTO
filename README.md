@@ -26,7 +26,7 @@ If conda is already installed (Miniforge, Miniconda or Anaconda), skip step 1. I
 
    The setup also downloads [PyTO-AD](https://github.com/UW-ERSL/PyTO-AD), the differentiable topology optimization code this branch builds on (finite element analysis, filters, MMA, automatic differentiation), into a folder next to this one, unless it is already there. It creates its own environment, `lsr-stress-mmto-ad`, so it does not change the environment `main` uses.
 
-4. **Open LSR MMTO.** Start menu, type LSR, and open it, or use the desktop icon. The start page offers the four examples and New project from an STL.
+4. **Open LSR MMTO.** Start menu, type LSR, and open it, or use the desktop icon. The start page offers the four examples and New project.
 
 ## Your first project
 
@@ -36,8 +36,8 @@ https://github.com/user-attachments/assets/abb986d8-c686-4a75-b559-3b81c5ae498f
 
 
 
-1. **New project from an STL** on the start page, or File > New.
-2. Work down the sidebar: **Units**, **Materials**, **Supports and loads**, **Formulation**, **Settings**.
+1. **New project** on the start page, or File > New.
+2. Work down the sidebar: **Geometry** (an STL file, or a part made of shapes), **Units**, **Materials**, **Supports and loads**, **Formulation**, **Settings**.
 3. **Analyse** to check the setup on the solid part, then **Run**.
 4. Look at the design in **Results**.
 5. **Export STL**.

@@ -76,8 +76,9 @@ LSR MMTO
 │
 ├── the GUI (gui/)                reads everything above; no physics written in it
 │   ├── main_window.py            the window, File and Help, New project (with the physics), the 3D view
-│   ├── materials_panel.py, database_editor.py, database_versions_window.py, formulation_panel.py,
-│   │   settings_panel.py, supports_and_loads_panel.py, run_panel.py, results_panel.py   one each
+│   ├── geometry_panel.py, materials_panel.py, database_editor.py, database_versions_window.py,
+│   │   formulation_panel.py, settings_panel.py, supports_and_loads_panel.py, run_panel.py,
+│   │   results_panel.py   one each
 │   ├── draw_design.py            a design in the 3D view, with the views its run saved
 │   ├── background_work.py        runs and analyses on one background thread
 │   ├── crash_report.py           crashes, errors, freezes and the last actions, in crash_report.log
