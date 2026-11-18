@@ -373,7 +373,9 @@ In the examples, `p` is your project: `p = Project(...)` for a new one, or `p = 
 
 Every call a project script uses, with its arguments, read from the code's own docstrings; `Python_walkthrough.ipynb` uses them on one whole project. Model units are the project's units (`p.units`). A length is a number in model units, or text in numbers, pi and h, the largest element size, such as `"1.5h"` or `"5.64 + 1h"`. A selection is made with one of the selection types first and then added to a project under a name. The examples follow on from one another, run from the LSR MMTO folder: the selections, then a new project that the next examples build up, save and write as a script, then the shipped U-bracket, run and read back.
 
-File > Run script runs a script with its own folder as the working folder, shows what it prints in the messages, and opens the project file it saves in that folder.
+File > Run script runs a script with its own folder as the working folder and shows what it prints in the messages. A setup script makes one project and saves it in its own folder, as `p.save("name.mmto")`; Run script then opens that project. A project saved anywhere else, in a subfolder too, is not opened.
+
+A setup script writes every length, of the part and of the selections, through one scale factor near its top: for example `UNIT = 0.0254`, with each length written as `2.375 * UNIT`. A drawing read in the wrong unit is then fixed by changing that one number and running the script again. Geometry > Scale... in the window scales the part only, not the selections typed in lengths. Forces, pressures and temperatures do not depend on the part's size and are not written through it.
 
 ### box
 

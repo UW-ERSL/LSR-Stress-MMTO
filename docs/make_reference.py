@@ -334,8 +334,15 @@ def python_section():
            "follow on from one another, run from the LSR MMTO folder: the selections, then a new project "
            "that the next examples build up, save and write as a script, then the shipped U-bracket, run "
            "and read back.", "",
-           "File > Run script runs a script with its own folder as the working folder, shows what it prints in "
-           "the messages, and opens the project file it saves in that folder.", ""]
+           "File > Run script runs a script with its own folder as the working folder and shows what it prints "
+           "in the messages. A setup script makes one project and saves it in its own folder, as "
+           "`p.save(\"name.mmto\")`; Run script then opens that project. A project saved anywhere else, in a "
+           "subfolder too, is not opened.", "",
+           "A setup script writes every length, of the part and of the selections, through one scale factor near "
+           "its top: for example `UNIT = 0.0254`, with each length written as `2.375 * UNIT`. A drawing read in "
+           "the wrong unit is then fixed by changing that one number and running the script again. Geometry > "
+           "Scale... in the window scales the part only, not the selections typed in lengths. Forces, pressures "
+           "and temperatures do not depend on the part's size and are not written through it.", ""]
     for e in python_entries():
         out += _entry(*e)[0]
     return out
