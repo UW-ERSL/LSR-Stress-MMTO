@@ -98,8 +98,8 @@ CORE_SETTINGS = [
     # ---- Main
     Setting("mesh", "n_dof", 30000, "Mesh dofs",
             "How fine the mesh is: the number of unknowns it is built for, counting each unknown at each "
-            "node (three per node for a structural problem: the movement in x, y and z). More is finer, and "
-            "slower.",
+            "node: three for structural (the movement in x, y and z), one for thermal (the temperature), four "
+            "for thermoelastic. More is finer, and slower.",
             "Main", integer=True, pyto_ad_field="nDOFDesired"),
     Setting("mesh", "single_layer", False, "Single element layer (2D)",
             "One element through the thickness, for a flat (2D) part.", "Main", pyto_ad_field="ExtrudeZ"),
@@ -110,8 +110,8 @@ CORE_SETTINGS = [
             "The smallest feature the design may have, in element sizes. Larger gives smoother, simpler designs.",
             "Main", pyto_ad_field="RelativeFilterRadius"),
     Setting("common", "material_filter_radius", None, "Latent smoothing radius",
-            "How far material choices are smoothed between neighbouring elements, in element sizes. Ticked: "
-            "the same as the density filter radius.", "Main", none_means="same as density filter",
+            "How far material choices are smoothed between neighbouring elements, in element sizes.", "Main",
+            none_means="same as density filter",
             pyto_ad_field="MaterialFilterRadius", reads_latent_points=True),
     Setting("common", "beta_schedule_scheme", "PAPER", "Projection sharpness schedule",
             "How fast the design is pushed to clear solid and empty: the sharpness starts at 1 and grows 1.5 "

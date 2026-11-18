@@ -13,7 +13,8 @@ it into the STL a run meshes. Lengths are in the project's length unit, angles i
     p = Project("my L-bracket", part_shapes=part)
 
 A step adds, cuts or keeps the overlap of one shape with the part made so far; the first step adds. Every
-shape, outline, repeat and step, with what it means and example parts, is in docs/part_shapes.md.
+shape, outline, repeat and step, with what it means and example parts, is in docs/reference.md, under
+Making the part from shapes.
 """
 import csv
 import json

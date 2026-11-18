@@ -758,9 +758,20 @@ def import_table(path: str) -> dict[str, list[Any]]:
 def write_database(path: str, attributes: Sequence[str], units: Sequence[str | None], names: Sequence[str],
                    labels: Sequence[str | None], colours: Sequence[str],
                    values: "np.ndarray | Sequence[Sequence[float]]") -> str:
-    """A whole database, as the app's editor saves it: the template's layout and Excel checks
-    (write_template), with each material's name, the numbers, each column's unit, and on the Display
-    sheet each material's colour and label (None: shown by its name)."""
+    """Write a material database, as the app's database editor saves it: the template's layout and Excel
+    checks (write_template), each material's name and numbers, each column's unit, and on the Display sheet
+    each material's colour and label. Returns path. The one way a script makes a database; then
+    p.database = path.
+
+    path: the .xlsx file to write, absolute or relative to the folder Python runs in
+    attributes: the columns, each an attribute of Material database attributes, e.g. ["Youngs_Modulus", "Density"]
+    units: each column's unit, one per attribute, in the unit system of the project that will use it; None for a ratio
+    names: the materials' names, one per row
+    labels: the label each material is shown with, one per material; None shows its name
+    colours: each material's colour, "#rrggbb", one per material
+    values: the numbers, one row per material and one number per attribute
+    Example: write_database("steel.xlsx", ["Youngs_Modulus", "Poissons_Ratio", "Density"], ["MPa", None, "t/mm^3"], ["Steel"], [None], ["#4c72b0"], [[210000, 0.3, 7.85e-9]])
+    """
     from openpyxl import load_workbook
     from openpyxl.styles import PatternFill
     write_template(path, attributes, len(names))

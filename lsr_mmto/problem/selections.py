@@ -266,8 +266,9 @@ def from_dict(d: dict[str, Any]) -> Selection:
 
 # ----------------------------------------------------------------------------- shapes
 class box(Selection):
-    """Points with lo <= p <= hi; the corners may come in any order. By default pad is half the element
-    size along each axis, so a box thinner than an element still catches the nearest layer.
+    """Points with lo <= p <= hi; the corners may come in any order. By default ("auto") pad is half the
+    element size along each axis for nodes, so a box thinner than an element still catches the nearest layer,
+    and 0 for element centres.
 
     lo: one corner, [x, y, z] in model units
     hi: the opposite corner, [x, y, z] in model units

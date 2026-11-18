@@ -184,7 +184,7 @@ If a step cannot be made (a size of 0, a cut that removes the whole part, a poly
 
 A changed part numbers its triangles anew, so faces picked on it may land elsewhere: after Update part, LSR MMTO names the selections to check. **Scale...** multiplies every length in the steps and asks first when you have picked faces.
 
-The steps are saved in the project file and written in the project's script, so the same part can also be written in a script: docs/part_shapes.md, in the LSR MMTO folder, shows how.
+The steps are saved in the project file and written in the project's script, so the same part can also be written in a script: docs/reference.md, in the LSR MMTO folder, shows how under Making the part from shapes.
 
 ### 5.3 The mesh
 
@@ -544,11 +544,11 @@ The following table lists every setting, organized by its group in the Settings 
 
 | Group | Setting | What it does |
 | --- | --- | --- |
-| Main | Mesh dofs | How fine the mesh is: the number of unknowns it is built for, counting each unknown at each node (three per node for a structural problem: the movement in x, y and z). More is finer, and slower. |
+| Main | Mesh dofs | How fine the mesh is: the number of unknowns it is built for, counting each unknown at each node: three for structural (the movement in x, y and z), one for thermal (the temperature), four for thermoelastic. More is finer, and slower. |
 | Main | Single element layer (2D) | One element through the thickness, for a flat (2D) part. |
 | Main | Max iterations | The optimization stops after this many iterations. |
 | Main | Density filter radius | The smallest feature the design may have, in element sizes. Larger gives smoother, simpler designs. |
-| Main | Latent smoothing radius | How far material choices are smoothed between neighbouring elements, in element sizes. Ticked: the same as the density filter radius. |
+| Main | Latent smoothing radius | How far material choices are smoothed between neighbouring elements, in element sizes. |
 | Main | Projection sharpness schedule | How fast the design is pushed to clear solid and empty: the sharpness starts at 1 and grows 1.5 times every 5 iterations after iteration 50, up to 32 (PAPER) or 16 (PAPER_BM1). |
 | Run length | Time limit [s] | The optimization stops after this many seconds. |
 | Run length | Convergence tolerance | The optimization stops early once the objective changes by less than this, relatively, between iterations, and every constraint is met to within this. |

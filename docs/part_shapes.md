@@ -1,6 +1,6 @@
 # Making a part from shapes
 
-A project's part can come from an STL file made in a CAD program, or it can be made in LSR MMTO from simple shapes: boxes, cylinders, spheres, outlines pushed up or spun around, joined and cut out of each other. This page shows how, in a script. In the GUI, the same steps are made in Geometry, the first step (user guide section 5.2). Every block of Python on this page is run by the tests, so it works as written (all but the CSV example in section 4, which needs a file of your own).
+A project's part can come from an STL file made in a CAD program, or it can be made in LSR MMTO from simple shapes: boxes, cylinders, spheres, outlines pushed up or spun around, joined and cut out of each other. This section shows how, in a script. In the GUI, the same steps are made in Geometry, the first step (user guide section 5.2). Every block of Python in this section is run by the tests, so it works as written (all but the CSV example in section 4, which needs a file of your own).
 
 Lengths are in the project's length unit and angles are in degrees.
 
@@ -168,7 +168,7 @@ for warning in p.part_warnings():
 
 ## 8. Saving
 
-The steps are saved in the project file under `part_shapes`. `p.save_as_script(...)` writes them as the same `S.` calls used on this page, so a saved script rebuilds the same part.
+The steps are saved in the project file under `part_shapes`. `p.save_as_script(...)` writes them as the same `S.` calls used in this section, so a saved script rebuilds the same part.
 
 Scaling the part (Scale... in the GUI's Geometry step, or `scale_part` in `lsr_mmto.problem.project_folder`) multiplies every length in the steps (sizes, radii, positions, points, repeats) and builds the part again. The project file changes when the project is next saved. The part is made again rather than stretched, so its triangles may be numbered differently: supports and loads picked as triangles may need picking again (the GUI asks first when there are any).
 

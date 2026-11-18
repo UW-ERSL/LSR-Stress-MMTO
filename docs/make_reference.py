@@ -31,7 +31,7 @@ SECTIONS = [
     ("name, comment", "the project's name (also the run's name) and a description"),
     ("physics", "the physics the project uses, see Physics"),
     ("mesh", "n_dof (degrees of freedom asked for) and single_layer (one element through the thickness)"),
-    ("part_shapes", "the part as a list of shape steps (docs/part_shapes.md), built into the STL; null for an "
+    ("part_shapes", "the part as a list of shape steps (Making the part from shapes, below), built into the STL; null for an "
                     "imported STL"),
     ("selections", "named regions of the mesh, see Selection types"),
     ("bcs", "boundary conditions, each on a named selection, see Boundary conditions"),
@@ -48,7 +48,7 @@ SECTIONS = [
 PROJECT_CALLS = ("Project", "units", "comment", "physics", "add_selection", "mesh", "part_warnings", "evaluate", "add_bc",
                  "keep_solid", "database", "material_source", "pinned_material",
                  "network_error", "vae_check", "network_check", "confirm_network", "objective",
-                 "constraint", "settings",
+                 "constraint", "settings", "warnings",
                  "save", "save_as_script", "load")                  # Project's calls, in the order a script uses them
 ARGUMENT = re.compile(r"^(\w+)((?:\[\w+\]|\(\w+\))*): (.*)$")       # name: text, or settings[section][name]: text
 
@@ -76,6 +76,7 @@ def generate():
     from lsr_mmto.materials.databases import ATTRIBUTES, UNIT_SYSTEMS
 
     out = ["# Reference", "",
+           "Everything a project setup script needs is on this page, the part made from shapes included.", "",
            "Generated from the code by `python docs/make_reference.py`; do not edit by hand.", "",
            "A project is an LSR MMTO project file (.mmto): the layout of a PyTO-AD project file, with an "
            "`mmto` section, which holds the whole "
@@ -89,7 +90,7 @@ def generate():
             "Lengths are numbers in model units, or text in numbers, pi and h, the largest element size: "
             "`\"<k>h\"` for k times it, or arithmetic such as `\"5.64 + 1h\"`, worked out on each mesh. "
             "`pad` widens every bound; `\"auto\"` is half an element for nodes and 0 for element centres "
-            "(faces and planes always half an element).", "",
+            "(face and plane default to half an element on nodes and elements alike).", "",
             "| type | fields | selects |", "|---|---|---|"]
     for name, cls in sorted(S._TYPES.items()):
         fields = "parts" if cls in (S.Union, S.Intersect, S.Difference) else ", ".join(cls.fields)
@@ -104,9 +105,11 @@ def generate():
             + f" | {kind.help} |" for k, kind in BC_KINDS.items()]
 
     out += ["", "## Material database attributes", "",
-            "A database is an .xlsx file: attribute names in row 1, units in row 2, then one row per "
-            "material with its name in column A. Every column must be one of these attributes (or one "
-            "of its other names); the Materials panel of the app shows the errors and warnings of a file.", "",
+            "A database is an .xlsx file whose first sheet holds attribute names in row 1 from column B, their "
+            "units in row 2, then one row per material with its name in column A; cells A1 and A2 are not "
+            "read. Every column must be one of these attributes (or one of its other names); the Materials "
+            "panel of the app shows the errors and warnings of a file. A script writes one with "
+            "write_database (Python, below).", "",
             "| attribute | other names | meaning | allowed range | units |", "|---|---|---|---|---|"]
     out += [f"| `{a.name}` | {', '.join(a.aliases)} | {a.doc} | {a.range_text()} | "
             f"{'none (may be blank)' if a.measures == 'ratio' else ', '.join(a.units)} |"
@@ -116,14 +119,14 @@ def generate():
             "Color is the default colour, an empty Label the material's name. Two materials with the same "
             "colour or the same label are an error. The run record stores both."]
 
-    kinds = ("length", "force", "stress", "density", "mass", "cost per mass")
+    kinds = list(next(iter(UNIT_SYSTEMS.values())))       # every unit the systems know, a physics' own too
     out += ["", "## Unit systems", "",
             "A project declares the units its numbers are in, as the PyTO-AD GUI does (`settings.unit_system` "
             "in the project file; `p.units` in code). Nothing is converted: forces, lengths, bounds and the "
             "database are used as written. A database column in other units is reported before a run, with "
             "what it does to the results. `none` (no unit system) checks nothing.", "",
             "| system | " + " | ".join(kinds) + " |", "|---|" + "---|" * len(kinds)]
-    out += [f"| `{k}` | " + " | ".join(v[q] for q in kinds) + " |" for k, v in UNIT_SYSTEMS.items()]
+    out += [f"| `{k}` | " + " | ".join(v.get(q, "") for q in kinds) + " |" for k, v in UNIT_SYSTEMS.items()]
 
     out += ["", "## Physics", "",
             "The `physics` of a project names the model its optimization uses.", "",
@@ -145,10 +148,9 @@ def generate():
                    f"{'yes' if q.constraint else ''} | {', '.join(q.needs)} | {q.doc} | {q.help} |")
 
     out += ["", "## Settings", "",
-            "Every setting a run takes, under its own name. A new project starts from these values "
-            "(the settings of the paper's examples); a file missing some is completed from them, and "
-            "the run says which. The VAE's own settings start from the database's known values. The "
-            "mesh settings are the file's `mesh` section; the others are `settings.<section>`. An empty "
+            "Every setting a run takes, under its own name. A new project starts from these values, and a file "
+            "missing some is completed from them. The run says which, except for the mesh settings. The "
+            "VAE's own settings start from the database's known values. The mesh settings are the file's `mesh` section; the others are `settings.<section>`. An empty "
             "physics column: every project has it.", ""]
     for section in ("mesh", "common", "advanced", "vae"):
         out += [f"### {section}", "", "| setting | physics | default | meaning |", "|---|---|---|---|"]
@@ -159,6 +161,7 @@ def generate():
             meaning = e.help + (f" Empty (None): {e.none_means}." if e.none_means else "")
             out.append(f"| `{e.key}` | {_physics(e.physics, PHYSICS)} | {default} | {meaning} |")
         out.append("")
+    out += shapes_section()
     out += python_section()
     return "\n".join(stars_kept(line) if line.startswith("|") else line for line in out)
 
@@ -207,10 +210,13 @@ def python_entries():
     Run holds). Every selection type is written as the call of its name."""
     from lsr_mmto.optimize.solid_part_analysis import analyse_design
     from lsr_mmto.problem import selections as S
+    from lsr_mmto.materials.databases import write_database
     from lsr_mmto.problem.project import Project, run
     from lsr_mmto.results import design_3d, load_results, run_plots, stl_export, tables
     out = [(name, getattr(S, name), "call") for name in S._TYPES]
     for name in PROJECT_CALLS:
+        if name == "database":                              # a database the script makes, before it is chosen
+            out.append(("write_database", write_database, "call"))
         found = inspect.getattr_static(Project, name, None)
         how = ("call" if name == "Project" else "classmethod" if isinstance(found, classmethod) else
                "method" if inspect.isfunction(found) else "attribute")
@@ -300,6 +306,22 @@ def examples():
     return [_entry(*e)[1:] for e in python_entries()]
 
 
+def shapes_section():
+    """docs/part_shapes.md, written by hand with its examples (tests/problem/test_part_shapes.py runs them), as a
+    section of this page, its headings one level down: one page holds all a setup script needs."""
+    with open(os.path.join(ROOT, "docs", "part_shapes.md"), encoding="utf-8") as fh:
+        lines = fh.read().rstrip("\n").split("\n")
+    out, code = [""], False
+    for line in lines:
+        code = code != line.startswith("```")                    # inside a code block: left as it is
+        if not code and line == "# Making a part from shapes":
+            line = "## Making the part from shapes"
+        elif not code and line.startswith("#"):
+            line = "#" + line
+        out.append(line)
+    return out
+
+
 def python_section():
     out = ["", "## Python", "",
            "In the examples, `p` is your project: `p = Project(...)` for a new one, or "
@@ -311,7 +333,9 @@ def python_section():
            "with one of the selection types first and then added to a project under a name. The examples "
            "follow on from one another, run from the LSR MMTO folder: the selections, then a new project "
            "that the next examples build up, save and write as a script, then the shipped U-bracket, run "
-           "and read back.", ""]
+           "and read back.", "",
+           "File > Run script runs a script with its own folder as the working folder, shows what it prints in "
+           "the messages, and opens the project file it saves in that folder.", ""]
     for e in python_entries():
         out += _entry(*e)[0]
     return out

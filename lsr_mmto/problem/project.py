@@ -24,9 +24,8 @@ run builds the project itself (Project.build): the mesh, the material, the suppo
 field, the body force and the optimization and VAE parameters the run starts from.
 
 Settings: every setting is one entry of SETTINGS in problem/settings.py, stored in
-settings.common, settings.advanced and settings.vae. A new project starts from the
-settings of the paper's examples; a file missing some is completed from the same
-defaults, and the run says which.
+settings.common, settings.advanced and settings.vae. A new project starts from their
+defaults; a file missing some is completed from the same defaults, and the run says which.
 
 Supports and loads each act on a named selection, evaluated on the mesh nodes. Their kinds are
 those of the project's physics (the <name>_supports_and_loads.py file of each physics); every
@@ -169,9 +168,9 @@ class Project:
 
     name: the project's name, text; its runs are named after it
     stl: the part, an STL file: its path, absolute or relative to base_dir; None when part_shapes is given
-    part_shapes: the part as a list of shape steps (lsr_mmto.shapes, docs/part_shapes.md), built into an STL in
-        part/ of base_dir when it is needed; None when stl is given. A project has one of the two, or neither
-        while its part is still to come (has_part; validate says "no part")
+    part_shapes: the part as a list of shape steps (lsr_mmto.shapes, see Making the part from shapes), built
+        into an STL in part/ of base_dir when it is needed; None when stl is given. A project has one of the
+        two, or neither while its part is still to come (has_part; validate says "no part")
     n_dof: how fine the mesh is, a whole number of unknowns (see Settings, mesh); None is the default there
     single_layer: True for one element through the thickness (a flat part such as a plate), False for a
         solid part; None is the default under Settings, mesh
@@ -302,12 +301,13 @@ class Project:
         return names
 
     def add_bc(self, kind: str, on: "S.Selection | str", **values: Any) -> None:
-        """A support or load of a kind of BC_KINDS (the structural ones: fixed, displacement, force,
-        traction) on a selection, its name or a Selection (stored under a new name), with the kind's values,
+        """A support or load of one of the kinds of the project's physics (Boundary conditions lists them, with
+        each kind's physics) on a selection, its name or a Selection (stored under a new name), with the kind's values,
         e.g. p.add_bc("fixed", "clamp", dofs="xyz"), p.add_bc("force", "corner", total=[0, -4, 0]).
         The values are checked as the project's check checks them; a wrong one is an error here.
 
-        kind: one of the kinds under Boundary conditions, such as "fixed" or "force"
+        kind: one of the kinds under Boundary conditions, such as "fixed" or "force"; a kind of another physics
+            is taken here and reported by the project's check (validate)
         on: the selection it acts on: its name, or a selection type above (added under a new name)
         values: the kind's values, as keywords, e.g. dofs="xyz" or total=[0, -1000, 0]; each kind's values
             are under Boundary conditions
@@ -821,7 +821,10 @@ class Project:
         """What is allowed but deserves a look before a run: what may not come out as meant in a part made of
         shapes (part_warnings), the database's warnings, a database in units other than the project's, a latent
         dimension other than the one recommended for the database, and what a constraint's quantity says about
-        its limit."""
+        its limit. A run prints them before it starts; none of them stops it.
+
+        Example: print(p.warnings())
+        """
         try:
             out = [f"part: {w}" for w in self.part_warnings()]
         except (ShapeError, OSError):
@@ -1257,14 +1260,14 @@ class Project:
                  "HERE = os.path.dirname(os.path.abspath(__file__))",
                  ""] + explained("Part and mesh", "Project, its arguments and the units")
         if shapes:
-            lines += ["# the part, made of shapes: every shape and step is in docs/part_shapes.md",
+            lines += ["# the part, made of shapes: every shape and step is in docs/reference.md, Making the part from shapes",
                       "part_shapes = ["] + to_script(self.part_shapes) + [
                       "]",
                       f"p = Project({self.name!r}, part_shapes=part_shapes, n_dof={self.n_dof}, "
                       f"single_layer={self.single_layer},",
                       "            base_dir=HERE)"]
         elif stl is None:
-            lines += ["# no part yet: give it stl=... or part_shapes=... (docs/part_shapes.md)",
+            lines += ["# no part yet: give it stl=... or part_shapes=... (docs/reference.md)",
                       f"p = Project({self.name!r}, n_dof={self.n_dof}, single_layer={self.single_layer}, base_dir=HERE)"]
         else:
             lines += [f"p = Project({self.name!r}, stl={stl!r}, n_dof={self.n_dof}, single_layer={self.single_layer},",
