@@ -56,6 +56,9 @@ APP = "LSR MMTO"
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXAMPLES = os.path.join(REPO, "projects")   # the example projects: opened as templates, never changed
 OUTLINE_COLOUR = "#c400c4"                  # selection shapes: magenta, unlike the part, supports, loads
+MESH_EDGE_COLOUR = "#3d6b3d"                # the run's mesh in a preview: the edges of its elements
+MAX_ARROWS = 24                             # a load's arrows: on at most this many of its nodes, spread over it
+ARROW_SHARE = 0.08                          # an arrow's length, as a share of the part's diagonal
 MEASURE_COLOURS = ("#222222", "#ffffff")    # Measure's line and points: in the light view, in the dark view
 PROJECT_FILTER = "LSR MMTO project (*.mmto)"
 SCRIPT_FILTER = "Python script (*.py)"
@@ -343,6 +346,36 @@ def snap_steps(size):
 def point_text(p):
     """A point as a field takes it: 120, 80, 1."""
     return ", ".join(format(float(v), ".6g") for v in p)
+
+
+def outer_elements(centres, h):
+    """For each element of a voxel mesh (its centre, the element size h), True when one of its six faces is on
+    the outside: the neighbour across that face is missing."""
+    ijk = np.rint((centres - centres.min(axis=0)) / h).astype(np.int64) + 1     # grid positions, 1 from the edge
+    n = ijk.max(axis=0) + 2
+
+    def key(a):
+        return (a[:, 0] * n[1] + a[:, 1]) * n[2] + a[:, 2]
+    present, outside = key(ijk), np.zeros(len(ijk), dtype=bool)
+    for axis in range(3):
+        for step in (-1, 1):
+            neighbour = ijk.copy()
+            neighbour[:, axis] += step
+            outside |= ~np.isin(key(neighbour), present)
+    return outside
+
+
+def spread_out(points, k):
+    """Indices of at most k of points (n, 3), spread over them: first the one nearest their middle, then each
+    time the one farthest from those taken."""
+    if len(points) <= k:
+        return np.arange(len(points))
+    taken = [int(np.argmin(np.linalg.norm(points - points.mean(axis=0), axis=1)))]
+    distance = np.linalg.norm(points - points[taken[0]], axis=1)
+    while len(taken) < k:
+        taken.append(int(np.argmax(distance)))
+        distance = np.minimum(distance, np.linalg.norm(points - points[taken[-1]], axis=1))
+    return np.array(taken)
 
 
 def load_direction(bc):
@@ -1629,11 +1662,13 @@ class MMTOWindow(MainWindow):
             self._looking = False
 
     def part_actor(self):
-        """The part's own actor in the 3D view (its STL), or None."""
+        """The part's own actor in the 3D view (its STL), or None. A preview's or a design's drawing is never it,
+        even with as many cells."""
         n = len(self.stl_geom.mesh.vectors) if getattr(self, "stl_geom", None) else -1
+        drawn = [a for name, a in self.plotter.actors.items() if str(name).startswith(("mmto_", "result_"))]
         for actor in self.plotter.renderer.GetActors():
             data = actor.GetMapper().GetInput() if actor.GetMapper() else None
-            if data is not None and data.GetNumberOfCells() == n:
+            if data is not None and data.GetNumberOfCells() == n and not any(actor is a for a in drawn):
                 return actor
         return None
 
@@ -1677,6 +1712,8 @@ class MMTOWindow(MainWindow):
 
     # ------------------------------------------------------------------ measuring
     def _measure_toggled(self, on):
+        if on:
+            self.show_part()                                        # Measure reads the mouse on the part
         self._measure_esc.setEnabled(on)
         self._measure_points = []
         self._draw_measure()
@@ -2267,6 +2304,7 @@ class MMTOWindow(MainWindow):
             QtWidgets.QMessageBox.information(self, APP, "Start a project first: File > New or File > Open.")
             return None
         self.show_setup_view()
+        self.show_part()                                            # the step's shape is drawn over the part
         if not self._raise_if_open("geometry_panel"):
             from .geometry_panel import GeometryPanel
             self.geometry_panel = GeometryPanel(self)
@@ -2414,8 +2452,10 @@ class MMTOWindow(MainWindow):
         return [cls for cls in PICK_WINDOWS if cls.makes() & wanted]
 
     def open_pick_window(self, cls):
-        """A picking window (one of PICK_WINDOWS), docked in the list's place, as a tab beside it."""
+        """A picking window (one of PICK_WINDOWS), docked in the list's place, as a tab beside it; the part is
+        shown, for its faces to be picked."""
         self.show_setup_view()
+        self.show_part()
         if not self._raise_if_open(cls.ATTR):
             window = cls(self)
             setattr(self, cls.ATTR, window)
@@ -2548,6 +2588,41 @@ class MMTOWindow(MainWindow):
         for name in [n for n in list(self.plotter.actors) if str(n).startswith("mmto_")]:
             self.plotter.remove_actor(name, reset_camera=False)
         self.preview_on = False
+        self.show_part()
+
+    def reads_mouse_on_part(self):
+        """True while a picking window or a form under Supports and loads is open, or Measure is on: each reads
+        the mouse on the part, so the part, not the run's mesh, is shown."""
+        panel = getattr(self, "supports_panel", None)
+        form_open = in_open_strip(panel) and panel.stack.currentIndex() > 0
+        return self.picking_window() is not None or form_open or self.measure.isChecked()
+
+    def show_part(self):
+        """The part in place of the run's mesh (draw_run_mesh), on the Setup view: a form or a picking window
+        reads the mouse on the part. The preview's nodes and arrows stay."""
+        self.plotter.remove_actor("mmto_mesh", reset_camera=False)
+        part = self.part_actor()
+        if part is not None and self.view == "setup":
+            part.SetVisibility(True)
+
+    def draw_run_mesh(self, mesh, keep=()):
+        """The run's mesh in place of the part, so supports and loads are checked on what the run solves: its
+        elements on the outside as blocks with their edges, in the part's colour; the elements in keep (drawn
+        apart, as keep-solid) left out. The part comes back with show_part. Nothing changes while the mouse is
+        read on the part (reads_mouse_on_part)."""
+        from .draw_design import _blocks
+        if self.reads_mouse_on_part():
+            return
+        centres, h = np.asarray(mesh.elem_centers, dtype=float), np.asarray(mesh.elem_size, dtype=float)
+        outside = outer_elements(centres, h)
+        outside[np.asarray(keep, dtype=int)] = False
+        self.plotter.remove_actor("mmto_mesh", reset_camera=False)
+        if outside.any():
+            self.plotter.add_mesh(_blocks(centres[outside], h, {}), color=MATERIAL_COLOR, show_edges=True,
+                                  edge_color=MESH_EDGE_COLOUR, pickable=False, name="mmto_mesh", reset_camera=False)
+        part = self.part_actor()
+        if part is not None:
+            part.SetVisibility(False)
 
     def clear_preview(self):
         """The preview drawings gone, back to the Setup view. The design is kept (Design, in the top row)."""
@@ -2662,28 +2737,38 @@ class MMTOWindow(MainWindow):
         (self.design_button if self.view == "design" and self._design is not None else self.part_button).setChecked(True)
 
     def _arrow(self, i, direction, points, size):
-        """A load's arrow, its tip on the load's nodes, coming from outside the part. A load that pulls
-        away from the part would put that arrow inside the part, hidden: it starts on the nodes instead."""
+        """A load's arrows on its nodes (points; at most MAX_ARROWS of them, spread over the load), each along
+        the load, its tip on its node, coming from outside the part. Where an arrow coming in would pass through
+        the part anywhere along it (a load pulling away from the part, a thin plate too), it starts on its node
+        instead."""
         import pyvista as pv
         d = np.asarray(direction, dtype=float) / np.linalg.norm(direction)
-        at, length = np.asarray(points).mean(axis=0), 0.15 * size
-        start = at - length * d
-        if self._inside_part(at - 0.5 * length * d):                # where the arrow would be: inside the part
-            start = at
-        self.plotter.add_mesh(pv.Arrow(start, d, scale=length), color=LOAD_COLOUR, pickable=False,
-                              name=f"mmto_arrow{i}")
+        points = np.asarray(points, dtype=float)
+        at, length = points[spread_out(points, MAX_ARROWS)], ARROW_SHARE * size
+        step = 0.5 * float(np.min(self._mesh.elem_size)) if self._mesh is not None else length
+        n = int(np.ceil(length / step))                             # points half an element apart along each
+        along = np.arange(1, n + 1) / n                             # arrow coming in
+        coming_in = at[:, None, :] - length * along[None, :, None] * d
+        inside = self._inside_part(coming_in.reshape(-1, 3)).reshape(len(at), n).any(axis=1)
+        starts = np.where(inside[:, None], at, at - length * d)
+        cloud = pv.PolyData(starts)
+        cloud["along"] = np.tile(d, (len(starts), 1))
+        arrows = cloud.glyph(orient="along", scale=False, factor=length, geom=pv.Arrow())
+        self.plotter.add_mesh(arrows, color=LOAD_COLOUR, pickable=False, name=f"mmto_arrow{i}", reset_camera=False)
 
-    def _inside_part(self, point):
-        """True when point is inside an element of the preview mesh (within half an element's diagonal of
-        an element centre)."""
+    def _inside_part(self, points):
+        """For each of points (n, 3), True when it is inside an element of the preview mesh (within half an
+        element of its centre along each axis), or on its outside surface (an arrow along an edge of the part)."""
+        points = np.atleast_2d(np.asarray(points, dtype=float))
         mesh = self._mesh
         if mesh is None:
-            return False
+            return np.zeros(len(points), dtype=bool)
+        h = np.asarray(mesh.elem_size, dtype=float)
         if getattr(self, "_centre_tree", (None,))[0] is not mesh:
             from scipy.spatial import cKDTree
-            self._centre_tree = (mesh, cKDTree(np.asarray(mesh.elem_centers, dtype=float)))
-        distance, _ = self._centre_tree[1].query(np.asarray(point, dtype=float))
-        return distance <= 0.5 * float(np.linalg.norm(np.asarray(mesh.elem_size, dtype=float)))
+            self._centre_tree = (mesh, cKDTree(np.asarray(mesh.elem_centers, dtype=float) / h))
+        distance, _ = self._centre_tree[1].query(points / h, p=np.inf)  # in element sizes, along the worst axis
+        return distance <= 0.5 + 1e-9
 
     def draw_outline(self, name, selection, colour):
         """The selection's shape as edges, always in OUTLINE_COLOUR, apart from every colour the nodes use
@@ -2698,10 +2783,11 @@ class MMTOWindow(MainWindow):
                                                             # can hide the text over the 3D view
 
     def draw_one(self, name, colour, bc_index=None):
-        """Only one selection on the part (a row clicked in Supports and loads): its nodes, its shape, and the
-        arrow of the load at bc_index. Returns its node count."""
+        """Only one selection on the run's mesh (a row clicked in Supports and loads): its nodes, its shape, and
+        the arrows of the load at bc_index. Returns its node count."""
         p, mesh = self.project, self.preview_mesh()
         self.clear_preview()
+        self.draw_run_mesh(mesh)
         xyz = np.asarray(mesh.node_xyz, dtype=float)
         nodes = p.evaluate(name, mesh, "nodes")
         self.draw_points(f"mmto_{name}", xyz[nodes], colour)
@@ -2714,10 +2800,10 @@ class MMTOWindow(MainWindow):
         return len(nodes)
 
     def draw_supports_and_loads(self):
-        """Every region on the run's mesh: supports blue, loads red with an arrow each, other regions
+        """Every region on the run's mesh: supports blue, loads red with their arrows, other regions
         orange, keep-solid elements grey. Returns (report lines, {region: node count})."""
-        import pyvista as pv
         from lsr_mmto.problem.boundary_conditions import BC_KINDS
+        from .draw_design import _blocks
         p, mesh = self.project, self.preview_mesh()
         self.clear_preview()
         xyz, centres = np.asarray(mesh.node_xyz, dtype=float), np.asarray(mesh.elem_centers, dtype=float)
@@ -2725,7 +2811,7 @@ class MMTOWindow(MainWindow):
         for bc in p.bcs:
             if bc.get("kind") in BC_KINDS:
                 role.setdefault(bc["on"], set()).add(BC_KINDS[bc["kind"]].role)
-        lines, counts = [], {}
+        lines, counts, kept = [], {}, []
         for name, s in p.selections.items():
             nodes = p.evaluate(name, mesh, "nodes")
             counts[name] = len(nodes)
@@ -2736,13 +2822,13 @@ class MMTOWindow(MainWindow):
             if name in p.keep_solid_names:                         # the kept elements, as grey blocks
                 elems = p.evaluate(name, mesh, "elements")
                 if len(elems):
-                    h = np.asarray(mesh.elem_size, dtype=float)
-                    blocks = pv.PolyData(centres[elems]).glyph(
-                        geom=pv.Cube(x_length=h[0], y_length=h[1], z_length=h[2]), scale=False, orient=False)
+                    blocks = _blocks(centres[elems], np.asarray(mesh.elem_size, dtype=float), {})
                     self.plotter.add_mesh(blocks, color=KEEP_COLOUR, pickable=False, name=f"mmto_keep_{name}")
+                    kept.append(np.asarray(elems, dtype=int))
                 lines.append(f"Keep solid {name}: {len(elems)} elements")
             if len(nodes) == 0:
                 lines.append(f"<span style='color:#b00000'>{name} has no nodes on this mesh</span>")
+        self.draw_run_mesh(mesh, np.concatenate(kept) if kept else ())
         size = float(np.linalg.norm(np.ptp(xyz, axis=0)))
         for i, bc in enumerate(p.bcs):
             d = load_direction(bc)

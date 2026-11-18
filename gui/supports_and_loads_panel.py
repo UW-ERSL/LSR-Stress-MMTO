@@ -1156,8 +1156,10 @@ class SupportsPanel(QtWidgets.QDialog):
 
     # ------------------------------------------------------------------ pages
     def open_page(self, dialog, on_ok):
-        """dialog as a page of this strip, in front of the page before it, the 3D view free to use;
-        OK or Cancel goes back one page, OK first calls on_ok(dialog)."""
+        """dialog as a page of this strip, in front of the page before it, the 3D view free to use (the part
+        shown, not the run's mesh: the page reads the mouse on it); OK or Cancel goes back one page, then OK
+        calls on_ok(dialog) and Cancel puts the preview back as it was (after_change)."""
+        self.window.show_part()
         page = QtWidgets.QWidget()
         box = QtWidgets.QVBoxLayout(page)
         title = QtWidgets.QLabel(f"<b>{dialog.windowTitle()}</b>")
@@ -1174,10 +1176,12 @@ class SupportsPanel(QtWidgets.QDialog):
         dialog.show()
 
         def finished(result):
+            self.stack.removeWidget(page)                           # first, so the preview redone sees the
+            page.deleteLater()                                      # page gone
             if result:
                 on_ok(dialog)
-            self.stack.removeWidget(page)
-            page.deleteLater()
+            else:                                                   # Cancel: the preview as it was
+                self.after_change()
         dialog.finished.connect(finished)
         return dialog
 

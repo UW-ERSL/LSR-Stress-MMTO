@@ -1,6 +1,6 @@
 # Testing the codebase
 
-Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 382 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
+Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 385 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
 
 Run them all from the repository folder with `python -m pytest tests -q -n 4` (`-n 2` on a computer with less than 16 GB of memory), one folder with `python -m pytest tests/<folder> -q`, or one file with `python -m pytest tests/<folder>/<file> -q`.
 
@@ -455,6 +455,9 @@ The LSR MMTO window, off-screen: the names it takes from PyTO-AD exist; each pro
 - `test_part_facts_pca_live_colours_training`: The part's facts behind the (i), not over the 3D view; the PCA breakdown behind the Materials panel's (i), and its Values | Network error switch; the live design by density; the training's epochs in the Run status line.
 - `test_results_compare_delete`: Results: the project's runs, newest first; a run shown as each of Material, Density, Stress, Displacement (smooth over the faces, its magnitude or x, y, z, and the deformed shape at a scale that moves it 5 % of the part at most) and Solid; two runs compared side by side; another place's run opened for looking only; Delete, in Results and in the Run strip, removes a run's folder.
 - `test_load_arrow_outside_the_part`: A load's arrow is drawn outside the part whichever way it points: pushing in, its tip on the face; pulling away, it starts on the face (it used to sit inside the part, hidden).
+- `test_preview_on_the_run_mesh`: Supports and loads are previewed on the run's mesh, its outer elements drawn in place of the part; a load's arrows sit on its nodes, at most MAX_ARROWS of them, spread over the load. A form and Clear bring the part back.
+- `test_load_arrow_on_a_thin_plate`: A load pulling a thin plate's top face up: its arrows start on the face and go up, none through the plate from below (a point halfway along the arrow is past the plate's far face, so every point along it is tested).
+- `test_outer_elements_and_spread_out`: A 3 x 3 x 3 block of elements has 26 on the outside; spread_out takes k distinct points, the far ends of a line among them.
 - `test_stop_while_training`: Stop while the material network trains: the run ends there, no network is saved and the run's folder is removed; the status says so.
 - `test_export_stl`: Export STL of the design shown: design.stl and a file per material used, in the run's folder, all closed; the pieces add up to their whole. Results' Show list has Smooth (exported), greyed with a tip until the run's folder holds the files; after the export it is chosen and the pieces are drawn, and can be pulled apart. What the folder holds decides: a Results panel opened later finds the files, and finds none once they are gone.
 - `test_earlier_run_after_scale_part`: A run made before Scale part is drawn and exported at the size it was run at: its mesh is the rebuilt one scaled back (the run's element size, the same nodes), Export STL gives the same extent, and the window's own mesh of the scaled part is left as it is. A part changed in another way still cannot show the run.

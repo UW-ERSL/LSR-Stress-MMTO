@@ -2212,9 +2212,10 @@ def test_run():
         panel = w.open_supports_and_loads_panel()
         w.design_button.click()                                               # Design again
         assert w.view == "design"
-        panel.preview()                                                       # a setup action: the part
-        assert w.view == "setup" and w.part_actor().GetVisibility()
+        panel.preview()                                                       # a setup action: the run's mesh
+        assert w.view == "setup" and "mmto_mesh" in w.plotter.actors and not w.part_actor().GetVisibility()
         w.clear_preview()                                                     # Clear keeps the design
+        assert w.part_actor().GetVisibility() and "mmto_mesh" not in w.plotter.actors
         assert w.show_design_view() and "result_design" in w.plotter.actors
         first = r.save_dir
 
@@ -2711,6 +2712,76 @@ def test_load_arrow_outside_the_part():
             bounds = w.plotter.actors[f"mmto_arrow{i}"].GetBounds()          # xmin, xmax, ...
             assert outside(bounds), (fx, bounds, x_face)                       # no part of it inside x < face
             assert bounds[1] > x_face + 1.0, (fx, bounds)                      # and it reaches out beyond it
+
+
+def test_preview_on_the_run_mesh():
+    """Supports and loads are previewed on the run's mesh, its outer elements drawn in place of the part; a
+    load's arrows sit on its nodes, at most MAX_ARROWS of them, spread over the load. A form and Clear bring
+    the part back."""
+    import pyvista as pv
+    with scratch() as d:
+        w = opened("L-bracket", d)
+        w.project.n_dof, w.project.single_layer = 3000, True
+        panel = w.open_supports_and_loads_panel()
+        panel.preview()
+        mesh = w.preview_mesh()
+        outer = G.outer_elements(np.asarray(mesh.elem_centers, dtype=float), np.asarray(mesh.elem_size, dtype=float))
+        assert outer.all()                                                    # one layer: every element shows
+        blocks = w.plotter.actors["mmto_mesh"].GetMapper().GetInput()
+        assert blocks.n_cells == 6 * mesh.num_elems and not w.part_actor().GetVisibility()
+        loads = [i for i, bc in enumerate(w.project.bcs) if G.load_direction(bc) is not None]
+        arrow = pv.Arrow()
+        for i in loads:
+            n = w.plotter.actors[f"mmto_arrow{i}"].GetMapper().GetInput().n_cells // arrow.n_cells
+            nodes = w.project.evaluate(w.project.bcs[i]["on"], mesh, "nodes")
+            assert n == min(len(nodes), G.MAX_ARROWS), (i, n, len(nodes))
+        page = panel.add_bc()                                                 # a form reads the mouse on the part
+        assert w.part_actor().GetVisibility() and "mmto_mesh" not in w.plotter.actors
+        panel.preview()                                                       # not even a preview redone
+        assert w.part_actor().GetVisibility() and "mmto_mesh" not in w.plotter.actors
+        page.reject()                                                         # Cancel: the preview as it was
+        assert "mmto_mesh" in w.plotter.actors and not w.part_actor().GetVisibility() and w.preview_on
+        w.measure.setChecked(True)                                            # Measure reads it too
+        assert w.part_actor().GetVisibility() and "mmto_mesh" not in w.plotter.actors
+        panel.preview()
+        assert w.part_actor().GetVisibility() and "mmto_mesh" not in w.plotter.actors
+        w.measure.setChecked(False)
+        w.open_structural_loads_window()                                      # a picking window, and a preview
+        panel.preview()                                                       # from the tab beside it
+        assert w.picking_window() is not None and w.part_actor().GetVisibility()
+        assert "mmto_mesh" not in w.plotter.actors
+        w.close_picking_windows()
+        panel.preview()
+        w.clear_preview()
+        assert w.part_actor().GetVisibility() and "mmto_mesh" not in w.plotter.actors
+
+
+def test_load_arrow_on_a_thin_plate():
+    """A load pulling a thin plate's top face up: its arrows start on the face and go up, none through the
+    plate from below (a point halfway along the arrow is past the plate's far face, so every point along it
+    is tested)."""
+    from lsr_mmto.problem import selections as S
+    with scratch() as d:
+        w = opened("L-bracket", d)                                            # a plate 1 thick, 200 across
+        w.project.n_dof, w.project.single_layer = 3000, True
+        w.project.add_selection("top", S.face("zmax"))
+        w.project.add_bc("force", "top", total=[0.0, 0.0, 5.0])
+        z_top = float(np.max(np.asarray(w.preview_mesh().node_xyz)[:, 2]))
+        w.draw_supports_and_loads()
+        bounds = w.plotter.actors[f"mmto_arrow{len(w.project.bcs) - 1}"].GetBounds()
+        assert bounds[4] >= z_top - 1e-6 and bounds[5] > z_top + 1.0, (bounds, z_top)
+
+
+def test_outer_elements_and_spread_out():
+    """A 3 x 3 x 3 block of elements has 26 on the outside; spread_out takes k distinct points, the far ends
+    of a line among them."""
+    c = np.stack(np.meshgrid(*[np.arange(3) + 0.5] * 3, indexing="ij"), -1).reshape(-1, 3) * 2.0
+    outer = G.outer_elements(c, np.array([2.0, 2.0, 2.0]))
+    assert outer.sum() == 26 and not outer[13]                                # the middle one is inside
+    line = np.c_[np.arange(100.0), np.zeros(100), np.zeros(100)]
+    taken = G.spread_out(line, 5)
+    assert len(set(taken.tolist())) == 5 and {0, 99} <= set(taken.tolist())
+    assert np.array_equal(G.spread_out(line[:3], 5), [0, 1, 2])
 
 
 def test_stop_while_training():

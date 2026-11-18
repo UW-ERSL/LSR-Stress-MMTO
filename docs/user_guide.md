@@ -320,7 +320,7 @@ Your changes are applied to the project immediately. Use File > Save to keep the
 Click **Add** and choose one of:
 
 - **Click on the part...** opens the **Pick** window. You click faces on the part, choose what they are, and press **Apply**. This is the quickest way for a face you can see. A project with both supports and forces and temperatures and heat (thermoelastic) has one line for each. When nothing of the project's physics can be picked, it is greyed, and resting the mouse on it says why.
-- **Enter by hand...** opens a form. You choose the **Type**, choose the selection under **Where** (or make one there with **New selection...**), and fill in the values. **Preview**, or Enter, checks the values and shows the selection on the part (with an arrow for a load), and the form stays open; **OK** keeps it. Use this when a face is hard to click, when you need exact numbers, or when the place is not a face at all (a hole, a patch, a point).
+- **Enter by hand...** opens a form. You choose the **Type**, choose the selection under **Where** (or make one there with **New selection...**), and fill in the values. **Preview**, or Enter, checks the values and shows the selection on the part (with arrows for a load), and the form stays open; **OK** keeps it. Use this when a face is hard to click, when you need exact numbers, or when the place is not a face at all (a hole, a patch, a point).
 
 Both methods add a support or load to the same list. You can edit either one later by double-clicking it.
 
@@ -430,10 +430,10 @@ You can mark a selection to remain solid even if no support or load acts on that
 
 ### 7.7 The preview
 
-Press **Preview** at the top of the panel to see everything on the mesh the run will use:
+Press **Preview** at the top of the panel to see everything on the mesh the run will use. The part is drawn as that mesh, its elements as small blocks, so you see exactly what the run solves:
 
 - supports as blue points,
-- loads as red points, with an arrow for each load,
+- loads as red points, with arrows on their nodes showing the direction (on a few nodes spread over the load, when it has many),
 - other selections as orange points,
 - kept-solid elements as grey blocks.
 
@@ -444,7 +444,7 @@ A line below the buttons gives the verdict, whether the supports hold the part:
 
 A selection with no nodes on the mesh shows in red: *name has no nodes on this mesh*. The (i) next to the verdict lists the size of the mesh, how many nodes each selection has, and how many elements are kept solid.
 
-Click a row of the list, or a selection under Selections, to see only that one on the part. **Clear** removes the preview, and any faces picked in the Pick window but not applied.
+Click a row of the list, or a selection under Selections, to see only that one on the mesh. **Clear** removes the preview and brings back the part, and removes any faces picked in the Pick window but not applied. A form, the Pick window and **Measure** show the part instead of the mesh while they are open, since they read the mouse on the part. While the mesh is shown, the bottom bar does not show the point under the mouse.
 
 The preview uses the same mesh as the optimization, rather than the STL surface. This means the nodes shown are the nodes the run will actually use. A finer mesh (Settings) gives more nodes, and can change which nodes a small selection catches.
 
