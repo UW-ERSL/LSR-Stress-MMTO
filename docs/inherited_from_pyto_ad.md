@@ -93,7 +93,7 @@ The four problems, worst first:
 |---|---|---|---|
 | `MaterialModel.SIMP` | which density scaling each solve uses | every physics' `analyse` | Safe |
 | `get_structural_material_model_scaling_torch`, `get_thermal_material_model_scaling_torch` | the density scaling, inside the solve | PyTO-AD's `solve`; thermoelastic's coupling | Safe |
-| `get_stress_relaxation_factor`, `get_pNorm_exponent` | read once, as the structural solver is made, into its own `stress_relaxation` and `pnorm_exponent` | `structural_physics.MultiMaterialHexFEA` | Safe (F2 fixed) |
+| `get_stress_relaxation_factor`, `get_pNorm_exponent` | read once, as the structural solver is made, as the start values of its own `stress_relaxation` and `pnorm_exponent`, which the run's settings then replace | `structural_physics.MultiMaterialHexFEA` | Safe (F2 fixed) |
 | `set_SIMP_STRUCTURAL_PENALTY` | the stiffness's SIMP exponent, at the start and at each step of continuation | `structural_physics.set_simp_penalties`, called by the run loop | Safe (P3 fixed, U1 tested) |
 
 **P3. The SIMP penalty was two named physics in the core. Fixed.**
@@ -114,7 +114,7 @@ The four problems, worst first:
 **F2. Global settings shared by every run in the program. Fixed.** The p-norm exponent was written into
 PyTO-AD's global at every build, and the stress relaxation read from its global at each use. Now the stress
 quantities read the exponent from the run's settings, and the structural solver keeps its own `pnorm_exponent`
-(set by `analyse` and by the final check) and `stress_relaxation` (read once, as it is made); nothing writes
+and `stress_relaxation` (both set by `analyse` and by the final check, from the run's settings); nothing writes
 PyTO-AD's p-norm global any more. Guard: `test_the_pnorm_exponent_is_the_runs_own` and the code rule above.
 
 ## The mesh, the supports, the filters, the optimizer

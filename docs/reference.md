@@ -143,6 +143,7 @@ Every setting a run takes, under its own name. A new project starts from these v
 |---|---|---|---|
 | `timeLimit` |  | 36000 | The optimization stops after this many seconds. |
 | `rel_conv_tol` |  | 1e-07 | The optimization stops early once the objective changes by less than this, relatively, between iterations, and every constraint is met to within this. |
+| `mma_move_limit` |  | 0.05 | The most any element's density, or its material choice, may change in one iteration, as a share of its range. Smaller is steadier but slower. |
 | `use_heaviside_projection` |  | True | Pushes each element towards fully solid or fully empty. |
 | `eta_proj` |  | 0.5 | The density at which that push splits solid from empty. |
 | `beta_init` |  | 1.0 | How hard the push is at the start. Larger is closer to clear solid and empty. |
@@ -169,6 +170,7 @@ Every setting a run takes, under its own name. A new project starts from these v
 | `initial_density` |  | None | The density every element starts the optimization with, from 0 to 1. Empty (None): the volume fraction limit, else 0.5. |
 | `snap_to_real_material` |  | False | In the final design, give each element the nearest real material. |
 | `binarize_topology` |  | True | In the final design, make each element fully solid or empty, keeping the volume. |
+| `stress_relaxation_exponent` | `structural` | 0.5 | How much a partly solid element's stress counts: its density to this power, times the stress of solid material. Larger counts partly solid elements less. |
 | `use_constant_poissons_ratio` | `structural` | False | One Poisson's ratio for every material, instead of each material's own. |
 | `constant_poissons_ratio` | `structural` | 0.3 | The Poisson's ratio used when Constant Poisson's ratio is ticked. |
 | `te_use_constant_poissons_ratio` | `thermoelastic` | False | One Poisson's ratio for every material, instead of each material's own. |

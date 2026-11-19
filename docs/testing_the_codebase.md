@@ -1,6 +1,6 @@
 # Testing the codebase
 
-Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 394 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
+Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 395 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
 
 Run them all from the repository folder with `python -m pytest tests -q -n 4` (`-n 2` on a computer with less than 16 GB of memory), one folder with `python -m pytest tests/<folder> -q`, or one file with `python -m pytest tests/<folder>/<file> -q`.
 
@@ -301,6 +301,7 @@ Running a Project: its settings cover every setting of _run_topopt; the run reco
 - `test_progress_and_stop`: progress() hears every iteration; should_stop() ends the run there, and the design reached so far is still post-processed (the GUI's Run and Stop).
 - `test_simp_continuation_raises_each_penalty_of_every_physics`: Each SIMP exponent a physics declares (SIMP_PENALTIES) starts at its start, or at its start with continuation when SIMP continuation is on, and each step of continuation raises it by 0.25 up to its largest; nothing in the core names a physics. A U-bracket run with continuation on for 11 iterations raises the stiffness's once, 1.5 to 1.75, where the structural solve reads it as well as in its record, and records no exponent structural does not use.
 - `test_the_pnorm_exponent_is_the_runs_own`: The p-norm exponent is the run's setting: the stress quantities read it from the run's settings, and building a project never writes it into PyTO-AD's global, so two projects in one program keep their own.
+- `test_step_limit_and_stress_relaxation_exponent_reach_the_run`: The Step limit setting is the move limit MMA gets, and the Stress relaxation exponent q is the one the stresses use: at the start design, with the same displacements, each element's relaxed stress for q = 3.5 is its stress for q = 0.5 times its density cubed.
 - `test_optimizer_failure_names_the_constraint_over_its_limit`: When the optimizer fails while a constraint is far over its limit (a limit that cannot be met from the starting design), the error says which constraint, by how much, and keeps the optimizer's own message.
 - `test_a_run_with_a_mass_fraction_constraint`: A short run with Mass fraction of the lightest <= 0.4 as its constraint goes through: every iteration's constraint is a finite number, the run keeps the constraint with its material word, names it as the app does, and the project it rebuilds from the record is the one that ran.
 - `test_a_sharpness_schedule_it_cannot_run_is_refused`: The five sharpness numbers are read as one schedule at the start of a run; numbers it cannot run with (a sharpness of 0, a largest below the start, a growth below 1, growing every 0 iterations) are refused before the first iteration, in the settings' own words.

@@ -434,6 +434,7 @@ def final_summary(designs: "list[tuple[str, np.ndarray, np.ndarray | torch.Tenso
         return E, nu, props
 
     solver.pnorm_exponent = float(settings.pnorm_exponent)       # the run's, for each design's pNormStress
+    solver.stress_relaxation = float(settings.stress_relaxation_exponent)   # and its relaxed stress
 
     for label, x, z in designs:
         eval_stress_compliance_metrics(

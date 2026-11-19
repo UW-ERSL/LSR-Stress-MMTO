@@ -123,7 +123,7 @@ def test_no_heating_gives_the_structural_compliance():
                                                   None, None),
                         x_phys=m.x_phys, props={"Youngs_Modulus": torch.full((n,), E, dtype=torch.float64)},
                         settings=SimpleNamespace(use_constant_poissons_ratio=True, constant_poissons_ratio=nu,
-                                                 pnorm_exponent=6.0))
+                                                 pnorm_exponent=6.0, stress_relaxation_exponent=0.5))
     STRUCTURAL.analyse(s)
     f_th = m.f_th.detach().numpy()
     f = s.fe.total_force.detach().numpy()

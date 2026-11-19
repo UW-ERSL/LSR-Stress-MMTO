@@ -12,6 +12,7 @@ The FE solve is PyTO-AD's differentiable sparse solve, a custom autograd node wh
 the adjoint solve, reusing the forward factorization. PyTO-AD is imported and inherited, never
 edited. PyTO-AD sets torch's default dtype to float64 on import; everything here is float64.
 """
+import math
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -58,7 +59,7 @@ class MultiMaterialHexFEA(_HexStructuralFEA_AD):
     mu: torch.Tensor
     elem_stiff_torch: torch.Tensor       # (N, 24, 24), what PyTO-AD's solve() assembles
     pnorm_exponent: float                # p of pNormStress (postprocess); the run's setting, set by analyse
-    stress_relaxation: float             # q of the relaxed stress, xb^q * stress; PyTO-AD's, fixed at build
+    stress_relaxation: float             # q of the relaxed stress, xb^q * stress; the run's setting, set by analyse
 
     def __init__(self, mesh: "HexMesher", bc: "BC", solver: "Solvers", mat_prop: "Material | None" = None,
                  **kwargs: Any) -> None:
@@ -196,10 +197,14 @@ def analyse(m: "MMTOModelAD | _Analysed") -> None:
     """One iteration's solve, inside the torch tree: E and nu from m.props, the displacement m.u at the
     density m.x_phys, and the relaxed von Mises stress m.svm that the stress quantities read.
 
-    Sets m.u (3 * nodes,), m.svm (N,); and the solver's material fields (set_material_fields) and p-norm
-    exponent (the run's setting, for its postprocess)."""
+    Sets m.u (3 * nodes,), m.svm (N,); and the solver's material fields (set_material_fields), p-norm
+    exponent and stress relaxation exponent (the run's settings, also for its postprocess)."""
     E, nu = elastic_constants(m.props, m.settings)
     m.fe.set_material_fields(E, nu)
     m.fe.pnorm_exponent = float(m.settings.pnorm_exponent)
+    q = float(m.settings.stress_relaxation_exponent)
+    if not (q > 0.0 and math.isfinite(q)):
+        raise ValueError(f"Stress relaxation exponent must be a number above 0, not {q:g}")
+    m.fe.stress_relaxation = q
     m.u = m.fe.solve(m.x_phys, ad_mm.MaterialModel.SIMP)
     m.svm = von_mises(m.fe.element_stress(m.u, m.x_phys))

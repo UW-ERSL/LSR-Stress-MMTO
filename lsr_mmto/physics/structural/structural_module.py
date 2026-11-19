@@ -81,6 +81,9 @@ SETTINGS = [
     dict(section="common", key="stress_scale_damping", default=0.5, label="Stress scale damping",
          help="How fast Failure factor (highest) follows the design. 1 follows it at once; smaller is steadier "
               "but slower.", group="Main"),
+    dict(section="advanced", key="stress_relaxation_exponent", default=0.5, label="Stress relaxation exponent",
+         help="How much a partly solid element's stress counts: its density to this power, times the stress of "
+              "solid material. Larger counts partly solid elements less.", group="Material model"),
     dict(section="advanced", key="use_constant_poissons_ratio", default=False, label="Constant Poisson's ratio",
          help="One Poisson's ratio for every material, instead of each material's own.", group="Material model"),
     dict(section="advanced", key="constant_poissons_ratio", default=0.3, label="Poisson's ratio value",

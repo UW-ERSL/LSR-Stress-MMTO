@@ -552,6 +552,7 @@ The following table lists every setting, organized by its group in the Settings 
 | Main | Latent smoothing radius | How far material choices are smoothed between neighbouring elements, in element sizes. |
 | Run length | Time limit [s] | The optimization stops after this many seconds. |
 | Run length | Convergence tolerance | The optimization stops early once the objective changes by less than this, relatively, between iterations, and every constraint is met to within this. |
+| Optimizer | Step limit | The most any element's density, or its material choice, may change in one iteration, as a share of its range. Smaller is steadier but slower. |
 | Projection | Heaviside projection | Pushes each element towards fully solid or fully empty. |
 | Projection | Projection threshold | The density at which that push splits solid from empty. |
 | Projection | Starting sharpness | How hard the push is at the start. Larger is closer to clear solid and empty. |
@@ -589,6 +590,7 @@ The following table lists every setting, organized by its group in the Settings 
 | VAE | Max epochs | Training stops after this many passes at the latest. |
 | Main | p-norm exponent | How closely the single stress value follows the highest stress in the part. Larger is closer, but harder to optimize. |
 | Main | Stress scale damping | How fast Failure factor (highest) follows the design. 1 follows it at once; smaller is steadier but slower. |
+| Material model | Stress relaxation exponent | How much a partly solid element's stress counts: its density to this power, times the stress of solid material. Larger counts partly solid elements less. |
 | Material model | Constant Poisson's ratio | One Poisson's ratio for every material, instead of each material's own. |
 | Material model | Poisson's ratio value | The Poisson's ratio used when Constant Poisson's ratio is ticked. |
 | Main | Reference temperature | The temperature at which the part has no thermal strain, in the project's temperature unit. |

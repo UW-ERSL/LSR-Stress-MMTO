@@ -167,6 +167,37 @@ def test_the_pnorm_exponent_is_the_runs_own():
                    - float((torch.sum(svm ** p) / 3) ** (1 / p))) < 1e-12
 
 
+def test_step_limit_and_stress_relaxation_exponent_reach_the_run():
+    """The Step limit setting is the move limit MMA gets, and the Stress relaxation exponent q is the one the
+    stresses use: at the start design, with the same displacements, each element's relaxed stress for q = 3.5
+    is its stress for q = 0.5 times its density cubed."""
+    from lsr_mmto.physics.structural import structural_module as S
+    real_mma, real_analyse = M.runMMA, S.analyse
+    moves, first = [], {}
+
+    def mma(*a, **k):
+        moves.append(k["move_limit"])
+        return real_mma(*a, **k)
+
+    def analyse(m):
+        real_analyse(m)
+        first.setdefault(m.settings.stress_relaxation_exponent, (m.svm.detach().clone(), m.x_phys.detach().clone()))
+
+    M.runMMA, S.analyse = mma, analyse
+    try:
+        for q in (0.5, 3.5):
+            p = ubracket_project()
+            p.settings["common"]["maxIterations"] = 1
+            p.settings["advanced"].update(mma_move_limit=0.1, stress_relaxation_exponent=q)
+            _run(p, _run_arguments(p, verbose=False))
+    finally:
+        M.runMMA, S.analyse = real_mma, real_analyse
+    assert moves == [0.1, 0.1], moves
+    (svm_low, x), (svm_high, _) = first[0.5], first[3.5]
+    assert np.allclose(svm_high.numpy(), (svm_low * x ** 3).numpy(), rtol=1e-9, atol=1e-30)
+    assert float(x.min()) < 0.99                                   # some element is partly solid
+
+
 def test_optimizer_failure_names_the_constraint_over_its_limit():
     """When the optimizer fails while a constraint is far over its limit (a limit that cannot be met
     from the starting design), the error says which constraint, by how much, and keeps the
@@ -263,9 +294,11 @@ def test_record_keeps_settings_as_given():
     assert cfg["arguments_resolved"]["use_z_smoothing"] is True
     assert cfg["penalization_zsmoothing"]["use_z_smoothing"] is True
     assert cfg["during_run"]["z_smoothing_off_at_iter"] == SMOOTHING_OFF
-    fixed = cfg["fixed_in_code"]
-    assert fixed["mma_move_limit"] == 0.05 and cfg["arguments_resolved"]["gamma_plateau_window"] == 10
-    assert fixed["stress_relaxation_exponent"] == 0.5
+    given = cfg["arguments_resolved"]
+    assert given["mma_move_limit"] == 0.05 and given["gamma_plateau_window"] == 10
+    assert given["stress_relaxation_exponent"] == 0.5
+    assert "mma_move_limit" not in cfg["fixed_in_code"] and "stress_relaxation_exponent" not in cfg["fixed_in_code"]
+    assert cfg["optimizer_mma"]["move_limit"] == 0.05
 
 
 def test_record_has_provenance():

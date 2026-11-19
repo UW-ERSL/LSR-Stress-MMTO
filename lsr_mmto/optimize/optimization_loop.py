@@ -132,7 +132,7 @@ class _StopRequested(Exception):
 
 
 APPLY_LATENT_SENS_FILTER = False      # (H_material@g)/Hs smoothing of the latent gradient blocks: switched off
-MMA_MOVE_LIMIT, MMA_KKT_TOL = 0.05, 1e-6
+MMA_KKT_TOL = 1e-6
 
 
 class RunState:
@@ -472,6 +472,8 @@ def setup(*, s: "RunSettings", project: "Project", save_dir: str, verbose: bool,
         initialDensity = float(s.initial_density)
         if not 0.0 < initialDensity <= 1.0:
             raise ValueError(f"Start density must be above 0 and at most 1, not {initialDensity:g}")
+    if not 0.0 < float(s.mma_move_limit) <= 1.0:
+        raise ValueError(f"Step limit must be above 0 and at most 1, not {float(s.mma_move_limit):g}")
 
     d0 = initialDensity * np.ones(num_elems, dtype=float)
     z0 = np.zeros(latentDim * num_elems, dtype=float)
@@ -795,11 +797,10 @@ def optimize(state: RunState) -> None:
     run_config["units"] = project.unit_record()
     from lsr_mmto.pyto_ad_imports import topopt_material_model
     run_config["fixed_in_code"] = {
-        "mma_move_limit": MMA_MOVE_LIMIT, "mma_kkt_tol": MMA_KKT_TOL,
+        "mma_kkt_tol": MMA_KKT_TOL,
         "apply_latent_sensitivity_filter": APPLY_LATENT_SENS_FILTER,
         "initial_density": float(state.initial_density),
         **{f"simp_{name}_penalty_at_end": float(v) for name, v in state.simp_penalties.items()},
-        "stress_relaxation_exponent": float(topopt_material_model._SIMP_STRESS_RELAXATION),
         "void_stiffness_relative": float(topopt_material_model._EVOID_RELATIVE),
     }
 
@@ -836,7 +837,7 @@ def optimize(state: RunState) -> None:
 def mma_record(state: RunState) -> dict[str, str | float]:
     """What the run record keeps of the MMA run."""
     s = state.s
-    return {"optimizer": "MMA (mmaWrapper)", "kktTol": MMA_KKT_TOL, "move_limit": MMA_MOVE_LIMIT,
+    return {"optimizer": "MMA (mmaWrapper)", "kktTol": MMA_KKT_TOL, "move_limit": float(s.mma_move_limit),
             "fTolerance": s.rel_conv_tol, "gTolerance": s.rel_conv_tol}
 
 
@@ -855,7 +856,7 @@ def mma(state: RunState,
         upper,
         maxIterations=state.to_params.MaxIterations,
         timeLimitSecs=s.timeLimit,
-        move_limit=MMA_MOVE_LIMIT,
+        move_limit=float(s.mma_move_limit),
         kktTol=MMA_KKT_TOL,
         fTolerance=s.rel_conv_tol,
         gTolerance=s.rel_conv_tol,

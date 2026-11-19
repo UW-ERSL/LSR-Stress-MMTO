@@ -114,6 +114,11 @@ CORE_SETTINGS = [
     Setting("advanced", "rel_conv_tol", 1e-7, "Convergence tolerance",
             "The optimization stops early once the objective changes by less than this, relatively, between "
             "iterations, and every constraint is met to within this.", "Run length"),
+    # ---- Optimizer
+    Setting("advanced", "mma_move_limit", 0.05, "Step limit",
+            "The most any element's density, or its material choice, may change in one iteration, as a share "
+            "of its range. Smaller is steadier but slower.",
+            "Optimizer"),
     # ---- Projection
     Setting("advanced", "use_heaviside_projection", True, "Heaviside projection",
             "Pushes each element towards fully solid or fully empty.", "Projection",
