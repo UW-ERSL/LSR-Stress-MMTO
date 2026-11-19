@@ -74,6 +74,13 @@ as torch from the model's state; autograd gives the gradient.
   points (`m.z`, `m.z_real`), as `MaterialVolumeFraction` does. With one material in the design there
   are none, so the project's check refuses it and the Formulation panel greys it out.
   `tests/code_rules/test_material_source.py` checks the flag against the function, and the functions it calls.
+- `between_iterations` (optional): for a quantity that keeps a state of its own from one iteration of a
+  run to the next. `between_iterations(m, opt, state, iteration)` runs after each iteration (the loop's
+  `carry_quantity_states`), updates `state` (a dict, empty at the start of the run) from the design just
+  analysed, and returns `{history key: number}` to record, or None. The function reads the state with
+  `run_state(m, name, opt)` (`lsr_mmto/formulation/quantity_states.py`), None outside a run (Analyse the
+  solid part). `FailureFactorMax` keeps the scale c that makes its value follow the highest failure
+  factor (adaptive normalization).
 - Add it to `QUANTITIES` in `tests/gradients/test_ad_quantities.py`, which checks the gradient against
   finite differences. What else to run: both generators above (the reference page and the user
   guide list every quantity).
@@ -207,7 +214,10 @@ subproblem as constraints (g <= 0). A method is one entry of `CONSTRAINT_METHODS
   (met when <= 0) and the gradients of both with respect to the optimizer's variables, in the shapes
   (1, 1), (n, 1), (m, 1) and (m, n). `zeta0` is the start design, `lower` and `upper` the bounds of
   every variable. `run` calls `evaluate` as often as it needs and returns the best design it reached
-  (shape (n,)) and what the run record should keep of how it ran.
+  (shape (n,)) and what the run record should keep of how it ran. Each call to `evaluate` is one
+  iteration: it moves the run's count, and the state a quantity keeps between iterations
+  (`between_iterations`). A method that tries designs within an iteration (a line search, inner loops)
+  would move them on every try.
 - `record(state)` is that record on its own, used when the run is stopped from the window.
 - `state` is the run's `RunState`: its settings as `state.s`, the iteration count, the problem's
   parameters (`state.to_params.Constraints`, `MaxIterations`), the number of variables.

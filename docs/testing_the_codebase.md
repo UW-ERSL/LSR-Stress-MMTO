@@ -1,6 +1,6 @@
 # Testing the codebase
 
-Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 386 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
+Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 392 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
 
 Run them all from the repository folder with `python -m pytest tests -q -n 4` (`-n 2` on a computer with less than 16 GB of memory), one folder with `python -m pytest tests/<folder> -q`, or one file with `python -m pytest tests/<folder>/<file> -q`.
 
@@ -71,6 +71,7 @@ Autodiff gradients of the objectives and constraints against central finite diff
 - `test_constraint_mass`: The autodiff gradient of the constraint Mass agrees with central finite differences.
 - `test_constraint_mass_at_least`: The autodiff gradient of the constraint Mass, at least agrees with central finite differences.
 - `test_constraint_failurefactorpnorm`: The autodiff gradient of the constraint FailureFactorPNorm agrees with central finite differences.
+- `test_constraint_failurefactormax`: The autodiff gradient of the constraint FailureFactorMax agrees with central finite differences.
 - `test_objective_stresspnorm`: The autodiff gradient of the objective StressPNorm agrees with central finite differences.
 - `test_constraint_volumefraction`: The autodiff gradient of the constraint VolumeFraction agrees with central finite differences.
 - `test_constraint_materialvolumefraction_material_2`: The autodiff gradient of the constraint MaterialVolumeFraction, material 2 agrees with central finite differences.
@@ -274,6 +275,16 @@ The final check at the end of a run (compliance, stresses, failure factor of the
 A run whose material source has no latent points (latent dimension 0): the design is the densities only, and every step of the run takes it, from the start design and its bounds through the iterations, the final check and the save. The source here is the database's own values with one material for every element (materials/material_source.py, DatabaseMaterials), put in where the run makes its source (optimization_loop.material_source).
 
 - `test_a_run_with_no_latent_points_goes_through`: The U-bracket on a coarse mesh, its distance penalty and latent smoothing switched on as usual: the run asks about designs of the densities only (one number per element), leaves out both penalties (they read the latent points) and says so, goes through and saves; each element has MATERIAL's database values, the saved run has latent dimension 0 and no history of either penalty, and every element's material is MATERIAL.
+
+### `tests/runs/test_quantity_states.py`
+
+A quantity may keep a state from one iteration of a run to the next (between_iterations, formulation/quantity_states.py); FailureFactorMax is the first that does (adaptive normalization, Le et al. 2010): c times the p-norm failure factor, c held fixed in the gradient and carried from one iteration to the next as c_next = a * r + (1 - a) * c, r the highest failure factor over the p-norm one. Checked on a made-up design (its value, its gradient, its state) and in a short run of a one-material bar, where the scale each iteration records follows the formula from the ratio the iteration before recorded.
+
+- `test_outside_a_run_the_value_is_the_highest_failure_factor`: A design analysed on its own (no run): FailureFactorMax is the highest stress / yield strength, exactly.
+- `test_in_a_run_the_scale_starts_at_1_and_is_fixed_in_the_gradient`: In a run, the first iteration's FailureFactorMax is the p-norm failure factor (scale 1); with a scale c, its value and its gradient are c times the p-norm one's, so no gradient goes through c.
+- `test_the_scale_moves_only_between_iterations`: Asking for the value many times leaves the state as it is; between_iterations moves it once each time, c_next = a * r + (1 - a) * c from c = 1: two iterations worked by hand, and what each returns for the history (the scale it used and r).
+- `test_each_entry_and_each_run_keeps_its_own_state`: Two entries of the formulation (one quantity, other options) keep separate states, and a new run starts with none; a damping outside (0, 1] is refused, naming the setting.
+- `test_a_run_carries_the_scale_from_iteration_to_iteration`: A short run of a one-material bar with FailureFactorMax at most 1 and at least 0.01 (two entries, one state): the history has the scale and the ratio of every iteration, once, the scale starts at 1, and each next scale is a * r + (1 - a) * c of the one before.
 
 ### `tests/runs/test_regression.py`
 

@@ -105,7 +105,8 @@ An objective or a constraint is one quantity, e.g. `Mass()` or `MaterialVolumeFr
 |---|---|---|---|---|---|---|---|
 | `Compliance` | Compliance | `structural` | yes | yes |  | F . u | How much the part gives under the loads. Lower is stiffer. |
 | `StressPNorm` | Stress (p-norm) | `structural` | yes |  |  | p-norm of the relaxed von Mises stress, no 1/N | One value close to the highest von Mises stress in the part. |
-| `FailureFactorPNorm` | Failure factor (p-norm) | `structural` | yes | yes | Yield_Strength | mean p-norm of von Mises / yield strength, per element | One value close to the highest stress / yield strength in the part. Above 1 means some element yields. |
+| `FailureFactorPNorm` | Failure factor (p-norm) | `structural` | yes | yes | Yield_Strength | mean p-norm of von Mises / yield strength, per element | An average of stress / yield strength over the whole part. It sits below the highest value, often well below, so 1 here does not mean no element yields. |
+| `FailureFactorMax` | Failure factor (highest) | `structural` |  | yes | Yield_Strength | the p-norm failure factor times a scale that tracks the highest failure factor (adaptive normalization) | The highest stress / yield strength in the part. At most 1 means no element yields. |
 | `ThermalCompliance` | Thermal compliance | `thermal` | yes | yes | Conductivity | f . T | How hot the part gets where the heat goes in. Lower carries the heat away better. |
 | `ThermoelasticCompliance` | Thermoelastic compliance | `thermoelastic` | yes | yes |  | (F + F_th) . u, the total load including the thermal force | How much the part gives under the loads and the heating. Lower is stiffer. |
 | `Mass` | Mass |  | yes | yes | Density | sum of density \* x_phys \* element volume | The mass of the part, from each material's density. |
@@ -134,6 +135,7 @@ Every setting a run takes, under its own name. A new project starts from these v
 | `material_filter_radius` |  | None | How far material choices are smoothed between neighbouring elements, in element sizes. Empty (None): same as density filter. |
 | `beta_schedule_scheme` |  | 'PAPER' (one of PAPER, PAPER_BM1) | How fast the design is pushed to clear solid and empty: the sharpness starts at 1 and grows 1.5 times every 5 iterations after iteration 50, up to 32 (PAPER) or 16 (PAPER_BM1). |
 | `pnorm_exponent` | `structural` | 6.0 | How closely the single stress value follows the highest stress in the part. Larger is closer, but harder to optimize. |
+| `stress_scale_damping` | `structural` | 0.5 | How fast Failure factor (highest) follows the design. 1 follows it at once; smaller is steadier but slower. |
 | `reference_temperature` | `thermoelastic` | 293.15 | The temperature at which the part has no thermal strain, in the project's temperature unit. |
 
 ### advanced

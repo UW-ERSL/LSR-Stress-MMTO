@@ -45,10 +45,11 @@ LSR MMTO
 │   │                                          latent smoothing, the distance penalty
 │   ├── formulation/              what is minimized and limited
 │   │   ├── quantities.py         slot: a quantity for every physics (Mass, Cost, the volume fractions)
+│   │   ├── quantity_states.py    the state a quantity keeps from one iteration of a run to the next
 │   │   └── formulation_text.py   reads the objective and constraints as written in a project
 │   ├── optimize/                 one run
 │   │   ├── optimization_loop.py  setup, then optimize: each design goes through the steps of
-│   │   │                         ITERATION_STEPS (penalties, continuation, record);
+│   │   │                         ITERATION_STEPS (penalties, record, quantity states, continuation);
 │   │   │                         slot: a constraint method (CONSTRAINT_METHODS, MMA today)
 │   │   ├── design_model.py       one design: filter, projection, properties, then the physics' analysis
 │   │   ├── history.py            what each iteration records and prints

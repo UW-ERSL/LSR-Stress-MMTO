@@ -78,6 +78,7 @@ class MMTOModelAD:
     Hsm: torch.Tensor                        # its row sums, (N,)
     z_real: torch.Tensor                     # the database's materials in latent space, (materials, latentDim)
     elem_volume: float
+    quantity_states: dict[tuple[str, str], dict]   # each formulation entry's state between iterations (run_state)
     # set by evaluate()
     x: torch.Tensor                          # raw density, (N,), a leaf; chain_to_x differentiates to it
     z: torch.Tensor                          # latents, element-major (N, latentDim), a leaf
@@ -98,6 +99,7 @@ class MMTOModelAD:
         self.Hsm = torch.as_tensor(np.asarray(Hs_material, dtype=float).ravel(), dtype=_DTYPE)
         self.z_real = torch.as_tensor(np.asarray(z_real, dtype=float), dtype=_DTYPE)
         self.elem_volume = float(elem_volume)
+        self.quantity_states = {}
         keep = to_params.ElemsToKeep
         self.keep = None if keep is None else torch.as_tensor(np.unique(np.asarray(keep, dtype=np.int64)))
 

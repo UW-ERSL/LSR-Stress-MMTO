@@ -22,7 +22,7 @@ The helpers behind each entry:
 
     make_solver              MultiMaterialHexFEA (its postprocess uses von_mises)
     analyse                  elastic_constants, von_mises
-    QUANTITIES               _compliance, _stress_pnorm (pnorm), _failure_factor_pnorm
+    QUANTITIES               _compliance, _stress_pnorm (pnorm), _failure_factor_pnorm, _failure_factor_max
     SUPPORT_AND_LOAD_KINDS   _apply_support (_dofs), _apply_force and _apply_traction (_add_load),
                              _picked_force, _check_direction
     iteration_diagnostics    record_fea_diagnostics: compute_max_failure_factor, update_paper_history,
@@ -78,6 +78,9 @@ SETTINGS = [
     dict(section="common", key="pnorm_exponent", default=6.0, label="p-norm exponent",
          help="How closely the single stress value follows the highest stress in the part. Larger is closer, "
               "but harder to optimize.", group="Main"),
+    dict(section="common", key="stress_scale_damping", default=0.5, label="Stress scale damping",
+         help="How fast Failure factor (highest) follows the design. 1 follows it at once; smaller is steadier "
+              "but slower.", group="Main"),
     dict(section="advanced", key="use_constant_poissons_ratio", default=False, label="Constant Poisson's ratio",
          help="One Poisson's ratio for every material, instead of each material's own.", group="Material model"),
     dict(section="advanced", key="constant_poissons_ratio", default=0.3, label="Poisson's ratio value",

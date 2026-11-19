@@ -506,7 +506,8 @@ The following quantities can be used as objectives or constraints:
 | --- | --- | --- |
 | Compliance | Objective and constraint | How much the part gives under the loads. Lower is stiffer. |
 | Stress (p-norm) | Objective | One value close to the highest von Mises stress in the part. |
-| Failure factor (p-norm) | Objective and constraint | One value close to the highest stress / yield strength in the part. Above 1 means some element yields. |
+| Failure factor (p-norm) | Objective and constraint | An average of stress / yield strength over the whole part. It sits below the highest value, often well below, so 1 here does not mean no element yields. |
+| Failure factor (highest) | Constraint | The highest stress / yield strength in the part. At most 1 means no element yields. |
 | Thermal compliance | Objective and constraint | How hot the part gets where the heat goes in. Lower carries the heat away better. |
 | Thermoelastic compliance | Objective and constraint | How much the part gives under the loads and the heating. Lower is stiffer. |
 | Mass | Objective and constraint | The mass of the part, from each material's density. |
@@ -582,6 +583,7 @@ The following table lists every setting, organized by its group in the Settings 
 | VAE | KL weight | How strongly training keeps the material map compact and smooth. |
 | VAE | Max epochs | Training stops after this many passes at the latest. |
 | Main | p-norm exponent | How closely the single stress value follows the highest stress in the part. Larger is closer, but harder to optimize. |
+| Main | Stress scale damping | How fast Failure factor (highest) follows the design. 1 follows it at once; smaller is steadier but slower. |
 | Material model | Constant Poisson's ratio | One Poisson's ratio for every material, instead of each material's own. |
 | Material model | Poisson's ratio value | The Poisson's ratio used when Constant Poisson's ratio is ticked. |
 | Main | Reference temperature | The temperature at which the part has no thermal strain, in the project's temperature unit. |

@@ -11,9 +11,9 @@ evaluate(state, zeta)
                     one design through ITERATION_STEPS, in order (each a function step(state, it)):
                     stop_if_asked, analyse_design, objective_and_constraints,
                     latent_sensitivity_filter, add_penalties, chain_to_design_variables, record,
-                    continuation; returns the objective (scaled by its first value, with the penalties),
-                    its gradient, the constraints and their gradients, with respect to the optimizer's
-                    variables
+                    carry_quantity_states, continuation; returns the objective (scaled by its first value,
+                    with the penalties), its gradient, the constraints and their gradients, with respect to
+                    the optimizer's variables
 optimize(state)     the constraint method runs from the start design, asking evaluate() about each design;
                     then the run record and the final analysis (optimize/final_design_analysis.py)
 
@@ -63,6 +63,7 @@ from lsr_mmto.optimize.design_model import MMTOModelAD
 from lsr_mmto.problem.settings import BetaScheduleScheme, Z0InitMethod
 from lsr_mmto.optimize.filters import create_density_and_material_filters
 from lsr_mmto.formulation.quantities import find_quantity
+from lsr_mmto.formulation.quantity_states import run_state, state_key
 from lsr_mmto.optimize.history import (
     compute_domain_volume,
     constraints_over_limit,
@@ -672,6 +673,26 @@ def record(state: RunState, it: Iteration) -> None:
                         "material": np.asarray(material.cpu())})
 
 
+def carry_quantity_states(state: RunState, it: Iteration) -> None:
+    """Each quantity of the formulation that keeps a state between iterations updates it from this design
+    (its between_iterations, quantities.py), and what it returns is appended to the history; once for each
+    state, so two entries that share one (state_key) move it once.
+
+    Reads the model after this design's analysis, state.iteration. Sets the model's quantity_states (run_state),
+    state.history (the keys the quantities return, one number each)."""
+    model = state.model
+    entries = [tuple(state.to_params.Objective)] + [tuple(c) for c in state.to_params.Constraints]
+    done = set()
+    for name, opt in (spec[:2] for spec in entries):
+        q = find_quantity(name)
+        if q.between_iterations is None or state_key(name, opt) in done:
+            continue
+        done.add(state_key(name, opt))
+        recorded = q.between_iterations(model, opt, run_state(model, name, opt), state.iteration)
+        for key, value in (recorded or {}).items():
+            state.history.setdefault(key, []).append(float(value))
+
+
 def continuation(state: RunState, it: Iteration) -> None:
     """The next iteration's count, SIMP penalties and Heaviside beta.
 
@@ -704,6 +725,7 @@ ITERATION_STEPS = [
     add_penalties,
     chain_to_design_variables,
     record,
+    carry_quantity_states,
     continuation,
 ]
 

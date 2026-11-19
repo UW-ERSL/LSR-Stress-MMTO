@@ -107,13 +107,19 @@ def material_volume_fraction(xb: torch.Tensor, z: torch.Tensor, z_real: torch.Te
 #                material" (the default), "its cheapest material"
 #   reads_latent_points  True when fn reads the latent points (m.z, m.z_real); a single-material project
 #                (every element one material: Project.single_material) refuses it. Default False
+#   between_iterations  between_iterations(m, opt, state, iteration), for a quantity that keeps a state of its own
+#                from one iteration of a run to the next: after each iteration, with m the design just analysed,
+#                it updates state (a dict, empty at the start of the run, one for each entry of the formulation)
+#                and returns {history key: number} to record for the iteration, or None. fn reads the state with
+#                run_state(m, name, opt) (formulation/quantity_states.py): None outside a run (Analyse the solid
+#                part), so fn says then what its value is without one. Default None: no state
 
 
 class Quantity:
     """One objective or constraint a formula can name, as the comment above describes its arguments."""
     __slots__ = ("name", "objective", "constraint", "physics", "needs", "fn", "doc", "shown", "help", "unit",
                  "arguments", "scales_with", "sets_start_density", "bound_warning", "start_bound", "start_note",
-                 "start_reference", "start_mix", "reads_latent_points")
+                 "start_reference", "start_mix", "reads_latent_points", "between_iterations")
 
     name: str
     objective: bool
@@ -134,6 +140,7 @@ class Quantity:
     start_reference: "float | Callable[[Project], float | None] | None"
     start_mix: str
     reads_latent_points: bool
+    between_iterations: "Callable[..., dict[str, float] | None] | None"    # (m, opt, state, iteration)
 
     def __init__(self, name: str, objective: bool, constraint: bool, physics: Iterable[str], needs: Iterable[str],
                  fn: "Callable[[MMTOModelAD | _Analysed, dict[str, int | float | str] | None], torch.Tensor]",
@@ -143,7 +150,8 @@ class Quantity:
                  bound_warning: "Callable[[Project, float], str | None] | None" = None,
                  start_bound: "float | Callable[[Project], float | None] | None" = None, start_note: str = "",
                  start_reference: "float | Callable[[Project], float | None] | None" = None,
-                 start_mix: str = "its lightest material", reads_latent_points: bool = False) -> None:
+                 start_mix: str = "its lightest material", reads_latent_points: bool = False,
+                 between_iterations: "Callable[..., dict[str, float] | None] | None" = None) -> None:
         self.name, self.objective, self.constraint = name, objective, constraint
         self.physics, self.needs, self.fn, self.doc = frozenset(physics), tuple(needs), fn, doc
         self.shown, self.help, self.unit = shown, help, unit
@@ -152,6 +160,7 @@ class Quantity:
         self.bound_warning, self.start_bound = bound_warning, start_bound
         self.start_note, self.start_reference, self.start_mix = start_note, start_reference, start_mix
         self.reads_latent_points = bool(reads_latent_points)
+        self.between_iterations = between_iterations
 
     def takes(self, argument: str) -> bool:
         """True when the formula takes the argument of that name or type ("material", "tau")."""
