@@ -1,7 +1,7 @@
 {
   "stl_file_path": "../data/models/RectangularBeam/RectangularBeam.STL",
   "mmto": {
-    "schema_version": 1,
+    "schema_version": 2,
     "name": "rectangular beam",
     "physics": "structural",
     "comment": "Rectangular beam, from Akshat Agha's ProblemConfig.py: ends clamped, 1000 N down on the middle of the top",
@@ -103,8 +103,7 @@
         "maxIterations": 300,
         "relative_filter_radius": 5.0,
         "material_filter_radius": 5.0,
-        "pnorm_exponent": 6.0,
-        "beta_schedule_scheme": "PAPER"
+        "pnorm_exponent": 6.0
       },
       "advanced": {
         "timeLimit": 36000,
@@ -130,7 +129,12 @@
         "constant_poissons_ratio": 0.3,
         "snap_to_real_material": false,
         "z0_init_method": "ORIGIN",
-        "binarize_topology": true
+        "binarize_topology": true,
+        "beta_init": 1.0,
+        "beta_max": 32.0,
+        "beta_factor": 1.5,
+        "beta_update_every": 5,
+        "beta_start_iter": 50
       },
       "vae": {
         "use_pretrained_vae": true,

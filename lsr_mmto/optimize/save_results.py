@@ -306,7 +306,6 @@ def build_run_config(example_name: str, run_args: dict[str, Any], to_params: "MM
     cfg["heaviside_beta"] = {
         "use_heaviside_projection": ra.get("use_heaviside_projection"),
         "eta_proj": ra.get("eta_proj"),
-        "beta_schedule_scheme": _to_plain(ra.get("beta_schedule_scheme")),
         "beta_schedule_values": _to_plain(beta_schedule),
     }
     topopt = _params_dict(to_params)

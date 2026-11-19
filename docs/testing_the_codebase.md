@@ -1,6 +1,6 @@
 # Testing the codebase
 
-Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 392 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
+Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 394 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
 
 Run them all from the repository folder with `python -m pytest tests -q -n 4` (`-n 2` on a computer with less than 16 GB of memory), one folder with `python -m pytest tests/<folder> -q`, or one file with `python -m pytest tests/<folder>/<file> -q`.
 
@@ -144,6 +144,7 @@ The Project: saving and loading, the checks made before a run, the translation o
 - `test_only_mmto_files_load`: A project is a .mmto file with an mmto section; anything else is refused with the reason.
 - `test_gui_sections_survive_a_save`: Saving from code keeps what the window wrote in the same file (its settings section).
 - `test_schema_upgrades`: A file of an older schema is brought up to date on loading; a newer one is refused.
+- `test_a_named_sharpness_schedule_becomes_its_numbers`: A schema 1 file named its Heaviside sharpness schedule, PAPER or PAPER_BM1; it loads with the same five numbers as settings, the largest sharpness 32 or 16, and no setting by the old name. Another name stays, so the project's check calls it an unknown setting.
 - `test_bc_kinds`: Every kind of boundary condition is a support or a load, says what it does, and labels its values.
 - `test_every_kind_round_trips_through_a_project_script`: Each kind of support and load, added with add_bc, written into a project script and the script run: the same support or load. A wrong value is refused by add_bc as the project's check refuses it.
 - `test_elements_kept_solid_are_solid_for_any_design`: The elements to keep solid come out of the filter and projection at density 1 whatever the design, so no slope can empty them, and their density has no gradient; the other elements are as the filter and projection make them. evaluate and physical_density both go through _physical, which this checks.
@@ -302,6 +303,7 @@ Running a Project: its settings cover every setting of _run_topopt; the run reco
 - `test_the_pnorm_exponent_is_the_runs_own`: The p-norm exponent is the run's setting: the stress quantities read it from the run's settings, and building a project never writes it into PyTO-AD's global, so two projects in one program keep their own.
 - `test_optimizer_failure_names_the_constraint_over_its_limit`: When the optimizer fails while a constraint is far over its limit (a limit that cannot be met from the starting design), the error says which constraint, by how much, and keeps the optimizer's own message.
 - `test_a_run_with_a_mass_fraction_constraint`: A short run with Mass fraction of the lightest <= 0.4 as its constraint goes through: every iteration's constraint is a finite number, the run keeps the constraint with its material word, names it as the app does, and the project it rebuilds from the record is the one that ran.
+- `test_a_sharpness_schedule_it_cannot_run_is_refused`: The five sharpness numbers are read as one schedule at the start of a run; numbers it cannot run with (a sharpness of 0, a largest below the start, a growth below 1, growing every 0 iterations) are refused before the first iteration, in the settings' own words.
 - `test_unknown_and_missing_settings`: Unknown and missing settings.
 - `test_run_finishes`: Run finishes.
 - `test_record_keeps_settings_as_given`: z smoothing was on at the start and switched off at iteration 2: the record says both.

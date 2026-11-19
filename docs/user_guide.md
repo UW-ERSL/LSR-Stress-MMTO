@@ -550,11 +550,15 @@ The following table lists every setting, organized by its group in the Settings 
 | Main | Max iterations | The optimization stops after this many iterations. |
 | Main | Density filter radius | The smallest feature the design may have, in element sizes. Larger gives smoother, simpler designs. |
 | Main | Latent smoothing radius | How far material choices are smoothed between neighbouring elements, in element sizes. |
-| Main | Projection sharpness schedule | How fast the design is pushed to clear solid and empty: the sharpness starts at 1 and grows 1.5 times every 5 iterations after iteration 50, up to 32 (PAPER) or 16 (PAPER_BM1). |
 | Run length | Time limit [s] | The optimization stops after this many seconds. |
 | Run length | Convergence tolerance | The optimization stops early once the objective changes by less than this, relatively, between iterations, and every constraint is met to within this. |
 | Projection | Heaviside projection | Pushes each element towards fully solid or fully empty. |
 | Projection | Projection threshold | The density at which that push splits solid from empty. |
+| Projection | Starting sharpness | How hard the push is at the start. Larger is closer to clear solid and empty. |
+| Projection | Largest sharpness | The sharpness stops growing here. A very sharp push can make stress limits hard to meet. |
+| Projection | Sharpness growth | How many times sharper each step makes it. 1 keeps it at Starting sharpness. |
+| Projection | Grow every [iterations] | The sharpness grows on every iteration that is a multiple of this. |
+| Projection | Start growing after iteration | The sharpness stays at Starting sharpness up to this iteration, then grows from the next multiple of Grow every. |
 | Distance penalty | Distance penalty | Pushes each element's material towards one of the real materials in the database. |
 | Distance penalty | Starting weight | How strong that push is at the start. |
 | Distance penalty | Largest weight | How strong it can get. |

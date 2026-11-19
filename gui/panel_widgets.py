@@ -334,7 +334,7 @@ def with_info(widget, text):
 
 
 def same(a, b):
-    """True when a value read back from a widget equals the stored one (1 == 1.0, 'PAPER' == 'PAPER')."""
+    """True when a value read back from a widget equals the stored one (1 == 1.0, 'ORIGIN' == 'ORIGIN')."""
     if isinstance(a, bool) or isinstance(b, bool):
         return a is b
     try:

@@ -79,10 +79,26 @@ DEFAULT_PHYSICS = next(iter(PHYSICS))          # a project that names no physics
 # where a run's material properties come from (Project.material_source; optimization_loop.material_source)
 MATERIAL_SOURCES = ("network", "one_database_material")
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 # _UPGRADES[n] turns an mmto section of version n into version n + 1. When the format
 # changes: raise SCHEMA_VERSION and add the function here; old files then still load.
-_UPGRADES = {}
+
+
+def _named_sharpness_schedule_to_numbers(m: dict[str, Any]) -> dict[str, Any]:
+    """Schema 1 to 2: the Heaviside sharpness schedule was a name, common.beta_schedule_scheme, PAPER or
+    PAPER_BM1; it is now its five numbers, advanced.beta_init ... beta_start_iter, the same for both but the
+    largest sharpness (32 or 16). Any other name stays, and the project's check calls it an unknown setting."""
+    settings = {k: dict(v) for k, v in (m.get("settings") or {}).items()}
+    common = settings.get("common", {})
+    if common.get("beta_schedule_scheme") in ("PAPER", "PAPER_BM1"):
+        scheme = common.pop("beta_schedule_scheme")
+        settings.setdefault("advanced", {}).update(
+            beta_init=1.0, beta_max=16.0 if scheme == "PAPER_BM1" else 32.0, beta_factor=1.5, beta_update_every=5,
+            beta_start_iter=50)
+    return dict(m, settings=settings) if "settings" in m else m
+
+
+_UPGRADES = {1: _named_sharpness_schedule_to_numbers}
 
 # The steps of a project's setup in the GUI, one per sidebar button, each with what makes it begun: an error
 # Project.validate finds names its step (Problem.gui_step), so the window can mark the step it is about; a step

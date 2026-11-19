@@ -60,7 +60,7 @@ from lsr_mmto.physics.available_physics import physics_module
 from lsr_mmto.design.latent_penalties import (PENALTIES, smooth_latent_constraint_gradient_inplace,
                                               smooth_latent_gradient_inplace)
 from lsr_mmto.optimize.design_model import MMTOModelAD
-from lsr_mmto.problem.settings import BetaScheduleScheme, Z0InitMethod
+from lsr_mmto.problem.settings import Z0InitMethod
 from lsr_mmto.optimize.filters import create_density_and_material_filters
 from lsr_mmto.formulation.quantities import find_quantity
 from lsr_mmto.formulation.quantity_states import run_state, state_key
@@ -89,32 +89,25 @@ if TYPE_CHECKING:
     from lsr_mmto.optimize.mmto_to_params import MMTOParams
     from lsr_mmto.problem.project import Project
     from lsr_mmto.problem.settings import RunSettings
-def get_beta_schedule(scheme: BetaScheduleScheme) -> dict[str, float]:
-    """Return the Heaviside beta-continuation parameters (PAPER scheme).
+BETA_KEYS = ("beta_init", "beta_max", "beta_factor", "beta_update_every", "beta_start_iter")
 
-    Keys: beta_init/beta_max (range), beta_factor (growth per update),
-    beta_update_every (iters between updates), beta_start_iter (first update).
-    """
-    if scheme == BetaScheduleScheme.PAPER:
-        return {
-            "beta_init": 1.0,
-            "beta_max": 32,
-            "beta_factor": 1.5,
-            "beta_update_every": 5,
-            "beta_start_iter": 50,
-        }
-    if scheme == BetaScheduleScheme.PAPER_BM1:
-        # Banh L-bracket benchmark: beta_max 16, per Table 2.
-        return {
-            "beta_init": 1.0,
-            "beta_max": 16,
-            "beta_factor": 1.5,
-            "beta_update_every": 5,
-            "beta_start_iter": 50,
-        }
 
-    raise ValueError(f"Unknown beta schedule scheme: {scheme}")
-    
+def get_beta_schedule(s: "RunSettings") -> dict[str, float]:
+    """The Heaviside sharpness schedule, as the run's settings give it: {key: value} of BETA_KEYS. beta starts at
+    beta_init and, after iteration beta_start_iter, grows beta_factor times every beta_update_every iterations,
+    up to beta_max (update_beta). ValueError, in the settings' own words, for numbers it cannot run with."""
+    b = {k: getattr(s, k) for k in BETA_KEYS}
+    wrong = [text for bad, text in (
+        (b["beta_init"] <= 0, "Starting sharpness must be above 0"),
+        (b["beta_max"] < b["beta_init"], "Largest sharpness must be at least Starting sharpness"),
+        (b["beta_factor"] < 1, "Sharpness growth must be at least 1"),
+        (b["beta_update_every"] < 1, "Grow every must be at least 1"),
+        (b["beta_start_iter"] < 0, "Start growing after iteration must be at least 0")) if bad]
+    if wrong:
+        raise ValueError("; ".join(wrong))
+    return b
+
+
 def update_beta(beta_proj: float, mmaIterations: int, beta_schedule: dict[str, float]) -> tuple[float, bool]:
     """Decide whether to increase the Heaviside sharpness beta this iteration.
 
@@ -465,7 +458,7 @@ def setup(*, s: "RunSettings", project: "Project", save_dir: str, verbose: bool,
                 save_path=None,          # interactive window, no file
             )
 
-    beta_schedule = get_beta_schedule(s.beta_schedule_scheme)
+    beta_schedule = get_beta_schedule(s)
 
     simp_penalties = simp_penalties_at_start(physics, s.use_continuation)
     physics.set_simp_penalties(solver, simp_penalties)
@@ -714,7 +707,7 @@ def continuation(state: RunState, it: Iteration) -> None:
         if beta_updated:
             state.beta = beta_new
             if state.verbose:
-                print(f"[PROJ] Updated beta -> {state.beta:.4g} (eta={s.eta_proj}, scheme={s.beta_schedule_scheme.value})")
+                print(f"[PROJ] Updated beta -> {state.beta:.4g} (eta={s.eta_proj}, at most {s.beta_max:g})")
 
 
 ITERATION_STEPS = [

@@ -6,7 +6,7 @@
   },
   "stl_file_path": "../data/models/Beam_Liao/Ex1_Beam_design.stl",
   "mmto": {
-    "schema_version": 1,
+    "schema_version": 2,
     "name": "beam",
     "physics": "structural",
     "comment": "Liao supported beam (quarter), 8 materials, min p-norm failure factor s.t. mass",
@@ -118,8 +118,7 @@
         "maxIterations": 350,
         "relative_filter_radius": 7.0,
         "material_filter_radius": null,
-        "pnorm_exponent": 10.0,
-        "beta_schedule_scheme": "PAPER"
+        "pnorm_exponent": 10.0
       },
       "advanced": {
         "timeLimit": 36000,
@@ -145,7 +144,12 @@
         "constant_poissons_ratio": 0.37,
         "snap_to_real_material": false,
         "z0_init_method": "ORIGIN",
-        "binarize_topology": true
+        "binarize_topology": true,
+        "beta_init": 1.0,
+        "beta_max": 32.0,
+        "beta_factor": 1.5,
+        "beta_update_every": 5,
+        "beta_start_iter": 50
       },
       "vae": {
         "use_pretrained_vae": true,

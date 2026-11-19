@@ -402,7 +402,7 @@ def test_schema_upgrades():
             q = Project.load(path)
         finally:
             del P._UPGRADES[0]
-        assert q.to_dict() == p.to_dict()                                # saved again, it is version 1
+        assert q.to_dict() == p.to_dict()                                # saved again, it is the current version
         json.dump(dict(data, mmto=dict(data["mmto"], schema_version=P.SCHEMA_VERSION + 1)), open(path, "w"))
         try:
             Project.load(path)
@@ -410,6 +410,30 @@ def test_schema_upgrades():
             assert "newer version" in str(e)
         else:
             raise AssertionError("a file from a newer version was accepted")
+
+
+def test_a_named_sharpness_schedule_becomes_its_numbers():
+    """A schema 1 file named its Heaviside sharpness schedule, PAPER or PAPER_BM1; it loads with the same five
+    numbers as settings, the largest sharpness 32 or 16, and no setting by the old name. Another name stays, so
+    the project's check calls it an unknown setting."""
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "u.mmto")
+        coded_ubracket().save(path)
+        data = json.load(open(path))
+        for scheme, largest in (("PAPER", 32.0), ("PAPER_BM1", 16.0)):
+            settings = {k: dict(v) for k, v in data["mmto"]["settings"].items()}
+            for k in ("beta_init", "beta_max", "beta_factor", "beta_update_every", "beta_start_iter"):
+                settings["advanced"].pop(k, None)
+            settings["common"]["beta_schedule_scheme"] = scheme
+            json.dump(dict(data, mmto=dict(data["mmto"], schema_version=1, settings=settings)), open(path, "w"))
+            q = Project.load(path)
+            assert "beta_schedule_scheme" not in q.settings["common"], scheme
+            assert {k: q.settings["advanced"][k] for k in ("beta_init", "beta_max", "beta_factor", "beta_update_every",
+                                                           "beta_start_iter")} == \
+                dict(beta_init=1.0, beta_max=largest, beta_factor=1.5, beta_update_every=5, beta_start_iter=50), scheme
+        settings["common"]["beta_schedule_scheme"] = "FAST"
+        json.dump(dict(data, mmto=dict(data["mmto"], schema_version=1, settings=settings)), open(path, "w"))
+        assert "unknown setting 'beta_schedule_scheme'" in "\n".join(Project.load(path).validate())
 
 
 def test_bc_kinds():

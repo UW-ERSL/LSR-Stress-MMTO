@@ -537,10 +537,10 @@ def test_settings_panel_edits():
         row.set(5)
         s._mark("common", "maxIterations")
         assert label.font().bold() and reset.isVisibleTo(s)
-        assert s.rows[("group", "Advanced")][0].text() == "Advanced"
+        assert s.rows[("group", "Advanced")][0].text() == "Advanced  (1 changed)"   # its Largest sharpness, 16
         s.rows[("advanced", "timeLimit")][0].set(60)
         s._mark("advanced", "timeLimit")
-        assert s.rows[("group", "Advanced")][0].text() == "Advanced  (1 changed)"
+        assert s.rows[("group", "Advanced")][0].text() == "Advanced  (2 changed)"
         s.rows[("common", "material_filter_radius")][0].none.setChecked(True)  # same as the density filter
         s.rows[("mesh", "n_dof")][0].widget.setText("abc")
         assert s.problems() == ["Mesh dofs is not a number"]

@@ -37,11 +37,6 @@ class Z0InitMethod(Enum):
     UNIFORM = "uniform"
 
 
-class BetaScheduleScheme(Enum):
-    PAPER = "paper"
-    PAPER_BM1 = "paper_bm1"
-
-
 FROM_DATABASE = "from the database"
 OPTIMIZATION, VAE = "Optimization", "VAE"                 # the Settings panel's two tabs
 
@@ -113,10 +108,6 @@ CORE_SETTINGS = [
             "How far material choices are smoothed between neighbouring elements, in element sizes.", "Main",
             none_means="same as density filter",
             pyto_ad_field="MaterialFilterRadius", reads_latent_points=True),
-    Setting("common", "beta_schedule_scheme", "PAPER", "Projection sharpness schedule",
-            "How fast the design is pushed to clear solid and empty: the sharpness starts at 1 and grows 1.5 "
-            "times every 5 iterations after iteration 50, up to 32 (PAPER) or 16 (PAPER_BM1).", "Main",
-            choices=BetaScheduleScheme),
     # ---- Run length
     Setting("advanced", "timeLimit", 36000, "Time limit [s]",
             "The optimization stops after this many seconds.", "Run length", integer=True),
@@ -129,6 +120,18 @@ CORE_SETTINGS = [
             pyto_ad_field="HeavisideProjection"),
     Setting("advanced", "eta_proj", 0.5, "Projection threshold",
             "The density at which that push splits solid from empty.", "Projection"),
+    Setting("advanced", "beta_init", 1.0, "Starting sharpness",
+            "How hard the push is at the start. Larger is closer to clear solid and empty.", "Projection"),
+    Setting("advanced", "beta_max", 32.0, "Largest sharpness",
+            "The sharpness stops growing here. A very sharp push can make stress limits hard to meet.",
+            "Projection"),
+    Setting("advanced", "beta_factor", 1.5, "Sharpness growth",
+            "How many times sharper each step makes it. 1 keeps it at Starting sharpness.", "Projection"),
+    Setting("advanced", "beta_update_every", 5, "Grow every [iterations]",
+            "The sharpness grows on every iteration that is a multiple of this.", "Projection", integer=True),
+    Setting("advanced", "beta_start_iter", 50, "Start growing after iteration",
+            "The sharpness stays at Starting sharpness up to this iteration, then grows from the next multiple "
+            "of Grow every.", "Projection", integer=True),
     # ---- Distance penalty
     Setting("advanced", "use_penalization", True, "Distance penalty",
             "Pushes each element's material towards one of the real materials in the database.",

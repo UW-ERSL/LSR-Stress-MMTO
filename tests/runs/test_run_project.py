@@ -215,10 +215,29 @@ def test_a_run_with_a_mass_fraction_constraint():
     assert Project.from_record(rec).to_dict() == p.to_dict()
 
 
+def test_a_sharpness_schedule_it_cannot_run_is_refused():
+    """The five sharpness numbers are read as one schedule at the start of a run; numbers it cannot run with (a
+    sharpness of 0, a largest below the start, a growth below 1, growing every 0 iterations) are refused before
+    the first iteration, in the settings' own words."""
+    from types import SimpleNamespace
+    good = dict(beta_init=1.0, beta_max=32.0, beta_factor=1.5, beta_update_every=5, beta_start_iter=50)
+    assert M.get_beta_schedule(SimpleNamespace(**good)) == good
+    for change, words in ((dict(beta_init=0.0), "Starting sharpness must be above 0"),
+                          (dict(beta_max=0.5), "Largest sharpness must be at least Starting sharpness"),
+                          (dict(beta_factor=0.9), "Sharpness growth must be at least 1"),
+                          (dict(beta_update_every=0), "Grow every must be at least 1")):
+        try:
+            M.get_beta_schedule(SimpleNamespace(**dict(good, **change)))
+        except ValueError as e:
+            assert words in str(e), (change, e)
+        else:
+            raise AssertionError(f"{change} was accepted")
+
+
 def test_unknown_and_missing_settings():
     p = ubracket_project()
     p.settings["advanced"]["gama_max"] = 5.0                       # a typo
-    p.settings["common"]["beta_schedule_scheme"] = "FAST"
+    p.settings["advanced"]["z0_init_method"] = "FAST"
     errors = "\n".join(p.validate())
     assert "unknown setting 'gama_max'" in errors and "'FAST' is not one of" in errors, errors
     with tempfile.TemporaryDirectory() as d:                        # a project file with no settings at all

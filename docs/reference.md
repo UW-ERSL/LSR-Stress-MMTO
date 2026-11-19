@@ -133,7 +133,6 @@ Every setting a run takes, under its own name. A new project starts from these v
 | `maxIterations` |  | 300 | The optimization stops after this many iterations. |
 | `relative_filter_radius` |  | 2.5 | The smallest feature the design may have, in element sizes. Larger gives smoother, simpler designs. |
 | `material_filter_radius` |  | None | How far material choices are smoothed between neighbouring elements, in element sizes. Empty (None): same as density filter. |
-| `beta_schedule_scheme` |  | 'PAPER' (one of PAPER, PAPER_BM1) | How fast the design is pushed to clear solid and empty: the sharpness starts at 1 and grows 1.5 times every 5 iterations after iteration 50, up to 32 (PAPER) or 16 (PAPER_BM1). |
 | `pnorm_exponent` | `structural` | 6.0 | How closely the single stress value follows the highest stress in the part. Larger is closer, but harder to optimize. |
 | `stress_scale_damping` | `structural` | 0.5 | How fast Failure factor (highest) follows the design. 1 follows it at once; smaller is steadier but slower. |
 | `reference_temperature` | `thermoelastic` | 293.15 | The temperature at which the part has no thermal strain, in the project's temperature unit. |
@@ -146,6 +145,11 @@ Every setting a run takes, under its own name. A new project starts from these v
 | `rel_conv_tol` |  | 1e-07 | The optimization stops early once the objective changes by less than this, relatively, between iterations, and every constraint is met to within this. |
 | `use_heaviside_projection` |  | True | Pushes each element towards fully solid or fully empty. |
 | `eta_proj` |  | 0.5 | The density at which that push splits solid from empty. |
+| `beta_init` |  | 1.0 | How hard the push is at the start. Larger is closer to clear solid and empty. |
+| `beta_max` |  | 32.0 | The sharpness stops growing here. A very sharp push can make stress limits hard to meet. |
+| `beta_factor` |  | 1.5 | How many times sharper each step makes it. 1 keeps it at Starting sharpness. |
+| `beta_update_every` |  | 5 | The sharpness grows on every iteration that is a multiple of this. |
+| `beta_start_iter` |  | 50 | The sharpness stays at Starting sharpness up to this iteration, then grows from the next multiple of Grow every. |
 | `use_penalization` |  | True | Pushes each element's material towards one of the real materials in the database. |
 | `gamma_init` |  | 0.001 | How strong that push is at the start. |
 | `gamma_max` |  | 10.0 | How strong it can get. |
