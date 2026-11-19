@@ -189,7 +189,8 @@ def test_settings_greyed_with_one_material():
                 assert label.toolTip() != settings_panel.ONE_MATERIAL, key       # only, not for one material
                 continue
             latent = BY_KEY[key].reads_latent_points
-            assert row.widget.isEnabled() != latent and label.isEnabled() != latent, key
+            control = row.none if row.none is not None and row.none.isChecked() else row.widget  # empty: its box
+            assert control.isEnabled() != latent and label.isEnabled() != latent, key
             if latent:
                 assert label.toolTip() == settings_panel.ONE_MATERIAL and not reset.isVisibleTo(s), key
         assert s.apply(w.project) == []

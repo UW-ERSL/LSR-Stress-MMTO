@@ -575,6 +575,7 @@ The following table lists every setting, organized by its group in the Settings 
 | Latent smoothing | Off after iteration | The iteration it stops at. |
 | Material model | SIMP continuation | Raises the SIMP penalty by 0.25 every 10 iterations during the run. |
 | Start and reported design | Starting latent point | The material every element starts with: ORIGIN (the middle of the material map), the LIGHTEST or HEAVIEST material, or UNIFORM (random). |
+| Start and reported design | Start density | The density every element starts the optimization with, from 0 to 1. |
 | Start and reported design | Snap to real materials | In the final design, give each element the nearest real material. |
 | Start and reported design | Binarize the topology | In the final design, make each element fully solid or empty, keeping the volume. |
 | VAE | Use the trained network | Use the network already trained for this database. Unticked, the next run trains a new one. |

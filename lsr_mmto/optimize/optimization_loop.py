@@ -468,6 +468,10 @@ def setup(*, s: "RunSettings", project: "Project", save_dir: str, verbose: bool,
         if find_quantity(c[0]).sets_start_density:
             initialDensity = c[2]
             break
+    if s.initial_density is not None:          # the Start density setting, when given, wins
+        initialDensity = float(s.initial_density)
+        if not 0.0 < initialDensity <= 1.0:
+            raise ValueError(f"Start density must be above 0 and at most 1, not {initialDensity:g}")
 
     d0 = initialDensity * np.ones(num_elems, dtype=float)
     z0 = np.zeros(latentDim * num_elems, dtype=float)

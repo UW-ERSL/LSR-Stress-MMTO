@@ -179,6 +179,9 @@ CORE_SETTINGS = [
             "The material every element starts with: ORIGIN (the middle of the material map), the LIGHTEST or "
             "HEAVIEST material, or UNIFORM (random).", "Start and reported design", choices=Z0InitMethod,
             reads_latent_points=True),
+    Setting("advanced", "initial_density", None, "Start density",
+            "The density every element starts the optimization with, from 0 to 1.", "Start and reported design",
+            none_means="the volume fraction limit, else 0.5"),
     Setting("advanced", "snap_to_real_material", False, "Snap to real materials",
             "In the final design, give each element the nearest real material.", "Start and reported design",
             reads_latent_points=True),

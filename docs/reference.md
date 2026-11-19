@@ -166,6 +166,7 @@ Every setting a run takes, under its own name. A new project starts from these v
 | `z_smoothing_disable_after_iter` |  | 250 | The iteration it stops at. |
 | `use_continuation` |  | False | Raises the SIMP penalty by 0.25 every 10 iterations during the run. |
 | `z0_init_method` |  | 'ORIGIN' (one of LIGHTEST, HEAVIEST, ORIGIN, UNIFORM) | The material every element starts with: ORIGIN (the middle of the material map), the LIGHTEST or HEAVIEST material, or UNIFORM (random). |
+| `initial_density` |  | None | The density every element starts the optimization with, from 0 to 1. Empty (None): the volume fraction limit, else 0.5. |
 | `snap_to_real_material` |  | False | In the final design, give each element the nearest real material. |
 | `binarize_topology` |  | True | In the final design, make each element fully solid or empty, keeping the volume. |
 | `use_constant_poissons_ratio` | `structural` | False | One Poisson's ratio for every material, instead of each material's own. |
