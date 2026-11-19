@@ -424,7 +424,7 @@ The units show beside each field, from the project's units (for example N and MP
 
 ### 7.6 Keep solid
 
-Tick **Keep solid** next to a selection, under Selections, and the optimization keeps material there: it favours those elements above every other, so they end the run solid. Use it for the places the part must keep whatever happens: where bolts go, where it is clamped, a mounting face.
+Tick **Keep solid** next to a selection, under Selections, and those elements stay fully solid for the whole run, whatever the optimization does elsewhere. Use it for the places the part must keep whatever happens: where bolts go, where it is clamped, a mounting face.
 
 You can mark a selection to remain solid even if no support or load acts on that selection.
 

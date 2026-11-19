@@ -14,7 +14,7 @@ TREE (arrow = "depends on")
     E, nu, Y, rho -> z                       the material source: the VAE decoder (whichever attributes the
                                              database has); none with one material, whose properties are fixed
     u      -> K -> x_phys, E, nu             K_e = SIMP(x_phys) * (lam_e K_lam + mu_e K_mu)
-    x_phys -> x_filt -> x                    Heaviside(density filter(x))
+    x_phys -> x_filt -> x                    Heaviside(density filter(x)), 1 at the elements to keep solid
 Each objective and constraint is one entry of QUANTITIES (formulation/quantities.py).
 Any other name raises KeyError rather than run something different.
 The driver (optimize/optimization_loop.py) combines them: OBJ = J/J0 + w*Pz + gamma*Dp/Sd0.
@@ -47,7 +47,7 @@ _DTYPE = torch.float64
 class MMTOModelAD:
     """The optimization callback's differentiable model, one torch tree per MMA iteration.
 
-        x (raw MMA density) -> density filter -> Heaviside -> x_phys
+        x (raw MMA density) -> density filter -> Heaviside -> x_phys (1 at the elements to keep solid)
         z (latents)         -> material source -> props (every property the database has; the VAE decoder,
                                                 or with one material, z empty and props fixed)
         x_phys, props       -> physics.analyse (structural: E, nu -> solve -> u -> von Mises)
@@ -98,6 +98,15 @@ class MMTOModelAD:
         self.Hsm = torch.as_tensor(np.asarray(Hs_material, dtype=float).ravel(), dtype=_DTYPE)
         self.z_real = torch.as_tensor(np.asarray(z_real, dtype=float), dtype=_DTYPE)
         self.elem_volume = float(elem_volume)
+        keep = to_params.ElemsToKeep
+        self.keep = None if keep is None else torch.as_tensor(np.unique(np.asarray(keep, dtype=np.int64)))
+
+    def _physical(self, x: torch.Tensor, beta: float, eta: float, use_heaviside: bool,
+                  apply_density_filter: bool) -> torch.Tensor:
+        """x -> x_phys: the density filter, the Heaviside projection, then the elements to keep solid set to 1."""
+        x_filt = density_filter(x, self.H, self.Hs) if apply_density_filter else x
+        x_phys = heaviside(x_filt, beta, eta) if use_heaviside else x_filt
+        return x_phys if self.keep is None else x_phys.index_fill(0, self.keep, 1.0)
 
     def evaluate(self, zeta: np.ndarray, beta: float, eta: float, use_heaviside: bool = True,
                  apply_density_filter: bool = True) -> tuple[torch.Tensor, list[torch.Tensor]]:
@@ -108,8 +117,7 @@ class MMTOModelAD:
         self.x = torch.tensor(zeta[:N], dtype=_DTYPE, requires_grad=True)
         self.z = torch.tensor(zeta[N:].reshape(latentDim, N).T.copy(), dtype=_DTYPE, requires_grad=True)
 
-        x_filt = density_filter(self.x, self.H, self.Hs) if apply_density_filter else self.x
-        self.x_phys = heaviside(x_filt, beta, eta) if use_heaviside else x_filt
+        self.x_phys = self._physical(self.x, beta, eta, use_heaviside, apply_density_filter)
 
         self.props = self.enc.decode(self.z)      # the material source (materials/material_source.py)
         self.physics.analyse(self)              # the solve, and what the physics' quantities read
@@ -124,8 +132,7 @@ class MMTOModelAD:
         the tree; nothing on the model changes."""
         with torch.no_grad():
             x = torch.as_tensor(np.asarray(x, dtype=float).ravel(), dtype=_DTYPE)
-            x_filt = density_filter(x, self.H, self.Hs) if apply_density_filter else x
-            return (heaviside(x_filt, beta, eta) if use_heaviside else x_filt).numpy().copy()
+            return self._physical(x, beta, eta, use_heaviside, apply_density_filter).numpy().copy()
 
     def _value(self, q: "Quantity", opt: dict[str, int | float | str] | None) -> torch.Tensor:
         """q.fn at the current state, after checking the database has the columns it reads."""

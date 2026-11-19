@@ -48,7 +48,7 @@ LSR MMTO
 │   │   └── formulation_text.py   reads the objective and constraints as written in a project
 │   ├── optimize/                 one run
 │   │   ├── optimization_loop.py  setup, then optimize: each design goes through the steps of
-│   │   │                         ITERATION_STEPS (penalties, keep solid, continuation, record);
+│   │   │                         ITERATION_STEPS (penalties, continuation, record);
 │   │   │                         slot: a constraint method (CONSTRAINT_METHODS, MMA today)
 │   │   ├── design_model.py       one design: filter, projection, properties, then the physics' analysis
 │   │   ├── history.py            what each iteration records and prints

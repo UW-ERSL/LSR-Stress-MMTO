@@ -449,6 +449,30 @@ def test_every_kind_round_trips_through_a_project_script():
                 raise AssertionError(f"{name}: a wrong value was accepted")
 
 
+def test_elements_kept_solid_are_solid_for_any_design():
+    """The elements to keep solid come out of the filter and projection at density 1 whatever the design, so no
+    slope can empty them, and their density has no gradient; the other elements are as the filter and projection
+    make them. evaluate and physical_density both go through _physical, which this checks."""
+    import scipy.sparse as sp
+    import torch
+    from types import SimpleNamespace
+    from lsr_mmto.design.density_filter_and_projection import SparseOperator
+    from lsr_mmto.optimize.design_model import MMTOModelAD
+    n = 6
+    H = sp.diags([np.ones(n - 1), 2 * np.ones(n), np.ones(n - 1)], [-1, 0, 1]).tocsr()
+    model = SimpleNamespace(H=SparseOperator(H), Hs=torch.as_tensor(np.asarray(H.sum(axis=1)).ravel()))
+    x = torch.tensor([0.0, 0.1, 0.0, 0.3, 0.05, 0.0], requires_grad=True)
+    model.keep = None
+    free = MMTOModelAD._physical(model, x, 8.0, 0.5, True, True)
+    model.keep = torch.tensor([0, 2])
+    kept = MMTOModelAD._physical(model, x, 8.0, 0.5, True, True)
+    assert torch.all(kept[[0, 2]] == 1) and torch.equal(kept[[1, 3, 4, 5]], free[[1, 3, 4, 5]])
+    kept[[0, 2]].sum().backward()
+    assert torch.all(x.grad == 0)
+    model._physical = lambda *a: MMTOModelAD._physical(model, *a)
+    assert np.all(MMTOModelAD.physical_density(model, x.detach().numpy(), 8.0, 0.5)[[0, 2]] == 1)
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in [(k, v) for k, v in list(globals().items()) if k.startswith("test_")]:

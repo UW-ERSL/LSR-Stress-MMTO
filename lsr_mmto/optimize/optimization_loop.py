@@ -9,7 +9,7 @@ setup(...)          builds everything before the first design: the problem, the 
                     and the bounds; returns the RunState
 evaluate(state, zeta)
                     one design through ITERATION_STEPS, in order (each a function step(state, it)):
-                    stop_if_asked, analyse_design, objective_and_constraints, keep_solid,
+                    stop_if_asked, analyse_design, objective_and_constraints,
                     latent_sensitivity_filter, add_penalties, chain_to_design_variables, record,
                     continuation; returns the objective (scaled by its first value, with the penalties),
                     its gradient, the constraints and their gradients, with respect to the optimizer's
@@ -21,6 +21,7 @@ THE DESIGN THROUGH ONE ITERATION:
     zeta = [x ; z]                         design vector (the optimizer's variables)
       x  -> x_filt = (H_density @ x)/Hs    density filter
       x_filt -> x_phys = Heaviside(x_filt) optional projection (density only)
+      x_phys = 1 at the elements to keep solid
       z  -> decode (VAE) -> per-element material properties (the physics' PROPERTIES)
     the physics' analyse (its front page): the solve(x_phys) and what its quantities read
       -> objective/constraints
@@ -381,7 +382,8 @@ def setup(*, s: "RunSettings", project: "Project", save_dir: str, verbose: bool,
     RunState (None when the project names no material database).
 
     DENSITY FILTER + HEAVISIDE PROJECTION (density ONLY):
-      x (MMA var) --density filter--> x_filt = (H@x)/Hs --projection--> x_phys = H_{beta,eta}(x_filt)
+      x (MMA var) --density filter--> x_filt = (H@x)/Hs --projection--> x_phys = H_{beta,eta}(x_filt),
+      then x_phys = 1 at the elements to keep solid
 
     Latents:
       z are raw MMA variables; no direct filtering of z is performed.
@@ -593,14 +595,6 @@ def objective_and_constraints(state: RunState, it: Iteration) -> None:
     it.obj = it.Jn
 
 
-def keep_solid(state: RunState, it: Iteration) -> None:
-    """Elements to keep solid get the objective's most favourable slope.
-
-    Sets it.grad_obj, in place, at to_params.ElemsToKeep (nothing when None)."""
-    if state.to_params.ElemsToKeep is not None:
-        it.grad_obj[state.to_params.ElemsToKeep] = np.min(it.grad_obj)
-
-
 def latent_sensitivity_filter(state: RunState, it: Iteration) -> None:
     """Smoothing of the latent gradient blocks (switched off: APPLY_LATENT_SENS_FILTER).
 
@@ -706,7 +700,6 @@ ITERATION_STEPS = [
     stop_if_asked,
     analyse_design,
     objective_and_constraints,
-    keep_solid,
     latent_sensitivity_filter,
     add_penalties,
     chain_to_design_variables,

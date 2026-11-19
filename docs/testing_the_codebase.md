@@ -1,6 +1,6 @@
 # Testing the codebase
 
-Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 385 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
+Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 386 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
 
 Run them all from the repository folder with `python -m pytest tests -q -n 4` (`-n 2` on a computer with less than 16 GB of memory), one folder with `python -m pytest tests/<folder> -q`, or one file with `python -m pytest tests/<folder>/<file> -q`.
 
@@ -145,6 +145,7 @@ The Project: saving and loading, the checks made before a run, the translation o
 - `test_schema_upgrades`: A file of an older schema is brought up to date on loading; a newer one is refused.
 - `test_bc_kinds`: Every kind of boundary condition is a support or a load, says what it does, and labels its values.
 - `test_every_kind_round_trips_through_a_project_script`: Each kind of support and load, added with add_bc, written into a project script and the script run: the same support or load. A wrong value is refused by add_bc as the project's check refuses it.
+- `test_elements_kept_solid_are_solid_for_any_design`: The elements to keep solid come out of the filter and projection at density 1 whatever the design, so no slope can empty them, and their density has no gradient; the other elements are as the filter and projection make them. evaluate and physical_density both go through _physical, which this checks.
 
 ### `tests/problem/test_project_folder.py`
 
