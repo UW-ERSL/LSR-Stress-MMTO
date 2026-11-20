@@ -424,7 +424,7 @@ def test_a_large_thermal_problem_uses_dpcg_and_gives_the_direct_answer():
     solver's, and every iterative solve, the adjoint's too, is kept by the run's checked solver as converged."""
     from types import SimpleNamespace
     from lsr_mmto.optimize.iterative_solve_check import CheckedDeflationSolver
-    from lsr_mmto.optimize.optimization_loop import problem_solver
+    from lsr_mmto.optimize.run_setup import problem_solver
     from lsr_mmto.pyto_ad_imports import DIRECT_SOLVER_DOF_CUTOFF, linear_solvers
     compliance = next(q["fn"] for q in THERMAL.QUANTITIES if q["name"] == "ThermalCompliance")
     p = _held_and_heated("large")

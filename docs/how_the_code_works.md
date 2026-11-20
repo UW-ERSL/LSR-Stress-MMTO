@@ -33,10 +33,10 @@ different material in each element, a subclass handles that (`MultiMaterialHexFE
 
 1. `Project.build()` (`problem/project.py`) builds the mesh from the STL, a boundary condition for each
    field of the project's physics from its supports and loads, and the optimization parameters.
-2. The loop's `setup` (`optimize/optimization_loop.py`) reads the material database. Through
+2. The run's `setup` (`optimize/run_setup.py`) reads the material database. Through
    `material_source`, it either loads the existing network or trains a new one (none for a single material, whose database values
    are used), gets the solver from the physics module's front page (`make_solver`), and makes the initial design
-   and the bounds. `optimize` then uses the constraint method (MMA), which asks `evaluate` about each
+   and the bounds. `optimize` (`optimize/optimization_loop.py`) then uses the constraint method (MMA), which asks `evaluate` about each
    design; `evaluate` follows the list `ITERATION_STEPS`, in order.
 3. For each design, `MMTOModelAD` (`optimize/design_model.py`) builds one connected torch tree:
 

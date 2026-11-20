@@ -14,7 +14,7 @@ nearest database material (the run's material_indices, as Export STL takes them)
     analyse_design(project, run_folder, save_dir=None, should_stop=None) -> Run
 
 It takes from the physics only its front page's entries, as a run does:
-    make_solver      the solver, built as a run builds it (optimization_loop.problem_solver)
+    make_solver      the solver, built as a run builds it (run_setup.problem_solver)
     analyse          the solve the project's objective and constraints (QUANTITIES) read; their values
                      are printed as the final check prints its numbers
     final_summary    the final check of the design analysed, printed, and its results (RESULT_FIELDS)
@@ -223,7 +223,7 @@ def _analyse(project: "Project",
     from lsr_mmto.optimize.final_design_analysis import checked_results, saved_names, solver_check
     from lsr_mmto.optimize.iterative_solve_check import CheckedDeflationSolver
     from lsr_mmto.optimize.history import compute_domain_volume
-    from lsr_mmto.optimize.optimization_loop import problem_solver
+    from lsr_mmto.optimize.run_setup import problem_solver
     from lsr_mmto.physics.available_physics import physics_module
     from lsr_mmto.problem.project import _ready_to_run
     from lsr_mmto.problem.settings import run_settings

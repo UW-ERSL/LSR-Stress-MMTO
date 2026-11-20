@@ -60,7 +60,7 @@ class MMTOModelAD:
     Heaviside projection and the density filter to the raw MMA variable.
     Every derivative comes from autograd; nothing is derived by hand.
 
-    Built once per run (optimization_loop.setup); each evaluate() replaces x, z, x_phys, props, J and cons,
+    Built once per run (run_setup.setup); each evaluate() replaces x, z, x_phys, props, J and cons,
     and the physics' analyse adds its own attributes, the ones its quantities read (structural: u, svm;
     thermal: T). grad_phys and chain_to_x differentiate the tree of the last evaluate().
     """

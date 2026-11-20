@@ -100,7 +100,8 @@ def test_every_quantity_has_its_gradient_checked():
 
 def test_a_physics_may_leave_out_its_optional_entries():
     """_checked gives a physics that leaves out an OPTIONAL_ENTRIES entry its "none" value, and refuses one
-    that leaves out any other entry, naming it, or gives SIMP_PENALTIES without set_simp_penalties."""
+    that leaves out any other entry, naming it, gives SIMP_PENALTIES without set_simp_penalties, or gives a
+    SIMP exponent that starts above its largest."""
     import types
 
     from lsr_mmto.physics import available_physics as ap
@@ -122,6 +123,15 @@ def test_a_physics_may_leave_out_its_optional_entries():
         raise AssertionError("SIMP_PENALTIES without set_simp_penalties was taken")
     except TypeError as e:
         assert "give both, or neither" in str(e)
+    half.set_simp_penalties = structural_module.set_simp_penalties
+    ap._checked(half)
+    for above in ((7.0, 1.5, 6.0), (3.0, 6.5, 6.0)):
+        half.SIMP_PENALTIES = {"structural": above}
+        try:
+            ap._checked(half)
+            raise AssertionError(f"a SIMP exponent starting above its largest was taken: {above}")
+        except ValueError as e:
+            assert "starts above its largest" in str(e), e
     del bare.analyse
     try:
         ap._checked(bare)

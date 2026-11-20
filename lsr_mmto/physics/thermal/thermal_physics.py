@@ -12,14 +12,14 @@ solve is differentiable: autograd gives the gradient of anything computed from T
 to x_phys and to the latent points. This file only gives it a conductivity per element, the way the
 structural solver is given E and nu per element.
 
-    make_solver   optimize/optimization_loop.py, once per run, after the mesh and the supports and
+    make_solver   optimize/run_setup.py, once per run, after the mesh and the supports and
                   loads are built
     analyse       optimize/design_model.py (MMTOModelAD.evaluate), once per iteration, after the density
                   filter and projection (m.x_phys) and the decode of the latent points (m.props)
-    deflation_space  optimize/optimization_loop.py (problem_solver), once per run, above the direct
+    deflation_space  optimize/run_setup.py (problem_solver), once per run, above the direct
                   solver's limit
-    set_simp_penalties  optimize/optimization_loop.py, at the start of the run and at each step of SIMP
-                  continuation
+    set_simp_penalties  optimize/run_setup.py at the start of the run, optimize/optimization_loop.py at
+                  each step of SIMP continuation
 """
 from typing import TYPE_CHECKING, Any
 

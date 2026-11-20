@@ -7,7 +7,7 @@ an answer that is not one. CheckedDeflationSolver is that solver, which keeps fo
 whether it converged (by DPCG's own test: it converged unless it used up its iterations), the relative residual
 |f - K x| / |f| of its answer, and the step of the run the solve was for: None during the iterations, a design's
 label during the final check (set by final_design_analysis.py) or an analysis. The run creates it
-(optimization_loop.problem_solver) and keeps it, so a physics need do nothing; the run record keeps what did not
+(run_setup.problem_solver) and keeps it, so a physics need do nothing; the run record keeps what did not
 converge, and the Summary and Compare show it (results/tables.py), so a number from a solve that failed is never
 taken for a result. PyTO-AD's solve reads one deflation space, the solver's W, and solves a system that does not
 fit it by plain CG, which is not checked; so the solver keeps one space for each size of system (add_space), and a

@@ -48,9 +48,9 @@ The four problems, worst first:
 | `hex_thermal_fea.HexThermalFEA` | the thermal solve; `ConductionHexFEA` subclasses it with a conductivity in each element | `lsr_mmto/physics/thermal/thermal_physics.py` | Safe |
 | `hex_element_stiffness` | the element matrices of one unit material, scaled per element | both solvers above | Safe |
 | `autodiff/sparse_solve` (reached through the solvers) | the solve and its gradient: PARDISO for small parts, DPCG for large ones (plain CG never: a test fails if it runs) | inside PyTO-AD's `solve` | see P1; P2 fixed |
-| `deflation.DeflationSolver` | DPCG for large parts; LSR MMTO's `CheckedDeflationSolver` records whether each solve converged | `lsr_mmto/optimize/iterative_solve_check.py`, `optimization_loop.problem_solver` (line 261) | **P1** |
-| `solvers` (`Solvers.PARDISO`, `Solvers.DPCG`) | which solver to use | `optimization_loop.problem_solver` | Safe |
-| `DIRECT_SOLVER_DOF_CUTOFF` (100,000) | the size above which DPCG is used | `optimization_loop.py`, line 282 | Safe |
+| `deflation.DeflationSolver` | DPCG for large parts; LSR MMTO's `CheckedDeflationSolver` records whether each solve converged | `lsr_mmto/optimize/iterative_solve_check.py`, `run_setup.problem_solver` (line 118) | **P1** |
+| `solvers` (`Solvers.PARDISO`, `Solvers.DPCG`) | which solver to use | `run_setup.problem_solver` | Safe |
+| `DIRECT_SOLVER_DOF_CUTOFF` (100,000) | the size above which DPCG is used | `run_setup.py`, line 139 | Safe |
 
 **P1. DPCG on binarized designs.**
 - *Assumes:* a design whose stiffness varies smoothly, as during the iterations. A binarized design mixes
@@ -60,7 +60,7 @@ The four problems, worst first:
   which numbers are not reliable (`iterative_solve_check.py`); a run or analysis that ends with one says so in red
   under Current run and in the messages panel, and the .npz keeps the record too. The wrong numbers are flagged,
   not prevented. Kept this way on purpose: the direct solver is not used on very large parts.
-- *If you fix it:* in `optimization_loop.problem_solver`, or in a solve of the final check alone, use the
+- *If you fix it:* in `run_setup.problem_solver`, or in a solve of the final check alone, use the
   direct solver (PARDISO) for the final check when the part fits in memory; or give DPCG a stronger
   preconditioner. Check: `tests/runs/test_run_project.py::test_a_solve_that_does_not_converge_is_marked`,
   and a run of the Airplane bracket at 30,000 dofs with the solver limit set to 20,000 whose solver check
@@ -83,7 +83,7 @@ The four problems, worst first:
   temperature's coarse solve leaves it out (`SpaceSolver._coarse_space`). Structural's is unchanged. It is not
   the cause of P1: a binarized structural design fails with the exact coarse matrix too.
 - *Guard:* above the limit a run is refused when a physics' deflation_space leaves a field without a space
-  (`optimization_loop.problem_solver`); every test fails if plain CG runs (`tests/conftest.py`); and
+  (`run_setup.problem_solver`); every test fails if plain CG runs (`tests/conftest.py`); and
   `tests/runs/test_run_project.py::test_every_field_of_every_physics_has_a_deflation_space` checks that each
   physics' deflation_space covers each of its fields.
 
@@ -101,7 +101,7 @@ The four problems, worst first:
   material model, and the run loop started and raised both, whatever the physics.
 - *Now:* each physics declares its own exponents (`SIMP_PENALTIES`: start, start with continuation, largest)
   and puts them where its solver reads them (`set_simp_penalties`). The run loop starts and raises them
-  (`optimization_loop.simp_penalties_at_start`, `raised_simp_penalties`) and names no physics. Thermal's goes
+  (`schedules.simp_schedules`, one schedule per exponent) and names no physics. Thermal's goes
   on its own solver (`conductivity_penalty`); structural's still goes into PyTO-AD's global, because PyTO-AD's
   structural solve reads only that (`hex_structural_fea.py`, line 196), but only structural's own folder
   sets it. The numbers did not move (`tests/runs/test_regression.py`).

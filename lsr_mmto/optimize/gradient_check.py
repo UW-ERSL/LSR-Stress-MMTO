@@ -3,7 +3,7 @@ gradient_check.py
 =================
 The autodiff gradient against central finite differences.
 
-check(p)          sets the project p up as run(p) does (optimization_loop.setup), then, at a random design,
+check(p)          sets the project p up as run(p) does (run_setup.setup), then, at a random design,
                   compares the gradient of the objective J and of the first
                   constraint with central differences on a few design variables,
                   for several step sizes h
@@ -26,11 +26,11 @@ if TYPE_CHECKING:
 
 
 def _model_from_setup(run_args: dict[str, Any]) -> dict[str, Any]:
-    """Set the project up as a run does (optimization_loop.setup) and hand back the autodiff model, the
+    """Set the project up as a run does (run_setup.setup) and hand back the autodiff model, the
     Heaviside beta and eta it starts with, and the bounds of every design variable, before any design
     is evaluated: {"model", "beta", "eta", "lb", "ub"}, the bounds flat (n,). run_args: _run_arguments'."""
-    from lsr_mmto.optimize import optimization_loop as M
-    state = M.setup(**{**run_args, "verbose": False, "plot_progress": False})
+    from lsr_mmto.optimize.run_setup import setup
+    state = setup(**{**run_args, "verbose": False, "plot_progress": False})
     if state is None:
         raise RuntimeError("the project names no material database, so there is nothing to check")
     return {"model": state.model, "beta": state.beta, "eta": state.s.eta_proj,

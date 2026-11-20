@@ -7,9 +7,7 @@ in the order they are added. Two every physics has are written here, in CORE_PEN
     LatentSmoothing   Pz, each element's distance to the mean of its neighbours' latent points
     DistancePenalty   Dp, each solid element's distance to the nearest real material
 
-and a physics may give its own (PENALTIES on its front page), added after these. Also here: the
-latent sensitivity filter, which smooths the latent blocks of a gradient with the material filter
-(switched off in the loop; kept for other physics).
+and a physics may give its own (PENALTIES on its front page), added after these.
 """
 from typing import TYPE_CHECKING, Callable, Iterable
 
@@ -23,11 +21,10 @@ from lsr_mmto.physics.available_physics import MODULES
 if TYPE_CHECKING:
     from types import ModuleType
 
-    from scipy.sparse import spmatrix
-
     from lsr_mmto.design.density_filter_and_projection import SparseOperator
     from lsr_mmto.optimize.design_model import MMTOModelAD
-    from lsr_mmto.optimize.optimization_loop import Iteration, RunState
+    from lsr_mmto.optimize.optimization_loop import Iteration
+    from lsr_mmto.optimize.run_setup import RunState
 
 
 def distance_penalty(xb: torch.Tensor, z: torch.Tensor, z_real: torch.Tensor, eps: float = 1e-12) -> torch.Tensor:
@@ -218,31 +215,3 @@ def penalties_of(modules: "list[ModuleType]") -> list[Penalty]:
 
 PENALTIES = penalties_of(MODULES)
 
-
-def smooth_latent_gradient_inplace(vec: np.ndarray, H_material: "spmatrix", Hs_material: np.ndarray, num_elems: int,
-                                   latentDim: int) -> None:
-    """Sensitivity-filter (in place) each latent block of an objective gradient.
-
-    Applies (H_material @ g)/Hs_material to each per-latent-dim slice. This is a
-    Sigmund-style regularizer on the latent gradient (z itself is not filtered).
-    """
-    for ell in range(latentDim):
-        sl = slice(
-            num_elems + ell * num_elems,
-            num_elems + (ell + 1) * num_elems,
-        )
-        vec[sl] = (H_material @ vec[sl]) / Hs_material
-
-
-def smooth_latent_constraint_gradient_inplace(mat: np.ndarray, H_material: "spmatrix", Hs_material: np.ndarray,
-                                              num_elems: int, latentDim: int) -> None:
-    """Same latent-block sensitivity filter as above, for the constraint Jacobian (constraints, design
-    variables), each row in place."""
-    nCons = mat.shape[0]
-    for i in range(nCons):
-        for ell in range(latentDim):
-            sl = slice(
-                num_elems + ell * num_elems,
-                num_elems + (ell + 1) * num_elems,
-            )
-            mat[i, sl] = (H_material @ mat[i, sl]) / Hs_material

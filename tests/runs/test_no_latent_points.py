@@ -5,7 +5,7 @@ A run whose material source has no latent points (latent dimension 0): the desig
 every step of the run takes it, from the start design and its bounds through the iterations, the final check
 and the save. The source here is the database's own values with one material for every element
 (materials/material_source.py, DatabaseMaterials), put in where the run makes its source
-(optimization_loop.material_source).
+(run_setup.material_source).
 
     python -m pytest tests/runs/test_no_latent_points.py
 """
@@ -27,7 +27,7 @@ def _one_material(monkeypatch, made):
     latent points; made["source"] is the source the run got, made["vector"] the size of each design it asked
     the model about."""
     from lsr_mmto.materials.material_source import DatabaseMaterials
-    from lsr_mmto.optimize import design_model, optimization_loop as M
+    from lsr_mmto.optimize import design_model, run_setup as M
 
     def source(project, s, vae_params, xlsx, saveNet, should_stop, on_network_error):
         made["source"] = DatabaseMaterials(xlsx, MATERIAL)

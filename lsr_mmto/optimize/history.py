@@ -7,7 +7,7 @@ iteration_diagnostics (structural: the mass ratio, the max failure factor and th
 physics/structural/structural_results.py). Nothing here changes the design.
 
 The history is a dict of lists: init_run_history's keys (those of every run), each penalty's keys (added by the
-loop's setup) and the keys a physics' iteration_diagnostics adds. Each iteration appends to the keys its steps
+run's setup, optimize/run_setup.py) and the keys a physics' iteration_diagnostics adds. Each iteration appends to the keys its steps
 record; a key a physics adds but does not record that run (the stress keys for a database without yield
 strength) stays empty.
 """

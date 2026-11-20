@@ -1,6 +1,6 @@
 # Testing the codebase
 
-Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 395 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
+Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 397 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
 
 Run them all from the repository folder with `python -m pytest tests -q -n 4` (`-n 2` on a computer with less than 16 GB of memory), one folder with `python -m pytest tests/<folder> -q`, or one file with `python -m pytest tests/<folder>/<file> -q`.
 
@@ -273,7 +273,7 @@ The final check at the end of a run (compliance, stresses, failure factor of the
 
 ### `tests/runs/test_no_latent_points.py`
 
-A run whose material source has no latent points (latent dimension 0): the design is the densities only, and every step of the run takes it, from the start design and its bounds through the iterations, the final check and the save. The source here is the database's own values with one material for every element (materials/material_source.py, DatabaseMaterials), put in where the run makes its source (optimization_loop.material_source).
+A run whose material source has no latent points (latent dimension 0): the design is the densities only, and every step of the run takes it, from the start design and its bounds through the iterations, the final check and the save. The source here is the database's own values with one material for every element (materials/material_source.py, DatabaseMaterials), put in where the run makes its source (run_setup.material_source).
 
 - `test_a_run_with_no_latent_points_goes_through`: The U-bracket on a coarse mesh, its distance penalty and latent smoothing switched on as usual: the run asks about designs of the densities only (one number per element), leaves out both penalties (they read the latent points) and says so, goes through and saves; each element has MATERIAL's database values, the saved run has latent dimension 0 and no history of either penalty, and every element's material is MATERIAL.
 
@@ -297,14 +297,16 @@ The numbers a run makes must not change by accident. The first iterations of eve
 
 Running a Project: its settings cover every setting of _run_topopt; the run record keeps the settings as they were given, says when a setting was switched off during the run, and stores the project so it can be rebuilt. A run from a script goes to the project folder's results, as one from the window does, and its folder holds exactly the run's three files.
 
-- `test_settings_cover_run_topopt`: The loop reads each setting as s.<name>: every name it reads (anywhere in the loop's file: its setup, the steps of an iteration, the optimizer; and in the penalties' weights) is a setting of SETTINGS, the run gets every one, and _run_topopt has no setting of its own (no default that could differ from SETTINGS).
+- `test_settings_cover_run_topopt`: The run reads each setting as s.<name>: every name it reads (anywhere in its setup, the steps of an iteration, the optimizer, the schedules; and in the penalties' weights) is a setting of SETTINGS, the run gets every one, and _run_topopt has no setting of its own (no default that could differ from SETTINGS).
 - `test_progress_and_stop`: progress() hears every iteration; should_stop() ends the run there, and the design reached so far is still post-processed (the GUI's Run and Stop).
 - `test_simp_continuation_raises_each_penalty_of_every_physics`: Each SIMP exponent a physics declares (SIMP_PENALTIES) starts at its start, or at its start with continuation when SIMP continuation is on, and each step of continuation raises it by 0.25 up to its largest; nothing in the core names a physics. A U-bracket run with continuation on for 11 iterations raises the stiffness's once, 1.5 to 1.75, where the structural solve reads it as well as in its record, and records no exponent structural does not use.
 - `test_the_pnorm_exponent_is_the_runs_own`: The p-norm exponent is the run's setting: the stress quantities read it from the run's settings, and building a project never writes it into PyTO-AD's global, so two projects in one program keep their own.
 - `test_step_limit_and_stress_relaxation_exponent_reach_the_run`: The Step limit setting is the move limit MMA gets, and the Stress relaxation exponent q is the one the stresses use: at the start design, with the same displacements, each element's relaxed stress for q = 3.5 is its stress for q = 0.5 times its density cubed.
 - `test_optimizer_failure_names_the_constraint_over_its_limit`: When the optimizer fails while a constraint is far over its limit (a limit that cannot be met from the starting design), the error says which constraint, by how much, and keeps the optimizer's own message.
 - `test_a_run_with_a_mass_fraction_constraint`: A short run with Mass fraction of the lightest <= 0.4 as its constraint goes through: every iteration's constraint is a finite number, the run keeps the constraint with its material word, names it as the app does, and the project it rebuilds from the record is the one that ran.
-- `test_a_sharpness_schedule_it_cannot_run_is_refused`: The five sharpness numbers are read as one schedule at the start of a run; numbers it cannot run with (a sharpness of 0, a largest below the start, a growth below 1, growing every 0 iterations) are refused before the first iteration, in the settings' own words.
+- `test_a_sharpness_schedule_it_cannot_run_is_refused`: The six sharpness settings are read as one schedule at the start of a run; numbers it cannot run with (a sharpness of 0, a largest below the start, a growth below 1 when multiplying or below 0 when adding, growing every 0 iterations) are refused before the first iteration, in the settings' own words.
+- `test_a_schedule_grows_as_its_settings_say`: A schedule multiplies (the sharpness by default: 1.5 times every 5 iterations after iteration 50, up to 32) or adds (1 every 25 iterations from the start, up to 10, as PolyStress's sharpness does), only on the iterations its settings name, never past its largest; at its largest it no longer grows.
+- `test_the_run_grows_its_sharpness_as_its_settings_say`: In a run, each design is evaluated with the sharpness its schedule has reached: Growth by ADD adds Sharpness growth, MULTIPLY multiplies by it, every Grow every iterations after Start growing after iteration, never past Largest sharpness.
 - `test_unknown_and_missing_settings`: Unknown and missing settings.
 - `test_run_finishes`: Run finishes.
 - `test_record_keeps_settings_as_given`: z smoothing was on at the start and switched off at iteration 2: the record says both.
@@ -636,7 +638,7 @@ A new setting is one entry of CORE_SETTINGS (lsr_mmto/problem/settings.py), and 
 - `test_one_entry_makes_a_setting`: One entry makes a setting.
 - `test_one_entry_makes_a_quantity`: One entry makes a quantity.
 - `test_every_quantity_has_its_gradient_checked`: Every quantity of the registry is in the hand list of tests/gradients/test_ad_quantities.py, which checks its gradient against finite differences (that file is slow; this check is not), or named there as not checked, with the reason. A new quantity left out of the list fails here, by its name.
-- `test_a_physics_may_leave_out_its_optional_entries`: _checked gives a physics that leaves out an OPTIONAL_ENTRIES entry its "none" value, and refuses one that leaves out any other entry, naming it, or gives SIMP_PENALTIES without set_simp_penalties.
+- `test_a_physics_may_leave_out_its_optional_entries`: _checked gives a physics that leaves out an OPTIONAL_ENTRIES entry its "none" value, and refuses one that leaves out any other entry, naming it, gives SIMP_PENALTIES without set_simp_penalties, or gives a SIMP exponent that starts above its largest.
 - `test_a_physics_summary_rows_reach_the_summary`: Each SUMMARY_ROWS entry is a row of the Summary with the last value its history key recorded, and a key the run did not record (or recorded as nan) gives no row.
 - `test_a_new_database_starts_with_the_columns_its_physics_reads`: Density, the properties the project needs, then its physics' optional ones, in the property list's order: an L-bracket that limits no stress needs no yield strength.
 - `test_two_things_of_one_name_are_refused`: Start-up refuses, naming both places: a physics setting with a name the core already uses (it would take the core setting's place in every project), two different penalties of one name, two penalties that write one history key, two quantities of one name in one physics, a material property's alias that is another property's name, and a result shown as a view every run has (Material, Density or Solid).

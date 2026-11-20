@@ -212,7 +212,7 @@ def test_a_large_problem_uses_dpcg_and_gives_the_direct_answer():
     more unknowns than it) gives the direct solver's temperature and displacement, and both solves are kept as
     converged."""
     from lsr_mmto.optimize.iterative_solve_check import CheckedDeflationSolver
-    from lsr_mmto.optimize.optimization_loop import problem_solver
+    from lsr_mmto.optimize.run_setup import problem_solver
     from lsr_mmto.pyto_ad_imports import DIRECT_SOLVER_DOF_CUTOFF, linear_solvers, mat_lib
     T_ref, E, nu = 293.15, 200.0, 0.3
     p = _bar("large")

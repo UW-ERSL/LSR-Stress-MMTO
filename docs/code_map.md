@@ -51,6 +51,8 @@ LSR MMTO
 │   │   ├── optimization_loop.py  setup, then optimize: each design goes through the steps of
 │   │   │                         ITERATION_STEPS (penalties, record, quantity states, continuation);
 │   │   │                         slot: a constraint method (CONSTRAINT_METHODS, MMA today)
+│   │   ├── run_setup.py          what a run builds before its first design: network, solver, start design
+│   │   ├── schedules.py          how the sharpness and the SIMP exponents change during a run
 │   │   ├── design_model.py       one design: filter, projection, properties, then the physics' analysis
 │   │   ├── history.py            what each iteration records and prints
 │   │   ├── final_design_analysis.py   the final design analysed, the results kept
@@ -149,6 +151,10 @@ Is it about one physics only?
     ├── a term added to the objective (a penalty) every physics has?
     │     one entry of CORE_PENALTIES, lsr_mmto/design/latent_penalties.py
     │     test: tests/physics/test_thermal_physics.py, tests/runs/test_regression.py · docs: "A penalty"
+    ├── a new way for a number to grow during a run (the sharpness, a SIMP exponent)?
+    │     one member of Growth, lsr_mmto/problem/settings.py, and its line in Schedule.next,
+    │     lsr_mmto/optimize/schedules.py
+    │     test: tests/runs/test_run_project.py · docs: the header of lsr_mmto/optimize/schedules.py
     ├── another step of each iteration (a continuation)?
     │     one step of ITERATION_STEPS, lsr_mmto/optimize/optimization_loop.py
     │     test: tests/runs/test_regression.py · docs: CONTRIBUTING, "Where a change goes"

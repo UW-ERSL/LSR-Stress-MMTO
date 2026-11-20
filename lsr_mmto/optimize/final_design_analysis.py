@@ -115,7 +115,7 @@ def run_postprocessing(history: dict[str, list[float | np.ndarray]], zetaOptimal
     final check analyses the design with the same materials as the optimization;
     physical_density(x) -> x_phys is its own density filter and projection, at the last beta.
     zetaOptimal is the design vector [x (N) ; z latent-major], flat. mat_lib and MaterialModel are not used.
-    checked: the run's deflation solver (optimization_loop.problem_solver), whose solves are labelled with the
+    checked: the run's deflation solver (run_setup.problem_solver), whose solves are labelled with the
     design they are for and recorded as run_config["solver_check"]; None checks nothing.
     Saves nothing when save_dir is None; the physics and properties_of are required (ValueError)."""
     if physics is None or properties_of is None:

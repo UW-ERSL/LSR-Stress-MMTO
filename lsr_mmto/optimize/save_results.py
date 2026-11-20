@@ -9,6 +9,7 @@ Writes into save_dir:
     run_config.yaml      the same manifest, sectioned
     run_data.pkl         only when SAVE_PICKLE is True
 
+run_record assembles the manifest of a run that has ended, from its run state (optimize/run_setup.py).
 Nothing is written unless a save_dir is passed. Reader: results/load_results.py.
 """
 import os
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
     from lsr_mmto.materials.databases import VAEParams
     from lsr_mmto.materials.material_source import MaterialSource
     from lsr_mmto.optimize.mmto_to_params import MMTOParams
+    from lsr_mmto.optimize.run_setup import RunState
 
 
 # Full-precision pickle alongside the record: zeta, void latents, float64,
@@ -320,6 +322,45 @@ def build_run_config(example_name: str, run_args: dict[str, Any], to_params: "MM
     }
     cfg["optimizer_mma"] = _to_plain(mma_settings or {})
     return cfg
+
+
+def run_record(state: "RunState", method_settings: dict[str, Any], runtime_sec: float,
+               fixed_in_code: dict[str, Any]) -> dict[str, Any]:
+    """The run record of a run that has ended (the loop's optimize, before the final analysis): build_run_config
+    from the run state, the run's arguments as given with the network file resolved, what the constraint method
+    kept of how it ran (method_settings), and what was fixed in the code: fixed_in_code (the loop's own), the
+    start density, each SIMP exponent at the end and the void stiffness.
+
+    Reads state.during_run, state.simp_penalties."""
+    from lsr_mmto.optimize.schedules import sharpness_record
+    from lsr_mmto.pyto_ad_imports import topopt_material_model
+    s, history, project = state.s, state.history, state.project
+    try:
+        iterations = max((len(v) for v in history.values() if hasattr(v, "__len__")), default=None)
+    except TypeError:                          # a value with a length it cannot give (a 0-d array): none kept
+        iterations = None
+    run_config = build_run_config(
+        example_name=getattr(project, "name", str(project)),
+        run_args=dict(state.args_at_start, saveNet=state.save_net), to_params=state.to_params,
+        vae_params=state.vae_params, beta_schedule=sharpness_record(s), mesh=state.mesh, bcs=state.bcs,
+        fields=state.physics.FIELDS, mat_encoder=state.encoder, z_real_points=state.z_real,
+        material_colors=state.material_colors, material_labels=state.material_labels,
+        mma_settings=method_settings, runtime_sec=runtime_sec, iterations=iterations,
+        comment=getattr(state.to_params, "Comment", ""),
+        pnorm_exponent=float(s.pnorm_exponent) if getattr(s, "pnorm_exponent", None) is not None else None)
+    run_config["during_run"] = dict(state.during_run)
+    run_config["network_errors_percent"] = state.network_errors   # what the run's materials were off by, per property
+    run_config["network_reconstruction"] = state.encoder.reconstruction()   # and per material: database vs network
+    run_config["provenance"] = state.provenance
+    run_config["database"] = state.database_record                # every cell of the database the run used
+    run_config["units"] = project.unit_record()
+    run_config["fixed_in_code"] = {
+        **fixed_in_code,
+        "initial_density": float(state.initial_density),
+        **{f"simp_{name}_penalty_at_end": float(v) for name, v in state.simp_penalties.items()},
+        "void_stiffness_relative": float(topopt_material_model._EVOID_RELATIVE),
+    }
+    return run_config
 
 
 def write_run_config_yaml(config: dict[str, Any], path: str) -> None:

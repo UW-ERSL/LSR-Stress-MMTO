@@ -8,7 +8,7 @@ DEFAULT_SETTINGS, the Settings panel, docs/reference.md, and the settings object
 optimization reads (s.gamma_factor).
 
 A new setting is one Setting in CORE_SETTINGS here (or, for a setting of one physics, one entry of SETTINGS
-on its module's front page; SETTINGS, made by settings_of, holds them all), plus the line in optimize/optimization_loop.py that reads s.<name>. A setting
+on its module's front page; SETTINGS, made by settings_of, holds them all), plus the line in the run (optimize/run_setup.py or optimize/optimization_loop.py) that reads s.<name>. A setting
 PyTO-AD's TOParams already has a field for names it (pyto_ad_field): build() copies it there, and
 the run reads it from there (to_params.MaxIterations), so the two never disagree.
 
@@ -35,6 +35,12 @@ class Z0InitMethod(Enum):
     HEAVIEST = "heaviest"
     ORIGIN = "origin"
     UNIFORM = "uniform"
+
+
+class Growth(Enum):
+    """How a schedule grows at each step (optimize/schedules.py)."""
+    MULTIPLY = "multiply"
+    ADD = "add"
 
 
 FROM_DATABASE = "from the database"
@@ -130,8 +136,12 @@ CORE_SETTINGS = [
     Setting("advanced", "beta_max", 32.0, "Largest sharpness",
             "The sharpness stops growing here. A very sharp push can make stress limits hard to meet.",
             "Projection"),
+    Setting("advanced", "beta_growth", "MULTIPLY", "Growth by",
+            "MULTIPLY: each step multiplies the sharpness by Sharpness growth. ADD: each step adds Sharpness "
+            "growth to it.", "Projection", choices=Growth),
     Setting("advanced", "beta_factor", 1.5, "Sharpness growth",
-            "How many times sharper each step makes it. 1 keeps it at Starting sharpness.", "Projection"),
+            "How much each step changes it, as Growth by says. MULTIPLY by 1 or ADD 0 keeps it at Starting "
+            "sharpness.", "Projection"),
     Setting("advanced", "beta_update_every", 5, "Grow every [iterations]",
             "The sharpness grows on every iteration that is a multiple of this.", "Projection", integer=True),
     Setting("advanced", "beta_start_iter", 50, "Start growing after iteration",

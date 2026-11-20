@@ -557,7 +557,8 @@ The following table lists every setting, organized by its group in the Settings 
 | Projection | Projection threshold | The density at which that push splits solid from empty. |
 | Projection | Starting sharpness | How hard the push is at the start. Larger is closer to clear solid and empty. |
 | Projection | Largest sharpness | The sharpness stops growing here. A very sharp push can make stress limits hard to meet. |
-| Projection | Sharpness growth | How many times sharper each step makes it. 1 keeps it at Starting sharpness. |
+| Projection | Growth by | MULTIPLY: each step multiplies the sharpness by Sharpness growth. ADD: each step adds Sharpness growth to it. |
+| Projection | Sharpness growth | How much each step changes it, as Growth by says. MULTIPLY by 1 or ADD 0 keeps it at Starting sharpness. |
 | Projection | Grow every [iterations] | The sharpness grows on every iteration that is a multiple of this. |
 | Projection | Start growing after iteration | The sharpness stays at Starting sharpness up to this iteration, then grows from the next multiple of Grow every. |
 | Distance penalty | Distance penalty | Pushes each element's material towards one of the real materials in the database. |

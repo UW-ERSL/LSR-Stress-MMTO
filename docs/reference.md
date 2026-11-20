@@ -148,7 +148,8 @@ Every setting a run takes, under its own name. A new project starts from these v
 | `eta_proj` |  | 0.5 | The density at which that push splits solid from empty. |
 | `beta_init` |  | 1.0 | How hard the push is at the start. Larger is closer to clear solid and empty. |
 | `beta_max` |  | 32.0 | The sharpness stops growing here. A very sharp push can make stress limits hard to meet. |
-| `beta_factor` |  | 1.5 | How many times sharper each step makes it. 1 keeps it at Starting sharpness. |
+| `beta_growth` |  | 'MULTIPLY' (one of MULTIPLY, ADD) | MULTIPLY: each step multiplies the sharpness by Sharpness growth. ADD: each step adds Sharpness growth to it. |
+| `beta_factor` |  | 1.5 | How much each step changes it, as Growth by says. MULTIPLY by 1 or ADD 0 keeps it at Starting sharpness. |
 | `beta_update_every` |  | 5 | The sharpness grows on every iteration that is a multiple of this. |
 | `beta_start_iter` |  | 50 | The sharpness stays at Starting sharpness up to this iteration, then grows from the next multiple of Grow every. |
 | `use_penalization` |  | True | Pushes each element's material towards one of the real materials in the database. |

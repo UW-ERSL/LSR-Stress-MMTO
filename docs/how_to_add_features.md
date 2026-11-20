@@ -184,7 +184,7 @@ run: both generators above (the reference page and the user guide list every kin
 
 One entry in `CORE_SETTINGS` in `lsr_mmto/problem/settings.py`, or, for a setting of one physics, one
 entry in `SETTINGS` on its front page (as the arguments of a `Setting`), plus the line that reads it
-as `s.<name>` (in `lsr_mmto/optimize/optimization_loop.py`, or in the physics' own code, which gets
+as `s.<name>` (in `lsr_mmto/optimize/run_setup.py` or `optimization_loop.py`, or in the physics' own code, which gets
 the same `s`):
 
     Setting("advanced", "gamma_factor", 1.1, "Weight growth per iteration",

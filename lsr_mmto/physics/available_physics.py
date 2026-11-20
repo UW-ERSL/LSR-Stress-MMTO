@@ -125,14 +125,18 @@ RESERVED_VIEWS = ("Material", "Density", "Solid")
 
 def _checked(module: "ModuleType") -> "ModuleType":
     """Returns the module, given the "none" value of each OPTIONAL_ENTRIES entry it leaves out; raises
-    TypeError naming every other MODULE_ENTRIES entry it does not give, and ValueError for a result shown
-    as one of RESERVED_VIEWS."""
+    TypeError naming every other MODULE_ENTRIES entry it does not give, and ValueError for a SIMP exponent
+    that starts above its largest or a result shown as one of RESERVED_VIEWS."""
     missing = [k for k in MODULE_ENTRIES if not hasattr(module, k) and k not in OPTIONAL_ENTRIES]
     if missing:
         raise TypeError(f"physics module {module.__name__} does not give {', '.join(missing)}")
     if hasattr(module, "SIMP_PENALTIES") != hasattr(module, "set_simp_penalties"):    # one is no use alone
         raise TypeError(f"physics module {module.__name__} gives one of SIMP_PENALTIES and set_simp_penalties: "
                         f"give both, or neither")
+    for name, (start, with_continuation, largest) in getattr(module, "SIMP_PENALTIES", {}).items():
+        if max(start, with_continuation) > largest:          # a schedule never brings a value down to its largest
+            raise ValueError(f"physics module {module.__name__}: the SIMP exponent {name!r} starts above its "
+                             f"largest ({start}, {with_continuation} with SIMP continuation; largest {largest})")
     for name, field in module.RESULT_FIELDS.items():
         if field.get("view") in RESERVED_VIEWS:
             raise ValueError(f"physics module {module.__name__}: the result {name!r} is shown as "

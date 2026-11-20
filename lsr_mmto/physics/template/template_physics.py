@@ -5,11 +5,11 @@ The job of this file: the solver of the physics, and one iteration's solve insid
 Thermal's thermal_physics.py is this file filled in.
 
 Who reads it:
-    make_solver       optimize/optimization_loop.py, once per run, after the mesh and the supports and
+    make_solver       optimize/run_setup.py, once per run, after the mesh and the supports and
                       loads are built
     analyse           optimize/design_model.py (MMTOModelAD.evaluate), once per iteration, after the
                       density filter and projection (m.x_phys) and the decode of the latent points (m.props)
-    deflation_space   optimize/optimization_loop.py, for a problem above the direct solver's limit
+    deflation_space   optimize/run_setup.py, for a problem above the direct solver's limit
 
 How the gradient comes: analyse solves with torch operations only, and PyTO-AD's solvers are
 differentiable, so autograd follows anything a quantity computes from the solution back through the

@@ -76,7 +76,7 @@ if TYPE_CHECKING:
 
 DEFAULT_PHYSICS = next(iter(PHYSICS))          # a project that names no physics: the first one listed
 
-# where a run's material properties come from (Project.material_source; optimization_loop.material_source)
+# where a run's material properties come from (Project.material_source; run_setup.material_source)
 MATERIAL_SOURCES = ("network", "one_database_material")
 
 SCHEMA_VERSION = 2

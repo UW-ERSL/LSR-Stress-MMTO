@@ -206,6 +206,8 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad_imp
 | File | Purpose |
 |---|---|
 | `optimization_loop.py` | the optimization loop; internal, a project runs it only through `run(p)` |
+| `run_setup.py` | everything a run builds before its first design: the material network, the solver, the start design |
+| `schedules.py` | how the numbers that change during a run (the sharpness, the SIMP exponents) change |
 | `design_model.py` | one iteration: design, properties, the physics' solve, objective and constraints |
 | `mmto_to_params.py` | the parameter container the loop reads |
 | `filters.py` | the density and material filters |

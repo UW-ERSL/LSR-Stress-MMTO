@@ -25,7 +25,7 @@ network); and the database it reads: materialNames, rawData (materials, columns)
 ({column: {"idx": its column in rawData, ...}}).
 
 The network's materials as latent points, and its errors, come from where the run makes its source
-(optimize/optimization_loop.py, material_source).
+(optimize/run_setup.py, material_source).
 """
 from typing import Any, Protocol
 

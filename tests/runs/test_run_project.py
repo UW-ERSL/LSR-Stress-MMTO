@@ -24,6 +24,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 sys.path.insert(0, ROOT)
 
 from lsr_mmto.optimize import optimization_loop as M  # noqa: E402
+from lsr_mmto.optimize import run_setup  # noqa: E402
+from lsr_mmto.optimize import schedules  # noqa: E402
 from lsr_mmto.optimize import save_results as run_save  # noqa: E402
 from lsr_mmto.physics.available_physics import MODULES  # noqa: E402
 from lsr_mmto.problem.project import Project, _run_arguments  # noqa: E402
@@ -53,7 +55,7 @@ _RUNS = {}
 def _run(project, args):
     """_run_topopt with the history and the run record captured; nothing written to disk."""
     captured = {}
-    real_init, real_post = M.init_run_history, M.run_postprocessing
+    real_init, real_post = run_setup.init_run_history, M.run_postprocessing
 
     def init():
         captured["history"] = real_init()
@@ -63,13 +65,13 @@ def _run(project, args):
         captured["config"] = kw["run_config"]
         captured["display"] = (kw["material_colors"], kw["material_labels"])
 
-    M.init_run_history, M.run_postprocessing = init, post
+    run_setup.init_run_history, M.run_postprocessing = init, post
     saved = run_save.WRITE_FILES
     run_save.WRITE_FILES = False
     try:
         M._run_topopt(**dict(args, project=project))
     finally:
-        M.init_run_history, M.run_postprocessing = real_init, real_post
+        run_setup.init_run_history, M.run_postprocessing = real_init, real_post
         run_save.WRITE_FILES = saved
     return captured
 
@@ -84,13 +86,13 @@ def runs():
 
 
 def test_settings_cover_run_topopt():
-    """The loop reads each setting as s.<name>: every name it reads (anywhere in the loop's file: its setup,
-    the steps of an iteration, the optimizer; and in the penalties' weights) is a setting of SETTINGS, the
+    """The run reads each setting as s.<name>: every name it reads (anywhere in its setup, the steps of an
+    iteration, the optimizer, the schedules; and in the penalties' weights) is a setting of SETTINGS, the
     run gets every one, and _run_topopt has no setting of its own (no default that could differ from
     SETTINGS)."""
     import re
     from lsr_mmto.design import latent_penalties
-    source = inspect.getsource(M) + inspect.getsource(latent_penalties)
+    source = "".join(inspect.getsource(m) for m in (M, run_setup, schedules, latent_penalties))
     read = set(re.findall(r"(?<![\w.])s\.(\w+)", source)) - {"as_dict"}
     assert read - set(RUN_KEYS) == set(), f"read but not settings: {sorted(read - set(RUN_KEYS))}"
     args = _run_arguments(ubracket_project(), save_dir=tempfile.gettempdir(), verbose=False)
@@ -128,13 +130,17 @@ def test_simp_continuation_raises_each_penalty_of_every_physics():
     from lsr_mmto.pyto_ad_imports import topopt_material_model
     for module in MODULES:
         declared = module.SIMP_PENALTIES
-        assert M.simp_penalties_at_start(module, False) == {n: v[0] for n, v in declared.items()}, module.NAME
-        values = M.simp_penalties_at_start(module, True)
+        off = schedules.simp_schedules(module, False)
+        assert {n: sch.start for n, sch in off.items()} == {n: v[0] for n, v in declared.items()}, module.NAME
+        assert all(sch.next(sch.start, k) == (sch.start, False) for sch in off.values() for k in range(1, 100))
+        on = schedules.simp_schedules(module, True)
+        values = {n: sch.start for n, sch in on.items()}
         assert values == {n: v[1] for n, v in declared.items()}, module.NAME
-        for step in range(1, 30):
-            values = M.raised_simp_penalties(module, values)
-            assert values == {n: min(v[1] + M.SIMP_STEP * step, v[2]) for n, v in declared.items()}, (module.NAME,
-                                                                                                    step)
+        for iteration in range(1, 300):
+            values = {n: on[n].next(values[n], iteration)[0] for n in values}
+            step = iteration // schedules.SIMP_EVERY
+            assert values == {n: min(v[1] + schedules.SIMP_STEP * step, v[2]) for n, v in declared.items()}, \
+                (module.NAME, iteration)
     p = ubracket_project()
     p.settings["advanced"]["use_continuation"] = True
     p.settings["common"]["maxIterations"] = 11
@@ -247,22 +253,82 @@ def test_a_run_with_a_mass_fraction_constraint():
 
 
 def test_a_sharpness_schedule_it_cannot_run_is_refused():
-    """The five sharpness numbers are read as one schedule at the start of a run; numbers it cannot run with (a
-    sharpness of 0, a largest below the start, a growth below 1, growing every 0 iterations) are refused before
-    the first iteration, in the settings' own words."""
+    """The six sharpness settings are read as one schedule at the start of a run; numbers it cannot run with (a
+    sharpness of 0, a largest below the start, a growth below 1 when multiplying or below 0 when adding, growing
+    every 0 iterations) are refused before the first iteration, in the settings' own words."""
     from types import SimpleNamespace
-    good = dict(beta_init=1.0, beta_max=32.0, beta_factor=1.5, beta_update_every=5, beta_start_iter=50)
-    assert M.get_beta_schedule(SimpleNamespace(**good)) == good
+    from lsr_mmto.problem.settings import Growth
+    good = dict(beta_init=1.0, beta_max=32.0, beta_growth=Growth.MULTIPLY, beta_factor=1.5, beta_update_every=5,
+                beta_start_iter=50)
+    assert schedules.sharpness_schedule(SimpleNamespace(**good)) == schedules.Schedule(
+        start=1.0, largest=32.0, growth=Growth.MULTIPLY, step=1.5, every=5, after=50)
+    assert schedules.sharpness_record(SimpleNamespace(**good)) == dict(good, beta_growth="MULTIPLY")
     for change, words in ((dict(beta_init=0.0), "Starting sharpness must be above 0"),
                           (dict(beta_max=0.5), "Largest sharpness must be at least Starting sharpness"),
                           (dict(beta_factor=0.9), "Sharpness growth must be at least 1"),
+                          (dict(beta_growth=Growth.ADD, beta_factor=-1.0), "Sharpness growth must be at least 0"),
                           (dict(beta_update_every=0), "Grow every must be at least 1")):
         try:
-            M.get_beta_schedule(SimpleNamespace(**dict(good, **change)))
+            schedules.sharpness_schedule(SimpleNamespace(**dict(good, **change)))
         except ValueError as e:
             assert words in str(e), (change, e)
         else:
             raise AssertionError(f"{change} was accepted")
+    added = schedules.sharpness_schedule(SimpleNamespace(**dict(good, beta_growth=Growth.ADD, beta_factor=0.5)))
+    assert (added.growth, added.step) == (Growth.ADD, 0.5)                     # a growth below 1 is fine to add
+    assert schedules.sharpness_schedule(SimpleNamespace(**dict(good, beta_growth="ADD"))).growth is Growth.ADD
+
+
+def test_a_schedule_grows_as_its_settings_say():
+    """A schedule multiplies (the sharpness by default: 1.5 times every 5 iterations after iteration 50, up to
+    32) or adds (1 every 25 iterations from the start, up to 10, as PolyStress's sharpness does), only on the
+    iterations its settings name, never past its largest; at its largest it no longer grows."""
+    from lsr_mmto.problem.settings import Growth
+
+    def walk(schedule, iterations):
+        value, grew_at = schedule.start, []
+        for k in range(1, iterations + 1):
+            value, grew = schedule.next(value, k)
+            if grew:
+                grew_at.append((k, value))
+        return grew_at
+
+    times = walk(schedules.Schedule(start=1.0, largest=32.0, growth=Growth.MULTIPLY, step=1.5, every=5, after=50), 200)
+    expected, v = [], 1.0
+    for k in range(55, 201, 5):
+        if v < 32.0:
+            v = min(v * 1.5, 32.0)
+            expected.append((k, v))
+    assert times == expected and times[-1][1] == 32.0
+    plus = walk(schedules.Schedule(start=1.0, largest=10.0, growth=Growth.ADD, step=1.0, every=25), 400)
+    assert plus == [(25 * j, 1.0 + j) for j in range(1, 10)]
+
+
+def test_the_run_grows_its_sharpness_as_its_settings_say():
+    """In a run, each design is evaluated with the sharpness its schedule has reached: Growth by ADD adds
+    Sharpness growth, MULTIPLY multiplies by it, every Grow every iterations after Start growing after iteration,
+    never past Largest sharpness."""
+    from lsr_mmto.optimize import design_model
+    real = design_model.MMTOModelAD.evaluate
+    for growth, expected in (("ADD", [1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 3.5]),
+                             ("MULTIPLY", [1.0, 1.0, 1.5, 1.5, 2.25, 2.25, 3.375])):
+        seen = []
+
+        def evaluate(self, zeta, beta, *args, **kwargs):
+            seen.append(float(beta))
+            return real(self, zeta, beta, *args, **kwargs)
+
+        p = ubracket_project()
+        p.settings["common"]["maxIterations"] = 6
+        p.settings["advanced"].update(use_heaviside_projection=True, beta_growth=growth, beta_init=1.0,
+                                      beta_factor=1.0 if growth == "ADD" else 1.5, beta_max=3.5,
+                                      beta_start_iter=0, beta_update_every=2)
+        design_model.MMTOModelAD.evaluate = evaluate
+        try:
+            _run(p, _run_arguments(p, verbose=False))
+        finally:
+            design_model.MMTOModelAD.evaluate = real
+        assert seen[:len(expected)] == expected, (growth, seen)
 
 
 def test_unknown_and_missing_settings():
@@ -578,7 +644,8 @@ def test_every_field_of_every_physics_has_a_deflation_space():
     made_up = SimpleNamespace(NAME="made up", FIELDS={"u": 3, "T": 1}, deflation_space=structural_physics.deflation_space,
                               make_solver=lambda *a: None)
     try:
-        M.problem_solver(made_up, mesh, None, {}, None, SimpleNamespace(nDOFDesired=imports.DIRECT_SOLVER_DOF_CUTOFF + 1))
+        run_setup.problem_solver(made_up, mesh, None, {}, None,
+                                 SimpleNamespace(nDOFDesired=imports.DIRECT_SOLVER_DOF_CUTOFF + 1))
         raise AssertionError("a field without a deflation space was not refused")
     except ValueError as e:
         assert "no space for the field T (1 unknown per node)" in str(e), e
