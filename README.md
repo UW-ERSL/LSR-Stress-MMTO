@@ -118,7 +118,7 @@ The pages in `docs/` and `CONTRIBUTING.md` are also available inside the GUI: th
 | `docs/reference.md` | everything a project file can hold, and every Python call a project script uses, generated from the code |
 | `docs/how_to_add_features.md` | how to add a quantity, a selection type, a kind of support or load, a setting, a material attribute, a physics or a database |
 | `CONTRIBUTING.md` | how changes to the code are made and checked |
-| `docs/make_reference.py` | writes `docs/reference.md` from the code |
+| `docs/make_generated_docs.py` | writes every generated page (`docs/reference.md`, the user guide's lists, `docs/testing_the_codebase.md`) from the code |
 | `setup_environment.py` | installs everything; see Installation |
 | `requirements.txt` | Python packages the setup installs |
 | `pyproject.toml` | makes this folder installable as the package `lsr_mmto` (`pip install -e .`) |
@@ -196,9 +196,10 @@ The package a script imports (`from lsr_mmto import Project, run`). `pyto_ad_imp
 | `structural/structural_module.py` | the structural module's front page: everything the rest of the code takes from it |
 | `structural/structural_physics.py` | the structural solver, the solve performed during one iteration, element stress, von Mises, p-norm |
 | `structural/structural_supports_and_loads.py` | the structural supports and loads: fixed, displacement, force, traction, and the check that they hold the part |
-| `structural/structural_quantities.py` | the structural objectives and constraints: compliance, p-norm stress, p-norm failure factor |
+| `structural/structural_quantities.py` | the structural objectives and constraints, each listed in `docs/reference.md` |
 | `structural/structural_results.py` | what each iteration records, the final check, the results a run saves and its Summary rows |
-| `thermal/thermal_module.py` | steady heat conduction, not yet offered in the GUI: the worked example of a physics, and its example materials |
+| `thermal/thermal_module.py` | steady heat conduction: the worked example of a physics, and its example materials |
+| `thermoelastic/thermoelastic_module.py` | linear thermoelasticity, one-way coupled: the temperature drives the displacement |
 | `template/` | the blank form of a physics, with what goes in each blank: the place to start one of your own |
 
 #### `lsr_mmto/optimize/`

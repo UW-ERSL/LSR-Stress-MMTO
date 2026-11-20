@@ -545,7 +545,7 @@ The following table lists every setting, organized by its group in the Settings 
 
 | Group | Setting | What it does |
 | --- | --- | --- |
-| Main | Mesh dofs | How fine the mesh is: the number of unknowns it is built for, counting each unknown at each node: three for structural (the movement in x, y and z), one for thermal (the temperature), four for thermoelastic. More is finer, and slower. |
+| Main | Mesh dofs | How fine the mesh is: the number of unknowns it is built for, counting each unknown at each node: three for a movement (in x, y and z) and one for a temperature. More is finer, and slower. |
 | Main | Single element layer (2D) | One element through the thickness, for a flat (2D) part. |
 | Main | Max iterations | The optimization stops after this many iterations. |
 | Main | Density filter radius | The smallest feature the design may have, in element sizes. Larger gives smoother, simpler designs. |

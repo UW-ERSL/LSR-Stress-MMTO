@@ -7,7 +7,8 @@ linear elasticity with a different material in each element; the stresses are vo
 
     structural_physics.py              the solver, one iteration's solve, element stress
     structural_supports_and_loads.py   fixed, displacement, force, traction
-    structural_quantities.py           compliance, p-norm stress and failure factor (QUANTITIES)
+    structural_quantities.py           the objectives and constraints (QUANTITIES), each listed in
+                                       docs/reference.md
     structural_results.py              what each iteration records, the final check, the results a run
                                        saves and its Summary rows
 
@@ -27,7 +28,7 @@ The helpers behind each entry:
                              _picked_force, _check_direction
     iteration_diagnostics    record_fea_diagnostics: compute_max_failure_factor, update_paper_history,
                              compute_stress_violation_diagnostics, print_stress_violation_diagnostics
-    final_summary            elastic_constants, eval_stress_compliance_metrics (compute_max_failure_factor),
+    final_summary            analyse, eval_stress_compliance_metrics (compute_max_failure_factor),
                              compute_stress_violation_diagnostics, print_stress_violation_diagnostics
 """
 from lsr_mmto.physics.structural.structural_physics import (analyse, deflation_space, make_solver,  # noqa: F401

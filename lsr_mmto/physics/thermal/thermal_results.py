@@ -11,10 +11,6 @@ from typing import TYPE_CHECKING, Callable
 import numpy as np
 import torch
 
-import lsr_mmto.pyto_ad_imports  # noqa: F401  puts PyTO-AD on sys.path
-from lsr_mmto.pyto_ad_imports import topopt_material_model as ad_mm
-from lsr_mmto.physics.thermal.thermal_physics import CONDUCTIVITY
-
 if TYPE_CHECKING:
     import pyvista
 
@@ -60,11 +56,15 @@ def final_summary(designs: "list[tuple[str, np.ndarray, np.ndarray | torch.Tenso
     """The final check's numbers: each design (label, x, z element-major) solved, its thermal compliance and
     highest temperature printed. properties_of(z) gives the decoded properties of latent points z. Returns
     the results a run saves (RESULT_FIELDS), of the last design: the temperature at each node."""
+    from lsr_mmto.physics.available_physics import design_for_analyse
+    from lsr_mmto.physics.thermal.thermal_physics import analyse
+
     for label, x, z in designs:
         with torch.no_grad():
             z = z if torch.is_tensor(z) else torch.as_tensor(np.asarray(z), dtype=torch.get_default_dtype())
-            solver.set_conductivity(properties_of(z)[CONDUCTIVITY])
-            T = solver.solve(x, ad_mm.MaterialModel.SIMP).detach()
+            design = design_for_analyse(solver, settings, x, properties_of(z))
+            analyse(design)                                         # the run's solve
+            T = design.T.detach()
             compliance = float(torch.dot(solver.total_force, T))
         print(f"[THERMAL] {label}: thermal compliance {compliance:.6g}, max temperature {float(T.max()):.4g}")
     return {"temperature": T.numpy()}

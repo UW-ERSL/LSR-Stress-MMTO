@@ -165,7 +165,7 @@ def set_simp_penalties(solver: "MultiMaterialHexFEA", values: dict[str, float]) 
     ad_mm.set_SIMP_STRUCTURAL_PENALTY(float(values["structural"]))
 
 
-# HELPER: of analyse and final_summary
+# HELPER: of analyse
 def elastic_constants(props: dict[str, torch.Tensor], settings: "RunSettings") -> tuple[torch.Tensor, torch.Tensor]:
     """E and nu per element from the decoded properties: the database's Poisson's ratio, or one value
     for every element when the setting asks for it or the database has none."""

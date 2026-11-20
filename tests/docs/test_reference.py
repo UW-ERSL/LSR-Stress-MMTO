@@ -5,7 +5,7 @@ docs/reference.md must be what the code generates: after adding a quantity,
 a selection type, a boundary-condition kind or a setting, or changing a docstring the
 Python section is read from, run
 
-    python docs/make_reference.py
+    python docs/make_generated_docs.py
 
 and commit the page with the change. Every example of the Python section must run, one after
 another as the page says, on the shipped U-bracket.
@@ -24,7 +24,7 @@ import make_reference as reference  # noqa: E402
 def test_reference_page_is_current():
     with open(reference.PAGE, encoding="utf-8") as fh:
         page = fh.read()
-    assert page == reference.generate(), "docs/reference.md is out of date: run python docs/make_reference.py"
+    assert page == reference.generate(), "docs/reference.md is out of date: run python docs/make_generated_docs.py"
 
 
 def test_every_python_example_runs():

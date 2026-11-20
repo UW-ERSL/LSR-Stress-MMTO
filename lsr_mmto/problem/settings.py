@@ -99,8 +99,7 @@ CORE_SETTINGS = [
     # ---- Main
     Setting("mesh", "n_dof", 30000, "Mesh dofs",
             "How fine the mesh is: the number of unknowns it is built for, counting each unknown at each "
-            "node: three for structural (the movement in x, y and z), one for thermal (the temperature), four "
-            "for thermoelastic. More is finer, and slower.",
+            "node: three for a movement (in x, y and z) and one for a temperature. More is finer, and slower.",
             "Main", integer=True, pyto_ad_field="nDOFDesired"),
     Setting("mesh", "single_layer", False, "Single element layer (2D)",
             "One element through the thickness, for a flat (2D) part.", "Main", pyto_ad_field="ExtrudeZ"),

@@ -131,7 +131,7 @@ def generate() -> str:
     head = ["# Testing the codebase", "",
             "Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and "
             f"each test in it, {count} in all. Generated from the tests' own docstrings by "
-            "`python docs/make_testing_doc.py`; do not edit it by hand.", "",
+            "`python docs/make_generated_docs.py`; do not edit it by hand.", "",
             "Run them all from the repository folder with `python -m pytest tests -q -n 4` (`-n 2` on a computer "
             "with less than 16 GB of memory), one folder with `python -m pytest tests/<folder> -q`, or one file "
             "with `python -m pytest tests/<folder>/<file> -q`.", ""]

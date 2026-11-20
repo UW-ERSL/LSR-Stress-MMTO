@@ -1,8 +1,8 @@
 # Reference
 
-Everything a project setup script needs is on this page, the part made from shapes included.
+Everything a project setup script can set is on this page, the part made from shapes included. Numbers fixed in the code are not settings, so they are not here; each run's record keeps those that shaped its result (`fixed_in_code` in its run_config).
 
-Generated from the code by `python docs/make_reference.py`; do not edit by hand.
+Generated from the code by `python docs/make_generated_docs.py`; do not edit by hand.
 
 A project is an LSR MMTO project file (.mmto): the layout of a PyTO-AD project file, with an `mmto` section, which holds the whole problem. Supports and loads picked on the part in the window become selections (`gui_support1`, `gui_load1`, ...) and boundary conditions of the mmto section as soon as they are applied; the rest of what the window saves in the file (its settings) is kept.
 
@@ -123,7 +123,7 @@ Every setting a run takes, under its own name. A new project starts from these v
 
 | setting | physics | default | meaning |
 |---|---|---|---|
-| `n_dof` |  | 30000 | How fine the mesh is: the number of unknowns it is built for, counting each unknown at each node: three for structural (the movement in x, y and z), one for thermal (the temperature), four for thermoelastic. More is finer, and slower. |
+| `n_dof` |  | 30000 | How fine the mesh is: the number of unknowns it is built for, counting each unknown at each node: three for a movement (in x, y and z) and one for a temperature. More is finer, and slower. |
 | `single_layer` |  | False | One element through the thickness, for a flat (2D) part. |
 
 ### common
@@ -797,7 +797,7 @@ Write a material database, as the app's database editor saves it: the template's
 |---|---|---|
 | `path` | the .xlsx file to write, absolute or relative to the folder Python runs in | required |
 | `attributes` | the columns, each an attribute of Material database attributes, e.g. ["Youngs_Modulus", "Density"] | required |
-| `units` | each column's unit, one per attribute, in the unit system of the project that will use it; None for a ratio | required |
+| `units` | each column's unit, one per attribute, in the unit system of the project that will use it; None for a ratio (a column with one unit only); None for any other column leaves its unit empty, which the database check reports | required |
 | `names` | the materials' names, one per row | required |
 | `labels` | the label each material is shown with, one per material; None shows its name | required |
 | `colours` | each material's colour, "#rrggbb", one per material | required |

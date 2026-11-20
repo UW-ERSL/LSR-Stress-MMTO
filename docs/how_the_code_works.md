@@ -19,9 +19,9 @@ different material in each element, a subclass handles that (`MultiMaterialHexFE
 | Folder | What it holds |
 |---|---|
 | `problem/` | the project (`Project`, `run(p)`), its settings, selections, supports and loads, the mesh, the project folder |
-| `materials/` | material databases and the material network (VAE), including how the network is trained and loaded |
+| `materials/` | material databases and the material network (VAE), including how the network is trained and loaded, and latent points to material properties (`decode`) |
 | `elements/` | the hexahedral element, including its strain matrix and Lame parameters |
-| `design/` | density filtering and Heaviside projection, latent points to material properties (`decode`), the penalties added to the objective (`PENALTIES`) |
+| `design/` | density filtering and Heaviside projection, the penalties added to the objective (`PENALTIES`) |
 | `formulation/` | the available objectives and constraints, and the reader of the formula text |
 | `physics/` | `available_physics.py`, the available physics modules, with a separate folder for each one |
 | `optimize/` | the optimization loop, the model used in each iteration, history, final design analysis, and saving results, plus Analyse (the solid part solved once in one material) |

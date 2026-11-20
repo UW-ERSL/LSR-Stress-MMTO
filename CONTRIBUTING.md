@@ -75,7 +75,7 @@ six minutes. Each process can use up to about 2.5 GB of memory: on a computer wi
 `-n 2`. The tests are in folders by what they check (physics, gradients, problem, materials, runs, gui,
 docs, code_rules); `docs/testing_the_codebase.md` lists every test, folder by folder, with what it checks.
 It is generated from the tests' docstrings: after adding, renaming or moving a test, run
-`python docs/make_testing_doc.py` (`tests/docs/test_testing_doc.py` fails until you do). A new folder of
+`python docs/make_generated_docs.py` (`tests/docs/test_testing_doc.py` fails until you do). A new folder of
 tests needs its line in `FOLDERS` there. While developing, run only the tests for the part you changed:
 
 | What you changed | The tests that cover it |
@@ -139,9 +139,8 @@ Run every test once before committing. To find the lines of code that are not co
 - Text the GUI shows is written for someone who has never seen the code: plain words, the labels
   the form itself shows, and the details behind an (i) (see Writing).
 - After a change to a list (settings, quantities, supports and loads, selection types, material
-  attributes) or to a docstring the reference reads, run `python docs/make_reference.py` and
-  `python -m gui.user_guide_window --write`; the reference page and the user guide's lists are made
-  from the code.
+  attributes) or to a docstring the reference reads, run `python docs/make_generated_docs.py`; the
+  reference page, the user guide's lists and the testing page are made from the code, all three by it.
 - The versions in requirements.txt are the ones every test passes with. A newer version of a package
   is a change like any other: change its pin, run every test, and commit both.
 

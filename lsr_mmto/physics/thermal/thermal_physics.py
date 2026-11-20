@@ -83,8 +83,7 @@ class ConductionHexFEA(hex_thermal_fea.HexThermalFEA):
 
     def solve(self, x: torch.Tensor | np.ndarray | None = None, material_model: "MaterialModel | None" = None,
               **kwargs: Any) -> torch.Tensor:
-        """PyTO-AD's solve(); also takes a numpy x, as the final check passes one. Returns T, one value per
-        node."""
+        """PyTO-AD's solve(); also takes a numpy x, as PyTO's solver did. Returns T, one value per node."""
         if x is not None and not torch.is_tensor(x):
             x = torch.as_tensor(np.asarray(x, dtype=float), dtype=_DTYPE)
         return super().solve(x, material_model, **kwargs)

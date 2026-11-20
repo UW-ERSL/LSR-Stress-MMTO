@@ -3,10 +3,10 @@
 Most additions are one entry in a list. `docs/how_the_code_works.md` says where each part of the
 code is, and `docs/code_map.md` leads from what you want to add to the section of this page to follow. The tests listed under each one fail when the entry is incomplete. After any addition, run
 
-    python docs/make_reference.py
-    python -m gui.user_guide_window --write
-    python docs/make_testing_doc.py
+    python docs/make_generated_docs.py
     python -m pytest tests -q -n 4
+
+The first writes every generated page (the reference, the user guide's lists and the testing page).
 
 `-n 4` spreads the tests over 4 processes at once. Each process needs up to about 2.5 GB of memory: on a
 computer with less than 16 GB, use `-n 2`.
@@ -82,7 +82,7 @@ as torch from the model's state; autograd gives the gradient.
   solid part). `FailureFactorMax` keeps the scale c that makes its value follow the highest failure
   factor (adaptive normalization).
 - Add it to `QUANTITIES` in `tests/gradients/test_ad_quantities.py`, which checks the gradient against
-  finite differences. What else to run: both generators above (the reference page and the user
+  finite differences. What else to run: `python docs/make_generated_docs.py` (the reference page and the user
   guide list every quantity).
 
 ## A penalty (a term added to the objective)
@@ -106,7 +106,7 @@ model's state; autograd gives the gradient.
 - `weight(state, it)`: its weight this iteration; 0 leaves it out of that iteration. Its schedule
   lives here: latent smoothing gives `z_smoothing_weight` until `z_smoothing_disable_after_iter`,
   then 0; the distance penalty's weight grows each iteration it is on. `state.s` holds the settings,
-  `state.iteration` the iteration, `it.Jn` the objective divided by its first value.
+  `state.iteration` the iteration, `it.Jn` the objective divided by the size of its first value.
 - `scale`: stated in every entry, `"raw"` (the weight multiplies the value) or `"first value"` (the
   value is divided by its value at the first iteration it is on). An entry without it is refused
   when the app starts.
@@ -146,7 +146,7 @@ The code line in the GUI picks it up by itself. For the selection form, add it t
 (the form never shows the code names).
 
 Add it to `tests/problem/test_selections.py`, including the round trip through `to_dict`. What else to run:
-both generators above (the user guide lists every selection type).
+`python docs/make_generated_docs.py` (the user guide lists every selection type).
 
 ## A kind of support or load
 
@@ -178,7 +178,7 @@ is an error there, as in the project's check.
 
 `test_every_kind_round_trips_through_a_project_script` in `tests/problem/test_project.py` adds every kind,
 writes it into a script and runs it; add a build test there for what the kind does. What else to
-run: both generators above (the reference page and the user guide list every kind).
+run: `python docs/make_generated_docs.py` (the reference page and the user guide list every kind).
 
 ## A setting
 
@@ -200,8 +200,8 @@ with the value as the project is built. A value the physics' own code reads is r
 settings (`m.settings.<key>`, as the p-norm exponent is), never put in a global of PyTO-AD's. The defaults, the Settings panel, the reference page and the
 settings a run gets are made from it. `test_settings_cover_run_topopt` in
 `tests/runs/test_run_project.py` fails when the loop reads a name that is not a setting;
-`tests/code_rules/test_extending.py` shows one entry reaching every place. What else to run: both generators
-above (the reference page and the user guide list every setting).
+`tests/code_rules/test_extending.py` shows one entry reaching every place. What else to run: `python docs/make_generated_docs.py`
+(the reference page and the user guide list every setting).
 
 ## A constraint method
 
@@ -210,7 +210,7 @@ subproblem as constraints (g <= 0). A method is one entry of `CONSTRAINT_METHODS
 `lsr_mmto/optimize/optimization_loop.py`, `{"run": run, "record": record}`:
 
 - `run(state, evaluate, zeta0, lower, upper)` returns `(zeta_optimal, record)`. `evaluate(zeta)` gives,
-  for a design, the objective (divided by its first value, with the penalties), the constraint values
+  for a design, the objective (divided by the size of its first value, with the penalties), the constraint values
   (met when <= 0) and the gradients of both with respect to the optimizer's variables, in the shapes
   (1, 1), (n, 1), (m, 1) and (m, n). `zeta0` is the start design, `lower` and `upper` the bounds of
   every variable. `run` calls `evaluate` as often as it needs and returns the best design it reached
@@ -258,7 +258,7 @@ density, mass, cost per mass) is an entry in `UNITS` and `UNIT_SYSTEMS` in
 
 A database column not in `ATTRIBUTES` is an error, so a new attribute is added before it is
 used. The check, the template and the database editor follow. Add a case to
-`tests/materials/test_databases.py`. What else to run: both generators above (the reference page lists the
+`tests/materials/test_databases.py`. What else to run: `python docs/make_generated_docs.py` (the reference page lists the
 units, the user guide the attributes).
 
 ## A physics
@@ -290,11 +290,12 @@ the final check). It names no physics, so you add nothing to it; it fails, namin
 `tiny_example`. `tests/code_rules/test_physics_folders.py` checks that every physics keeps the form's files and
 places. Each name means one thing: a kind of support or load, a quantity, a penalty or a material property (or
 an alias of one) that the core or another physics already has may be given again only exactly as that one is,
-and is then shared; a setting key, and a history key a penalty writes, belong to one place only; no result may
-be shown as Material, Density or Solid (`RESERVED_VIEWS`, the views every run has). Start-up refuses a physics
+and is then shared; a setting key belongs to one place only, and two penalties may not write the same history
+key (a penalty's key that a physics also records is not checked yet, so give a penalty's keys names of their
+own); no result may be shown as Material, Density or Solid (`RESERVED_VIEWS`, the views every run has). Start-up refuses a physics
 that breaks one of these, naming both places. A project names its physics with `"physics"` in its file (`p.physics` in code); an unknown name is an error before the run. The material
 attributes it reads that the core does not have (Density and Cost) are its own, in `NEW_PROPERTIES`
-(see "A material attribute"). What else to run: both generators above, since its settings,
+(see "A material attribute"). What else to run: `python docs/make_generated_docs.py`, since its settings,
 quantities, kinds and attributes join their lists.
 
 The entries in `OPTIONAL_ENTRIES` (`available_physics.py`) may be left out: no optional properties,
@@ -338,8 +339,11 @@ shape)`:
 | `where` | where its values live | `"element"` (the default) or `"node"` |
 | `shape` | one number, or x, y and z | `"scalar"` (the default) or `"vector"` |
 
-`final_summary` returns one array per entry: `(elements,)` or `(nodes,)`, with a last axis of 3 for a
-vector. The final check refuses one of another length or shape, with a message naming it. A run saves
+`final_summary` solves each final design by calling the physics' own `analyse` on
+`design_for_analyse(solver, settings, x, properties_of(z))` (`physics/available_physics.py`), so a setting
+`analyse` reads is read in that one place, and the final check solves as the iterations did
+(`tests/code_rules/test_physics_folders.py` checks it calls `analyse`). It returns one array per entry:
+`(elements,)` or `(nodes,)`, with a last axis of 3 for a vector. The final check refuses one of another length or shape, with a message naming it. A run saves
 each entry's where and shape, and a run saved before they existed loads as a number at each element.
 In Results, a value at each node is coloured smoothly over the faces, and a vector gets a picker
 (magnitude, x, y, z); a vector at each node that measures length can also draw the deformed shape.

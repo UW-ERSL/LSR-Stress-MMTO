@@ -766,6 +766,7 @@ def write_database(path: str, attributes: Sequence[str], units: Sequence[str | N
     path: the .xlsx file to write, absolute or relative to the folder Python runs in
     attributes: the columns, each an attribute of Material database attributes, e.g. ["Youngs_Modulus", "Density"]
     units: each column's unit, one per attribute, in the unit system of the project that will use it; None for a ratio
+      (a column with one unit only); None for any other column leaves its unit empty, which the database check reports
     names: the materials' names, one per row
     labels: the label each material is shown with, one per material; None shows its name
     colours: each material's colour, "#rrggbb", one per material
@@ -777,8 +778,9 @@ def write_database(path: str, attributes: Sequence[str], units: Sequence[str | N
     write_template(path, attributes, len(names))
     wb = load_workbook(path)
     main, disp = wb["Main"], wb[DISPLAY_SHEET]
-    for c, unit in enumerate(units, start=2):
-        main.cell(row=2, column=c, value=unit)
+    for c, (attribute, unit) in enumerate(zip(attributes, units), start=2):
+        only = ATTRIBUTES[attribute_name(attribute)].units
+        main.cell(row=2, column=c).value = only[0] if unit is None and len(only) == 1 else unit   # None empties it
     for r, (name, row) in enumerate(zip(names, values), start=3):
         main.cell(row=r, column=1, value=name)
         for c, v in enumerate(row, start=2):

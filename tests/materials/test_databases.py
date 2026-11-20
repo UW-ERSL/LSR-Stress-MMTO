@@ -522,3 +522,16 @@ def test_a_blank_unit_is_no_unit_for_the_network_too():
     enc.loadAutoencoderFromFile(os.path.splitext(path)[0] + ".nt")
     assert "nan" not in repr(encoding_errors(enc)) and "nan" not in repr(encoding_errors(enc, per_material=True))
 
+
+
+def test_a_missing_unit_is_reported_not_guessed():
+    """write_database with no unit (None) for a column that has a unit leaves its unit cell empty, so the database
+    check reports it, instead of the template's first unit (Pa for Young's modulus) standing in for it; a ratio
+    with no unit still gets its one unit, "-"."""
+    from lsr_mmto.materials.databases import check_database, database_units, write_database
+    with tempfile.TemporaryDirectory() as d:
+        path = write_database(os.path.join(d, "db.xlsx"), ["Youngs_Modulus", "Poissons_Ratio", "Density"],
+                              [None, None, "kg/m^3"], ["A"], [None], ["#4c72b0"], [[2e11, 0.3, 7800.0]])
+        assert database_units(path) == {"Youngs_Modulus": None, "Poissons_Ratio": "-", "Density": "kg/m^3"}
+        errors, _ = check_database(path)
+        assert any("no units for Youngs_Modulus" in e for e in errors), errors

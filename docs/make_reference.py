@@ -76,8 +76,10 @@ def generate():
     from lsr_mmto.materials.databases import ATTRIBUTES, UNIT_SYSTEMS
 
     out = ["# Reference", "",
-           "Everything a project setup script needs is on this page, the part made from shapes included.", "",
-           "Generated from the code by `python docs/make_reference.py`; do not edit by hand.", "",
+           "Everything a project setup script can set is on this page, the part made from shapes included. "
+           "Numbers fixed in the code are not settings, so they are not here; each run's record keeps those "
+           "that shaped its result (`fixed_in_code` in its run_config).", "",
+           "Generated from the code by `python docs/make_generated_docs.py`; do not edit by hand.", "",
            "A project is an LSR MMTO project file (.mmto): the layout of a PyTO-AD project file, with an "
            "`mmto` section, which holds the whole "
            "problem. Supports and loads picked on the part in the window become selections (`gui_support1`, "

@@ -13,7 +13,9 @@ Every physics folder keeps the shape of the form (lsr_mmto/physics/template/):
     the final check      final_summary reads its designs only with "for ... in designs" or by an index
                          (designs[-1]), so the run knows which design each solve is for and labels it
                          (optimize/final_design_analysis.py): never list(designs), sorted(designs), or designs
-                         handed to another function
+                         handed to another function; and it solves each by calling the physics' own analyse
+                         (on design_for_analyse), so no setting is read twice and the final check solves as
+                         the iterations did
 
 A test for each check shows it catches what it is for.
 
@@ -112,6 +114,18 @@ def designs_misread(source, name):
     return out
 
 
+def solves_without_analyse(source, name):
+    """[name] when source has a final_summary that never calls analyse (as analyse(...) or something.analyse(...)),
+    so it repeats the solve itself; [] otherwise."""
+    for fn in ast.walk(ast.parse(source)):
+        if isinstance(fn, ast.FunctionDef) and fn.name == "final_summary":
+            calls = [node.func for node in ast.walk(fn) if isinstance(node, ast.Call)]
+            if not any((isinstance(f, ast.Name) and f.id == "analyse") or
+                       (isinstance(f, ast.Attribute) and f.attr == "analyse") for f in calls):
+                return [name]
+    return []
+
+
 def test_every_physics_has_the_five_files():
     missing = [f"{d}/{d}_{job}.py" for d in FOLDERS for job in JOBS
                if not os.path.isfile(os.path.join(PHYSICS_DIR, d, f"{d}_{job}.py"))]
@@ -147,6 +161,14 @@ def test_the_final_check_reads_its_designs_one_by_one():
     assert not wrong, "final_summary reads designs other than one by one:\n" + "\n".join(wrong)
 
 
+def test_the_final_check_solves_with_the_physics_own_analyse():
+    """final_summary solves each design with the physics' own analyse, never a solve of its own."""
+    wrong = [w for d in FOLDERS if d != "template" for w in solves_without_analyse(
+        open(os.path.join(PHYSICS_DIR, d, f"{d}_results.py"), encoding="utf-8").read(), f"{d}_results.py")]
+    assert not wrong, ("final_summary solves without calling the physics' analyse (build each design with "
+                       "design_for_analyse and call analyse on it):\n" + "\n".join(wrong))
+
+
 def test_the_checks_catch_what_they_are_for():
     assert unmarked("def f():\n    pass\n", "a.py") == ["a.py:1 f"]
     assert unmarked("# HELPER: of g\n@staticmethod\ndef f():\n    pass\n", "a.py") == []
@@ -168,6 +190,9 @@ def test_the_checks_catch_what_they_are_for():
     assert designs_misread("def final_summary(cases):\n    return sorted(cases)\n", "r.py") == ["r.py:2"]
     assert designs_misread("def final_summary(d):\n    for i in range(3):\n        d[i]\n    d[1:]\n", "r.py") \
         == ["r.py:4"]
+    assert solves_without_analyse("def final_summary(designs):\n    analyse(d)\n", "r.py") == []
+    assert solves_without_analyse("def final_summary(designs):\n    physics.analyse(d)\n", "r.py") == []
+    assert solves_without_analyse("def final_summary(designs):\n    solver.solve(x)\n", "r.py") == ["r.py"]
 
 
 if __name__ == "__main__":
@@ -176,5 +201,6 @@ if __name__ == "__main__":
     test_every_function_of_a_physics_is_marked()
     test_outside_a_physics_only_its_front_page_is_imported()
     test_the_final_check_reads_its_designs_one_by_one()
+    test_the_final_check_solves_with_the_physics_own_analyse()
     test_the_checks_catch_what_they_are_for()
     print("ok")

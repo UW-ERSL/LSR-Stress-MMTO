@@ -3,14 +3,13 @@ compare.py
 ==========
 Saved runs side by side (the app's Compare): runs is a dict of name to Run (records.load).
 
-settings(runs)             the run arguments side by side; differences are marked
 table(runs)                final values and run times side by side
 histories(runs, out=None)  objective, constraints and grayness over the iterations
 designs(runs, out=None)    the optimized designs side by side, coloured by material
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -18,38 +17,7 @@ if TYPE_CHECKING:
     from matplotlib.figure import Figure
 
     from lsr_mmto.results.load_results import Run
-    from lsr_mmto.results.tables import Table, Tables
-
-# arguments that say where a run was written or how it printed, not what it solved
-_IGNORE = {"save_dir", "plot_progress", "verbose", "plotter", "timeLimit", "saveNet"}
-_SWITCHED = {"use_z_smoothing", "use_penalization"}   # changed by the schedule during a run
-
-
-def _arguments(run: Run) -> dict[str, Any]:
-    """The run's arguments as its manifest resolved them; {} when it has none."""
-    return dict((run.config or {}).get("arguments_resolved") or {})
-
-
-def settings(runs: dict[str, Run]) -> Table:
-    """Run arguments, one column per run; a row is marked where they differ."""
-    from .tables import Table
-    names = list(runs)
-    args = {k: _arguments(r) for k, r in runs.items()}
-    keys = sorted(set().union(*[a.keys() for a in args.values()]) - _IGNORE - _SWITCHED)
-    rows, differ = [], []
-    for k in keys:
-        vals = [str(args[n].get(k, "")) for n in names]
-        same = len(set(vals)) == 1
-        rows.append([k] + vals + ["" if same else "differs"])
-        if not same:
-            differ.append(k)
-    note = ("identical settings" if not differ
-            else "settings differ: " + ", ".join(differ))
-    note += (". use_z_smoothing and use_penalization are left out: the run record stores "
-             "them after the run, when the schedule may have switched them off.")
-    return Table(rows, headers=["argument"] + names + [""],
-                 title="Run settings", note=note,
-                 highlight=lambda row: row[-1] == "differs", symbol_cols=())
+    from lsr_mmto.results.tables import Tables
 
 
 def _runtime(run: Run) -> float:

@@ -22,6 +22,7 @@ import scipy.sparse.linalg
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, "tests", "physics"))
 
 from lsr_mmto.optimize import optimization_loop as M  # noqa: E402
 from lsr_mmto.optimize import run_setup  # noqa: E402
@@ -30,6 +31,7 @@ from lsr_mmto.optimize import save_results as run_save  # noqa: E402
 from lsr_mmto.physics.available_physics import MODULES  # noqa: E402
 from lsr_mmto.problem.project import Project, _run_arguments  # noqa: E402
 from lsr_mmto.problem.settings import DEFAULT_SETTINGS, RUN_KEYS, SETTINGS  # noqa: E402
+from settings_for_a_test import default_run_settings  # noqa: E402
 
 UBRACKET = os.path.join(ROOT, "projects", "U-bracket.mmto")
 N_DOF, ITERS, SMOOTHING_OFF = 3000, 4, 2
@@ -154,6 +156,21 @@ def test_simp_continuation_raises_each_penalty_of_every_physics():
     assert not [k for k in fixed if k.startswith("simp_") and k != "simp_structural_penalty_at_end"], fixed
 
 
+def test_a_negative_objective_keeps_its_sign():
+    """The objective is divided by the size of its first value, so one that starts negative (minus an energy, to
+    make the energy as large as it can be) is still minimized: its scaled value starts at -1, not +1, and its
+    gradient keeps its direction."""
+    from types import SimpleNamespace
+    import torch
+    state = SimpleNamespace(model=SimpleNamespace(grad_phys=lambda t: np.array([float(t.detach())])),
+                            objective_scale=None)
+    for J, scaled in ((-4.0, -1.0), (-2.0, -0.5)):
+        it = SimpleNamespace(J_t=torch.tensor(J, dtype=torch.float64), cons_t=[])
+        M.objective_and_constraints(state, it)
+        assert (it.J_phys, it.Jn, it.obj, float(it.grad_obj[0])) == (J, scaled, scaled, J / 4.0)
+    assert state.objective_scale == 4.0
+
+
 def test_the_pnorm_exponent_is_the_runs_own():
     """The p-norm exponent is the run's setting: the stress quantities read it from the run's settings, and
     building a project never writes it into PyTO-AD's global, so two projects in one program keep their own."""
@@ -166,7 +183,7 @@ def test_the_pnorm_exponent_is_the_runs_own():
     assert topopt_material_model._PNORM_EXPONENT == before
     svm = torch.tensor([1.0, 2.0, 3.0], dtype=torch.float64)
     for p in (6.0, 16.0):
-        m = SimpleNamespace(svm=svm, N=3, settings=SimpleNamespace(pnorm_exponent=p),
+        m = SimpleNamespace(svm=svm, N=3, settings=default_run_settings(pnorm_exponent=p),
                             props={"Yield_Strength": torch.ones(3, dtype=torch.float64)})
         assert abs(float(find_quantity("StressPNorm").fn(m, None)) - float(torch.sum(svm ** p) ** (1 / p))) < 1e-12
         assert abs(float(find_quantity("FailureFactorPNorm").fn(m, None))

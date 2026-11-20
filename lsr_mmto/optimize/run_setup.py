@@ -389,7 +389,7 @@ def setup(*, s: "RunSettings", project: "Project", save_dir: str, verbose: bool,
         iteration=0,                        # designs evaluated so far
         beta=float(beta_schedule.start),
         simp_penalties=simp_penalties,      # raised by SIMP continuation
-        objective_scale=None,               # the first objective; later ones are divided by it
+        objective_scale=None,               # the first objective's size; later ones are divided by it
         penalties=penalties,                # the penalties of the run's physics, in the order they are added
         penalty_scales={},                  # the first value of each penalty scaled by it, by name
         gamma=float(s.gamma_init),          # the distance penalty's weight

@@ -136,7 +136,8 @@ def analyse_design(state: RunState, it: Iteration) -> None:
 
 def objective_and_constraints(state: RunState, it: Iteration) -> None:
     """The objective and the constraints with their gradients with respect to (x_phys, z) by autograd;
-    the objective divided by its first value.
+    the objective divided by the size of its first value (never below 1e-12, as a penalty's scale), so a
+    negative objective keeps its sign and is still minimized.
 
     Reads it.J_t, it.cons_t, state.objective_scale. Sets it.J_phys (the objective), it.Jn and it.obj (both
     the scaled objective), it.grad_obj (n,) scaled the same, it.cons (m, 1), it.grad_cons (m, n);
@@ -149,7 +150,7 @@ def objective_and_constraints(state: RunState, it: Iteration) -> None:
 
     it.J_phys = float(it.obj)
     if state.objective_scale is None:
-        state.objective_scale = it.J_phys
+        state.objective_scale = max(abs(it.J_phys), 1e-12)
     it.Jn = it.J_phys / float(state.objective_scale)
     it.grad_obj = it.grad_obj / float(state.objective_scale)
     it.obj = it.Jn

@@ -19,6 +19,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 sys.path.insert(0, ROOT)
 
 from lsr_mmto.physics.thermoelastic import thermoelastic_module as THERMOELASTIC  # noqa: E402
+from settings_for_a_test import default_run_settings  # noqa: E402
 
 BAR = os.path.join(ROOT, "data", "models", "RectangularBeam")
 
@@ -74,8 +75,9 @@ def _solved(p, E, nu, alpha, conductivity, T_ref):
     m = SimpleNamespace(fe=fe, x_phys=each(1.0),
                         props={"Youngs_Modulus": each(E), "Conductivity": each(conductivity),
                                "Thermal_Expansion": each(alpha)},
-                        settings=SimpleNamespace(reference_temperature=T_ref, te_use_constant_poissons_ratio=False,
-                                                 te_constant_poissons_ratio=nu))
+                        settings=default_run_settings(reference_temperature=T_ref,
+                                                      te_use_constant_poissons_ratio=False,
+                                                      te_constant_poissons_ratio=nu))
     THERMOELASTIC.analyse(m)
     return mesh, m
 
@@ -122,8 +124,7 @@ def test_no_heating_gives_the_structural_compliance():
     s = SimpleNamespace(fe=STRUCTURAL.make_solver(mesh, mat_prop, {"u": bcs["u"]}, linear_solvers.Solvers.PARDISO,
                                                   None, None),
                         x_phys=m.x_phys, props={"Youngs_Modulus": torch.full((n,), E, dtype=torch.float64)},
-                        settings=SimpleNamespace(use_constant_poissons_ratio=True, constant_poissons_ratio=nu,
-                                                 pnorm_exponent=6.0, stress_relaxation_exponent=0.5))
+                        settings=default_run_settings(use_constant_poissons_ratio=True, constant_poissons_ratio=nu))
     STRUCTURAL.analyse(s)
     f_th = m.f_th.detach().numpy()
     f = s.fe.total_force.detach().numpy()
@@ -235,8 +236,9 @@ def test_a_large_problem_uses_dpcg_and_gives_the_direct_answer():
         m = SimpleNamespace(fe=fe, x_phys=each(1.0),
                             props={"Youngs_Modulus": each(E), "Conductivity": each(3.0),
                                    "Thermal_Expansion": each(1e-5)},
-                            settings=SimpleNamespace(reference_temperature=T_ref, te_use_constant_poissons_ratio=True,
-                                                     te_constant_poissons_ratio=nu))
+                            settings=default_run_settings(reference_temperature=T_ref,
+                                                          te_use_constant_poissons_ratio=True,
+                                                          te_constant_poissons_ratio=nu))
         THERMOELASTIC.analyse(m)
         answers[name] = (m.T.detach().numpy(), m.u.detach().numpy())
     for what, direct, iterative in zip(("temperature", "displacement"), answers["PARDISO"], answers["DPCG"]):

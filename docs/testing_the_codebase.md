@@ -1,6 +1,6 @@
 # Testing the codebase
 
-Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 397 in all. Generated from the tests' own docstrings by `python docs/make_testing_doc.py`; do not edit it by hand.
+Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 400 in all. Generated from the tests' own docstrings by `python docs/make_generated_docs.py`; do not edit it by hand.
 
 Run them all from the repository folder with `python -m pytest tests -q -n 4` (`-n 2` on a computer with less than 16 GB of memory), one folder with `python -m pytest tests/<folder> -q`, or one file with `python -m pytest tests/<folder>/<file> -q`.
 
@@ -55,6 +55,10 @@ The thermoelastic physics (lsr_mmto/physics/thermoelastic/) gives the right answ
 ### `tests/physics/core_lists_for_a_test.py` (a script, not collected by pytest)
 
 The core's lists changed for one test, and put back after it: registered(module) adds a physics as its line in available_physics.MODULES would, making every list with the functions start-up makes them with (remake_lists), so whatever start-up would refuse is refused here too; added(entries, ...) adds entries to one list. Not a test file: a physics' own test file imports what it needs from here, and copying a test file never copies these.
+
+### `tests/physics/settings_for_a_test.py` (a script, not collected by pytest)
+
+A run's settings for a test that builds its own model: default_run_settings(**changes) gives every setting at its default, as a new project has it, with the test's changes on top. A test that wrote out only the settings it needs would break whenever a setting is added that the code it calls reads; one made here cannot. Not a test file: a test file imports it from here.
 
 ## gradients
 
@@ -224,6 +228,7 @@ Material databases: the attribute registry, the check of a database file, the la
 - `test_unit_kinds_of_a_physics`: A physics' own kinds of quantity (UNIT_KINDS on its front page) are in the unit tables; a kind given differently by two physics (other units, or the same units but another unit in a unit system), or a unit system's unit that is not one of the kind's units, is refused.
 - `test_columns_found_by_what_they_measure`: The mass of a design is made from the column that measures density, and the per-iteration materials line prints the columns whose attribute has a label there, in their order, whatever the columns are named.
 - `test_a_blank_unit_is_no_unit_for_the_network_too`: A blank unit cell (BM1_3Mats_2Attr's Poisson's ratio, a ratio) is no unit, None, for the material network as for the database's own reader, so the network's error table shows nothing there, not "nan".
+- `test_a_missing_unit_is_reported_not_guessed`: write_database with no unit (None) for a column that has a unit leaves its unit cell empty, so the database check reports it, instead of the template's first unit (Pa for Young's modulus) standing in for it; a ratio with no unit still gets its one unit, "-".
 
 ### `tests/materials/test_network_stamp.py`
 
@@ -300,6 +305,7 @@ Running a Project: its settings cover every setting of _run_topopt; the run reco
 - `test_settings_cover_run_topopt`: The run reads each setting as s.<name>: every name it reads (anywhere in its setup, the steps of an iteration, the optimizer, the schedules; and in the penalties' weights) is a setting of SETTINGS, the run gets every one, and _run_topopt has no setting of its own (no default that could differ from SETTINGS).
 - `test_progress_and_stop`: progress() hears every iteration; should_stop() ends the run there, and the design reached so far is still post-processed (the GUI's Run and Stop).
 - `test_simp_continuation_raises_each_penalty_of_every_physics`: Each SIMP exponent a physics declares (SIMP_PENALTIES) starts at its start, or at its start with continuation when SIMP continuation is on, and each step of continuation raises it by 0.25 up to its largest; nothing in the core names a physics. A U-bracket run with continuation on for 11 iterations raises the stiffness's once, 1.5 to 1.75, where the structural solve reads it as well as in its record, and records no exponent structural does not use.
+- `test_a_negative_objective_keeps_its_sign`: The objective is divided by the size of its first value, so one that starts negative (minus an energy, to make the energy as large as it can be) is still minimized: its scaled value starts at -1, not +1, and its gradient keeps its direction.
 - `test_the_pnorm_exponent_is_the_runs_own`: The p-norm exponent is the run's setting: the stress quantities read it from the run's settings, and building a project never writes it into PyTO-AD's global, so two projects in one program keep their own.
 - `test_step_limit_and_stress_relaxation_exponent_reach_the_run`: The Step limit setting is the move limit MMA gets, and the Stress relaxation exponent q is the one the stresses use: at the start design, with the same displacements, each element's relaxed stress for q = 3.5 is its stress for q = 0.5 times its density cubed.
 - `test_optimizer_failure_names_the_constraint_over_its_limit`: When the optimizer fails while a constraint is far over its limit (a limit that cannot be met from the starting design), the error says which constraint, by how much, and keeps the optimizer's own message.
@@ -674,4 +680,5 @@ Every physics folder keeps the shape of the form (lsr_mmto/physics/template/):
 - `test_every_function_of_a_physics_is_marked`: Every function of a physics is marked.
 - `test_outside_a_physics_only_its_front_page_is_imported`: Outside a physics only its front page is imported.
 - `test_the_final_check_reads_its_designs_one_by_one`: The final check reads its designs one by one.
+- `test_the_final_check_solves_with_the_physics_own_analyse`: final_summary solves each design with the physics' own analyse, never a solve of its own.
 - `test_the_checks_catch_what_they_are_for`: The checks catch what they are for.

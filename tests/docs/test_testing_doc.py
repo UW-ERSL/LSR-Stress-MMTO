@@ -4,7 +4,7 @@ test_testing_doc.py
 docs/testing_the_codebase.md must be what the tests generate: after adding, removing or renaming a test,
 changing a test's docstring, or moving a test file, run
 
-    python docs/make_testing_doc.py
+    python docs/make_generated_docs.py
 
 and commit the page with the change. A folder of tests must have its line in FOLDERS
 (docs/make_testing_doc.py), and no test file may sit outside the folders.
@@ -27,7 +27,7 @@ def test_testing_page_is_current():
     with open(testing_doc.PAGE, encoding="utf-8") as fh:
         page = fh.read()
     assert page == testing_doc.generate(), \
-        "docs/testing_the_codebase.md is out of date: run python docs/make_testing_doc.py"
+        "docs/testing_the_codebase.md is out of date: run python docs/make_generated_docs.py"
 
 
 def test_a_folder_without_its_line_or_a_loose_test_file_stops_the_page(monkeypatch):

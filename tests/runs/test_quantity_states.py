@@ -20,9 +20,11 @@ import torch
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, "tests", "physics"))
 
 from lsr_mmto.formulation.quantities import find_quantity  # noqa: E402
 from lsr_mmto.formulation.quantity_states import run_state  # noqa: E402
+from settings_for_a_test import default_run_settings  # noqa: E402
 
 BAR = os.path.join(ROOT, "data", "models", "RectangularBeam")
 P, DAMPING = 6.0, 0.5
@@ -33,7 +35,7 @@ def _design(svm, in_a_run=True):
     run's states (empty), else none."""
     svm = torch.as_tensor(svm, dtype=torch.float64)
     m = SimpleNamespace(svm=svm, props={"Yield_Strength": torch.full_like(svm, 2.0)}, N=svm.shape[0],
-                        settings=SimpleNamespace(pnorm_exponent=P, stress_scale_damping=DAMPING))
+                        settings=default_run_settings(pnorm_exponent=P, stress_scale_damping=DAMPING))
     if in_a_run:
         m.quantity_states = {}
     return m

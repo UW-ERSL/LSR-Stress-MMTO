@@ -15,6 +15,7 @@ A front page is duck typed: any module that has every name of MODULE_ENTRIES bel
 presence (_checked) when PHYSICS is made, not for signatures. The entries in OPTIONAL_ENTRIES may be left
 out: _checked then gives the module the "none" value listed there.
 """
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Callable
 
 from lsr_mmto.physics.structural import structural_module
@@ -22,6 +23,8 @@ from lsr_mmto.physics.thermal import thermal_module
 from lsr_mmto.physics.thermoelastic import thermoelastic_module
 if TYPE_CHECKING:
     from types import ModuleType
+
+    import torch
 
     from lsr_mmto.formulation.quantities import Quantity
     from lsr_mmto.materials.databases import Attribute
@@ -46,8 +49,9 @@ MODULE_ENTRIES = {
     "make_solver": "make_solver(mesh, mat_prop, bcs, linear_solver, dsolver, elem_body_force): its finite "
                    "element solver; bcs holds one boundary condition per field. The core also reads its .bc "
                    "(.bc.num_dofs), .mesh and .plot_mesh; a physics of several fields gives one field's",
-    "analyse": "analyse(model): one iteration's solve inside the torch tree, from model.x_phys and model.props, "
-               "leaving on the model what its quantities read",
+    "analyse": "analyse(model): one iteration's solve inside the torch tree, reading only model.fe (its solver), "
+               "model.settings, model.x_phys and model.props, and leaving on the model what its quantities "
+               "read; final_summary runs it again on each final design (design_for_analyse)",
     "SUPPORT_AND_LOAD_KINDS": "its kinds of support and load, {name: the arguments of a BCKind}, each naming "
                               "the field it acts on",
     "NEEDS": "what every project of it must have, as roles of its kinds: ('support', 'load') when a problem "
@@ -188,6 +192,18 @@ def joined(what: str, core: dict[str, Any], modules: "list[ModuleType]",
             if where[name] != "the core" and m.NAME not in tags:
                 tags.append(m.NAME)
     return out
+
+
+def design_for_analyse(solver: Any, settings: Any, x: Any, props: "dict[str, torch.Tensor]") -> SimpleNamespace:
+    """One design as a physics' analyse reads it (MODULE_ENTRIES "analyse"): fe the solver, settings the run's,
+    x_phys the densities x as a float64 tensor, props each element's properties. A physics' final_summary calls
+    analyse on it, so the final check solves exactly as the run's iterations did and reads each setting in one
+    place; analyse leaves its results on it (structural's u and svm, thermal's T)."""
+    import numpy as np
+    import torch
+    x_phys = x.to(torch.float64) if torch.is_tensor(x) else torch.as_tensor(np.asarray(x, dtype=float),
+                                                                               dtype=torch.float64)
+    return SimpleNamespace(fe=solver, settings=settings, x_phys=x_phys, props=props)
 
 
 def undefined_properties(modules: "list[ModuleType]", quantities: "list[Quantity]",

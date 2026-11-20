@@ -42,7 +42,7 @@ def test_every_entry_is_described():
 def test_guide_lists_are_current():
     with open(U.GUIDE, encoding="utf-8") as fh:
         text = fh.read()
-    assert text == U.guide_text(), "run python -m gui.user_guide_window --write"
+    assert text == U.guide_text(), "run python docs/make_generated_docs.py"
     for name in U.LISTS:
         assert f"<!-- list: {name} -->" in text, name
 

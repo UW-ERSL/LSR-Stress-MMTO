@@ -11,8 +11,6 @@ from typing import TYPE_CHECKING, Callable
 
 import numpy as np
 import torch
-from lsr_mmto.pyto_ad_imports import topopt_material_model as ad_mm
-from lsr_mmto.physics.thermoelastic.thermoelastic_physics import elastic_constants, thermal_force
 if TYPE_CHECKING:
     from lsr_mmto.materials.material_source import MaterialSource
     from lsr_mmto.problem.settings import RunSettings
@@ -75,18 +73,17 @@ def final_summary(designs: "list[tuple[str, np.ndarray, np.ndarray | torch.Tenso
     with a warning when its largest thermal strain is above _STRAIN_WARNING. properties_of(z) gives the decoded
     properties of latent points z. Returns the results a run saves (RESULT_FIELDS), of the last design: the
     temperature at each node, and the displacement (x, y, z) at each node."""
+    from lsr_mmto.physics.available_physics import design_for_analyse
+    from lsr_mmto.physics.thermoelastic.thermoelastic_physics import analyse
+
     T_ref = float(settings.reference_temperature)
     for label, x, z in designs:
         with torch.no_grad():
-            x = torch.as_tensor(np.asarray(x), dtype=torch.float64)
             z = z if torch.is_tensor(z) else torch.as_tensor(np.asarray(z), dtype=torch.get_default_dtype())
             props = properties_of(z)
-            solver.thermal.set_conductivity(props["Conductivity"])
-            T = solver.thermal.solve(x, ad_mm.MaterialModel.SIMP).detach()
-            E, nu = elastic_constants(props, settings)
-            f_th = thermal_force(solver, T, x, E, nu, props["Thermal_Expansion"], T_ref)
-            solver.set_material_fields(E, nu)
-            u = solver.solve(x, ad_mm.MaterialModel.SIMP, extra_force=f_th).detach()
+            design = design_for_analyse(solver, settings, x, props)
+            analyse(design)                                         # the run's solves, temperature first
+            T, f_th, u = design.T.detach(), design.f_th.detach(), design.u.detach()
             compliance = float(torch.dot(solver.total_force, u))
             share = float(torch.dot(f_th, u)) / compliance if compliance != 0.0 else float("nan")
             dT = (T[solver.thermal.edof] - T_ref).abs().amax(dim=1)

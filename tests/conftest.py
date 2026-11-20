@@ -10,7 +10,8 @@ message panel's height) go to a folder of the test run's own. And no solve is le
 PyTO-AD falls back to for a system that no deflation space fits, fails the test that reaches it (every iterative
 solve is DPCG on a checked solver, optimize/iterative_solve_check.py). And each physics' tiny example runs at
 most once per test session (once per worker with -n), for every test that only needs a run of that physics to
-look at (tiny_run).
+look at (tiny_run). And the scratch folders a test run makes in the repository folder (_test_*) are removed by the
+process that made them after its last test, with any an earlier run left a day ago or more (pytest_sessionfinish).
 """
 import importlib
 import os
@@ -147,3 +148,83 @@ def tiny_run(tmp_path_factory):
             runs[physics] = project, load_results.load(os.path.join(folder, "run", "run_data.npz"))
         return runs[physics]
     return made
+
+
+# the scratch folders this process makes in the repository folder (tempfile.mkdtemp with a "_test_" prefix and
+# dir=ROOT, as the GUI tests do), so this process removes exactly its own at the end and never another's
+_made_here = []
+_mkdtemp = tempfile.mkdtemp
+
+
+def _recording_mkdtemp(*args, **kwargs):
+    folder = _mkdtemp(*args, **kwargs)
+    if os.path.basename(folder).startswith("_test_") and \
+            os.path.dirname(os.path.abspath(folder)) == os.path.abspath(ROOT):
+        _made_here.append(folder)
+    return folder
+
+
+tempfile.mkdtemp = _recording_mkdtemp
+
+
+def _removed(folders, tries=1):
+    """folders removed, tried up to tries times half a second apart (a folder a process that has just ended held
+    open frees once Windows lets go of it); returns those still there. Touches no window: closing one runs the
+    app's own close (Save?) on a window a test may have half taken apart."""
+    import gc
+    import shutil
+    import time
+    left = [d for d in folders if os.path.exists(d)]
+    for attempt in range(tries):
+        if not left:
+            break
+        if attempt:
+            time.sleep(0.5)
+        gc.collect()
+        for d in left:
+            shutil.rmtree(d, ignore_errors=True)
+        left = [d for d in left if os.path.exists(d)]
+    return left
+
+
+_left_by_workers = []
+
+
+def pytest_testnodedown(node, error):
+    """On the main process, as each worker of -n ends: the scratch folders it could not remove, kept to remove
+    once it has ended and let go of them."""
+    _left_by_workers.extend(getattr(node, "workeroutput", {}).get("scratch_left", []))
+
+
+def _last_change(folder):
+    """When anything in folder last changed (seconds since the epoch)."""
+    times = [os.path.getmtime(folder)]
+    for here, _, files in os.walk(folder):
+        times += [os.path.getmtime(os.path.join(here, f)) for f in files]
+    return max(times)
+
+
+def pytest_sessionfinish(session):
+    """After this process's last test: the scratch folders it made in the repository folder (_test_*) that are still
+    there, removed. A test removes its own as it ends, but on Windows a file still held open stops that and the
+    folder is left behind. Only folders this test run made are removed, so a second test run in the same folder
+    keeps its own. A worker of -n hands the ones it cannot remove to the main process, which removes them once that
+    worker has ended, removes folders an earlier run left (untouched for a day), and names any it still cannot
+    remove at the end of the run."""
+    import glob
+    import time
+    left = _removed(_made_here)
+    if hasattr(session.config, "workerinput"):
+        session.config.workeroutput["scratch_left"] = left
+        return
+    still = _removed(left + _left_by_workers, tries=10)
+    for d in glob.glob(os.path.join(ROOT, "_test_*")):
+        try:
+            if time.time() - _last_change(d) > 24 * 3600:
+                _removed([d])
+        except OSError:
+            pass
+    reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+    if still and reporter is not None:
+        names = ", ".join(sorted(os.path.basename(d) for d in still))
+        reporter.write_line(f"Scratch folders that could not be removed (delete them by hand): {names}", yellow=True)

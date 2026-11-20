@@ -58,7 +58,7 @@ def latent_smoothing(xb: torch.Tensor, z: torch.Tensor, Hm: "SparseOperator", Hs
 #                physics' analyse left, m.settings); m.x_phys.detach() keeps the density out of its gradient
 #   weight(state, it)  its weight this iteration, 0 when it is off; its schedule lives here. state is the
 #                run's state (state.s its settings, state.iteration the designs evaluated so far), it the
-#                iteration's numbers so far (it.Jn, the objective divided by its first value)
+#                iteration's numbers so far (it.Jn, the objective divided by the size of its first value)
 #   scale        what its value is divided by, stated in every entry: "raw" (nothing) or "first value" (its
 #                value at the first iteration it is on, at least 1e-12)
 #   key          the history key of what it adds to the objective each iteration (0 while it is off)

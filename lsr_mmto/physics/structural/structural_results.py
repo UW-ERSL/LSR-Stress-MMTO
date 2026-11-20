@@ -12,13 +12,11 @@ import numpy as np
 import torch
 
 import lsr_mmto.pyto_ad_imports  # noqa: F401  puts PyTO-AD on sys.path
-from lsr_mmto.pyto_ad_imports import topopt_material_model as ad_mm
 from lsr_mmto.optimize.history import _property_to_numpy, compute_mass_from_x_and_z
 
 if TYPE_CHECKING:
     import pyvista
 
-    from pyto.autodiff.material_model import MaterialModel
     from pyto.core.bc import BC
     from pyto.core.hex_mesher import HexMesher
     from lsr_mmto.materials.material_source import MaterialSource
@@ -314,26 +312,18 @@ def eval_stress_compliance_metrics(
     latentDim: int,
     matEncoder: "MaterialSource",
     fe_solver_structural: "MultiMaterialHexFEA",
-    MaterialModel: "type[MaterialModel]",
     elem_volume: float,
     design_domain_volume: float,
-    decode: "Callable[[torch.Tensor], tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]]",
+    material_properties: dict[str, torch.Tensor],
 ) -> dict[str, float | None]:
-    """The design's compliance, stresses and mass, printed under label. decode(z) gives the
-    per-element (E, nu, properties) the optimization used for latent points z. x_vec (N,); z_vec latent-major
-    (latentDim * N). Solves on the solver (its state is left at this design) and returns the printed numbers;
-    final_mass, mass_ratio and max_failure_factor are None when the database has no column for them."""
+    """The design's compliance, stresses and mass, printed under label, from the solver's last solve, which is
+    of this design (final_summary runs analyse on it first); material_properties are its elements' properties.
+    x_vec (N,); z_vec latent-major (latentDim * N). Returns the printed numbers; final_mass, mass_ratio and
+    max_failure_factor are None when the database has no column for them."""
     x_vec = np.asarray(x_vec, dtype=float).flatten()
     z_vec = np.asarray(z_vec, dtype=float).flatten()
 
-    zPts = torch.tensor(np.asarray(z_vec, dtype=float).reshape(latentDim, len(x_vec)).T, dtype=torch.get_default_dtype())
-
-    # E and nu exactly as the optimization had them: the same decode, the same constant-nu setting
-    with torch.no_grad():
-        E, nu, material_properties = decode(zPts)
-    fe_solver_structural.set_material_fields(E.detach(), nu.detach())
-
-    sol_local = fe_solver_structural.solve(x_vec, MaterialModel.SIMP)
+    sol_local = fe_solver_structural.sol
     fe_solver_structural.mesh.setPseudoDensity(torch.as_tensor(x_vec))   # PyTO-AD's mesh takes torch
     fe_solver_structural.postprocess()
 
@@ -426,24 +416,18 @@ def final_summary(designs: "list[tuple[str, np.ndarray, np.ndarray | torch.Tenso
     stress violations of the last one. properties_of(z) gives the decoded properties of latent points z.
     Returns the results a run saves (RESULT_FIELDS), of the last design: von Mises at each element, and the
     displacement (x, y, z) at each node, the solver's last solution."""
-    from lsr_mmto.physics.structural.structural_physics import elastic_constants
-
-    def decode(z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
-        props = properties_of(z)
-        E, nu = elastic_constants(props, settings)
-        return E, nu, props
-
-    solver.pnorm_exponent = float(settings.pnorm_exponent)       # the run's, for each design's pNormStress
-    solver.stress_relaxation = float(settings.stress_relaxation_exponent)   # and its relaxed stress
+    from lsr_mmto.physics.available_physics import design_for_analyse
+    from lsr_mmto.physics.structural.structural_physics import analyse
 
     for label, x, z in designs:
+        with torch.no_grad():
+            props = properties_of(z if torch.is_tensor(z) else torch.as_tensor(np.asarray(z),
+                                                                              dtype=torch.get_default_dtype()))
+            analyse(design_for_analyse(solver, settings, x, props))     # the run's solve, settings included
         eval_stress_compliance_metrics(
             x_vec=x, z_vec=np.asarray(z).T.reshape(-1), label=label, active_thresh=0.5, latentDim=latent_dim,
-            matEncoder=encoder, fe_solver_structural=solver, MaterialModel=ad_mm.MaterialModel,
-            elem_volume=elem_volume, design_domain_volume=design_domain_volume, decode=decode)
-    _, x, z = designs[-1]
-    with torch.no_grad():
-        props = properties_of(z if torch.is_tensor(z) else torch.as_tensor(np.asarray(z), dtype=torch.get_default_dtype()))
+            matEncoder=encoder, fe_solver_structural=solver, elem_volume=elem_volume,
+            design_domain_volume=design_domain_volume, material_properties=props)
     final_stress_diag = compute_stress_violation_diagnostics(
         vm=solver.vonMisesStress, material_properties=props, x_vec=x, active_thresh=0.5,
         mesh=solver.mesh, bc=solver.bc, violation_tol=0.0)
