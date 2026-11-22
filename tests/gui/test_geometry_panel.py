@@ -60,10 +60,14 @@ def test_steps_made_in_the_strip_are_the_scripts_and_wait_for_update_part():
     is said in red and the last part kept; closing builds; the file saves the steps."""
     w = G.MMTOWindow()
     with scratch() as d:
+        assert w.open_project(os.path.join(ROOT, "projects", "beam.mmto"))   # its view: another size, elsewhere
         assert w.new_project(folder=os.path.join(d, "plate"))
         g = w.geometry_panel
         g.side.buttons["shapes"].click()
         g.add_step("box")
+        b = w.plotter.actors["step_shape"].GetBounds()                     # x min, x max, y min, ...
+        centre = [(b[0] + b[1]) / 2, (b[2] + b[3]) / 2, (b[4] + b[5]) / 2]
+        assert all(abs(f - c) < 1e-9 for f, c in zip(w.plotter.camera.focal_point, centre))   # fitted to it
         editor = g.editor_area.widget()
         typed(editor.shape_editor.fields, "x", "100")
         typed(editor.shape_editor.fields, "y", "40")

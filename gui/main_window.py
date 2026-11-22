@@ -2371,13 +2371,19 @@ class MMTOWindow(MainWindow):
         self._refresh_title()
 
     def show_step_shape(self, surface):
-        """One step's shape drawn see-through over the part (the step chosen in Geometry); None takes it away."""
+        """One step's shape drawn see-through over the part (the step chosen in Geometry); None takes it away.
+        With no part drawn yet the view is fitted to the shape, since the camera may still be the last
+        project's; with a part, the view stays and only the depth range the view draws takes the shape in."""
         import pyvista as pv
         self.plotter.remove_actor("step_shape", reset_camera=False)
         if surface is not None:
             faces = np.hstack([np.full((len(surface.faces), 1), 3), surface.faces]).ravel()
             self.plotter.add_mesh(pv.PolyData(np.asarray(surface.vertices), faces), name="step_shape",
                                   color="#2f5fe0", opacity=0.35, pickable=False, reset_camera=False)
+            if self.part_actor() is None:
+                self.plotter.reset_camera()
+            else:
+                self.plotter.renderer.ResetCameraClippingRange()
         self.plotter.render()
 
     def open_supports_and_loads_panel(self):
