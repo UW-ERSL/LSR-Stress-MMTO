@@ -1269,8 +1269,8 @@ def test_vae_tab():
         assert s.vae_status.text() == "Network: ggd.nt, none yet. The first run trains ggd.nt."
         use = s.rows[("vae", "use_pretrained_vae")][0].widget
         assert not use.isEnabled() and not use.isChecked()                  # shown unticked: nothing to use yet
-        latent = s.rows[("vae", "latentDim")][0]                              # empty: the recommendation, 2
-        assert latent.none.isChecked() and latent.none.isEnabled() and latent.widget.value() == 2
+        latent = s.rows[("vae", "latentDim")][0]                              # the project's 2 kept: a number
+        assert latent.widget.isEnabled() and not latent.none.isChecked() and latent.none.isEnabled()
         assert s.apply(w.project) == [] and w.project.settings["vae"]["use_pretrained_vae"] is True   # kept
     f = formulation_panel.FormulationPanel(G.MMTOWindow(), Project.load(os.path.join(PROJECTS, "beam.mmto")))
     f.rows[0]["widgets"]["bound"].setText("abc")
