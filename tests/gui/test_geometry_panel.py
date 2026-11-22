@@ -86,7 +86,9 @@ def test_steps_made_in_the_strip_are_the_scripts_and_wait_for_update_part():
         assert w.part_waiting and GP.WAITING in g.message.text() and w.is_dirty()
         assert g.update_button.property("waiting") == "true"
         assert w.part_bounds() is None                                    # nothing drawn yet
+        assert "step_shape" in w.plotter.actors                           # the step being changed, see-through
         assert g.update_part() and not w.part_waiting
+        assert "step_shape" not in w.plotter.actors                       # the part as built, alone
         lo, hi = w.part_bounds()
         assert list(hi - lo) == [100, 40, 10]
         assert os.path.normcase(w.stl_geom.file_path) == os.path.normcase(w.project.stl_path())

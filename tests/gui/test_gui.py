@@ -3029,6 +3029,15 @@ def test_material_legend():
         w.set_design(both, wide=True)
         assert w.legend.isVisible() and len(w.design_legend) == 2
         assert "<i>left</i>" in w.legend.text() and "<i>right</i>" in w.legend.text() and "Blue" in w.legend.text()
+        with answers(Box.Discard):                                            # another project: no legend left
+            assert w.open_project(os.path.join(ROOT, "projects", "U-bracket.mmto"))
+        assert not w.legend.isVisible() and w.design_legend == []
+        w.set_design(lambda win: draw_design.record(win, run, mesh, "Density"))
+        titles = list(w.design_bars)
+        assert titles and all(t in w.plotter.scalar_bars for t in titles)
+        with answers(Box.Discard):                                            # nor its colour bars
+            assert w.open_project(os.path.join(ROOT, "projects", "U-bracket.mmto"))
+        assert not w.design_bars and not any(t in w.plotter.scalar_bars for t in titles)
 
 
 if __name__ == "__main__":

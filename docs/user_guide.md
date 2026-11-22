@@ -167,7 +167,7 @@ To fix that, press **Scale...** and type in **Scale by** the number every coordi
 A part made in LSR MMTO from simple shapes: boxes, cylinders, spheres, and outlines pushed up (an **Extrusion**) or spun around (a **Revolution**). The part is a list of steps, done in order. Each step **Adds** a shape to the part, **Cuts** it out of the part, or keeps only the **Overlap** of the two. The first step adds.
 
 - **New step** shows the shapes as tiles. Click one to add a step with that shape. For a step after the first, choose Add, Cut or Overlap above the tiles. In an example, LSR MMTO first asks to save it as a project of your own.
-- Click a step in the list to see its boxes below. Every change goes into the project at once. Its shape is drawn see-through in blue over the part, so you can see where it is, even a cut that misses.
+- Click a step in the list to see its boxes below. Every change goes into the project at once. Its shape is drawn see-through in blue over the part, so you can see where it is, even a cut that misses. Update part shows the part alone again, until you click or change a step.
 - Click the shape's name (for example *Cylinder: change*) to give the step another shape.
 - **At** is where the shape's origin goes: a box's lowest corner, the centre of a cylinder's base, a sphere's centre.
 - A **Box** has its **Size** along x, y and z. A **Cylinder** has a **Radius** and a **Height** and stands along z; **+ Cone** gives it a **Top radius** (0 for a point), and **Remove cone** makes it a cylinder again. A **Sphere** has a **Radius**.

@@ -2132,7 +2132,7 @@ class MMTOWindow(MainWindow):
         self.template = is_example(path)
         self._design, self.view, self._shown_wide = None, "setup", False    # the previous project's design goes
         self._shown_run = None
-        self.design_bars.clear()
+        self._remove_design()                                       # its drawing, colour bars and legend too
         filled = project.complete_settings()                        # a file missing settings: filled from defaults
         self._saved = self._state() if path else None                # ... which is not a change; Save writes them
         self.init_state()                                           # PyTO-AD's own fresh state

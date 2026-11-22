@@ -868,15 +868,18 @@ class GeometryPanel(QtWidgets.QDialog):
         self.update_button.style().polish(self.update_button)
 
     def update_part(self):
-        """The part built from the steps and drawn; a part that cannot be made is said here in red, and the
-        view keeps the last part built. True when built."""
+        """The part built from the steps and drawn, alone: the chosen step's shape shows again once a step is
+        chosen or changed. A part that cannot be made is said here in red, the view keeps the last part built
+        and the chosen step's shape stays. True when built."""
         if not self.window.project.part_shapes:
             self.window.update_part_from_shapes()                   # no part: the drawing goes, the checks follow
             self._show_message("there are no steps yet")
             return False
         error = self.window.update_part_from_shapes()
         k = self.steps_list.currentRow()
-        if 0 <= k < len(self.steps()):
+        if error is None:
+            self.window.show_step_shape(None)
+        elif 0 <= k < len(self.steps()):
             self._highlight(self.steps()[k])
         self._show_message(error)
         return error is None
