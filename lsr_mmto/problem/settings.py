@@ -17,7 +17,9 @@ a single material there are none, so the Settings panel greys it out.
 
 Sections: "mesh" is Project.n_dof and Project.single_layer; "common", "advanced" and "vae" are
 project.settings[section]. A VAE setting whose default is FROM_DATABASE starts from the database's
-known values (databases.DATABASE_VAE), or VAEParams for another database.
+known values (databases.DATABASE_VAE), or VAEParams for another database; for another database the latent
+dimension starts empty, meaning the one recommended for the database (Project.latent_dim), worked out when
+it is used, so it follows the database until a number is typed.
 """
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable
@@ -212,7 +214,8 @@ CORE_SETTINGS = [
             "Before a run, you are warned if the network reproduces any material property less closely than "
             "this, in % of the property's range in the database. You can still run.", "VAE"),
     Setting("vae", "latentDim", FROM_DATABASE, "Latent dimension",
-            "How many numbers describe one material in the material map.", "VAE", integer=True),
+            "How many numbers describe one material in the material map.", "VAE", integer=True,
+            none_means="recommended for the database"),
     Setting("vae", "learningRate", FROM_DATABASE, "Learning rate", "The step size of the network's training.",
             "VAE"),
     Setting("vae", "vae_hiddenDim", FROM_DATABASE, "Hidden layer width", "The size of the network's inner layers.",

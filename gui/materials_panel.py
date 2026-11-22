@@ -766,7 +766,8 @@ class MaterialsPanel(QtWidgets.QDialog):
         cleared = project.clear_hand_set_network()                  # it belonged to the database before
         project.settings["vae"] = q.settings["vae"]
         project.database = q.database
-        changed = [f"{BY_KEY[k].label} {before[k]} -> {q.settings['vae'][k]}" for k in before
+        shown = lambda k, v: (BY_KEY[k].none_means or "none") if v is None else v     # noqa: E731
+        changed = [f"{BY_KEY[k].label} {shown(k, before[k])} -> {shown(k, q.settings['vae'][k])}" for k in before
                    if not same(before[k], q.settings["vae"][k])]
         return [f"Database: {q.database}"] + ([f"VAE settings for it: {', '.join(changed)}"] if changed else []) + \
             [line for line in (cleared, matched) if line] + chosen

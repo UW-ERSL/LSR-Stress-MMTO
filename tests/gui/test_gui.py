@@ -776,7 +776,8 @@ def test_materials_panel():
         m.set_database(own)                                                    # any other: relative to the project
         assert m.project.database == "mine.xlsx" and m.combo.currentText() == "mine"
         m.apply(w.project)
-        assert w.project.settings["vae"]["latentDim"] == 2 and w.project.validate() == []
+        assert w.project.settings["vae"]["latentDim"] is None and w.project.latent_dim() == 2   # the recommendation
+        assert w.project.validate() == []
         shutil.copy(os.path.join(ROOT, DATABASE_DIR, "BM1_3Mats_2Attr.nt"), os.path.join(d, "trained.nt"))
         shutil.copy(own, os.path.join(d, "trained.xlsx"))                      # its own network: width 50
         w.project.settings["vae"]["vae_hiddenDim"] = 300
@@ -1268,7 +1269,8 @@ def test_vae_tab():
         assert s.vae_status.text() == "Network: ggd.nt, none yet. The first run trains ggd.nt."
         use = s.rows[("vae", "use_pretrained_vae")][0].widget
         assert not use.isEnabled() and not use.isChecked()                  # shown unticked: nothing to use yet
-        assert s.rows[("vae", "latentDim")][0].widget.isEnabled()
+        latent = s.rows[("vae", "latentDim")][0]                              # empty: the recommendation, 2
+        assert latent.none.isChecked() and latent.none.isEnabled() and latent.widget.value() == 2
         assert s.apply(w.project) == [] and w.project.settings["vae"]["use_pretrained_vae"] is True   # kept
     f = formulation_panel.FormulationPanel(G.MMTOWindow(), Project.load(os.path.join(PROJECTS, "beam.mmto")))
     f.rows[0]["widgets"]["bound"].setText("abc")

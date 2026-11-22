@@ -295,11 +295,11 @@ def test_project_uses_the_check():
         assert p.validate() == []
         p.complete_settings()
         n_z = recommended_latent_dim(p.database)[1]
-        assert p.settings["vae"]["latentDim"] == n_z                # a new database starts from the recommendation
+        assert p.settings["vae"]["latentDim"] is None and p.latent_dim() == n_z   # empty: the recommendation
         assert p.warnings() == []
         p.settings["vae"]["latentDim"] = n_z + 2
         assert any("is recommended" in w for w in p.warnings())
-        p.settings["vae"]["latentDim"] = n_z
+        p.settings["vae"]["latentDim"] = None
 
         p.units = "mmKS"                                       # GOOD is in Pa: Y too
         assert "not the design" in "\n".join(p.warnings())          # the failure factor as objective

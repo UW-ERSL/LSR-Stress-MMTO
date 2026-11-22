@@ -519,7 +519,8 @@ class Project:
         before.complete_settings()                          # what a run would use now
         changed = []
         for key, value in (("vae_hiddenDim", shape[1]), ("latentDim", shape[2])):
-            if before.settings["vae"].get(key) != value:
+            now = before.latent_dim() if key == "latentDim" else before.settings["vae"].get(key)
+            if now != value:
                 vae[key] = value
                 changed.append(f"{BY_KEY[key].label[:1].lower()}{BY_KEY[key].label[1:]} {value}")
         return f"Network settings set to match the trained network: {', '.join(changed)}" if changed else None
@@ -915,8 +916,10 @@ class Project:
                                                        f"{os.path.basename(xlsx)} has {n_columns}: it was trained on "
                                                        f"another database"))
                 for key, have in (("latentDim", latent), ("vae_hiddenDim", hidden)):
-                    if vae.get(key) is not None and int(vae[key]) != have:
-                        errors.append(Problem("settings", f"{key} is {vae[key]}, but {name} was trained with {have}: "
+                    value = self.latent_dim() if key == "latentDim" else vae.get(key)
+                    shown = f"{value} (recommended for the database)" if vae.get(key) is None else f"{value}"
+                    if value is not None and int(value) != have:
+                        errors.append(Problem("settings", f"{key} is {shown}, but {name} was trained with {have}: "
                                                           f"set it to {have}, or switch off use_pretrained_vae to "
                                                           f"train a new network"))
                 if n_in == n_columns:
@@ -1047,18 +1050,31 @@ class Project:
                     values[k] = v
                     filled.append(f"{section}.{k}")
         vae_defaults = {k: getattr(VAEParams(), k) for k in VAE_PARAMS}
+        vae_defaults["latentDim"] = None                    # empty: the one recommended for the database (latent_dim)
         if self.database is not None:
-            xlsx, known = self.database_paths()
+            _, known = self.database_paths()
             if known:                                       # a shipped database: what its network was trained with
                 vae_defaults.update(known)
-            elif ("latentDim" not in self.settings["vae"] and self.material_source == "network"
-                  and not check_database(xlsx)[0]):
-                vae_defaults["latentDim"] = recommended_latent_dim(xlsx)[1]
         for k in VAE_PARAMS:
             if k not in self.settings["vae"]:
                 self.settings["vae"][k] = vae_defaults[k]
                 filled.append(f"vae.{k}")
         return filled
+
+    def latent_dim(self) -> int:
+        """The latent dimension a run uses: the setting when a number is set, else the one recommended for the
+        database (recommended_latent_dim), else VAEParams' when there is no database or it fails its check.
+
+        Example: n_z = p.latent_dim()
+        """
+        value = self.settings.get("vae", {}).get("latentDim")
+        if value is not None:
+            return int(value)
+        if self.database is not None:
+            xlsx, _ = self.database_paths()
+            if os.path.isfile(xlsx) and not check_database(xlsx)[0]:
+                return recommended_latent_dim(xlsx)[1]
+        return int(VAEParams().latentDim)
 
     # ------------------------------------------------------------------ the problem
     def mesh(self) -> "HexMesher":
@@ -1119,6 +1135,7 @@ class Project:
         vae_params = VAEParams()
         for k in VAE_PARAMS:
             setattr(vae_params, k, self.settings["vae"][k])
+        vae_params.latentDim = self.latent_dim()            # an empty setting: the database's recommendation
 
         # ---- keep-solid elements
         to_params.ElemsToKeep = None

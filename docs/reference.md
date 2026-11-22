@@ -184,7 +184,7 @@ Every setting a run takes, under its own name. A new project starts from these v
 | `use_pretrained_vae` |  | True | Use the network already trained for this database. Unticked, the next run trains a new one. |
 | `saveNet` |  | None | The trained network: always the .nt file next to the database, with the same name. Empty (None): next to the database. |
 | `network_error_warning` |  | 5.0 | Before a run, you are warned if the network reproduces any material property less closely than this, in % of the property's range in the database. You can still run. |
-| `latentDim` |  | from the database | How many numbers describe one material in the material map. |
+| `latentDim` |  | from the database | How many numbers describe one material in the material map. Empty (None): recommended for the database. |
 | `learningRate` |  | from the database | The step size of the network's training. |
 | `vae_hiddenDim` |  | from the database | The size of the network's inner layers. |
 | `maxAttributeErrorPercent` |  | from the database | Training stops once the network reproduces every material property within this percent. |

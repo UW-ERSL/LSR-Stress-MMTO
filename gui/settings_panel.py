@@ -281,13 +281,24 @@ class SettingsPanel(QtWidgets.QDialog):
                 known.update(vae_hiddenDim=shape[1], latentDim=shape[2])
             for key, value in known.items():
                 row = self.rows[("vae", key)][0]
-                if not same(row.get() if row.ok() else None, value):
+                now = row.get() if row.ok() else None
+                if key == "latentDim" and now is None and row.ok():     # empty: the database's recommendation
+                    now = q.latent_dim()
+                if not same(now, value):
                     row.set(value)
                     self.vae_synced.append(key)
                 self._mark("vae", key)
+        latent = self.rows[("vae", "latentDim")][0]
+        if latent.none.isChecked():                             # shown greyed: the number a run would use
+            latent.widget.blockSignals(True)
+            latent.widget.set_value(q.latent_dim())
+            latent.widget.blockSignals(False)
         for key in VAE_KEYS:
             row, label, reset = self.rows[("vae", key)]
-            row.widget.setEnabled(not trained)
+            empty = row.none is not None and row.none.isChecked()
+            row.widget.setEnabled(not trained and not empty)
+            if row.none is not None:
+                row.none.setEnabled(not trained)
             if trained:
                 reset.setEnabled(False)
                 reset.setVisible(False)
