@@ -76,6 +76,167 @@ def _carry_failure_factor_scale(m: "MMTOModelAD", opt: dict[str, int | float | s
     return {"failure_factor_scale": used, "failure_factor_ratio": ratio}
 
 
+
+
+# POLYSTRESS-INSPIRED LOCAL AUGMENTED LAGRANGIAN STRESS OBJECTIVE
+# See Giraldo-Londono & Paulino (2021), Eqs. (19), (39)-(43), Appendix E.
+# This is the *volume-fraction* version, matching the paper's objective.
+# The current structural physics already gives RELAXED stress in m.svm.
+# We therefore do NOT multiply the local constraint by a second SIMP
+# stiffness factor mE(rho): that would double-relax the stress. The AL
+# scheme is PolyStress's, while the stress relaxation remains LSR MMTO's.
+# These initial values are Table 3 defaults; changing them is deliberately
+# local to this feature until the project exposes them as settings.
+_AL_MU0 = 10.0
+_AL_MU_MAX = 10000.0
+_AL_MU_GROWTH = 1.10
+_AL_MMA_PER_STEP = 5
+
+
+# HELPER: computes the elementwise polynomial stress constraints for AL
+def _al_local_constraints(m: "MMTOModelAD | _Analysed") -> torch.Tensor:
+    """PolyStress polynomial, one inequality per element (negative = satisfied).
+
+    Lambda = relaxed von Mises / local yield strength - 1.
+    Unlike PolyStress's solid-material stress, Lambda here uses LSR MMTO's
+    preexisting stress relaxation. Polynomial Lambda*(1+Lambda**2) preserves
+    the sign and the zero at yield, without another density multiplier.
+    """
+    excess = _failure_factors(m).reshape(-1) - 1.0
+    return excess * (1.0 + excess.square())
+
+
+def _volume_fraction_al_stress(m: "MMTOModelAD | _Analysed",
+                               opt: dict[str, int | float | str] | None) -> torch.Tensor:
+    """Physical volume fraction + mean local augmented-Lagrangian penalty.
+
+    L = mean(x_phys) + (1/N) sum(lambda*h + mu/2*h**2),
+    h = max(g, -lambda/mu).  Multipliers and mu are constant under autograd.
+    """
+    f = torch.mean(m.x_phys)
+    state = run_state(m, "VolumeFractionALStress", opt)
+    if state is None:
+        # Outside an optimization run there are no AL multipliers; return
+        # the physical volume fraction, not a fictional AL value.
+        return f
+    g = _al_local_constraints(m)
+    lam = state.get("multipliers")
+    if lam is None:
+        lam = torch.zeros_like(g)
+    else:
+        lam = lam.to(device=g.device, dtype=g.dtype).detach()
+        if lam.shape != g.shape:
+            raise ValueError("AL multiplier count differs from element count")
+    mu = float(state.get("mu", _AL_MU0))
+    h = torch.maximum(g, -lam / mu)
+    return f + torch.mean(lam * h + 0.5 * mu * h.square())
+
+
+def _carry_al_stress(m: "MMTOModelAD", opt: dict[str, int | float | str] | None,
+                     state: dict, iteration: int) -> dict[str, float]:
+    """Hold AL parameters for five MMA evaluations, then update both.
+
+    State changes happen under no_grad AFTER the current objective was
+    evaluated. The next evaluation sees the updated values. We report the
+    physical maximum stress ratio, not just the polynomial g value.
+    """
+    with torch.no_grad():
+        ratios = _failure_factors(m).reshape(-1)
+        g = _al_local_constraints(m).detach()
+        lam = state.get("multipliers")
+        if lam is None:
+            lam = torch.zeros_like(g)
+        else:
+            lam = lam.to(device=g.device, dtype=g.dtype).detach()
+        if lam.shape != g.shape:
+            raise ValueError("AL multiplier count differs from element count")
+        mu = float(state.get("mu", _AL_MU0))
+        h = torch.maximum(g, -lam / mu)
+        penalty = torch.mean(lam * h + 0.5 * mu * h.square())
+        maximum = float(torch.max(ratios))
+        metrics = {
+            "al_max_failure_factor": maximum,
+            "al_max_stress_violation": max(0.0, maximum - 1.0),
+            "al_penalty": float(penalty),
+            "al_mu": mu,
+            "al_active_elements": float(torch.count_nonzero(h > 0)),
+        }
+        # Count actual evaluations locally; independent of whether the run's
+        # public iteration index starts at zero or one.
+        evaluations = int(state.get("al_evaluations", 0)) + 1
+        state["al_evaluations"] = evaluations
+        if evaluations % _AL_MMA_PER_STEP == 0:
+            state["multipliers"] = (lam + mu * h).detach().clone()
+            state["mu"] = min(_AL_MU_GROWTH * mu, _AL_MU_MAX)
+        else:
+            state["multipliers"] = lam.detach().clone()
+            state["mu"] = mu
+        return metrics
+
+
+
+# ESSENTIAL: the fn of the MassALStress quantity (QUANTITIES)
+def _mass_al_stress(m: "MMTOModelAD | _Analysed",
+                    opt: dict[str, int | float | str] | None) -> torch.Tensor:
+    """Normalized physical mass plus the same elementwise AL stress penalty.
+
+    The reference density is the mean decoded density in the INITIAL evaluation,
+    detached from autograd and held constant afterwards. Hence this objective
+    REALLY rewards lower-density material choices, not just lower volume.
+    The mass contribution is M / (reference_density * full_design_volume),
+    a dimensionless, fixed-scale physical-mass objective.
+
+    The initial-reference rule is a convenience for this experiment, not a
+    universal replacement for an explicit reference mass setting.
+    """
+    rho = m.props["Density"].reshape(-1)
+    state = run_state(m, "MassALStress", opt)
+    if state is None:
+        # Outside a run there is no persistent reference or AL state.
+        return torch.mean(rho * m.x_phys.reshape(-1)) / rho.detach().mean().clamp_min(1e-30)
+
+    ref = state.get("mass_reference_density")
+    if ref is None:
+        ref = rho.detach().mean().clamp_min(1e-30)
+    f = torch.mean(rho * m.x_phys.reshape(-1)) / ref
+
+    g = _al_local_constraints(m)
+    lam = state.get("multipliers")
+    if lam is None:
+        lam = torch.zeros_like(g)
+    else:
+        lam = lam.to(device=g.device, dtype=g.dtype).detach()
+        if lam.shape != g.shape:
+            raise ValueError("AL multiplier count differs from element count")
+    mu = float(state.get("mu", _AL_MU0))
+    h = torch.maximum(g, -lam / mu)
+    return f + torch.mean(lam * h + 0.5 * mu * h.square())
+
+
+# ESSENTIAL: the between_iterations of the MassALStress quantity (QUANTITIES)
+def _carry_mass_al_stress(m: "MMTOModelAD", opt: dict[str, int | float | str] | None,
+                          state: dict, iteration: int) -> dict[str, float]:
+    """Freeze the first design's average decoded density; carry AL state.
+
+    Multiplier updates and history metrics are otherwise the same as for
+    VolumeFractionALStress, but belong to the separate MassALStress state.
+    """
+    if "mass_reference_density" not in state:
+        with torch.no_grad():
+            ref = float(m.props["Density"].reshape(-1).mean())
+        if not math.isfinite(ref) or ref <= 0.0:
+            raise ValueError("MassALStress requires a positive reference density")
+        state["mass_reference_density"] = ref
+    metrics = _carry_al_stress(m, opt, state, iteration)
+    with torch.no_grad():
+        # Physical mass in the model's mass unit; the optimizer sees
+        # the normalized version from _mass_al_stress.
+        mass = torch.sum(m.props["Density"].reshape(-1) * m.x_phys.reshape(-1)) * m.elem_volume
+        ref_mass = state["mass_reference_density"] * m.N * m.elem_volume
+        metrics["al_physical_mass"] = float(mass)
+        metrics["al_mass_fraction_reference"] = float(mass) / float(ref_mass)
+    return metrics
+
 # the structural objectives and constraints, as the arguments of a Quantity (formulation/quantities.py)
 QUANTITIES = [
     dict(name="Compliance", objective=True, constraint=True, needs=[], fn=_compliance, doc="F . u",
@@ -98,4 +259,20 @@ QUANTITIES = [
          help="The highest stress / yield strength in the part. At most 1 means no element yields.",
          unit="no units", scales_with={"Yield_Strength": -1}, start_bound=1.0,
          start_note="the highest stress allowed equals the yield strength"),
+    dict(name="VolumeFractionALStress", objective=True, constraint=False,
+         needs=["Yield_Strength"], fn=_volume_fraction_al_stress,
+         between_iterations=_carry_al_stress,
+         doc="physical volume fraction plus normalized local AL stress penalty",
+         shown="Volume fraction (AL stress)",
+         help="Minimize material volume while enforcing local relaxed-stress limits "
+              "with augmented Lagrangian multipliers updated every five iterations.",
+         unit="no units"),
+    dict(name="MassALStress", objective=True, constraint=False,
+         needs=["Density", "Yield_Strength"], fn=_mass_al_stress,
+         between_iterations=_carry_mass_al_stress,
+         doc="physical mass divided by fixed initial reference full-solid mass, plus normalized local AL stress penalty",
+         shown="Mass (AL stress)",
+         help="Minimize actual material mass, including material choices, while enforcing "
+              "elementwise relaxed-stress limits using AL multipliers updated every five iterations.",
+         unit="no units"),
 ]
