@@ -1107,7 +1107,8 @@ def test_add_properties_window():
         assert others == sorted(others, key=lambda k: SHOWN[k].lower())               # alphabetical as shown
         assert {"Cost", "Poissons_Ratio"} <= set(others)
         assert sorted(seen["greyed"]) == ["Density", "Poissons_Ratio", "Yield_Strength", "Youngs_Modulus"]
-        assert seen["young"] == ["Youngs_Modulus"] and seen["yield"] == ["Yield_Strength"]
+        assert seen["young"] == ["Youngs_Modulus", "Youngs_Modulus_Temperature_Slope"]    # each word in its group
+        assert seen["yield"] == ["Yield_Strength", "Yield_Strength_Temperature_Slope"]
         assert e.attributes == ["Density", "Youngs_Modulus", "Yield_Strength", "Poissons_Ratio", "Cost"]
         assert e.table.horizontalHeaderItem(7).text() == "Cost"
         lone = DE.AddPropertiesDialog(w, ["Density"])                          # no project: one list
