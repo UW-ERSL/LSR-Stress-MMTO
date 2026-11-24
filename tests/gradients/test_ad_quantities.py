@@ -60,6 +60,10 @@ NOT_CHECKED = {
     "ThermoelasticCompliance": "a thermoelastic project's: its gradient for the density, the expansion "
                                "coefficient and the conductivity is checked in tests/physics/test_thermoelastic_physics.py "
                                "(test_gradients_agree_with_finite_differences)",
+    "VolumeFractionALStress": "needs a run's multipliers (outside a run it is the volume fraction alone): its gradient "
+                              "in a run's state is checked in tests/physics/test_thermoelastic_physics.py "
+                              "(test_al_stress_gradients_agree_with_finite_differences)",
+    "MassALStress": "needs a run's multipliers, as VolumeFractionALStress: checked in the same test",
 }
 # Mass fraction is also checked against a hand calculation (test_mass_fraction_by_hand).
 

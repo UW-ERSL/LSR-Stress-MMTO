@@ -107,7 +107,7 @@ def test_researcher_guide():
         assert block.text() == title and block.blockFormat().headingLevel(), block.text()
     g.contents.setCurrentItem(g.contents.topLevelItem(0))
     assert g.page.toPlainText().startswith("How the code works")
-    g.search.setText("lagrangian")                                       # in CONTRIBUTING.md only
+    g.search.setText("miniforge")                                        # in CONTRIBUTING.md only
     APP.processEvents()
     current = g.contents.currentItem()
     assert (current.parent() or current) is g.contents.topLevelItem(4), current.text(0)

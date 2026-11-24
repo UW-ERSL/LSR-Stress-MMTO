@@ -106,6 +106,7 @@ def _al_local_constraints(m: "MMTOModelAD | _Analysed") -> torch.Tensor:
     return excess * (1.0 + excess.square())
 
 
+# ESSENTIAL: the fn of the VolumeFractionALStress quantity (QUANTITIES)
 def _volume_fraction_al_stress(m: "MMTOModelAD | _Analysed",
                                opt: dict[str, int | float | str] | None) -> torch.Tensor:
     """Physical volume fraction + mean local augmented-Lagrangian penalty.
@@ -132,6 +133,7 @@ def _volume_fraction_al_stress(m: "MMTOModelAD | _Analysed",
     return f + torch.mean(lam * h + 0.5 * mu * h.square())
 
 
+# ESSENTIAL: the between_iterations of the VolumeFractionALStress quantity (QUANTITIES)
 def _carry_al_stress(m: "MMTOModelAD", opt: dict[str, int | float | str] | None,
                      state: dict, iteration: int) -> dict[str, float]:
     """Hold AL parameters for five MMA evaluations, then update both.
