@@ -1,6 +1,6 @@
 # Testing the codebase
 
-Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 404 in all. Generated from the tests' own docstrings by `python docs/make_generated_docs.py`; do not edit it by hand.
+Every test of LSR MMTO, folder by folder: what each folder checks, what each file in it checks, and each test in it, 408 in all. Generated from the tests' own docstrings by `python docs/make_generated_docs.py`; do not edit it by hand.
 
 Run them all from the repository folder with `python -m pytest tests -q -n 4` (`-n 2` on a computer with less than 16 GB of memory), one folder with `python -m pytest tests/<folder> -q`, or one file with `python -m pytest tests/<folder>/<file> -q`.
 
@@ -55,6 +55,10 @@ The thermoelastic physics (lsr_mmto/physics/thermoelastic/) gives the right answ
 - `test_a_bar_heated_evenly_is_as_stiff_as_youngs_modulus_at_its_temperature`: The bar heated evenly by dT with no expansion (alpha 0, so no thermal force), clamped on xmin and pulled down on xmax, with a slope k on Young's modulus: its thermoelastic compliance equals the structural solver's for E (1 + k dT), on the same mesh, supports and load.
 - `test_a_slope_that_makes_a_property_negative_is_refused`: Heated by 100 with a slope of -0.02 per degree, Young's modulus would be -1 times its value: refused, naming the slope's column.
 - `test_gradients_with_temperature_slopes_agree_with_finite_differences`: As test_gradients_agree_with_finite_differences, with slopes on Young's modulus and the expansion coefficient that differ by element: the gradient now also runs from the temperature through E(T) and alpha(T), so the conductivity reaches J through the stiffness too. Checked for the density, the conductivity and both slopes.
+- `test_a_bar_held_at_both_ends_and_heated_evenly_carries_e_alpha_dt`: The bar heated evenly by dT, held in x on xmin and on xmax (so it cannot grow along x), in y on ymin and in z on zmin (so it grows freely sideways), with slopes on Young's modulus and the expansion coefficient: every element carries sigma_xx = -E(T) alpha(T) dT and nothing else, so its von Mises stress is E (1 + k_E dT) alpha (1 + k_alpha dT) dT. A stress (1 - 2 nu) times too large, or one at the reference values, shows the thermal strain or its temperature taken wrongly.
+- `test_a_bar_free_to_grow_carries_no_stress`: The bar heated evenly and held only against rigid motion (as test_a_bar_heated_evenly_grows_freely) grows by its thermal strain alone, so every stress component is zero everywhere, far below E alpha dT. Von Mises alone cannot show this: the thermal strain is the same in every direction, which von Mises does not see, so the components are checked too (a stress of the total strain would be E alpha dT / (1 - 2 nu) in each).
+- `test_the_al_stress_objectives_apply_to_thermoelastic`: Structural's augmented Lagrangian stress objectives are one quantity each, given by both physics.
+- `test_al_stress_gradients_agree_with_finite_differences`: Each augmented Lagrangian stress objective (VolumeFractionALStress, MassALStress) in a run (multipliers and mu as a run holds them) on the bar clamped and held at T_ref on xmin and heated on xmax, at an uneven design with a slope on Young's modulus and a yield strength low enough that many elements are above it: its autograd gradient for the density, the conductivity and the slope agrees with central differences, the whole chain T -> E(T) -> u -> stress -> penalty included. Checked along a random direction of all elements at once (g . v): J sums every element's penalty, so one element alone moves it too little to see past the solver's last digits.
 
 ### `tests/physics/core_lists_for_a_test.py` (a script, not collected by pytest)
 

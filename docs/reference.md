@@ -110,6 +110,8 @@ An objective or a constraint is one quantity, e.g. `Mass()` or `MaterialVolumeFr
 | `StressPNorm` | Stress (p-norm) | `structural` | yes |  |  | p-norm of the relaxed von Mises stress, no 1/N | One value close to the highest von Mises stress in the part. |
 | `FailureFactorPNorm` | Failure factor (p-norm) | `structural` | yes | yes | Yield_Strength | mean p-norm of von Mises / yield strength, per element | An average of stress / yield strength over the whole part. It sits below the highest value, often well below, so 1 here does not mean no element yields. |
 | `FailureFactorMax` | Failure factor (highest) | `structural` |  | yes | Yield_Strength | the p-norm failure factor times a scale that tracks the highest failure factor (adaptive normalization) | The highest stress / yield strength in the part. At most 1 means no element yields. |
+| `VolumeFractionALStress` | Volume fraction (AL stress) | `structural`, `thermoelastic` | yes |  | Yield_Strength | physical volume fraction plus normalized local AL stress penalty | Minimize material volume while enforcing local relaxed-stress limits with augmented Lagrangian multipliers updated every five iterations. |
+| `MassALStress` | Mass (AL stress) | `structural`, `thermoelastic` | yes |  | Density, Yield_Strength | physical mass divided by fixed initial reference full-solid mass, plus normalized local AL stress penalty | Minimize actual material mass, including material choices, while enforcing elementwise relaxed-stress limits using AL multipliers updated every five iterations. |
 | `ThermalCompliance` | Thermal compliance | `thermal` | yes | yes | Conductivity | f . T | How hot the part gets where the heat goes in. Lower carries the heat away better. |
 | `ThermoelasticCompliance` | Thermoelastic compliance | `thermoelastic` | yes | yes |  | (F + F_th) . u, the total load including the thermal force | How much the part gives under the loads and the heating. Lower is stiffer. |
 | `Mass` | Mass |  | yes | yes | Density | sum of density \* x_phys \* element volume | The mass of the part, from each material's density. |
@@ -177,6 +179,7 @@ Every setting a run takes, under its own name. A new project starts from these v
 | `stress_relaxation_exponent` | `structural` | 0.5 | How much a partly solid element's stress counts: its density to this power, times the stress of solid material. Larger counts partly solid elements less. |
 | `use_constant_poissons_ratio` | `structural` | False | One Poisson's ratio for every material, instead of each material's own. |
 | `constant_poissons_ratio` | `structural` | 0.3 | The Poisson's ratio used when Constant Poisson's ratio is ticked. |
+| `te_stress_relaxation_exponent` | `thermoelastic` | 0.5 | How much a partly solid element's stress counts: its density to this power, times the stress of solid material. Larger counts partly solid elements less. |
 | `te_use_constant_poissons_ratio` | `thermoelastic` | False | One Poisson's ratio for every material, instead of each material's own. |
 | `te_constant_poissons_ratio` | `thermoelastic` | 0.3 | The Poisson's ratio used when Constant Poisson's ratio is ticked. |
 

@@ -23,13 +23,14 @@ Who reads it:
     set_simp_penalties  optimize/run_setup.py at the start of the run, optimize/optimization_loop.py at
                       each step of SIMP continuation
 """
+import math
 from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
 import lsr_mmto.pyto_ad_imports  # noqa: F401  puts PyTO-AD on sys.path, float64 default
 from lsr_mmto.physics.structural import structural_physics
-from lsr_mmto.physics.structural.structural_physics import MultiMaterialHexFEA
+from lsr_mmto.physics.structural.structural_physics import MultiMaterialHexFEA, von_mises
 from lsr_mmto.physics.thermal import thermal_physics
 from lsr_mmto.physics.thermal.thermal_physics import ConductionHexFEA
 from lsr_mmto.pyto_ad_imports import topopt_material_model as ad_mm
@@ -61,18 +62,26 @@ def analyse(m: "MMTOModelAD | _Analysed") -> None:
     loads plus that force, both at the density m.x_phys with SIMP.
 
     It takes m.props as decoded (at the reference temperature) and replaces it with the values at each element's
-    temperature (properties_at_temperature), which everything after the temperature solve reads.
+    temperature (properties_at_temperature), which everything after the temperature solve reads. Last, the
+    relaxed von Mises stress m.svm of the mechanical strain (thermoelastic_stress), which the stress quantities
+    read.
 
-    Sets m.T (nodes,), m.props, m.f_th (3 * nodes,), m.u (3 * nodes,); and the solvers' material values
-    (set_conductivity, set_material_fields)."""
+    Sets m.T (nodes,), m.props, m.f_th (3 * nodes,), m.u (3 * nodes,), m.svm (N,); and the solvers' material
+    values (set_conductivity, set_material_fields) and stress relaxation exponent (the run's setting)."""
+    T_ref = float(m.settings.reference_temperature)
+    q = float(m.settings.te_stress_relaxation_exponent)
+    if not (q > 0.0 and math.isfinite(q)):
+        raise ValueError(f"Stress relaxation exponent must be a number above 0, not {q:g}")
     m.fe.thermal.set_conductivity(m.props["Conductivity"])
     m.T = m.fe.thermal.solve(m.x_phys, ad_mm.MaterialModel.SIMP)
-    m.props = properties_at_temperature(m.props, m.T, m.fe.thermal.edof, float(m.settings.reference_temperature))
+    dT = m.T[m.fe.thermal.edof].mean(dim=1) - T_ref                           # (N,), at each element's centre
+    m.props = properties_at_temperature(m.props, dT, T_ref)
     E, nu = elastic_constants(m.props, m.settings)
-    m.f_th = thermal_force(m.fe, m.T, m.x_phys, E, nu, m.props["Thermal_Expansion"],
-                           float(m.settings.reference_temperature))
+    m.f_th = thermal_force(m.fe, m.T, m.x_phys, E, nu, m.props["Thermal_Expansion"], T_ref)
     m.fe.set_material_fields(E, nu)
+    m.fe.stress_relaxation = q
     m.u = m.fe.solve(m.x_phys, ad_mm.MaterialModel.SIMP, extra_force=m.f_th)
+    m.svm = von_mises(thermoelastic_stress(m.fe, m.u, m.x_phys, m.props["Thermal_Expansion"], dT))
 
 # the properties that change with temperature, each with the database column of its slope (thermoelastic_module.py)
 TEMPERATURE_SLOPES = {"Youngs_Modulus": "Youngs_Modulus_Temperature_Slope",
@@ -80,23 +89,22 @@ TEMPERATURE_SLOPES = {"Youngs_Modulus": "Youngs_Modulus_Temperature_Slope",
                       "Yield_Strength": "Yield_Strength_Temperature_Slope"}
 
 # HELPER: of analyse
-def properties_at_temperature(props: dict[str, torch.Tensor], T: torch.Tensor, edof: torch.Tensor,
+def properties_at_temperature(props: dict[str, torch.Tensor], dT: torch.Tensor,
                               T_ref: float) -> dict[str, torch.Tensor]:
     """A new dict of the properties at each element's temperature: each property P of TEMPERATURE_SLOPES whose
-    slope k the database has becomes P (1 + k (T_c - T_ref)), T_c the element's centre temperature (the mean of
-    its nodes' temperatures, edof each element's temperature dofs); the rest as they are. The thermal expansion
+    slope k the database has becomes P (1 + k dT), dT (N,) the element's centre temperature (the mean of its
+    nodes' temperatures) minus the reference temperature T_ref; the rest as they are. The thermal expansion
     coefficient is the secant one from T_ref, so the thermal strain is alpha(T) (T - T_ref). Inside the torch
     tree: the gradient reaches T (so the thermal solve) and the slopes. A slope that makes a property zero or
     negative at some element is refused: the straight line does not reach that far."""
     out = dict(props)
-    dT = T[edof].mean(dim=1) - T_ref                                           # (N,)
     for name, slope in TEMPERATURE_SLOPES.items():
         if name not in props or slope not in props:
             continue
         factor = 1.0 + props[slope] * dT
         if bool(torch.any(factor <= 0.0)):
             worst = int(torch.argmin(factor))
-            raise ValueError(f"The {slope} column makes {name} zero or negative at {float(T[edof][worst].mean()):.6g} "
+            raise ValueError(f"The {slope} column makes {name} zero or negative at {float(dT[worst]) + T_ref:.6g} "
                              f"degrees (element {worst}). A straight line does not reach that far: use a smaller "
                              f"slope, or keep the temperatures closer to the reference temperature.")
         out[name] = props[name] * factor
@@ -115,6 +123,20 @@ def thermal_force(fe: "ThermoelasticHexFEA", T: torch.Tensor, x_phys: torch.Tens
     f_e = scale[:, None] * (dT @ fe.H.T)                                       # (N, 24)
     f = torch.zeros(3 * fe.mesh.num_nodes, dtype=f_e.dtype)
     return f.index_add(0, fe.edof.reshape(-1), f_e.reshape(-1))
+
+# HELPER: of analyse
+def thermoelastic_stress(fe: "ThermoelasticHexFEA", u: torch.Tensor, x_phys: torch.Tensor, alpha: torch.Tensor,
+                         dT: torch.Tensor) -> torch.Tensor:
+    """The relaxed stress at each element's centre, (N, 6): x_phys^q D (B u_e - alpha dT [1, 1, 1, 0, 0, 0]), the
+    mechanical strain (the total strain less the thermal strain) times the element's D (its lam and mu, from
+    set_material_fields), q the solver's stress relaxation exponent. alpha and dT (N,) are each element's
+    expansion coefficient and centre temperature rise, as the thermal force has them, so a part free to grow
+    has no stress."""
+    strain = u[fe.edof] @ fe.B.T                                               # (N, 6), total
+    thermal = (alpha * dT)[:, None] * torch.tensor([1.0, 1.0, 1.0, 0.0, 0.0, 0.0], dtype=strain.dtype)
+    D = fe.lam[:, None, None] * fe.D_lam + fe.mu[:, None, None] * fe.D_mu
+    stress = torch.einsum("eij,ej->ei", D, strain - thermal)
+    return stress * (x_phys ** fe.stress_relaxation)[:, None]
 
 # HELPER: of analyse
 def elastic_constants(props: dict[str, torch.Tensor], settings: "RunSettings") -> tuple[torch.Tensor, torch.Tensor]:

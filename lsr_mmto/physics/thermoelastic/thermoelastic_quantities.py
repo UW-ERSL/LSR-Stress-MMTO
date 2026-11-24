@@ -2,11 +2,14 @@
 thermoelastic_quantities.py
 ===========================
 What the thermoelastic module optimizes: its objectives and constraints (QUANTITIES: thermoelastic
-compliance). What it records and reports is in thermoelastic_results.py.
+compliance, and structural's augmented Lagrangian stress objectives, which read the relaxed von Mises
+stress m.svm that analyse sets). What it records and reports is in thermoelastic_results.py.
 """
 from typing import TYPE_CHECKING
 
 import torch
+
+from lsr_mmto.physics.structural.structural_quantities import QUANTITIES as STRUCTURAL_QUANTITIES
 
 if TYPE_CHECKING:
     from lsr_mmto.optimize.design_model import MMTOModelAD
@@ -26,4 +29,4 @@ QUANTITIES = [
          doc="(F + F_th) . u, the total load including the thermal force", shown="Thermoelastic compliance",
          help="How much the part gives under the loads and the heating. Lower is stiffer.",
          unit="{force}*{length}"),
-]
+] + [q for q in STRUCTURAL_QUANTITIES if q["name"] in ("VolumeFractionALStress", "MassALStress")]  # the same entries

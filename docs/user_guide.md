@@ -511,6 +511,8 @@ The following quantities can be used as objectives or constraints:
 | Stress (p-norm) | Objective | One value close to the highest von Mises stress in the part. |
 | Failure factor (p-norm) | Objective and constraint | An average of stress / yield strength over the whole part. It sits below the highest value, often well below, so 1 here does not mean no element yields. |
 | Failure factor (highest) | Constraint | The highest stress / yield strength in the part. At most 1 means no element yields. |
+| Volume fraction (AL stress) | Objective | Minimize material volume while enforcing local relaxed-stress limits with augmented Lagrangian multipliers updated every five iterations. |
+| Mass (AL stress) | Objective | Minimize actual material mass, including material choices, while enforcing elementwise relaxed-stress limits using AL multipliers updated every five iterations. |
 | Thermal compliance | Objective and constraint | How hot the part gets where the heat goes in. Lower carries the heat away better. |
 | Thermoelastic compliance | Objective and constraint | How much the part gives under the loads and the heating. Lower is stiffer. |
 | Mass | Objective and constraint | The mass of the part, from each material's density. |
@@ -598,6 +600,7 @@ The following table lists every setting, organized by its group in the Settings 
 | Material model | Constant Poisson's ratio | One Poisson's ratio for every material, instead of each material's own. |
 | Material model | Poisson's ratio value | The Poisson's ratio used when Constant Poisson's ratio is ticked. |
 | Main | Reference temperature | The temperature at which the part has no thermal strain, in the project's temperature unit. |
+| Material model | Stress relaxation exponent | How much a partly solid element's stress counts: its density to this power, times the stress of solid material. Larger counts partly solid elements less. |
 | Material model | Constant Poisson's ratio | One Poisson's ratio for every material, instead of each material's own. |
 | Material model | Poisson's ratio value | The Poisson's ratio used when Constant Poisson's ratio is ticked. |
 

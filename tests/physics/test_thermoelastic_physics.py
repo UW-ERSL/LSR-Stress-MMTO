@@ -13,6 +13,7 @@ import sys
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 import torch
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -338,7 +339,6 @@ def test_a_bar_heated_evenly_is_as_stiff_as_youngs_modulus_at_its_temperature():
 def test_a_slope_that_makes_a_property_negative_is_refused():
     """Heated by 100 with a slope of -0.02 per degree, Young's modulus would be -1 times its value: refused,
     naming the slope's column."""
-    import pytest
     p = _heated_evenly("too steep", 100.0)
     p.add_bc("fixed", "xmin", dofs="xyz")
     with pytest.raises(ValueError, match="Youngs_Modulus_Temperature_Slope column makes Youngs_Modulus zero or negative"):
@@ -390,3 +390,105 @@ def test_gradients_with_temperature_slopes_agree_with_finite_differences():
                     fd = (float(J(plus)[0]) - float(J(minus)[0])) / (2 * h)
                 best = min(best, abs(fd - g[i]) / abs(g[i]))
             assert best < 1e-5, f"{name}[{i}]: relative difference {best:.1e}"
+
+
+def test_a_bar_held_at_both_ends_and_heated_evenly_carries_e_alpha_dt():
+    """The bar heated evenly by dT, held in x on xmin and on xmax (so it cannot grow along x), in y on ymin and
+    in z on zmin (so it grows freely sideways), with slopes on Young's modulus and the expansion coefficient:
+    every element carries sigma_xx = -E(T) alpha(T) dT and nothing else, so its von Mises stress is
+    E (1 + k_E dT) alpha (1 + k_alpha dT) dT. A stress (1 - 2 nu) times too large, or one at the reference
+    values, shows the thermal strain or its temperature taken wrongly."""
+    T_ref, dT, E, alpha, k_E, k_alpha = 293.15, 100.0, 200.0, 1e-5, -2e-3, 1e-3
+    p = _heated_evenly("held at both ends", dT, T_ref)
+    p.add_bc("fixed", "xmin", dofs="x")
+    p.add_bc("fixed", "xmax", dofs="x")
+    p.add_bc("fixed", "ymin", dofs="y")
+    p.add_bc("fixed", "zmin", dofs="z")
+    _, m = _solved(p, E=E, nu=0.3, alpha=alpha, conductivity=3.0, T_ref=T_ref,
+                   more={"Youngs_Modulus_Temperature_Slope": k_E, "Thermal_Expansion_Temperature_Slope": k_alpha})
+    expected = E * (1.0 + k_E * dT) * alpha * (1.0 + k_alpha * dT) * dT
+    error = float(torch.max(torch.abs(m.svm - expected))) / expected
+    assert error < 1e-8, f"largest difference {error:.2e} of E alpha dT"
+
+
+def test_a_bar_free_to_grow_carries_no_stress():
+    """The bar heated evenly and held only against rigid motion (as test_a_bar_heated_evenly_grows_freely) grows
+    by its thermal strain alone, so every stress component is zero everywhere, far below E alpha dT. Von Mises
+    alone cannot show this: the thermal strain is the same in every direction, which von Mises does not see, so
+    the components are checked too (a stress of the total strain would be E alpha dT / (1 - 2 nu) in each)."""
+    from lsr_mmto.physics.thermoelastic.thermoelastic_physics import thermoelastic_stress
+    T_ref, dT, E, alpha = 293.15, 100.0, 200.0, 1e-5
+    p = _heated_evenly("free, no stress", dT, T_ref)
+    p.add_bc("fixed", "xmin", dofs="x")
+    p.add_bc("fixed", "ymin", dofs="y")
+    p.add_bc("fixed", "zmin", dofs="z")
+    _, m = _solved(p, E=E, nu=0.3, alpha=alpha, conductivity=3.0, T_ref=T_ref)
+    assert float(torch.max(m.svm)) < 1e-8 * E * alpha * dT, float(torch.max(m.svm))
+    stress = thermoelastic_stress(m.fe, m.u, m.x_phys, m.props["Thermal_Expansion"], torch.full_like(m.x_phys, dT))
+    assert float(torch.max(torch.abs(stress))) < 1e-8 * E * alpha * dT, float(torch.max(torch.abs(stress)))
+
+
+def test_the_al_stress_objectives_apply_to_thermoelastic():
+    """Structural's augmented Lagrangian stress objectives are one quantity each, given by both physics."""
+    from lsr_mmto.formulation.quantities import QUANTITIES
+    by_name = {q.name: q for q in QUANTITIES}
+    for name in ("VolumeFractionALStress", "MassALStress"):
+        assert by_name[name].applies_to("thermoelastic") and by_name[name].applies_to("structural"), name
+
+
+@pytest.mark.parametrize("name", ["VolumeFractionALStress", "MassALStress"])
+def test_al_stress_gradients_agree_with_finite_differences(name):
+    """Each augmented Lagrangian stress objective (VolumeFractionALStress, MassALStress) in a run (multipliers and mu as a run holds them) on the bar clamped and held at
+    T_ref on xmin and heated on xmax, at an uneven design with a slope on Young's modulus and a yield strength
+    low enough that many elements are above it: its autograd gradient for the density, the conductivity and the
+    slope agrees with central differences, the whole chain T -> E(T) -> u -> stress -> penalty included. Checked
+    along a random direction of all elements at once (g . v): J sums every element's penalty, so one element
+    alone moves it too little to see past the solver's last digits."""
+    from lsr_mmto.formulation.quantity_states import state_key
+    from lsr_mmto.physics.structural import structural_quantities as SQ
+    objective = {"VolumeFractionALStress": SQ._volume_fraction_al_stress, "MassALStress": SQ._mass_al_stress}[name]
+    T_ref, E, nu = 0, 200.0, 0.3
+    p = _bar("al gradients")
+    p.bcs += [{"kind": "fixed_temperature", "on": "xmin", "value": T_ref},
+              {"kind": "heat_source", "on": "xmax", "total": 1.0}]
+    p.add_bc("fixed", "xmin", dofs="xyz")
+    _, m = _solved(p, E=E, nu=nu, alpha=1e-5, conductivity=3.0, T_ref=T_ref)
+    n = len(m.x_phys)
+    rise = float(m.T.max()) - T_ref
+    rng = np.random.default_rng(2)
+    design = {"x_phys": rng.uniform(0.5, 1.0, n), "Conductivity": 3.0 * rng.uniform(0.7, 1.3, n),
+              "Youngs_Modulus_Temperature_Slope": rng.uniform(-0.2, 0.2, n) / rise}
+    multipliers = torch.tensor(rng.uniform(0.0, 1.0, n), dtype=torch.float64)
+    Y = None
+
+    def J(values):
+        """The AL objective at the design values, with the solver of m and a run's state for it."""
+        t = {k: torch.tensor(v, dtype=torch.float64, requires_grad=True) for k, v in values.items()}
+        model = SimpleNamespace(fe=m.fe, x_phys=t["x_phys"], settings=m.settings, N=n,
+                                quantity_states={state_key(name, None):
+                                                 {"multipliers": multipliers, "mu": 10.0}},
+                                props={"Youngs_Modulus": torch.full((n,), E, dtype=torch.float64),
+                                       "Thermal_Expansion": torch.full((n,), 1e-5, dtype=torch.float64),
+                                       "Density": torch.full((n,), 2.0, dtype=torch.float64),
+                                       "Yield_Strength": torch.full((n,), Y or 1.0, dtype=torch.float64),
+                                       **{k: v for k, v in t.items() if k != "x_phys"}})
+        THERMOELASTIC.analyse(model)
+        return objective(model, None), t, model
+
+    with torch.no_grad():                                   # the yield strength at the median stress of this
+        Y = float(torch.median(J(design)[2].svm))          # design: about half its elements above yield
+    value, leaves, _ = J(design)
+    value.backward()
+    for variable, leaf in leaves.items():
+        g = leaf.grad.numpy()
+        assert np.any(g != 0), f"no gradient for {variable}"
+        size = 1.0 / rise if variable.endswith("Slope") else design[variable]   # each element's own size
+        v = rng.uniform(-1.0, 1.0, n) * size
+        best = np.inf
+        for step in (1e-3, 1e-4, 1e-5):
+            plus = {k: (w + step * v if k == variable else w.copy()) for k, w in design.items()}
+            minus = {k: (w - step * v if k == variable else w.copy()) for k, w in design.items()}
+            with torch.no_grad():
+                fd = (float(J(plus)[0]) - float(J(minus)[0])) / (2 * step)
+            best = min(best, abs(fd - g @ v) / abs(g @ v))
+        assert best < 1e-5, f"{name}, {variable}: relative difference {best:.1e}"

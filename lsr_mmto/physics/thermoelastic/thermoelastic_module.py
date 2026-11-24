@@ -76,6 +76,9 @@ SETTINGS = [
     dict(section="common", key="reference_temperature", default=293.15, label="Reference temperature",
          help="The temperature at which the part has no thermal strain, in the project's temperature unit.",
          group="Main"),
+    dict(section="advanced", key="te_stress_relaxation_exponent", default=0.5, label="Stress relaxation exponent",
+         help="How much a partly solid element's stress counts: its density to this power, times the stress of "
+              "solid material. Larger counts partly solid elements less.", group="Material model"),
     dict(section="advanced", key="te_use_constant_poissons_ratio", default=False, label="Constant Poisson's ratio",
          help="One Poisson's ratio for every material, instead of each material's own.", group="Material model"),
     dict(section="advanced", key="te_constant_poissons_ratio", default=0.3, label="Poisson's ratio value",
