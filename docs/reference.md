@@ -74,6 +74,9 @@ A database is an .xlsx file whose first sheet holds attribute names in row 1 fro
 | `Yield_Strength` | Yield Strength, Yield | yield strength, the stress at which the material yields | 0 < value | Pa, kPa, MPa, GPa, psi, ksi |
 | `Conductivity` | Thermal_Conductivity, Thermal Conductivity, k | thermal conductivity, how well heat flows through it | 0 < value | W/(m\*K), mW/(mm\*K), BTU/(s\*in\*°R) |
 | `Thermal_Expansion` | Thermal Expansion, CTE, alpha | coefficient of thermal expansion, the strain per degree of temperature rise | 0 < value | 1/K, 1/°R |
+| `Youngs_Modulus_Temperature_Slope` | E slope | the share of Young's modulus gained per degree above the reference temperature (negative: lost) | any | 1/K, 1/°R |
+| `Thermal_Expansion_Temperature_Slope` | alpha slope, CTE slope | the share of the thermal expansion coefficient gained per degree above the reference temperature | any | 1/K, 1/°R |
+| `Yield_Strength_Temperature_Slope` | Y slope | the share of the yield strength gained per degree above the reference temperature (negative: lost) | any | 1/K, 1/°R |
 
 An optional sheet `Display` gives each material the colour and the label it is shown with: columns Material, Color (#rrggbb) and Label, one row per material, matched by name. An empty Color is the default colour, an empty Label the material's name. Two materials with the same colour or the same label are an error. The run record stores both.
 

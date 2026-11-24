@@ -11,7 +11,8 @@ f_th,e = s(x_phys_e) * E_e * alpha_e / (1 - 2 nu_e) * H (T_e - T_ref), where s i
 scaling, H the element's coupling matrix (24 x 8) and T_e the element's 8 temperatures. Thermal's solver
 (ConductionHexFEA) solves the temperature and structural's (MultiMaterialHexFEA) the displacement; both
 solves are differentiable, so autograd gives the gradient of anything computed from T and u back to x_phys
-and to the latent points. Nothing is differentiated by hand.
+and to the latent points. Nothing is differentiated by hand. Young's modulus, the expansion coefficient and the
+yield strength may change with each element's temperature (properties_at_temperature); the conductivity does not.
 
 Who reads it:
     make_solver       optimize/run_setup.py, once per run, after the mesh and the supports and
@@ -59,15 +60,47 @@ def analyse(m: "MMTOModelAD | _Analysed") -> None:
     the thermal force from m.T and each element's expansion, then the displacement m.u under the applied
     loads plus that force, both at the density m.x_phys with SIMP.
 
-    Sets m.T (nodes,), m.f_th (3 * nodes,), m.u (3 * nodes,); and the solvers' material values
+    It takes m.props as decoded (at the reference temperature) and replaces it with the values at each element's
+    temperature (properties_at_temperature), which everything after the temperature solve reads.
+
+    Sets m.T (nodes,), m.props, m.f_th (3 * nodes,), m.u (3 * nodes,); and the solvers' material values
     (set_conductivity, set_material_fields)."""
     m.fe.thermal.set_conductivity(m.props["Conductivity"])
     m.T = m.fe.thermal.solve(m.x_phys, ad_mm.MaterialModel.SIMP)
+    m.props = properties_at_temperature(m.props, m.T, m.fe.thermal.edof, float(m.settings.reference_temperature))
     E, nu = elastic_constants(m.props, m.settings)
     m.f_th = thermal_force(m.fe, m.T, m.x_phys, E, nu, m.props["Thermal_Expansion"],
                            float(m.settings.reference_temperature))
     m.fe.set_material_fields(E, nu)
     m.u = m.fe.solve(m.x_phys, ad_mm.MaterialModel.SIMP, extra_force=m.f_th)
+
+# the properties that change with temperature, each with the database column of its slope (thermoelastic_module.py)
+TEMPERATURE_SLOPES = {"Youngs_Modulus": "Youngs_Modulus_Temperature_Slope",
+                      "Thermal_Expansion": "Thermal_Expansion_Temperature_Slope",
+                      "Yield_Strength": "Yield_Strength_Temperature_Slope"}
+
+# HELPER: of analyse
+def properties_at_temperature(props: dict[str, torch.Tensor], T: torch.Tensor, edof: torch.Tensor,
+                              T_ref: float) -> dict[str, torch.Tensor]:
+    """A new dict of the properties at each element's temperature: each property P of TEMPERATURE_SLOPES whose
+    slope k the database has becomes P (1 + k (T_c - T_ref)), T_c the element's centre temperature (the mean of
+    its nodes' temperatures, edof each element's temperature dofs); the rest as they are. The thermal expansion
+    coefficient is the secant one from T_ref, so the thermal strain is alpha(T) (T - T_ref). Inside the torch
+    tree: the gradient reaches T (so the thermal solve) and the slopes. A slope that makes a property zero or
+    negative at some element is refused: the straight line does not reach that far."""
+    out = dict(props)
+    dT = T[edof].mean(dim=1) - T_ref                                           # (N,)
+    for name, slope in TEMPERATURE_SLOPES.items():
+        if name not in props or slope not in props:
+            continue
+        factor = 1.0 + props[slope] * dT
+        if bool(torch.any(factor <= 0.0)):
+            worst = int(torch.argmin(factor))
+            raise ValueError(f"The {slope} column makes {name} zero or negative at {float(T[edof][worst].mean()):.6g} "
+                             f"degrees (element {worst}). A straight line does not reach that far: use a smaller "
+                             f"slope, or keep the temperatures closer to the reference temperature.")
+        out[name] = props[name] * factor
+    return out
 
 # HELPER: of analyse
 def thermal_force(fe: "ThermoelasticHexFEA", T: torch.Tensor, x_phys: torch.Tensor, E: torch.Tensor,

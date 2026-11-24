@@ -33,14 +33,28 @@ NAME = "thermoelastic"
 DOC = "linear isotropic thermoelasticity, one-way coupled: the temperature drives the displacement"
 FIELDS = {"u": 3, "T": 1}                           # the displacement, three unknowns per node; the temperature, one
 PROPERTIES = ["Youngs_Modulus", "Conductivity", "Thermal_Expansion"]   # Poisson's ratio may be one value (SETTINGS)
-OPTIONAL_PROPERTIES = ["Poissons_Ratio"]            # each material's own when the database has it, else SETTINGS'
+OPTIONAL_PROPERTIES = ["Poissons_Ratio",           # each material's own when the database has it, else SETTINGS'
+                       "Yield_Strength",           # and these when the database has them, else none
+                       "Youngs_Modulus_Temperature_Slope", "Thermal_Expansion_Temperature_Slope",
+                       "Yield_Strength_Temperature_Slope"]
 
-# the material property it brings, as the arguments of an Attribute (materials/databases.py); Young's modulus and
-# Poisson's ratio are structural's, Conductivity is thermal's
+# the material properties it brings, as the arguments of an Attribute (materials/databases.py); Young's modulus,
+# Poisson's ratio and yield strength are structural's, Conductivity is thermal's. Each slope k makes its property
+# change with temperature, P(T) = P (1 + k (T - T_ref)) at each element's centre (properties_at_temperature in
+# thermoelastic_physics.py); a database without it keeps the property constant
 NEW_PROPERTIES = [
     dict(name="Thermal_Expansion", measures="expansion",
          doc="coefficient of thermal expansion, the strain per degree of temperature rise",
          shown="Thermal expansion coefficient", low=0, aliases=("Thermal Expansion", "CTE", "alpha")),
+    dict(name="Youngs_Modulus_Temperature_Slope", measures="expansion",
+         doc="the share of Young's modulus gained per degree above the reference temperature (negative: lost)",
+         shown="Young's modulus change per degree", aliases=("E slope",)),
+    dict(name="Thermal_Expansion_Temperature_Slope", measures="expansion",
+         doc="the share of the thermal expansion coefficient gained per degree above the reference temperature",
+         shown="Thermal expansion change per degree", aliases=("alpha slope", "CTE slope")),
+    dict(name="Yield_Strength_Temperature_Slope", measures="expansion",
+         doc="the share of the yield strength gained per degree above the reference temperature (negative: lost)",
+         shown="Yield strength change per degree", aliases=("Y slope",)),
 ]
 
 NEEDS = ("support",)                                # heating alone is a problem; a mechanical load is not needed

@@ -87,7 +87,7 @@ def final_summary(designs: "list[tuple[str, np.ndarray, np.ndarray | torch.Tenso
             compliance = float(torch.dot(solver.total_force, u))
             share = float(torch.dot(f_th, u)) / compliance if compliance != 0.0 else float("nan")
             dT = (T[solver.thermal.edof] - T_ref).abs().amax(dim=1)
-            strain = float(torch.max(props["Thermal_Expansion"] * dT))
+            strain = float(torch.max(design.props["Thermal_Expansion"] * dT))   # at temperature
         print(f"[THERMOELASTIC] {label}: thermoelastic compliance {compliance:.6g}, thermal share {share:.3f}, "
               f"max temperature {float(T.max()):.4g}")
         if strain > _STRAIN_WARNING:

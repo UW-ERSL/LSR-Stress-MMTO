@@ -281,6 +281,9 @@ A material database can contain these attributes:
 | Yield strength | Yield strength, the stress at which the material yields | Pa, kPa, MPa, GPa, psi, ksi |
 | Thermal conductivity | Thermal conductivity, how well heat flows through it | W/(m\*K), mW/(mm\*K), BTU/(s\*in\*°R) |
 | Thermal expansion coefficient | Coefficient of thermal expansion, the strain per degree of temperature rise | 1/K, 1/°R |
+| Young's modulus change per degree | The share of Young's modulus gained per degree above the reference temperature (negative: lost) | 1/K, 1/°R |
+| Thermal expansion change per degree | The share of the thermal expansion coefficient gained per degree above the reference temperature | 1/K, 1/°R |
+| Yield strength change per degree | The share of the yield strength gained per degree above the reference temperature (negative: lost) | 1/K, 1/°R |
 
 <!-- end of list -->
 

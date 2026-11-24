@@ -59,9 +59,10 @@ def tiny_example(folder):
     return p
 
 
-def _solved(p, E, nu, alpha, conductivity, T_ref):
+def _solved(p, E, nu, alpha, conductivity, T_ref, more=None):
     """The bar's mesh and a model m after analyse: one value of each property in every element, every element
-    solid. m holds what analyse reads (fe, x_phys, props, settings) and what it sets (T, f_th, u)."""
+    solid. m holds what analyse reads (fe, x_phys, props, settings) and what it sets (T, f_th, u). more: other
+    properties, {column: one value}, e.g. a temperature slope."""
     from lsr_mmto.pyto_ad_imports import linear_solvers, mat_lib
     p.complete_settings()
     mesh = p.mesh()
@@ -74,7 +75,7 @@ def _solved(p, E, nu, alpha, conductivity, T_ref):
     each = lambda v: torch.full((n,), v, dtype=torch.float64)  # noqa: E731
     m = SimpleNamespace(fe=fe, x_phys=each(1.0),
                         props={"Youngs_Modulus": each(E), "Conductivity": each(conductivity),
-                               "Thermal_Expansion": each(alpha)},
+                               "Thermal_Expansion": each(alpha), **{k: each(v) for k, v in (more or {}).items()}},
                         settings=default_run_settings(reference_temperature=T_ref,
                                                       te_use_constant_poissons_ratio=False,
                                                       te_constant_poissons_ratio=nu))
@@ -276,3 +277,116 @@ def test_a_part_left_free_in_a_rigid_motion_is_refused():
     p.add_bc("fixed", "ymin", dofs="y")
     p.add_bc("fixed", "zmin", dofs="z")
     assert error(p) is None
+
+
+def _heated_evenly(name, dT, T_ref=293.15):
+    """The bar held at T_ref + dT on xmin and xmax with no heat source, so dT everywhere."""
+    p = _bar(name)
+    p.bcs += [{"kind": "fixed_temperature", "on": "xmin", "value": T_ref + dT},
+              {"kind": "fixed_temperature", "on": "xmax", "value": T_ref + dT}]
+    return p
+
+
+def test_a_bar_heated_evenly_grows_by_the_expansion_coefficient_at_its_temperature():
+    """As test_a_bar_heated_evenly_grows_freely, with a slope k on the expansion coefficient: the bar grows by
+    alpha (1 + k dT) dT. The yield strength's slope gives Y (1 + k_Y dT) in every element, and Young's
+    modulus, with no slope column, stays as it is."""
+    T_ref, dT, alpha, k_alpha, Y, k_Y = 293.15, 100.0, 1e-5, 1e-3, 100.0, -1e-3
+    p = _heated_evenly("free expansion, slope", dT, T_ref)
+    p.add_bc("fixed", "xmin", dofs="x")
+    p.add_bc("fixed", "ymin", dofs="y")
+    p.add_bc("fixed", "zmin", dofs="z")
+    mesh, m = _solved(p, E=200.0, nu=0.3, alpha=alpha, conductivity=3.0, T_ref=T_ref,
+                      more={"Thermal_Expansion_Temperature_Slope": k_alpha, "Yield_Strength": Y,
+                            "Yield_Strength_Temperature_Slope": k_Y})
+    xyz = np.asarray(mesh.node_xyz, dtype=float)
+    expected = alpha * (1.0 + k_alpha * dT) * dT * (xyz - xyz.min(axis=0))
+    u = m.u.detach().numpy().reshape(-1, 3)
+    error = np.max(np.abs(u - expected)) / np.max(np.abs(expected))
+    assert error < 1e-8, f"largest difference {error:.2e} of the largest displacement"
+    assert torch.allclose(m.props["Yield_Strength"], torch.full_like(m.x_phys, Y * (1.0 + k_Y * dT)), rtol=1e-12)
+    assert torch.all(m.props["Youngs_Modulus"] == 200.0)
+
+
+def test_a_bar_heated_evenly_is_as_stiff_as_youngs_modulus_at_its_temperature():
+    """The bar heated evenly by dT with no expansion (alpha 0, so no thermal force), clamped on xmin and pulled
+    down on xmax, with a slope k on Young's modulus: its thermoelastic compliance equals the structural solver's
+    for E (1 + k dT), on the same mesh, supports and load."""
+    from lsr_mmto.physics.structural import structural_module as STRUCTURAL
+    from lsr_mmto.pyto_ad_imports import linear_solvers, mat_lib
+    T_ref, dT, E, nu, k_E = 293.15, 100.0, 200.0, 0.3, -2e-3
+    p = _heated_evenly("stiffness at temperature", dT, T_ref)
+    p.add_bc("fixed", "xmin", dofs="xyz")
+    p.add_bc("force", "xmax", total=[0.0, -1.0, 0.0])
+    mesh, m = _solved(p, E=E, nu=nu, alpha=0.0, conductivity=3.0, T_ref=T_ref,
+                      more={"Youngs_Modulus_Temperature_Slope": k_E})
+    bcs, _ = p.supports_and_loads(mesh)
+    mat_prop = mat_lib.create_material_with_defaults(
+        "CustomMaterial", youngs_modulus=1.0, poissons_ratio=0.3, mass_density=1.0, yield_strength=1.0)
+    n = mesh.num_elems
+    s = SimpleNamespace(fe=STRUCTURAL.make_solver(mesh, mat_prop, {"u": bcs["u"]}, linear_solvers.Solvers.PARDISO,
+                                                  None, None),
+                        x_phys=m.x_phys,
+                        props={"Youngs_Modulus": torch.full((n,), E * (1.0 + k_E * dT), dtype=torch.float64)},
+                        settings=default_run_settings(use_constant_poissons_ratio=True, constant_poissons_ratio=nu))
+    STRUCTURAL.analyse(s)
+    thermoelastic = float(torch.dot(m.fe.total_force, m.u))
+    structural = float(torch.dot(s.fe.total_force, s.u))
+    assert abs(thermoelastic - structural) < 1e-10 * abs(structural), (thermoelastic, structural)
+
+
+def test_a_slope_that_makes_a_property_negative_is_refused():
+    """Heated by 100 with a slope of -0.02 per degree, Young's modulus would be -1 times its value: refused,
+    naming the slope's column."""
+    import pytest
+    p = _heated_evenly("too steep", 100.0)
+    p.add_bc("fixed", "xmin", dofs="xyz")
+    with pytest.raises(ValueError, match="Youngs_Modulus_Temperature_Slope column makes Youngs_Modulus zero or negative"):
+        _solved(p, E=200.0, nu=0.3, alpha=1e-5, conductivity=3.0, T_ref=293.15,
+                more={"Youngs_Modulus_Temperature_Slope": -0.02})
+
+
+def test_gradients_with_temperature_slopes_agree_with_finite_differences():
+    """As test_gradients_agree_with_finite_differences, with slopes on Young's modulus and the expansion
+    coefficient that differ by element: the gradient now also runs from the temperature through E(T) and
+    alpha(T), so the conductivity reaches J through the stiffness too. Checked for the density, the
+    conductivity and both slopes."""
+    T_ref, E, nu = 0, 200.0, 0.3
+    p = _bar("gradients, slopes")
+    p.bcs += [{"kind": "fixed_temperature", "on": "xmin", "value": T_ref},
+              {"kind": "heat_source", "on": "xmax", "total": 1.0}]
+    p.add_bc("fixed", "xmin", dofs="xyz")
+    _, m = _solved(p, E=E, nu=nu, alpha=1e-5, conductivity=3.0, T_ref=T_ref)
+    n = len(m.x_phys)
+    rise = float(m.T.max()) - T_ref                         # the largest temperature rise, for slopes that stay
+    rng = np.random.default_rng(1)                          # well away from zero (|k dT| at most about 0.4)
+    design = {"x_phys": rng.uniform(0.5, 1.0, n), "Conductivity": 3.0 * rng.uniform(0.7, 1.3, n),
+              "Youngs_Modulus_Temperature_Slope": rng.uniform(-0.2, 0.2, n) / rise,
+              "Thermal_Expansion_Temperature_Slope": rng.uniform(-0.2, 0.2, n) / rise}
+
+    def J(values):
+        """J at the design values, with the solver of m: a fresh model through analyse."""
+        t = {k: torch.tensor(v, dtype=torch.float64, requires_grad=True) for k, v in values.items()}
+        model = SimpleNamespace(fe=m.fe, x_phys=t["x_phys"], settings=m.settings,
+                                props={"Youngs_Modulus": torch.full((n,), E, dtype=torch.float64),
+                                       "Thermal_Expansion": torch.full((n,), 1e-5, dtype=torch.float64),
+                                       **{k: v for k, v in t.items() if k != "x_phys"}})
+        THERMOELASTIC.analyse(model)
+        return torch.dot(model.fe.total_force, model.u), t
+
+    value, leaves = J(design)
+    value.backward()
+    for name, leaf in leaves.items():
+        g = leaf.grad.numpy()
+        assert np.any(g != 0), f"no gradient for {name}"
+        for i in rng.choice(np.argsort(-np.abs(g))[:50], 3, replace=False):
+            best = np.inf
+            for step in (1e-4, 1e-5, 1e-6):                     # relative to the value
+                h = step * abs(design[name][i])
+                plus, minus = {k: v.copy() for k, v in design.items()}, {k: v.copy() for k, v in design.items()}
+                plus[name][i] += h
+                minus[name][i] -= h
+                with torch.no_grad():
+                    fd = (float(J(plus)[0]) - float(J(minus)[0])) / (2 * h)
+                best = min(best, abs(fd - g[i]) / abs(g[i]))
+            assert best < 1e-5, f"{name}[{i}]: relative difference {best:.1e}"
